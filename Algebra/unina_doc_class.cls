@@ -1357,6 +1357,19 @@
   \end{dimostrazionebox}%
 }
 
+% ── Ambiente CASO: una direzione / un caso / un punto di una dimostrazione ──
+%   \begin{caso}{$(\Rightarrow)$ Se ... allora ...} ... \end{caso}
+\newtcolorbox{caso}[1]{
+  enhanced,
+  colback=primary!3!white, colframe=primary!30!white,
+  boxrule=0.4pt, arc=1mm, outer arc=1mm,
+  left=2.5mm, right=2mm, top=1mm, bottom=1mm,
+  before skip=2mm, after skip=2mm,
+  title={#1}, fonttitle=\small\bfseries, coltitle=primary!85!black,
+  colbacktitle=primary!12!white, toptitle=0.6mm, bottomtitle=0.6mm,
+  titlerule=0.4pt,
+}
+
 % ── Tavole di verità ──────────────────────────────────────────
 \newcommand{\vero}{{\color{seagreen!65!black}\mathrm{V}}}
 \newcommand{\falso}{{\color{cherryred!80!black}\mathrm{F}}}
