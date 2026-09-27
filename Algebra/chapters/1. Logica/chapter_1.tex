@@ -1,0 +1,965 @@
+\chapter{Logica proposizionale}
+
+Prima di parlare di insiemi, funzioni e strutture algebriche ci serve un linguaggio preciso con cui scrivere
+(e verificare) affermazioni matematiche: la \textbf{logica}. Cominciamo dalla \textbf{logica proposizionale},
+in cui le affermazioni più semplici sono indicate da lettere ($p$, $q$, $r$, \dots) e vengono combinate
+tramite i connettivi (\textit{non}, \textit{e}, \textit{oppure}, \dots).
+
+Il percorso del capitolo è sempre lo stesso che seguiremo anche per la logica dei predicati:
+\begin{enumerate}
+    \item \textbf{alfabeto}: quali simboli possiamo usare;
+    \item \textbf{sintassi}: quali sequenze di simboli sono «scritte correttamente» (le formule ben formate);
+    \item \textbf{semantica}: quando una formula ben formata è vera o falsa;
+    \item \textbf{tautologie}: le formule sempre vere, che useremo come «regole di calcolo» per tutto il corso.
+\end{enumerate}
+
+% ──────────────────────────────────────────────────────────────
+\section{L'alfabeto}\label{sec:alfabeto-prop}
+
+\dfn[alfabeto-prop]{Alfabeto della logica proposizionale}{
+    L'\textbf{alfabeto} della logica proposizionale è la terna
+    \[ \mcA = (P, C, B) \]
+    dove:
+    \begin{itemize}
+        \item $P = \{p, q, r, \dots\}$ è l'insieme delle \textbf{variabili proposizionali};
+        \item $C = \{\neg, \wedge, \vee, \rightarrow, \leftrightarrow\}$ è l'insieme dei \textbf{connettivi};
+        \item $B = \{(,\ )\}$ è l'insieme delle \textbf{parentesi}.
+    \end{itemize}
+}
+
+I connettivi hanno vari nomi; i più comuni sono i seguenti.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{c|l|l|l}
+\intestazione \textbf{Simbolo} & \textbf{Nome} & \textbf{Si legge} & \textbf{Tipo} \\ \hline
+$\neg$ & NOT & «non» & unario \\
+$\wedge$ & AND & «e» & binario \\
+$\vee$ & OR & «oppure» & binario \\
+$\rightarrow$ & IMPLIES & «se \dots\ allora \dots», «implica» & binario \\
+$\leftrightarrow$ & IFF & «se e solo se» & binario \\
+\end{tabular}
+\caption{I connettivi della logica proposizionale.}
+\end{table}
+
+NOT si dice \textbf{connettivo unario} perché agisce su una sola formula, mentre gli altri si dicono
+\textbf{connettivi binari} perché agiscono su due formule.
+
+\dfn[formula]{Formula}{
+    Una qualunque sequenza (finita) di elementi dell'alfabeto $\mcA$ si dice \textbf{formula}.
+}
+
+Non tutte le formule hanno senso: ad esempio $)\,p \wedge \vee\, ($ è una formula, ma è chiaramente
+«scritta male». Quali sono allora le formule ammesse?
+
+% ──────────────────────────────────────────────────────────────
+\section{Sintassi: le formule ben formate}\label{sec:sintassi-prop}
+
+La \textbf{sintassi} è l'insieme di regole che permettono di capire quali sequenze di simboli sono
+ammesse e quali no. Le formule ammesse si dicono \textbf{formule ben formate} (in breve \textbf{FBF}).
+
+\dfn[fbf-prop]{Formule ben formate (FBF)}{
+    Le \textbf{formule ben formate} della logica proposizionale sono le formule costruite con le seguenti regole:
+    \begin{enumerate}
+        \item ogni variabile proposizionale è una FBF;
+        \item se $f$ è una FBF, allora $\neg f$ è una FBF;
+        \item se $f$ e $g$ sono FBF e $\sim$ è uno dei connettivi $\wedge$, $\vee$, $\rightarrow$, $\leftrightarrow$,
+              allora $f \sim g$ è una FBF;
+        \item se $f$ è una FBF, allora anche $(f)$ è una FBF.
+    \end{enumerate}
+    Indichiamo con $\mcF$ l'\textbf{insieme di tutte le FBF}.
+}
+
+In altre parole, le FBF sono le stringhe \textbf{sintatticamente corrette}, cioè quelle che si ottengono
+applicando (un numero finito di volte) le regole grammaticali qui sopra.
+
+\begin{esempio}{Costruire una FBF passo per passo}
+    Verifichiamo che $(p \wedge q) \rightarrow \neg r$ è una FBF:
+    \begin{itemize}
+        \item $p$, $q$, $r$ sono FBF (regola 1);
+        \item $p \wedge q$ è una FBF (regola 3) e quindi anche $(p \wedge q)$ lo è (regola 4);
+        \item $\neg r$ è una FBF (regola 2);
+        \item $(p \wedge q) \rightarrow \neg r$ è una FBF (regola 3, con $f = (p \wedge q)$ e $g = \neg r$).
+    \end{itemize}
+    Invece $p \wedge \vee q$ \textbf{non} è una FBF: nessuna regola permette di scrivere due connettivi binari uno dopo l'altro.
+\end{esempio}
+
+\info{Parentesi e ordine di precedenza}{
+    Le parentesi non sono realmente necessarie, ma servono per gestire l'ordine di precedenza dei connettivi.
+    Ad esempio, $\neg(p \wedge q)$ sarà diverso da $(\neg p) \wedge q$.
+    In teoria potremmo anche non utilizzare mai le parentesi, concordando il seguente ordine gerarchico:
+    \begin{center}
+        NOT, \ AND, \ OR, \ IMPLIES, \ IFF.
+    \end{center}
+    Tuttavia useremo le parentesi ogni volta che potremo, utilizzando implicitamente la sola convenzione
+    che \textbf{NOT ha la precedenza su tutto} (quindi $\neg p \wedge q$ significa $(\neg p) \wedge q$).
+}
+
+% ──────────────────────────────────────────────────────────────
+\section{Semantica: la funzione di valutazione}\label{sec:semantica-prop}
+
+Passiamo ora alla \textbf{semantica}, ovvero al «senso» delle FBF: vogliamo stabilire quando una FBF è vera
+e quando è falsa. Per farlo assegniamo a ogni FBF un valore di verità, $\vero$ (vero) oppure $\falso$ (falso),
+in modo coerente con il significato dei connettivi.
+
+\dfn[valutazione]{Funzione di valutazione}{
+    Sia $\mcF$ l'insieme delle FBF. Una funzione $v \colon \mcF \to \{\vero, \falso\}$ si dice
+    \textbf{(funzione di) valutazione} se per ogni coppia di FBF $f$, $g$ valgono le seguenti regole:
+    \begin{enumerate}
+        \item se $v(f) = \vero$, allora $v(\neg f) = \falso$;
+        \item se $v(f) = \falso$, allora $v(\neg f) = \vero$;
+        \item $v(f \wedge g) = \vero$ \ se e solo se \ $v(f) = \vero$ \textbf{e} $v(g) = \vero$;
+        \item $v(f \vee g) = \vero$ \ se e solo se \ $v(f) = \vero$ \textbf{oppure} $v(g) = \vero$;
+        \item $v(f \rightarrow g) = \vero$ \ se e solo se \ $v(f) = \falso$ \textbf{oppure} $v(g) = \vero$;
+        \item $v(f \leftrightarrow g) = \vero$ \ se e solo se \ $v(f) = v(g)$.
+    \end{enumerate}
+    Diremo che una FBF $f$ è \textbf{vera} (nella valutazione $v$) se $v(f) = \vero$, altrimenti diremo che è \textbf{falsa}.
+}
+
+\warning{Perché nelle regole 3--6 serve il «se e solo se»}{
+    Se nella regola 3 ci fosse solo «se $v(f \wedge g) = \vero$ allora $v(f) = \vero$ e $v(g) = \vero$», nulla
+    vieterebbe di avere $v(f \wedge g) = \falso$ anche quando $f$ e $g$ sono entrambe vere.
+    Il «se e solo se» dice invece che il valore di $f \wedge g$ è \textbf{completamente determinato} dai valori
+    di $f$ e di $g$ (e lo stesso per $\vee$, $\rightarrow$, $\leftrightarrow$).
+}
+
+\begin{esempio}{Calcolare una valutazione}
+    Sia $v$ una valutazione con $v(p) = \vero$ e $v(q) = \falso$. Calcoliamo $v\big((p \wedge q) \rightarrow \neg q\big)$:
+    \begin{itemize}
+        \item $v(p \wedge q) = \falso$ per la regola 3, perché $v(q) = \falso$;
+        \item $v(\neg q) = \vero$ per la regola 2;
+        \item $v\big((p \wedge q) \rightarrow \neg q\big) = \vero$ per la regola 5, perché $v(p \wedge q) = \falso$.
+    \end{itemize}
+\end{esempio}
+
+Come si vede dall'esempio, per calcolare $v$ su una FBF basta conoscere i valori che $v$ assegna alle
+\textbf{variabili proposizionali} che vi compaiono: tutto il resto si ricava applicando le regole
+(le parentesi non cambiano il valore: $v((f)) = v(f)$). Quindi, se in una FBF compaiono $n$ variabili,
+ci sono esattamente $2^n$ casi da controllare. È proprio l'idea delle tavole di verità.
+
+\subsection{Tavole di verità}\label{sec:tavole}
+
+Le \textbf{tavole di verità} servono a controllare tutti i possibili valori di verità di una FBF al variare
+dei valori di verità delle sue «componenti»: ogni riga corrisponde a una possibile scelta dei valori delle variabili.
+
+\begin{Proposizione}{Tavole di verità dei connettivi}{tavole-connettivi}
+    \begin{prerequisiti}
+        \dip{Definizione}{def:valutazione}
+    \end{prerequisiti}
+    Per ogni valutazione $v$, i valori di $\neg p$, $p \wedge q$, $p \vee q$, $p \rightarrow q$ e $p \leftrightarrow q$
+    in funzione dei valori di $p$ e $q$ sono dati dalle seguenti tavole di verità.
+
+    \begin{tavola}{c|c}
+  \intestazione $p$ & $\neg p$ \\ \hline
+  $\vero$ & $\falso$ \\
+  $\falso$ & $\vero$ \\
+\end{tavola}
+
+    \begin{tavola}{cc|cccc}
+  \intestazione $p$ & $q$ & $p \wedge q$ & $p \vee q$ & $p \rightarrow q$ & $p \leftrightarrow q$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ \\
+\end{tavola}
+\end{Proposizione}
+
+\begin{dimostrazione}
+    Ogni riga si ricava direttamente da una regola della definizione di valutazione.
+    Ad esempio, nella riga $v(p) = \vero$, $v(q) = \falso$ della colonna $p \rightarrow q$: per la regola 5,
+    $v(p \rightarrow q) = \vero$ se e solo se $v(p) = \falso$ oppure $v(q) = \vero$; qui non succede né l'una
+    né l'altra cosa, quindi $v(p \rightarrow q) \neq \vero$, cioè $v(p \rightarrow q) = \falso$.
+    Tutte le altre righe si ottengono allo stesso modo.
+\end{dimostrazione}
+
+È importante notare come abbiamo \textbf{ricavato} queste tavole dalle definizioni semantiche dei connettivi stessi.
+
+\warning{L'implicazione con premessa falsa}{
+    Dalla tavola, $p \rightarrow q$ è falsa \textbf{solo} quando $p$ è vera e $q$ è falsa.
+    In particolare, se la premessa $p$ è falsa, allora $p \rightarrow q$ è vera qualunque sia $q$:
+    «se $2 + 2 = 5$, allora la luna è di formaggio» è un'implicazione vera!
+    Questo fatto tornerà utile con i quantificatori ristretti (Capitolo~\ref{cap:predicati}).
+}
+
+% ──────────────────────────────────────────────────────────────
+\section{Tautologie, contraddizioni ed equivalenza logica}\label{sec:tautologie}
+
+\dfn[tautologia]{Tautologia e contraddizione}{
+    Una FBF $f$ che risulta \textbf{sempre vera}, cioè tale che $v(f) = \vero$ per ogni valutazione $v$,
+    si dice \textbf{tautologia}.
+
+    Una FBF $f$ che risulta \textbf{sempre falsa}, cioè tale che $v(f) = \falso$ per ogni valutazione $v$,
+    si dice \textbf{contraddizione}.
+}
+
+In termini di tavole di verità: una FBF è una tautologia se la sua colonna contiene solo $\vero$,
+ed è una contraddizione se la sua colonna contiene solo $\falso$.
+
+\dfn[equivalenza]{Formule logicamente equivalenti}{
+    Siano $f$ e $g$ due FBF. Se $f \leftrightarrow g$ è una tautologia, allora $f$ e $g$ si dicono
+    \textbf{logicamente equivalenti}.
+}
+
+\begin{Proposizione}{Equivalenza logica e tavole di verità}{criterio-colonne}
+    \begin{prerequisiti}
+        \dip{Definizione}{def:valutazione}
+        \dip{Definizione}{def:tautologia}
+        \dip{Definizione}{def:equivalenza}
+    \end{prerequisiti}
+    Due FBF $f$ e $g$ sono logicamente equivalenti se e solo se $v(f) = v(g)$ per ogni valutazione $v$,
+    cioè se e solo se nella tavola di verità \textbf{le colonne di $f$ e di $g$ coincidono riga per riga}.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \[
+    \begin{aligned}
+        f \text{ e } g \text{ logicamente equivalenti}
+        &\sse f \leftrightarrow g \text{ è una tautologia} && \text{(Definizione~\ref{def:equivalenza})}\\
+        &\sse v(f \leftrightarrow g) = \vero \text{ per ogni valutazione } v && \text{(Definizione~\ref{def:tautologia})}\\
+        &\sse v(f) = v(g) \text{ per ogni valutazione } v && \text{(regola 6 della Definizione~\ref{def:valutazione})}.
+    \end{aligned}
+    \]
+\end{dimostrazione}
+
+È questo il metodo che useremo per dimostrare quasi tutte le tautologie notevoli: invece di calcolare la
+colonna di $f \leftrightarrow g$, basta confrontare la colonna di $f$ con quella di $g$.
+
+\begin{Corollario}{Catene di equivalenze}{catene}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:criterio-colonne}
+    \end{prerequisiti}
+    Siano $f$, $g$, $h$ FBF.
+    \begin{enumerate}
+        \item Se $f$ è logicamente equivalente a $g$, allora $g$ è logicamente equivalente a $f$.
+        \item Se $f$ è logicamente equivalente a $g$ e $g$ è logicamente equivalente a $h$, allora
+              $f$ è logicamente equivalente a $h$.
+    \end{enumerate}
+\end{Corollario}
+
+\begin{dimostrazione}
+    Per la Proposizione~\ref{prop:criterio-colonne}, per ogni valutazione $v$ abbiamo $v(f) = v(g)$
+    (e quindi $v(g) = v(f)$, che dà il punto 1) e $v(g) = v(h)$; dunque $v(f) = v(h)$ per ogni $v$,
+    che è il punto 2.
+\end{dimostrazione}
+
+Grazie al corollario possiamo scrivere \textbf{catene} del tipo $f_1 \leftrightarrow f_2 \leftrightarrow \dots \leftrightarrow f_n$,
+in cui ogni passaggio è un'equivalenza logica: alla fine il primo e l'ultimo membro sono logicamente equivalenti.
+
+Le due proposizioni che seguono sono usate di continuo, spesso senza dirlo esplicitamente, ogni volta che
+«applichiamo una tautologia» all'interno di una formula più grande: conviene quindi averle enunciate una volta per tutte.
+
+\begin{Proposizione}{Tautologie e sostituzione delle variabili}{sost-variabili}
+    \begin{prerequisiti}
+        \dip{Definizione}{def:fbf-prop}
+        \dip{Definizione}{def:valutazione}
+        \dip{Definizione}{def:tautologia}
+    \end{prerequisiti}
+    Sia $\tau$ una tautologia in cui compare la variabile proposizionale $p$ e sia $f$ una FBF qualsiasi.
+    Allora la FBF $\tau'$ ottenuta da $\tau$ sostituendo \textbf{ogni} occorrenza di $p$ con $f$ è ancora una tautologia.
+\end{Proposizione}
+
+\begin{dimostrazione}[Idea della dimostrazione]
+    Fissiamo una valutazione $v$ e consideriamo la valutazione $w$ che assegna alle variabili gli stessi valori di $v$,
+    tranne che a $p$, a cui assegna il valore $w(p) = v(f)$. Calcolare $v(\tau')$ con le regole della valutazione
+    è esattamente lo stesso calcolo che si fa per $w(\tau)$: dove in $\tau$ compare $p$, in $\tau'$ compare $f$,
+    che ha lo stesso valore. Quindi $v(\tau') = w(\tau) = \vero$, perché $\tau$ è una tautologia.
+    Poiché $v$ era arbitraria, $\tau'$ è una tautologia.
+\end{dimostrazione}
+
+In pratica: tutte le tautologie che dimostreremo con le variabili $p, q, r$ restano vere se al posto delle
+variabili mettiamo \textbf{FBF qualsiasi}. Ad esempio, dalla doppia negazione $\neg(\neg p) \leftrightarrow p$
+otterremo che $\neg(\neg f) \leftrightarrow f$ per ogni FBF $f$.
+
+\begin{Proposizione}{Sostituzione di sottoformule equivalenti}{sostituzione}
+    \begin{prerequisiti}
+        \dip{Definizione}{def:fbf-prop}
+        \dip{Definizione}{def:valutazione}
+        \dip{Proposizione}{prop:criterio-colonne}
+    \end{prerequisiti}
+    Siano $f$ e $g$ due FBF logicamente equivalenti e sia $h$ una FBF in cui compare $f$.
+    Se $h'$ è la FBF ottenuta da $h$ sostituendo $f$ con $g$, allora $h$ e $h'$ sono logicamente equivalenti.
+\end{Proposizione}
+
+\begin{dimostrazione}[Idea della dimostrazione]
+    Fissata una valutazione $v$, il valore $v(h)$ si calcola a partire dai valori delle sottoformule di $h$,
+    applicando le regole della Definizione~\ref{def:valutazione}. In questo calcolo $f$ interviene solo tramite
+    il suo valore $v(f)$. Poiché $f$ e $g$ sono equivalenti, $v(f) = v(g)$ (Proposizione~\ref{prop:criterio-colonne}),
+    quindi sostituendo $f$ con $g$ il calcolo procede in modo identico e $v(h) = v(h')$.
+    Questo vale per ogni $v$, quindi $h$ e $h'$ sono logicamente equivalenti (di nuovo per la Proposizione~\ref{prop:criterio-colonne}).
+\end{dimostrazione}
+
+% ──────────────────────────────────────────────────────────────
+\section{Tautologie notevoli}\label{sec:tautologie-notevoli}
+
+Vediamo ora le tautologie più importanti. Tutte si dimostrano con lo stesso metodo: si costruisce la tavola
+di verità e si controlla che la colonna della formula contenga solo $\vero$ oppure, per le equivalenze,
+che le \textbf{colonne evidenziate} coincidano riga per riga (Proposizione~\ref{prop:criterio-colonne}).
+Quando nella stessa tavola ci sono più equivalenze da controllare, le colonne da confrontare hanno lo
+\textbf{stesso colore}.
+
+Le proprietà commutativa, associativa e distributiva sono date negli appunti del prof.\ come esercizi che
+\textbf{fanno parte della teoria}, perché verranno usate più avanti: per questo le trovi qui come proposizioni.
+
+% --- Doppia negazione
+\begin{Proposizione}{Doppia negazione}{doppianeg}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Definizione}{def:tautologia}
+    \end{prerequisiti}
+    La FBF
+    \[ \neg(\neg p) \leftrightarrow p \]
+    è una tautologia.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{c|ccT}
+  \intestazione $p$ & $\neg p$ & $\neg(\neg p)$ & $\neg(\neg p) \leftrightarrow p$ \\ \hline
+  $\vero$ & $\falso$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\vero$ \\
+\end{tavola}
+    L'ultima colonna contiene solo $\vero$. A parole: negare due volte riporta al valore di partenza.
+\end{dimostrazione}
+
+% --- Idempotenza
+\begin{Proposizione}{Idempotenza di AND e OR}{idempotenza}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Definizione}{def:tautologia}
+    \end{prerequisiti}
+    Le FBF
+    \[ (p \wedge p) \leftrightarrow p \qquad\qquad (p \vee p) \leftrightarrow p \]
+    sono tautologie.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{c|ccTT}
+  \intestazione $p$ & $p \wedge p$ & $p \vee p$ & $(p \wedge p) \leftrightarrow p$ & $(p \vee p) \leftrightarrow p$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    Le ultime due colonne contengono solo $\vero$.
+\end{dimostrazione}
+
+% --- Terzo escluso
+\begin{Proposizione}{Principio del terzo escluso}{terzoescluso}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Definizione}{def:tautologia}
+    \end{prerequisiti}
+    La FBF
+    \[ p \vee \neg p \]
+    è una tautologia.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{c|cT}
+  \intestazione $p$ & $\neg p$ & $p \vee \neg p$ \\ \hline
+  $\vero$ & $\falso$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    L'ultima colonna contiene solo $\vero$. A parole: una proposizione è vera oppure è falsa, non c'è una terza possibilità.
+\end{dimostrazione}
+
+% --- Non contraddizione
+\begin{Proposizione}{Principio di non contraddizione}{noncontraddizione}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Definizione}{def:tautologia}
+    \end{prerequisiti}
+    La FBF
+    \[ \neg(p \wedge \neg p) \]
+    è una tautologia.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{c|ccT}
+  \intestazione $p$ & $\neg p$ & $p \wedge \neg p$ & $\neg(p \wedge \neg p)$ \\ \hline
+  $\vero$ & $\falso$ & $\falso$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\vero$ \\
+\end{tavola}
+    L'ultima colonna contiene solo $\vero$. Equivalentemente, $p \wedge \neg p$ è una contraddizione:
+    una proposizione non può essere contemporaneamente vera e falsa.
+\end{dimostrazione}
+
+% --- Commutatività
+\begin{Proposizione}{Commutatività di AND, OR e IFF}{commutativita}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Proposizione}{prop:criterio-colonne}
+    \end{prerequisiti}
+    Le FBF
+    \[ (p \wedge q) \leftrightarrow (q \wedge p) \qquad (p \vee q) \leftrightarrow (q \vee p) \qquad (p \leftrightarrow q) \leftrightarrow (q \leftrightarrow p) \]
+    sono tautologie.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{cc|TTUUKK}
+  \intestazione $p$ & $q$ & $p \wedge q$ & $q \wedge p$ & $p \vee q$ & $q \vee p$ & $p \leftrightarrow q$ & $q \leftrightarrow p$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    Le colonne dello stesso colore coincidono ($p \wedge q$ con $q \wedge p$, $p \vee q$ con $q \vee p$,
+    $p \leftrightarrow q$ con $q \leftrightarrow p$), quindi per la Proposizione~\ref{prop:criterio-colonne}
+    le tre doppie implicazioni sono tautologie.
+\end{dimostrazione}
+
+% --- Non commutatività di ->
+\begin{Proposizione}{L'implicazione non è commutativa}{noncommimp}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Definizione}{def:tautologia}
+    \end{prerequisiti}
+    La FBF $(p \rightarrow q) \leftrightarrow (q \rightarrow p)$ \textbf{non} è una tautologia; quindi, in generale,
+    $p \rightarrow q$ e $q \rightarrow p$ non sono logicamente equivalenti.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{cc|ccT}
+  \intestazione $p$ & $q$ & $p \rightarrow q$ & $q \rightarrow p$ & $(p \rightarrow q) \leftrightarrow (q \rightarrow p)$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    Nelle righe $v(p) = \vero, v(q) = \falso$ e $v(p) = \falso, v(q) = \vero$ l'ultima colonna vale $\falso$,
+    quindi la formula non è sempre vera. Ad esempio, «se piove allora prendo l'ombrello» non dice la stessa
+    cosa di «se prendo l'ombrello allora piove».
+\end{dimostrazione}
+
+% --- Associatività
+\begin{Proposizione}{Associatività di AND e OR}{associativita}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Proposizione}{prop:criterio-colonne}
+    \end{prerequisiti}
+    Le FBF
+    \[ \big((p \wedge q) \wedge r\big) \leftrightarrow \big(p \wedge (q \wedge r)\big) \qquad\qquad
+       \big((p \vee q) \vee r\big) \leftrightarrow \big(p \vee (q \vee r)\big) \]
+    sono tautologie.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    Con tre variabili le righe sono $2^3 = 8$. Per $\wedge$:
+    \begin{tavola}{ccc|cTcT}
+  \intestazione $p$ & $q$ & $r$ & $p \wedge q$ & $(p \wedge q) \wedge r$ & $q \wedge r$ & $p \wedge (q \wedge r)$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\vero$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+\end{tavola}
+    e per $\vee$:
+    \begin{tavola}{ccc|cTcT}
+  \intestazione $p$ & $q$ & $r$ & $p \vee q$ & $(p \vee q) \vee r$ & $q \vee r$ & $p \vee (q \vee r)$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+\end{tavola}
+    In entrambe le tavole le colonne evidenziate coincidono, quindi si conclude con la Proposizione~\ref{prop:criterio-colonne}.
+\end{dimostrazione}
+
+Grazie all'associatività possiamo scrivere $p \wedge q \wedge r$ e $p \vee q \vee r$ \textbf{senza parentesi}:
+comunque le mettiamo otteniamo formule logicamente equivalenti. Si noti che $p \wedge q \wedge r$ è vera solo
+quando $p$, $q$, $r$ sono tutte vere, mentre $p \vee q \vee r$ è falsa solo quando sono tutte false.
+
+% --- Distributività
+\begin{Proposizione}{Distributività reciproca di AND e OR}{distributivita}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Proposizione}{prop:criterio-colonne}
+    \end{prerequisiti}
+    $\wedge$ e $\vee$ sono reciprocamente distributivi, cioè le FBF
+    \[ \big(p \wedge (q \vee r)\big) \leftrightarrow \big((p \wedge q) \vee (p \wedge r)\big) \qquad\qquad
+       \big(p \vee (q \wedge r)\big) \leftrightarrow \big((p \vee q) \wedge (p \vee r)\big) \]
+    sono tautologie.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    Distributività di $\wedge$ rispetto a $\vee$:
+    \begin{tavola}{ccc|cTccT}
+  \intestazione $p$ & $q$ & $r$ & $q \vee r$ & $p \wedge (q \vee r)$ & $p \wedge q$ & $p \wedge r$ & $(p \wedge q) \vee (p \wedge r)$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+\end{tavola}
+    Distributività di $\vee$ rispetto a $\wedge$:
+    \begin{tavola}{ccc|cTccT}
+  \intestazione $p$ & $q$ & $r$ & $q \wedge r$ & $p \vee (q \wedge r)$ & $p \vee q$ & $p \vee r$ & $(p \vee q) \wedge (p \vee r)$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+\end{tavola}
+    In entrambe le tavole le colonne evidenziate coincidono.
+\end{dimostrazione}
+
+% --- De Morgan
+\begin{Proposizione}{Leggi di De Morgan}{demorgan}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Proposizione}{prop:criterio-colonne}
+    \end{prerequisiti}
+    Le FBF
+    \[ \neg(p \vee q) \leftrightarrow (\neg p \wedge \neg q) \qquad\qquad \neg(p \wedge q) \leftrightarrow (\neg p \vee \neg q) \]
+    sono tautologie.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{cc|cTccT}
+  \intestazione $p$ & $q$ & $p \vee q$ & $\neg(p \vee q)$ & $\neg p$ & $\neg q$ & $\neg p \wedge \neg q$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    \begin{tavola}{cc|cTccT}
+  \intestazione $p$ & $q$ & $p \wedge q$ & $\neg(p \wedge q)$ & $\neg p$ & $\neg q$ & $\neg p \vee \neg q$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    In entrambe le tavole le colonne evidenziate coincidono. A parole: «non è vero che (A oppure B)»
+    significa «non A e non B»; «non è vero che (A e B)» significa «non A oppure non B».
+\end{dimostrazione}
+
+% --- Relazione -> e v
+\begin{Proposizione}{Relazione tra IMPLIES e OR}{impor}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Proposizione}{prop:criterio-colonne}
+    \end{prerequisiti}
+    La FBF
+    \[ (p \rightarrow q) \leftrightarrow (\neg p \vee q) \]
+    è una tautologia.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{cc|TcT}
+  \intestazione $p$ & $q$ & $p \rightarrow q$ & $\neg p$ & $\neg p \vee q$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    Le colonne evidenziate coincidono.
+\end{dimostrazione}
+
+% --- Contrapposizione
+\begin{Proposizione}{Contrapposizione}{contrapposizione}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Proposizione}{prop:criterio-colonne}
+        \dipgruppo{Solo per la seconda dimostrazione:}
+        \dip{Proposizione}{prop:impor}
+        \dip{Proposizione}{prop:commutativita}
+        \dip{Proposizione}{prop:doppianeg}
+        \dip{Proposizione}{prop:sost-variabili}
+        \dip{Proposizione}{prop:sostituzione}
+        \dip{Corollario}{cor:catene}
+    \end{prerequisiti}
+    La FBF
+    \[ (p \rightarrow q) \leftrightarrow (\neg q \rightarrow \neg p) \]
+    è una tautologia.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{cc|TccT}
+  \intestazione $p$ & $q$ & $p \rightarrow q$ & $\neg q$ & $\neg p$ & $\neg q \rightarrow \neg p$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    Le colonne evidenziate coincidono.
+\end{dimostrazione}
+
+\begin{dimostrazione}[Seconda dimostrazione, senza tavole]
+    Usiamo le tautologie già dimostrate come regole di calcolo, concatenando equivalenze (Corollario~\ref{cor:catene}):
+    \[
+    \begin{aligned}
+        p \rightarrow q &\leftrightarrow \neg p \vee q && \text{(relazione tra $\rightarrow$ e $\vee$)}\\
+        &\leftrightarrow q \vee \neg p && \text{(commutatività di $\vee$)}\\
+        &\leftrightarrow \neg(\neg q) \vee \neg p && \text{(doppia negazione, sostituita dentro la formula)}\\
+        &\leftrightarrow \neg q \rightarrow \neg p && \text{(relazione tra $\rightarrow$ e $\vee$, con $\neg q$ al posto di $p$ e $\neg p$ al posto di $q$)}.
+    \end{aligned}
+    \]
+\end{dimostrazione}
+
+% --- Negazione dell'implicazione
+\begin{Proposizione}{Negazione dell'implicazione}{negimp}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Proposizione}{prop:criterio-colonne}
+        \dipgruppo{Solo per la seconda dimostrazione:}
+        \dip{Proposizione}{prop:impor}
+        \dip{Proposizione}{prop:demorgan}
+        \dip{Proposizione}{prop:doppianeg}
+        \dip{Proposizione}{prop:sost-variabili}
+        \dip{Proposizione}{prop:sostituzione}
+        \dip{Corollario}{cor:catene}
+    \end{prerequisiti}
+    La FBF
+    \[ \neg(p \rightarrow q) \leftrightarrow (p \wedge \neg q) \]
+    è una tautologia.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{cc|cTcT}
+  \intestazione $p$ & $q$ & $p \rightarrow q$ & $\neg(p \rightarrow q)$ & $\neg q$ & $p \wedge \neg q$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\vero$ & $\falso$ & $\vero$ & $\falso$ \\
+\end{tavola}
+    Le colonne evidenziate coincidono.
+\end{dimostrazione}
+
+\begin{dimostrazione}[Seconda dimostrazione, senza tavole]
+    \[
+    \begin{aligned}
+        \neg(p \rightarrow q) &\leftrightarrow \neg(\neg p \vee q) && \text{(relazione tra $\rightarrow$ e $\vee$)}\\
+        &\leftrightarrow \neg(\neg p) \wedge \neg q && \text{(De Morgan, con $\neg p$ al posto di $p$)}\\
+        &\leftrightarrow p \wedge \neg q && \text{(doppia negazione)}.
+    \end{aligned}
+    \]
+    A parole: «se A allora B» è falsa esattamente quando A è vera ma B no.
+\end{dimostrazione}
+
+% --- Doppia implicazione
+\begin{Proposizione}{Doppia implicazione}{doppiaimp}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Proposizione}{prop:criterio-colonne}
+    \end{prerequisiti}
+    La FBF
+    \[ (p \leftrightarrow q) \leftrightarrow \big((p \rightarrow q) \wedge (q \rightarrow p)\big) \]
+    è una tautologia.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{cc|TccT}
+  \intestazione $p$ & $q$ & $p \leftrightarrow q$ & $p \rightarrow q$ & $q \rightarrow p$ & $(p \rightarrow q) \wedge (q \rightarrow p)$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    Le colonne evidenziate coincidono. È il motivo per cui, per dimostrare un «se e solo se», si dimostrano
+    separatamente le due implicazioni $(\Rightarrow)$ e $(\Leftarrow)$.
+\end{dimostrazione}
+
+% --- Negazione della doppia implicazione
+\begin{Proposizione}{Negazione della doppia implicazione}{negdoppiaimp}
+    \begin{prerequisiti}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Proposizione}{prop:criterio-colonne}
+    \end{prerequisiti}
+    La FBF
+    \[ (p \leftrightarrow q) \leftrightarrow (\neg p \leftrightarrow \neg q) \]
+    è una tautologia.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{cc|TccT}
+  \intestazione $p$ & $q$ & $p \leftrightarrow q$ & $\neg p$ & $\neg q$ & $\neg p \leftrightarrow \neg q$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\vero$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    Le colonne evidenziate coincidono.
+\end{dimostrazione}
+
+\info{Come si usa la negazione della doppia implicazione}{
+    Il nome viene dal fatto che si \textbf{negano entrambi i membri} della doppia implicazione.
+    Insieme alla Proposizione~\ref{prop:sost-variabili}, dice che per ogni coppia di FBF $f$, $g$:
+    \begin{center}
+        se $f \leftrightarrow g$ è vera, allora anche $\neg f \leftrightarrow \neg g$ è vera (e viceversa).
+    \end{center}
+    Negli appunti del prof.\ è usata proprio così, per passare da un'equivalenza tra due affermazioni
+    all'equivalenza tra le loro negazioni (ad esempio nelle caratterizzazioni delle funzioni iniettive e
+    negli insiemi ordinati).
+}
+
+% ──────────────────────────────────────────────────────────────
+\section{Altri connettivi: XOR, NAND, NOR}\label{sec:altri-connettivi}
+
+\dfn[xor-nand-nor]{I connettivi XOR, NAND e NOR}{
+    Definiamo, attraverso le loro tavole di verità, tre nuovi connettivi binari:
+    \begin{itemize}
+        \item \textbf{XOR} (anche detto \textit{Aut}, simbolo $\veebar$): «o l'uno o l'altro, ma non entrambi»;
+        \item \textbf{NAND} (\textit{not-and}, simbolo $\mid$);
+        \item \textbf{NOR} (\textit{not-or}, simbolo $\downarrow$).
+    \end{itemize}
+    \begin{tavola}{cc|ccc}
+  \intestazione $p$ & $q$ & $p \XOR q$ & $p \NAND q$ & $p \NOR q$ \\ \hline
+  $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    Li aggiungiamo all'insieme $C$ dei connettivi: la regola 3 della Definizione~\ref{def:fbf-prop} vale anche per loro
+    e il valore di una valutazione su $p \XOR q$, $p \NAND q$, $p \NOR q$ è dato dalla tavola.
+}
+
+A parole: $p \XOR q$ è vera quando \textbf{esattamente una} tra $p$ e $q$ è vera; $p \NAND q$ è falsa solo quando
+$p$ e $q$ sono entrambe vere; $p \NOR q$ è vera solo quando $p$ e $q$ sono entrambe false.
+
+\begin{Proposizione}{XOR come negazione di IFF}{xoriff}
+    \begin{prerequisiti}
+        \dip{Definizione}{def:xor-nand-nor}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Proposizione}{prop:criterio-colonne}
+    \end{prerequisiti}
+    La FBF
+    \[ (p \XOR q) \leftrightarrow \neg(p \leftrightarrow q) \]
+    è una tautologia.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    \begin{tavola}{cc|TcT}
+  \intestazione $p$ & $q$ & $p \XOR q$ & $p \leftrightarrow q$ & $\neg(p \leftrightarrow q)$ \\ \hline
+  $\vero$ & $\vero$ & $\falso$ & $\vero$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\vero$ & $\falso$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ \\
+\end{tavola}
+    Le colonne evidenziate coincidono: $p \XOR q$ è vera esattamente quando $p$ e $q$ hanno valori \textbf{diversi},
+    cioè quando $p \leftrightarrow q$ è falsa.
+\end{dimostrazione}
+
+\begin{Proposizione}{Esplicitazioni di XOR}{xorespl}
+    \begin{prerequisiti}
+        \dip{Definizione}{def:xor-nand-nor}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Proposizione}{prop:criterio-colonne}
+        \dip{Corollario}{cor:catene}
+    \end{prerequisiti}
+    Le seguenti FBF sono logicamente equivalenti:
+    \[ p \XOR q \qquad\qquad (p \wedge \neg q) \vee (q \wedge \neg p) \qquad\qquad (p \vee q) \wedge \neg(p \wedge q). \]
+\end{Proposizione}
+
+\begin{dimostrazione}
+    Confrontiamo la prima formula con la seconda
+    \begin{tavola}{cc|TccT}
+  \intestazione $p$ & $q$ & $p \XOR q$ & $p \wedge \neg q$ & $q \wedge \neg p$ & $(p \wedge \neg q) \vee (q \wedge \neg p)$ \\ \hline
+  $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+\end{tavola}
+    e la prima con la terza:
+    \begin{tavola}{cc|TccT}
+  \intestazione $p$ & $q$ & $p \XOR q$ & $p \vee q$ & $\neg(p \wedge q)$ & $(p \vee q) \wedge \neg(p \wedge q)$ \\ \hline
+  $\vero$ & $\vero$ & $\falso$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ \\
+\end{tavola}
+    In entrambi i casi le colonne evidenziate coincidono; per il Corollario~\ref{cor:catene} anche la seconda
+    e la terza formula sono equivalenti tra loro. A parole: «esattamente una tra $p$ e $q$ è vera» equivale a
+    «$p$ vera e $q$ falsa, oppure $q$ vera e $p$ falsa», e a «almeno una è vera, ma non entrambe».
+\end{dimostrazione}
+
+\begin{Proposizione}{Commutatività e associatività di XOR}{xorcommassoc}
+    \begin{prerequisiti}
+        \dip{Definizione}{def:xor-nand-nor}
+        \dip{Proposizione}{prop:criterio-colonne}
+    \end{prerequisiti}
+    Le FBF
+    \[ (p \XOR q) \leftrightarrow (q \XOR p) \qquad\qquad \big((p \XOR q) \XOR r\big) \leftrightarrow \big(p \XOR (q \XOR r)\big) \]
+    sono tautologie.
+\end{Proposizione}
+
+\begin{dimostrazione}
+    Commutatività:
+    \begin{tavola}{cc|TT}
+  \intestazione $p$ & $q$ & $p \XOR q$ & $q \XOR p$ \\ \hline
+  $\vero$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+\end{tavola}
+    Associatività:
+    \begin{tavola}{ccc|cTcT}
+  \intestazione $p$ & $q$ & $r$ & $p \XOR q$ & $(p \XOR q) \XOR r$ & $q \XOR r$ & $p \XOR (q \XOR r)$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ & $\falso$ & $\vero$ \\
+  $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\falso$ \\
+\end{tavola}
+    In entrambe le tavole le colonne evidenziate coincidono.
+\end{dimostrazione}
+
+% ──────────────────────────────────────────────────────────────
+\section{Riduzione dei connettivi}\label{sec:riduzione}
+
+Attraverso le tautologie possiamo definire alcuni connettivi mediante altri. Ad esempio, per la
+Proposizione~\ref{prop:impor}
+\[ (p \rightarrow q) \leftrightarrow (\neg p \vee q), \]
+dunque possiamo \textbf{eliminare} $\rightarrow$: ogni volta che compare, lo sostituiamo con $\neg$ e $\vee$
+(Proposizione~\ref{prop:sostituzione}). Allo stesso modo, per la Proposizione~\ref{prop:doppiaimp}, possiamo eliminare
+$\leftrightarrow$ e per la Proposizione~\ref{prop:xoriff} possiamo eliminare XOR. Quindi ci si può ridurre a casi più semplici.
+
+\begin{Proposizione}{Riduzioni a NAND e NOR}{riduzioni}
+    \begin{prerequisiti}
+        \dip{Definizione}{def:xor-nand-nor}
+        \dip{Proposizione}{prop:tavole-connettivi}
+        \dip{Proposizione}{prop:criterio-colonne}
+        \dip{Corollario}{cor:catene}
+    \end{prerequisiti}
+    Valgono le seguenti equivalenze logiche:
+    \begin{enumerate}
+        \item $(p \NAND p) \leftrightarrow \neg p \leftrightarrow (p \NOR p)$;
+        \item $(p \wedge q) \leftrightarrow \neg(p \NAND q)$ \quad e \quad $(p \NAND q) \leftrightarrow \neg(p \wedge q)$;
+        \item $(p \vee q) \leftrightarrow \neg(p \NOR q)$ \quad e \quad $(p \NOR q) \leftrightarrow \neg(p \vee q)$.
+    \end{enumerate}
+\end{Proposizione}
+
+\begin{dimostrazione}
+    Punto 1 (le tre colonne evidenziate coincidono, poi si usa il Corollario~\ref{cor:catene}):
+    \begin{tavola}{c|TTT}
+  \intestazione $p$ & $\neg p$ & $p \NAND p$ & $p \NOR p$ \\ \hline
+  $\vero$ & $\falso$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    Punto 2:
+    \begin{tavola}{cc|TTUU}
+  \intestazione $p$ & $q$ & $p \wedge q$ & $\neg(p \NAND q)$ & $p \NAND q$ & $\neg(p \wedge q)$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\vero$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    Punto 3:
+    \begin{tavola}{cc|TTUU}
+  \intestazione $p$ & $q$ & $p \vee q$ & $\neg(p \NOR q)$ & $p \NOR q$ & $\neg(p \vee q)$ \\ \hline
+  $\vero$ & $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\vero$ & $\falso$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\vero$ & $\vero$ & $\vero$ & $\falso$ & $\falso$ \\
+  $\falso$ & $\falso$ & $\falso$ & $\falso$ & $\vero$ & $\vero$ \\
+\end{tavola}
+    In ogni tavola le colonne dello stesso colore coincidono. Del resto i nomi lo dicono già:
+    NAND è «not-and» e NOR è «not-or».
+\end{dimostrazione}
+
+Insomma, non è difficile dimostrare che \textbf{tutti} i connettivi si possono definire a partire dal solo NAND,
+o anche dal solo NOR.
+
+\begin{Teorema}{Completezza di NAND e di NOR}{completezza-nand}
+    \begin{prerequisiti}
+        \dip{Definizione}{def:fbf-prop}
+        \dip{Definizione}{def:xor-nand-nor}
+        \dip{Proposizione}{prop:riduzioni}
+        \dip{Proposizione}{prop:doppianeg}
+        \dip{Proposizione}{prop:demorgan}
+        \dip{Proposizione}{prop:impor}
+        \dip{Proposizione}{prop:doppiaimp}
+        \dip{Proposizione}{prop:xoriff}
+        \dip{Proposizione}{prop:sost-variabili}
+        \dip{Proposizione}{prop:sostituzione}
+        \dip{Corollario}{cor:catene}
+    \end{prerequisiti}
+    Ogni FBF è logicamente equivalente a una FBF in cui compare come unico connettivo NAND.
+    Lo stesso vale per NOR.
+\end{Teorema}
+
+\begin{dimostrazione}
+    Basta esprimere con il solo NAND ciascuno dei connettivi $\neg$, $\wedge$, $\vee$, $\rightarrow$, $\leftrightarrow$
+    (e anche XOR e NOR): poi, in una FBF qualsiasi, si sostituisce un connettivo alla volta partendo dalle sottoformule
+    più interne, e ogni sostituzione produce una formula equivalente (Proposizione~\ref{prop:sostituzione}).
+    Nei passaggi seguenti le tautologie sono applicate anche con FBF al posto delle variabili (Proposizione~\ref{prop:sost-variabili})
+    e le equivalenze sono concatenate (Corollario~\ref{cor:catene}).
+    \begin{itemize}
+        \item \textbf{NOT}: $\neg p \leftrightarrow p \NAND p$ (Proposizione~\ref{prop:riduzioni}, punto 1).
+        \item \textbf{AND}: $p \wedge q \leftrightarrow \neg(p \NAND q) \leftrightarrow (p \NAND q) \NAND (p \NAND q)$,
+              per il punto 2 e poi per il punto 1 applicato alla FBF $p \NAND q$.
+        \item \textbf{OR}: per la doppia negazione e De Morgan
+              \[ p \vee q \leftrightarrow \neg(\neg p) \vee \neg(\neg q) \leftrightarrow \neg(\neg p \wedge \neg q). \]
+              Per il punto 2, $\neg(f \wedge g) \leftrightarrow f \NAND g$ per ogni coppia di FBF $f$, $g$; quindi
+              \[ p \vee q \leftrightarrow (\neg p) \NAND (\neg q) \leftrightarrow (p \NAND p) \NAND (q \NAND q). \]
+        \item \textbf{IMPLIES}: per la relazione tra $\rightarrow$ e $\vee$, la doppia negazione e De Morgan
+              \[ p \rightarrow q \leftrightarrow \neg p \vee q \leftrightarrow \neg p \vee \neg(\neg q) \leftrightarrow \neg(p \wedge \neg q)
+                 \leftrightarrow p \NAND (\neg q) \leftrightarrow p \NAND (q \NAND q). \]
+        \item \textbf{IFF}: per la doppia implicazione $p \leftrightarrow q \leftrightarrow (p \rightarrow q) \wedge (q \rightarrow p)$,
+              e $\rightarrow$, $\wedge$ sono già stati espressi con il solo NAND.
+        \item \textbf{XOR} e \textbf{NOR}: $p \XOR q \leftrightarrow \neg(p \leftrightarrow q)$ (Proposizione~\ref{prop:xoriff}) e
+              $p \NOR q \leftrightarrow \neg(p \vee q)$ (Proposizione~\ref{prop:riduzioni}, punto 3), e $\neg$, $\leftrightarrow$, $\vee$ sono già stati espressi.
+    \end{itemize}
+    Per NOR si ragiona in modo analogo scambiando i ruoli di $\wedge$ e $\vee$:
+    $\neg p \leftrightarrow p \NOR p$; \ $p \vee q \leftrightarrow (p \NOR q) \NOR (p \NOR q)$; \
+    $p \wedge q \leftrightarrow \neg(\neg p \vee \neg q) \leftrightarrow (p \NOR p) \NOR (q \NOR q)$;
+    infine $\rightarrow$ e $\leftrightarrow$ si esprimono tramite $\neg$, $\vee$, $\wedge$ come sopra.
+\end{dimostrazione}
+
+% ──────────────────────────────────────────────────────────────
+\section{Esercizi}\label{sec:esercizi-prop}
+
+Gli esercizi che negli appunti del prof.\ sono segnati come parte della teoria sono stati svolti nelle sezioni
+precedenti (commutatività, associatività, distributività, doppia implicazione, XOR). Restano i seguenti.
+
+\begin{esercizio}{Connettivi binari}
+    Quanti connettivi binari è possibile definire?
+    (\textit{Suggerimento}: un connettivo binario è determinato dalla colonna della sua tavola di verità.)
+\end{esercizio}
+
+\begin{esercizio}{Tavole di verità}
+    Scrivere le tavole di verità delle seguenti FBF:
+    \begin{enumerate}[label=(\alph*)]
+        \item $p \wedge q \wedge r$;
+        \item $(p \leftrightarrow q) \leftrightarrow \big((p \rightarrow q) \vee (q \rightarrow p)\big)$. È una tautologia?
+    \end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Formalizzare}
+    Formalizzare nel linguaggio del calcolo proposizionale le seguenti frasi italiane:
+    \begin{enumerate}[label=(\alph*)]
+        \item «Se c'è il sole, vado a mare»;
+        \item «Quando vado a mare c'è il sole»;
+        \item «Se c'è il sole e non lavoro, allora vado a mare»;
+        \item «È necessario che ci sia il sole perché io vada a mare»;
+        \item «In caso io vada a mare, non dovrà essere notte e non dovranno esserci nuvole».
+    \end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{De Morgan}
+    Verificare le leggi di De Morgan (Proposizione~\ref{prop:demorgan}) senza guardare la dimostrazione.
+\end{esercizio}
+
+\begin{esercizio}{Transitività dell'implicazione}
+    Dimostrare che $\rightarrow$ è transitiva, cioè che $\big((p \rightarrow q) \wedge (q \rightarrow r)\big) \rightarrow (p \rightarrow r)$
+    è una tautologia.
+\end{esercizio}
+
+\begin{esercizio}{Ridurre i connettivi}
+    \begin{enumerate}[label=(\alph*)]
+        \item Scrivere il connettivo $\rightarrow$ usando soltanto $\wedge$ e $\neg$.
+        \item Scrivere il connettivo $\leftrightarrow$ usando soltanto NAND (o NOR).
+    \end{enumerate}
+    (\textit{Suggerimento}: rileggere la dimostrazione del Teorema~\ref{teo:completezza-nand}.)
+\end{esercizio}
