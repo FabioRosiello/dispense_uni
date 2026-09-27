@@ -1,0 +1,508 @@
+\chapter{Il piano di controllo: gli algoritmi di routing}
+
+% Grafo di esempio (Kurose) usato in tutto il capitolo
+\tikzset{
+  rnode/.style={circle, draw=netblue!80!black, thick, fill=cloudbg, minimum size=0.75cm, font=\small\bfseries\sffamily},
+  redge/.style={thick, black!70},
+  rcost/.style={font=\scriptsize\sffamily, fill=white, inner sep=1pt},
+}
+\newcommand{\grafoesempio}[1]{%
+  \node[rnode] (u) at (0,0) {u};
+  \node[rnode] (v) at (1.8,1.4) {v};
+  \node[rnode] (w) at (4.2,1.4) {w};
+  \node[rnode] (x) at (1.8,-1.4) {x};
+  \node[rnode] (y) at (4.2,-1.4) {y};
+  \node[rnode] (z) at (6,0) {z};
+  \draw[redge] (u) -- node[rcost] {2} (v);
+  \draw[redge] (u) -- node[rcost] {1} (x);
+  \draw[redge] (u) -- node[rcost, pos=0.35] {5} (w);
+  \draw[redge] (v) -- node[rcost] {3} (w);
+  \draw[redge] (v) -- node[rcost] {2} (x);
+  \draw[redge] (x) -- node[rcost, pos=0.35] {3} (w);
+  \draw[redge] (x) -- node[rcost] {1} (y);
+  \draw[redge] (w) -- node[rcost] {1} (y);
+  \draw[redge] (w) -- node[rcost] {5} (z);
+  \draw[redge] (y) -- node[rcost] {2} (z);
+  #1
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Introduzione al routing}
+% ══════════════════════════════════════════════════════════════
+
+Ricordiamo che, alla ricezione di un pacchetto, un router può:
+
+\begin{itemize}
+    \item inoltrarlo così com'è a un vicino adatto;
+    \item inoltrarne una versione modificata o sostituita (frammentazione, NAT, \dots);
+    \item scartarlo (per esempio se è scaduto).
+\end{itemize}
+
+Ci sono router molto semplici, usati dagli amministratori locali per collegare LAN e WAN, e router usati dagli ISP per
+far arrivare i pacchetti al dispositivo giusto in tutta Internet. I router hanno forwarding table che stabiliscono la
+strategia di inoltro \textbf{locale} (nel vicinato del router), create in modo centralizzato o decentralizzato. Ma
+all'avvio un router \textbf{non sa nulla} del resto della rete.
+
+\dfn{Algoritmo di routing}{
+    Per decidere dove inoltrare i pacchetti, i router usano \textbf{algoritmi di routing}, che determinano
+    \textbf{percorsi buoni} (sequenze di router) dai mittenti ai destinatari. Di solito un percorso ``buono'' è quello a
+    \textbf{costo minimo} (il più corto, il più veloce, \dots); nel mondo reale contano anche questioni di
+    \emph{policy} (regole che dicono, per esempio, se un'organizzazione può scambiare traffico con un'altra).
+}
+
+Il problema di trovare percorsi buoni su una rete (o su un grafo) è cruciale per le reti di calcolatori, ma è
+rilevantissimo anche altrove: videogiochi, guida autonoma, robotica, navigatori.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il flooding}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Flooding}{
+    Nell'approccio più semplice, il \textbf{flooding} (inondazione), ogni router inoltra ogni pacchetto in arrivo su
+    \textbf{tutti} i collegamenti tranne quello da cui è arrivato.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \grafoesempio{
+    \draw[-{Stealth}, very thick, netred] (u) -- (v); \draw[-{Stealth}, very thick, netred] (u) -- (x); \draw[-{Stealth}, very thick, netred] (u) -- (w);
+    \draw[-{Stealth}, very thick, netorange] (v) -- (w); \draw[-{Stealth}, very thick, netorange] (x) -- (y); \draw[-{Stealth}, very thick, netorange] (x) -- (w); \draw[-{Stealth}, very thick, netorange] (v) -- (x);
+    \draw[-{Stealth}, very thick, netgreen!60!black] (w) -- (z); \draw[-{Stealth}, very thick, netgreen!60!black] (y) -- (z); \draw[-{Stealth}, very thick, netgreen!60!black] (y) -- (w);
+  }
+  \node[font=\footnotesize\sffamily, text width=5cm, anchor=west] at (7,0) {\textcolor{netred}{1° giro}, \textcolor{netorange}{2° giro}, \textcolor{netgreen!60!black}{3° giro}: il pacchetto si moltiplica e raggiunge tutti, esplorando ogni cammino.};
+\end{tikzpicture}
+\caption{Flooding a partire da u.}
+\end{figure}
+
+\begin{itemize}
+    \item Tutti i cammini vengono esplorati, compreso quello ottimo: se un cammino esiste, il pacchetto \textbf{arriverà}.
+    \item I pacchetti che non vanno da nessuna parte raggiungono prima o poi il limite di hop e vengono scartati.
+    \item È \textbf{robustissimo} grazie alla ridondanza: se alcuni router sono spenti, i cammini alternativi vengono comunque usati.
+\end{itemize}
+
+Il flooding si usa in situazioni particolari in cui serve ridondanza (diffusione di messaggi a tutti, scenari militari),
+ma è impraticabile in reti grandi e ad alte prestazioni come Internet: serve un algoritmo più sofisticato.
+
+% ══════════════════════════════════════════════════════════════
+\section{Formalizzazione del problema}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Grafo e costi}{
+    La rete si rappresenta come un \textbf{grafo} $G = (N, E)$ dove:
+    \begin{itemize}
+      \item $N$ è l'insieme dei \textbf{nodi} (i router);
+      \item $E \subseteq N \times N$ è l'insieme degli \textbf{archi} (i collegamenti fisici), coppie di nodi.
+    \end{itemize}
+    Ogni arco ha un \textbf{costo}, che può riflettere la lunghezza fisica del collegamento, la sua velocità o il suo costo
+    economico. Formalmente una funzione $c$ tale che, per ogni coppia di nodi $(x, y)$:
+    \begin{itemize}
+      \item se $(x,y) \in E$, $c(x,y)$ è il costo dell'arco;
+      \item se $(x,y) \notin E$, $c(x,y) = \infty$;
+      \item il grafo è \textbf{non orientato}: se $(x,y) \in E$ allora anche $(y,x) \in E$ e $c(x,y) = c(y,x)$.
+    \end{itemize}
+}
+
+\dfn{Cammino e cammino minimo}{
+    Un \textbf{cammino} è una sequenza di nodi $(x_1, x_2, \dots, x_p)$ tale che nodi adiacenti sono collegati:
+    $(x_1, x_2), \dots, (x_{p-1}, x_p) \in E$. Il suo \textbf{costo} è la somma dei costi degli archi:
+    $$c(\pi) = \sum_{i=1}^{p-1} c(x_i, x_{i+1})$$
+    Tra tutti i cammini che collegano due nodi $u$ e $z$, il \textbf{cammino migliore} (a costo minimo) è quello di costo minimo.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \grafoesempio{ \draw[pathhl, opacity=0.6] (u) -- (x) -- (y) -- (w); }
+  \node[font=\footnotesize\sffamily, text width=6.2cm, anchor=west] at (7,0) {Un grafo di 6 nodi (da Kurose), usato in tutto il capitolo.\\[4pt] \textbf{Esercizio}: qual è il cammino migliore tra u e w?\\[4pt] \emph{Soluzione}: u--x--y--w, di costo $1+1+1 = 3$ (il collegamento diretto u--w costa 5, e u--v--w costa 5).};
+\end{tikzpicture}
+\caption{Il grafo di esempio; evidenziato il cammino minimo da u a w.}
+\end{figure}
+
+\begin{itemize}
+    \item Gli algoritmi che trovano un cammino ottimo tra due nodi si chiamano algoritmi \textbf{di cammino a costo minimo}
+          (\emph{least-cost path}; \emph{shortest path} se tutti gli archi hanno lo stesso costo).
+    \item Nelle reti interessa trovare il cammino ottimo non per una coppia, ma per \textbf{tutte} le coppie di nodi.
+    \item Un algoritmo di routing \textbf{converge} quando ha trovato il cammino minimo per tutte le coppie di nodi.
+\end{itemize}
+
+Nelle reti si usano tipicamente due famiglie di algoritmi: \textbf{Distance Vector} e \textbf{Link State}.
+
+% ══════════════════════════════════════════════════════════════
+\section{L'algoritmo Distance Vector}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Distance Vector (DV)}{
+    L'algoritmo \textbf{Distance Vector} è un approccio \textbf{decentralizzato}: sfrutta la conoscenza \textbf{locale} della
+    rete combinata con la comunicazione tra nodi. Si basa sull'algoritmo di \textbf{Bellman-Ford}. Ogni nodo riceve
+    informazioni da uno o più vicini diretti, fa un calcolo, e ridistribuisce i risultati ai vicini. È
+    \textbf{asincrono}: non richiede che tutti i nodi siano coordinati.
+}
+
+\subsection{L'equazione di Bellman}
+
+Sia $d_x(y)$ il costo del cammino migliore dal nodo $x$ al nodo $y$. Dall'equazione di Bellman (Bellman-Ford):
+
+\dfn{Equazione di Bellman-Ford}{
+    $$d_x(y) = \min_{v} \{\, c(x,v) + d_v(y) \,\}$$
+    dove il minimo è preso su tutti i \textbf{vicini} $v$ di $x$.
+}
+
+È intuitiva: sul cammino migliore da $x$ a $y$ deve esserci un vicino $v$ di $x$, e il costo di quel cammino è il costo per
+raggiungere $v$ più il costo del cammino migliore da $v$ a $y$.
+
+\begin{itemize}
+    \item Se troviamo questo $v$, basta scriverlo nella forwarding table: tutti i pacchetti diretti a $y$ vanno inoltrati a $v$.
+    \item Per farlo, $x$ deve avere una stima di $d_v(y)$ per tutti i suoi vicini: il \textbf{distance vector}.
+\end{itemize}
+
+\begin{esempio}{L'equazione sul grafo di esempio}
+\begin{center}
+\begin{tikzpicture}
+  \grafoesempio{ \draw[pathhl, opacity=0.6] (u) -- (x) -- (y) -- (z); }
+\end{tikzpicture}
+\end{center}
+Il cammino migliore da u a z è u$\rightarrow$x$\rightarrow$y$\rightarrow$z. Per tutti i nodi lungo questo cammino l'equazione di
+Bellman deve valere. Il nodo u ha tre vicini, w, v e x:
+\begin{itemize}
+    \item per x: $c(u,x) = 1$ e $d_x(z) = 3$, quindi $1 + 3 = 4$;
+    \item per v: $c(u,v) = 2$ e $d_v(z) = 5$, quindi $2 + 5 = 7$;
+    \item per w: $c(u,w) = 5$ e $d_w(z) = 3$, quindi $5 + 3 = 8$.
+\end{itemize}
+$$d_u(z) = \min\{1+3,\ 2+5,\ 5+3\} = 4$$
+Il nodo \textbf{x} minimizza l'espressione: è il prossimo nodo del cammino ottimo, e nella forwarding table di u la destinazione z
+va associata al collegamento verso x. Ripetendo il ragionamento su x si vede che y minimizza la sua espressione, e così via.
+\end{esempio}
+
+\subsection{Lo pseudocodice}
+
+\begin{lstlisting}[mathescape=true, title={Distance Vector, eseguito da ogni nodo $x$}]
+DistanceVector(x):
+    // inizializzazione
+    for all nodes v:
+        if v is a neighbor of x then  D$_x$(v) = c(x,v)
+        else                          D$_x$(v) = $\infty$
+    for all neighbors w and destinations y:
+        D$_w$(y) = ?                     // ancora sconosciuti
+    send initial D$_x$($\cdot$) to all neighbors
+
+    // fase online
+    repeat
+        wait for (a link cost change) or (an update D$_w$($\cdot$) from a neighbor w)
+        for all nodes y:
+            D$_x$(y) = min$_v$ { c(x,v) + D$_v$(y) }     // equazione di Bellman
+        if D$_x$(y) changed for any destination y then
+            send updated D$_x$($\cdot$) to all neighbors
+    until false   // per sempre
+\end{lstlisting}
+
+\begin{itemize}
+    \item La struttura $D_w(v)$ conserva i distance vector dei nodi $w$ verso le destinazioni $v$.
+    \item \textbf{Inizializzazione}: sono note solo le distanze verso i vicini.
+    \item \textbf{Fase online}: si ricevono le novità dai vicini, si aggiornano i distance vector con l'equazione di Bellman, e i
+          cambiamenti locali vengono comunicati ai nodi adiacenti.
+\end{itemize}
+
+\begin{esempio}{Come si propaga una buona notizia}
+Seguiamo il cammino da u a z:
+\begin{enumerate}
+    \item All'avvio u conosce solo i suoi vicini: il costo verso z è infinito, $D_u(z) = \infty$.
+    \item Il nodo y si ``sveglia'' e scopre un cammino verso z: il collegamento diretto y--z di costo 2, $D_y(z) = c(y,z) = 2$. Comunica
+          la buona notizia a x.
+    \item Il nodo x scopre che il cammino migliore verso z passa per y, con costo $D_x(z) = c(x,y) + D_y(z) = 1 + 2 = 3$, e inoltra
+          la notizia a u.
+    \item Il nodo u riceve la notizia: ora esiste un cammino verso z di costo finito, attraverso x:
+          $D_u(z) = c(u,x) + D_x(z) = 1 + 3 = 4$.
+\end{enumerate}
+Lo stesso processo avviene per tutti i nodi e tutti i cammini.
+\end{esempio}
+
+\begin{esempio}{Le tabelle di un nodo (dalla lavagna)}
+Il nodo x mantiene il proprio vettore e quelli ricevuti dai vicini. Quando riceve da y il vettore aggiornato, ricalcola ogni
+destinazione: per esempio $D_x(z) = \min\{c(x,y) + D_y(z),\ c(x,w) + D_w(z),\ \dots\}$. Poi u, ricevuto il nuovo vettore di x,
+ricalcola $D_u(w) = c(u,x) + D_x(w) = 1 + 2 = 3$ e $D_u(z) = c(u,x) + D_x(z) = 1 + 3 = 4$.
+\begin{center}
+\begin{tabular}{l|cccccc}
+\toprule
+\textbf{vettore di u dopo la convergenza} & u & v & w & x & y & z \\
+\midrule
+costo & 0 & 2 & 3 & 1 & 2 & 4 \\
+prossimo hop & --- & v & x & x & x & x \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{esempio}
+
+\subsection{Complessità, pro e contro}
+
+Ogni volta che il costo di un nodo viene aggiornato, tutti i nodi devono rivalutare i propri archi: nel caso peggiore la
+complessità è \textbf{quadratica}.
+
+\begin{itemize}
+    \item[\itick] \textbf{Asincrono}: i router possono adattarsi ai costi aggiornati in qualsiasi momento, senza coordinarsi.
+    \item[\icross] \textbf{Convergenza lenta}: gli aggiornamenti si propagano lentamente, perché ogni nodo deve accorgersi del
+          cambiamento e avvisare i vicini.
+    \item[\icross] \textbf{Count-to-infinity}: i miglioramenti vengono riconosciuti e adottati subito, ma i \textbf{guasti} vengono
+          rilevati lentamente e possono produrre cicli.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il problema del count-to-infinity}
+% ══════════════════════════════════════════════════════════════
+
+Il problema nasce proprio dalla natura ``locale'' di DV, che è anche la sua forza: il vettore locale $D_x(y)$ si calcola a
+partire dai vettori degli altri nodi $D_v(y)$, ma non c'è alcuna indicazione su \textbf{quali nodi} stanno sui cammini scelti
+dai vicini. Posso essere sicuro di non essere io stesso sul ``cammino migliore'' dei miei vicini?
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \begin{scope}
+    \node[rnode] (x) at (0,0) {x};
+    \node[rnode] (y) at (2.2,1.6) {y};
+    \node[rnode] (z) at (4.4,0) {z};
+    \draw[redge] (x) -- node[rcost] {4} (y);
+    \draw[redge] (y) -- node[rcost] {1} (z);
+    \draw[redge] (x) -- node[rcost] {50} (z);
+    \node[font=\footnotesize\sffamily] at (2.2,-0.9) {prima del cambiamento};
+  \end{scope}
+  \draw[-{Stealth}, very thick] (5.2,0.6) -- (6.4,0.6);
+  \begin{scope}[xshift=7.2cm]
+    \node[rnode] (x) at (0,0) {x};
+    \node[rnode] (y) at (2.2,1.6) {y};
+    \node[rnode] (z) at (4.4,0) {z};
+    \draw[redge, netred, very thick] (x) -- node[rcost, text=netred] {\textbf{60}} (y);
+    \draw[redge] (y) -- node[rcost] {1} (z);
+    \draw[redge] (x) -- node[rcost] {50} (z);
+    \node[font=\footnotesize\sffamily, text=netred] at (2.2,-0.9) {il costo x--y sale a 60, e solo y se ne accorge};
+  \end{scope}
+\end{tikzpicture}
+\caption{Lo scenario del count-to-infinity.}
+\end{figure}
+
+\textbf{Situazione iniziale} ($c(x,y) = 4$): $D_y(x) = 4$, $D_y(z) = 1$, $D_z(y) = 1$, $D_z(x) = 1 + D_y(x) = 5$ (z raggiunge x
+passando per y), $D_x(y) = 4$, $D_x(z) = 4 + D_y(z) = 5$.
+
+Ora il costo di x--y sale a 60 e \textbf{solo y} se ne accorge:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{clcc}
+\toprule
+\textbf{Passo} & \textbf{Chi aggiorna} & $D_y(x)$ & $D_z(x)$ \\
+\midrule
+0 & situazione iniziale & 4 & 5 \\
+1 & y: $\min\{60,\ 1 + D_z(x)\} = 1 + 5$ & \textbf{6} & 5 \\
+2 & z: $\min\{50,\ 1 + D_y(x)\} = 1 + 6$ & 6 & \textbf{7} \\
+3 & y: $\min\{60,\ 1 + D_z(x)\} = 1 + 7$ & \textbf{8} & 7 \\
+4 & z: $\min\{50,\ 1 + 8\}$ & 8 & \textbf{9} \\
+\dots & \dots & \dots & \dots \\
+& y: $\min\{60,\ 1 + 49\}$ & \textbf{50} & 49 \\
+& z: $\min\{50,\ 1 + 50\} = 50$ (diretto) & 50 & \textbf{50} \\
+& y: $\min\{60,\ 1 + 50\}$ & \textbf{51} & 50 \\
+\bottomrule
+\end{tabular}
+\caption{y crede di poter raggiungere x passando per z, ma z raggiungeva x passando per y: i due vettori si rincorrono.}
+\end{table}
+
+\begin{enumerate}
+    \item y rileva l'aumento e aggiorna il proprio vettore verso x: $D_y(x) = \min\{60,\ 1 + D_z(x)\} = 6$. Ma il valore $D_z(x) = 5$
+          che sta usando era calcolato \textbf{passando per y stesso}, sul vecchio collegamento da 4!
+    \item Il vettore $D_y(x)$ è usato da z per calcolare il cammino verso x, quindi anche $D_z(x)$ va aggiornato: 7.
+    \item Ma $D_z(x)$ è a sua volta usato da y, che deve aggiornarsi di nuovo: 8. E così via.
+\end{enumerate}
+
+È un \textbf{ciclo}: i due vettori si aggiornano continuamente, crescendo di poco a ogni scambio, finché non si raggiunge una
+configurazione stabile (qui dopo più di 40 scambi, quando il cammino diretto z--x da 50 diventa conveniente). Nel frattempo i
+pacchetti per x rimbalzano tra y e z. Se il collegamento si interrompesse del tutto ($c = \infty$), il conteggio salirebbe
+davvero verso l'infinito.
+
+\subsection{Come si sarebbe evitato}
+
+Il problema non ci sarebbe stato se anche x si fosse accorto del cambiamento e lo avesse comunicato. Se x è malfunzionante o in
+ritardo (e i costi alti dei suoi collegamenti potrebbero proprio indicarlo), la convergenza richiede tempo. Se invece anche x
+rileva il cambiamento, i costi convergono subito:
+
+\begin{align*}
+D_y(x) &= \min\{c(y,x),\ c(y,z) + D_z(x)\} = c(y,z) + D_z(x) = 1 + 50 = 51 \\
+D_y(z) &= \min\{c(y,z),\ c(y,x) + D_x(z)\} = c(y,z) = 1 \\
+D_x(y) &= \min\{c(x,y),\ c(x,z) + D_z(y)\} = c(x,z) + D_z(y) = 50 + 1 = 51 \\
+D_x(z) &= \min\{c(x,z),\ c(x,y) + D_y(z)\} = c(x,z) = 50 \\
+D_z(x) &= \min\{c(z,x),\ c(z,y) + D_y(x)\} = c(z,x) = 50 \\
+D_z(y) &= \min\{c(z,y),\ c(z,x) + D_x(y)\} = c(z,y) = 1
+\end{align*}
+
+\info{Poisoned reverse}{
+    Una tecnica che attenua il problema è il \textbf{poisoned reverse} (inversione avvelenata): se z raggiunge x passando per y,
+    allora z comunica a y che la propria distanza da x è \textbf{infinita}. Così y non userà mai z per raggiungere x, e il ciclo tra
+    due nodi non si forma. Non risolve però i cicli che coinvolgono tre o più nodi.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{L'algoritmo Link State}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Link State (LS)}{
+    L'algoritmo \textbf{Link State} è un approccio \textbf{centralizzato} (nel senso della conoscenza): sfrutta la conoscenza
+    \textbf{completa} della rete per trovare il cammino migliore. Si basa sull'algoritmo di \textbf{Dijkstra} e \textbf{non soffre
+    del count-to-infinity}. La conoscenza completa si ottiene facendo inviare a ogni nodo, in broadcast, dei \emph{link-state
+    packet} con gli identificativi e i costi dei propri collegamenti.
+}
+
+La versione di base calcola i cammini minimi \textbf{da un nodo di partenza a tutte le destinazioni}, e va quindi eseguita su
+ogni nodo.
+
+\subsection{La fase di scoperta}
+
+Prima di calcolare i cammini, ogni router deve scoprire i nodi vicini e condividere l'informazione con gli altri, in quattro passi:
+
+\begin{enumerate}
+    \item \textbf{Scoperta dei vicini}: il router invia uno speciale messaggio ``hello'' su tutti i collegamenti; gli altri router
+          rispondono con il proprio identificativo.
+    \item \textbf{Impostazione dei costi}: il router fissa la distanza o il costo verso ogni vicino, che può dipendere dai costi reali
+          (tempo, banda, \dots) o essere impostato dall'amministratore.
+    \item \textbf{Costruzione del pacchetto}: il router crea un pacchetto che riassume gli identificativi dei vicini e i relativi costi.
+    \item \textbf{Scambio dei pacchetti}: il router invia il pacchetto a tutti gli altri router della rete (broadcast) e riceve pacchetti
+          analoghi da tutti.
+\end{enumerate}
+
+Alla fine ogni router ha una conoscenza ``completa'' della topologia: ogni nodo, dopo il broadcast collettivo, conosce tutto il grafo
+e può calcolare i cammini minimi, che sono gli stessi calcolati da tutti gli altri. Ora si può eseguire \textbf{Dijkstra}.
+
+\subsection{Lo pseudocodice}
+
+\begin{lstlisting}[mathescape=true, title={Link State (Dijkstra), eseguito dal nodo $x$}]
+LinkState(x):
+    N' = {x}
+    for all nodes v:
+        if v is a neighbor of x then  D(v) = c(x,v)
+        else                          D(v) = $\infty$
+    repeat
+        find w not in N' such that D(w) is minimum
+        add w to N'
+        for each neighbor v of w which is not in N':
+            D(v) = min( D(v), D(w) + c(w,v) )
+    until N' = N
+\end{lstlisting}
+
+\begin{itemize}
+    \item $D(v)$ conserva la distanza dal nodo corrente a ogni destinazione; $N'$ è l'insieme dei nodi di cui si conosce già il cammino minimo.
+    \item \textbf{Inizializzazione}: si assume che tutti i costi siano noti; sono impostate solo le distanze verso i vicini.
+    \item \textbf{Costruzione}: si sceglie il nodo $w$ più vicino non ancora in $N'$, si esplora il vicinato di $w$ controllando se il
+          cammino attraverso $w$ è migliore di quello attuale, e si esce quando tutti i nodi sono stati esplorati.
+\end{itemize}
+
+\subsection{Un esempio completo e la ricostruzione del cammino}
+
+Eseguiamo LS sul nodo u del grafo di esempio. Usiamo anche una funzione $p(v)$ che memorizza il \textbf{nodo precedente} a $v$ sul
+cammino migliore trovato finora.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{clccccc}
+\toprule
+\textbf{Passo} & $N'$ & $D(v), p(v)$ & $D(w), p(w)$ & $D(x), p(x)$ & $D(y), p(y)$ & $D(z), p(z)$ \\
+\midrule
+0 & u & 2, u & 5, u & \textbf{1, u} & $\infty$ & $\infty$ \\
+1 & ux & \textbf{2, u} & 4, x & & 2, x & $\infty$ \\
+2 & uxv & & 4, x & & \textbf{2, x} & $\infty$ \\
+3 & uxvy & & \textbf{3, y} & & & 4, y \\
+4 & uxvyw & & & & & \textbf{4, y} \\
+5 & uxvywz & & & & & \\
+\bottomrule
+\end{tabular}
+\caption{Dijkstra dal nodo u. In grassetto il nodo scelto a ogni passo (a parità di distanza la scelta è arbitraria: qui v prima di y).}
+\end{table}
+
+\begin{enumerate}
+    \setcounter{enumi}{-1}
+    \item Solo u è in $N'$: i vicini hanno la distanza del collegamento diretto (v: 2, w: 5, x: 1), gli altri $\infty$.
+    \item Il più vicino è x (1). Da x: w diventa $\min(5,\ 1+3) = 4$ via x; y diventa $1 + 1 = 2$ via x; v resta $\min(2,\ 1+2) = 2$.
+    \item Si sceglie v (2). Da v: w resta $\min(4,\ 2+3) = 4$.
+    \item Si sceglie y (2). Da y: w diventa $\min(4,\ 2+1) = 3$ via y; z diventa $2 + 2 = 4$ via y.
+    \item Si sceglie w (3). Da w: z resta $\min(4,\ 3+5) = 4$.
+    \item Si sceglie z (4): tutti i nodi sono in $N'$, fine.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \grafoesempio{ \draw[pathhl, opacity=0.55] (u) -- (v); \draw[pathhl, opacity=0.55] (u) -- (x) -- (y) -- (w); \draw[pathhl, opacity=0.55] (y) -- (z); }
+  \node[font=\footnotesize\sffamily, anchor=west] at (7,0.4) {
+    \begin{tabular}{ll}
+    \toprule
+    \textbf{Destinazione} & \textbf{Collegamento} \\
+    \midrule
+    v & (u, v) \\
+    w & (u, x) \\
+    x & (u, x) \\
+    y & (u, x) \\
+    z & (u, x) \\
+    \bottomrule
+    \end{tabular}};
+\end{tikzpicture}
+\caption{L'albero dei cammini minimi da u e la forwarding table che ne deriva.}
+\end{figure}
+
+Per ricostruire un cammino basta \textbf{risalire i predecessori} fino al nodo corrente. Per z: $p(z) = y$, $p(y) = x$, $p(x) = u$,
+quindi il cammino è u$\rightarrow$x$\rightarrow$y$\rightarrow$z, e il primo hop (quello da scrivere nella forwarding table) è x.
+
+\subsection{Complessità, pro e contro}
+
+A ogni iterazione si controllano tutti i nodi della rete che non sono ancora in $N'$, e se ne aggiunge uno. Il numero totale di
+controlli è $n + (n-1) + \dots + 1 = \frac{n(n+1)}{2}$, cioè $O(n^2)$ nel caso peggiore. Con strutture dati più sofisticate (per
+esempio gli \emph{heap}) si scende a $O(n \log n)$ circa (più precisamente $O((|E| + n)\log n)$).
+
+\begin{itemize}
+    \item[\itick] \textbf{Convergenza più rapida}: tutte le comunicazioni avvengono contemporaneamente.
+    \item[\itick] \textbf{Niente count-to-infinity}: si propaga lo stato di tutti i collegamenti.
+    \item[\icross] \textbf{Sincrono}: i nodi devono ricevere le informazioni da tutta la rete prima di iniziare.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{DV contro LS}
+% ══════════════════════════════════════════════════════════════
+
+DV e LS affrontano il routing in modo complementare: DV sfrutta informazioni \textbf{locali} sui vicini, LS richiede informazioni
+\textbf{globali} su tutti i nodi.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{3cm}p{5.8cm}p{5.8cm}}
+\toprule
+ & \textbf{Distance Vector} & \textbf{Link State} \\
+\midrule
+Informazione & locale (solo i vicini) & globale (tutta la topologia) \\
+Algoritmo & Bellman-Ford & Dijkstra \\
+Complessità dei messaggi & comunicazione solo se cambia un cammino migliore & comunicazione sincrona tra tutti i nodi, più complessa \\
+Velocità di convergenza & lenta; nel frattempo cammini subottimi; count-to-infinity & più rapida \\
+Robustezza & calcoli concatenati: se una tabella è sbagliata, l'errore si propaga a tutti & ogni nodo calcola la propria tabella: più robusto \\
+Esempi reali & RIP & OSPF, IS-IS \\
+\bottomrule
+\end{tabular}
+\caption{Distance Vector e Link State a confronto.}
+\end{table}
+
+\warning{Un guasto che fece storia}{
+    Nel \textbf{1997} un router malfunzionante di un piccolo ISP annunciò percorsi errati, che furono propagati a catena: i router
+    della dorsale furono inondati e parte di Internet restò scollegata per diverse ore. È l'esempio tipico di quanto possa costare la
+    fiducia cieca nei calcoli dei vicini.
+}
+
+Alla fine, \textbf{entrambe} le soluzioni sono usate in Internet. Dentro un'organizzazione si usano protocolli come OSPF (link state) o
+RIP (distance vector); tra organizzazioni diverse (i \emph{sistemi autonomi}) si usa BGP, un protocollo \emph{path vector} derivato da
+DV che tiene conto anche delle policy.
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Il routing cerca i \textbf{cammini a costo minimo} su un grafo $G=(N,E)$ con costi $c(x,y)$; converge quando li ha trovati per tutte le coppie.
+    \item Il \textbf{flooding} è robusto ma impraticabile su larga scala.
+    \item \textbf{DV} (Bellman-Ford, decentralizzato, asincrono): $d_x(y) = \min_v\{c(x,v) + d_v(y)\}$; convergenza lenta e \textbf{count-to-infinity}.
+    \item \textbf{LS} (Dijkstra, conoscenza globale): scoperta dei vicini, costi, pacchetti link-state in broadcast, poi Dijkstra con $D(v)$ e $p(v)$; $O(n^2)$.
+    \item LS converge più velocemente ed è più robusto; DV comunica meno. In Internet si usano entrambi.
+\end{itemize}
+}

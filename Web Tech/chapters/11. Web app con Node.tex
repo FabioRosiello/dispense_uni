@@ -1,0 +1,606 @@
+\chapter{Applicazioni web con Node.js}
+
+Node.js ci permette di realizzare in modo semplice ed efficiente un server HTTP,
+sfruttando i moduli integrati e il suo event loop a thread singolo. Node.js fa
+anche un po' di pre-elaborazione sulle richieste (analizza gli header) e ci
+fornisce un'astrazione per richieste e risposte.
+
+A parte questo, però, siamo da soli. Per costruire una vera applicazione
+dobbiamo affrontare tre problemi:
+
+\begin{itemize}
+  \item il \term{routing};
+  \item il \term{templating};
+  \item l'\term{analisi del corpo} delle richieste.
+\end{itemize}
+
+Li affrontiamo uno alla volta, costruendo la stessa applicazione
+\guillemotleft lista di cose da fare\guillemotright\ già vista nell'esempio CGI.
+
+\section{Lo scheletro dell'applicazione}
+
+\begin{lstlisting}[style=js, name=app.js]
+import http from 'http';
+
+const PORT = 3000;
+
+let server = http.createServer();
+server.listen(PORT);
+server.on('request', handleRequest);
+
+function handleRequest(request, response) {
+  /* gestione della richiesta */
+}
+\end{lstlisting}
+
+Rispetto all'esempio del capitolo precedente si nota una differenza stilistica:
+invece di passare la callback direttamente a \code{createServer}, la si registra
+come gestore dell'evento \code{request}. È lo stesso meccanismo degli eventi
+del browser visto nel capitolo 7.
+
+\section{Routing}
+
+La nostra applicazione dovrà gestire molti tipi diversi di richiesta HTTP:
+mostrare la homepage, mostrare la lista, azzerare l'applicazione, e così via.
+
+\dfn{Routing}{
+  Il \term{routing} è il problema di stabilire, data una richiesta, \textbf{quale
+  codice} debba essere eseguito per servirla.}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      n/.style={wtnode, minimum width=3.0cm, minimum height=1.0cm},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                draw=neutral!45!black},
+      c/.style={font=\FiraCodeNL\scriptsize, anchor=east,
+                text=neutral!25!black, align=right}]
+
+    \node[c] (r1) at (-0.3,0.8)  {GET /todos HTTP/1.1};
+    \node[c] (r2) at (-0.3,-0.8) {POST /todos HTTP/1.1\\ todo=Learn+Node.js};
+
+    \node[n, draw=orange-gradient-6, fill=orange-gradient-1!40!white]
+      (rt) at (2.9,0) {\textbf{Router}};
+
+    \node[wtnodeplain, anchor=west, font=\FiraCodeNL\scriptsize]
+      (h1) at (5.3,0.8) {handleGetReqs()};
+    \node[wtnodeplain, anchor=west, font=\FiraCodeNL\scriptsize]
+      (h2) at (5.3,-0.8) {handlePostReqs()};
+
+    \draw[a] (r1.east) -- (rt.west |- r1);
+    \draw[a] (r2.east) -- (rt.west |- r2);
+    \draw[a] (rt.east |- h1) -- (h1.west);
+    \draw[a] (rt.east |- h2) -- (h2.west);
+  \end{tikzpicture}
+  \caption{Il router smista ogni richiesta verso il codice che la serve.}
+  \label{fig:router}
+\end{figure}
+
+\subsection{Instradare in base al percorso}
+
+\begin{lstlisting}[style=js, name=router.js]
+function handleRequest(request, response) {
+  switch (request.url) {
+    case "/":
+      renderHomepage(request, response);
+      break;
+    case "/reset":
+      handleResetRequest(request, response);
+      break;
+    case "/todo":
+      handleTodoListRequest(request, response);
+      break;
+    /* e cosi' via... */
+    default:
+      handleError(request, response, 404);
+  }
+}
+\end{lstlisting}
+
+\subsection{Instradare anche in base al metodo}
+
+Le richieste verso un certo percorso possono essere gestite in modo diverso a
+seconda del \textbf{metodo HTTP} usato:
+
+\begin{itemize}
+  \item una \code{GET} su \code{/todos} restituisce la lista degli elementi;
+  \item una \code{POST} su \code{/todos} prova a salvarne uno nuovo.
+\end{itemize}
+
+\begin{lstlisting}[style=js, name=router.js]
+function handleTodoListRequest(request, response, context = {}) {
+  switch (request.method) {
+    case "GET":
+      handleTodoListRequestGet(request, response, context); break;
+    case "POST":
+      handleTodoListRequestPost(request, response, context); break;
+    default:
+      handleError(request, response, 405, "Metodo non supportato");
+  }
+}
+\end{lstlisting}
+
+\info{Il codice 405}{
+  Quando il percorso esiste ma il metodo non è previsto, la risposta corretta
+  non è un \code{404} (\textit{Not Found}) bensì un \code{405} (\textit{Method
+  Not Allowed}). È una distinzione che i client e i \textit{proxy} sanno
+  interpretare, e che torna utile soprattutto nelle API REST.}
+
+\subsection{Servire i file statici}
+
+Se il nostro output HTML include file statici (immagini, CSS, script), dobbiamo
+configurare il router perché li serva.
+
+\begin{lstlisting}[style=js, name=router.js]
+switch (request.url) {
+  /* ... */
+  case "/css/bootstrap.css":
+    fs.readFile('./static/css/bootstrap.css', function (err, data) {
+      response.writeHead(200, { 'Content-Type': 'text/css' });
+      response.end(data, 'utf-8');
+    });
+    break;
+
+  case "/img/node.png":
+    fs.readFile('./static/img/node.png', function (err, data) {
+      response.writeHead(200, { 'Content-Type': 'image/png' });
+      response.end(data, "binary");
+    });
+    break;
+}
+\end{lstlisting}
+
+Si noti che \code{fs.readFile} è \textbf{asincrona}: prende una callback che
+verrà invocata quando il file sarà stato letto. È esattamente il modello non
+bloccante descritto nel capitolo precedente.
+
+\subsection{Gestire gli errori}
+
+Quando nessuna delle rotte note si applica, restituiamo un \code{404}.
+
+\begin{lstlisting}[style=js, name=router.js]
+switch (request.url) {
+  /* altre rotte */
+  default:
+    handleError(request, response, 404, "Pagina non trovata");
+}
+
+function handleError(request, response, statusCode, message) {
+  let renderedContent = pug.renderFile("./templates/errorPage.pug",
+    { "code": statusCode, "description": message });
+  response.writeHead(statusCode, { "Content-Type": "text/html" });
+  response.end(renderedContent);
+}
+\end{lstlisting}
+
+\warning{Il routing non resta semplice a lungo}{
+  Uno \code{switch} sembra sufficiente, ma il problema cresce in fretta con
+  l'applicazione:
+  \begin{itemize}
+    \item alcune rotte devono essere accessibili solo ad alcuni utenti (per
+          esempio gli amministratori);
+    \item alcune rotte dipendono da \textbf{schemi o parametri} nel percorso,
+          come \code{GET /users/42/friends}, dove \code{42} può essere un id
+          qualunque: con uno \code{switch} su una stringa esatta è impossibile;
+    \item può servire eseguire \textbf{due o più pezzi di codice} per gestire una
+          richiesta, per esempio una funzione che registra i dati e un'altra che
+          prepara la risposta.
+  \end{itemize}
+  Sono esattamente i problemi che risolveremo con Express, nel prossimo
+  capitolo.}
+
+\section{Motori di template}
+
+A un certo punto la nostra applicazione dovrà produrre del codice HTML da
+rimandare nel corpo della risposta. Nel primo esempio l'abbiamo scritto a mano,
+concatenando stringhe.
+
+Il problema è che alcune parti dell'HTML si ripetono in più pagine (barra di
+navigazione, piè di pagina) e che, man mano che le pagine diventano complesse,
+costruire una risposta manipolando e concatenando stringhe diventa rapidamente
+impraticabile.
+
+\dfn{Motore di template}{
+  Un \term{motore di template} (\textit{template engine}) permette di descrivere
+  la struttura di una pagina in un file separato, con dei
+  \textbf{segnaposto}, e di generare l'HTML finale combinando quel modello con i
+  dati forniti a tempo di esecuzione.}
+
+\subsection{Pug}
+
+\term{Pug} (già noto come Jade) è un motore di template ad alte prestazioni
+implementato in JavaScript, con una sintassi \textbf{sensibile agli spazi}
+(simile a Python) per scrivere modelli HTML.
+
+\begin{lstlisting}[style=shell]
+npm install pug
+\end{lstlisting}
+
+\begin{lstlisting}[style=js]
+import pug from "pug";
+
+let html = pug.renderFile("./templates/basic_example.pug");
+console.log(html);   // html contiene il codice HTML generato
+\end{lstlisting}
+
+\begin{esempio}{Il primo template Pug}
+\begin{lstlisting}[style=pug, name=basic_example.pug]
+doctype html
+html(lang="it")
+  head
+    title Hello Pug!
+  body
+    h1(class="foo") Primo template Pug
+    p Questo e' il nostro primo template Pug!
+\end{lstlisting}
+
+produce:
+
+\begin{lstlisting}[style=html, name=output.html]
+<!DOCTYPE html>
+<html lang="it">
+  <head><title>Hello Pug!</title></head>
+  <body>
+    <h1 class="foo">Primo template Pug</h1>
+    <p>Questo e' il nostro primo template Pug!</p>
+  </body>
+</html>
+\end{lstlisting}
+
+L'indentazione sostituisce i tag di chiusura, e gli attributi si scrivono fra
+parentesi tonde. Il risultato è molto più breve e, soprattutto, impossibile da
+sbagliare nell'annidamento.
+\end{esempio}
+
+\subsection{Inclusioni}
+
+Pug è molto più di un modo diverso di scrivere HTML. Tanto per cominciare, un
+template può \textbf{includerne} altri: è un grande aiuto per il riuso.
+
+\begin{lstlisting}[style=pug, name=partials/head.pug]
+head
+  title Hello Pug
+  script(src='/js/script.js')
+  link(rel='stylesheet' href='/style.css')
+\end{lstlisting}
+
+\begin{lstlisting}[style=pug, name=partials/footer.pug]
+footer#footer
+  p Copyright (c) Web Tech
+\end{lstlisting}
+
+\begin{lstlisting}[style=pug, name=index.pug]
+doctype html
+html
+  include partials/head.pug
+  body
+    h1 Hello Pug!
+    include partials/footer.pug
+\end{lstlisting}
+
+Si noti \code{footer\#footer}: in Pug il cancelletto è l'abbreviazione per
+l'attributo \attr{id}, esattamente come nei selettori CSS.
+
+\subsection{Ereditarietà fra template}
+
+Progettando applicazioni web è comune avere un \textbf{layout condiviso} da
+tutte le pagine, che ciascuna pagina può poi personalizzare in alcune parti. Pug
+supporta questo scenario con l'\term{ereditarietà fra template}, tramite le
+parole chiave \code{block} ed \code{extends}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      b/.style={draw=primary!60!black, fill=primary!10!white, line width=0.7pt,
+                minimum width=3.0cm, minimum height=0.5cm, anchor=north},
+      bc/.style={b, draw=accent!60!black, fill=accent!12!white}]
+
+    \foreach \x/\ttl in {0/{Layout base}, 4.4/{Homepage}, 8.8/{Pagina articolo}} {
+      \node[font=\Lato\scriptsize\bfseries, text=neutral!25!black]
+        at (\x,1.0) {\ttl};
+    }
+
+    % layout base
+    \node[b] (h0) at (0,0.6) {heading};
+    \node[b, below=1pt of h0] (n0) {navbar};
+    \node[bc, below=1pt of n0, minimum height=1.1cm] (c0) {content};
+    \node[b, below=1pt of c0] (f0) {footer};
+
+    % homepage
+    \node[b] (h1) at (4.4,0.6) {heading};
+    \node[b, below=1pt of h1] (n1) {navbar};
+    \node[bc, below=1pt of n1, minimum height=1.1cm] (c1) {contenuto proprio};
+    \node[b, below=1pt of c1] (f1) {footer};
+
+    % articolo
+    \node[b] (h2) at (8.8,0.6) {heading};
+    \node[b, below=1pt of h2] (n2) {navbar};
+    \node[bc, below=1pt of n2, minimum height=1.1cm, minimum width=1.9cm,
+          anchor=north west] (c2) at ([xshift=-1.5cm]n2.south west) {article};
+    \node[bc, minimum height=1.1cm, minimum width=1.0cm, anchor=north west]
+      (s2) at ([xshift=1pt]c2.north east) {sidebar};
+    \node[b, below=1pt of c2.south west, anchor=north west] (f2) {footer};
+  \end{tikzpicture}
+  \caption{Un layout comune, personalizzato dalle singole pagine.}
+  \label{fig:pug-inheritance}
+\end{figure}
+
+\begin{esempio}{Layout base e pagina figlia}
+\begin{lstlisting}[style=pug, name=base-layout.pug]
+doctype html
+html
+  head
+    title Pug Inheritance
+  body
+    block heading
+      h1 Pug Inheritance
+    block content
+    block footer
+      footer Questo e' il footer predefinito.
+\end{lstlisting}
+
+Il template definisce tre \textbf{blocchi}: \code{heading}, \code{content} e
+\code{footer}. I blocchi \code{heading} e \code{footer} contengono un contenuto
+predefinito.
+
+\begin{lstlisting}[style=pug, name=index.pug]
+extends ./base-layout.pug
+
+block content
+  p Il contenuto vero e proprio della homepage.
+
+block footer
+  footer Questo e' un footer specializzato.
+\end{lstlisting}
+
+Il template figlio \textbf{sovrascrive} i blocchi \code{content} e
+\code{footer}; il blocco \code{heading} non viene sovrascritto e mostra il
+contenuto predefinito. Il risultato è:
+
+\begin{lstlisting}[style=html, name=output.html]
+<!DOCTYPE html>
+<html>
+  <head><title>Pug Inheritance</title></head>
+  <body>
+    <h1>Pug Inheritance</h1>
+    <p>Il contenuto vero e proprio della homepage.</p>
+    <footer>Questo e' un footer specializzato.</footer>
+  </body>
+</html>
+\end{lstlisting}
+\end{esempio}
+
+\subsection{Locals: passare i dati al template}
+
+I template Pug possono generare contenuto a partire da un oggetto di dati
+fornito, chiamato \term{locals}, passato alle funzioni \code{render()} o
+\code{renderFile()}.
+
+\begin{esempio}{Interpolazione}
+\begin{lstlisting}[style=js]
+import pug from "pug";
+
+let html = pug.renderFile("./locals.pug", {
+  "product": {
+    "name": "Samsung S24",
+    "description": "Smartphone"
+  }
+});
+
+console.log(html);
+\end{lstlisting}
+
+\begin{lstlisting}[style=pug, name=locals.pug]
+- let footer = "una bella stringa"
+
+h1 #{product.name.toUpperCase()}
+p Descrizione: #{product.description}
+footer #{footer}
+\end{lstlisting}
+
+\begin{lstlisting}[style=html, name=output.html]
+<h1>SAMSUNG S24</h1>
+<p>Descrizione: Smartphone</p>
+<footer>una bella stringa</footer>
+\end{lstlisting}
+
+Il codice contenuto fra \code{\#\{} e \code{\}} viene valutato,
+\textbf{sottoposto a escaping} e inserito nell'output. L'escaping automatico
+non è un dettaglio: è ciò che impedisce che un nome di prodotto contenente
+\code{<script>} finisca per essere eseguito dal browser.
+
+Una riga che inizia con \code{-} contiene invece codice JavaScript eseguito ma
+non stampato.
+\end{esempio}
+
+\subsection{Condizionali}
+
+\begin{lstlisting}[style=js]
+let user = { "isAdmin": true, "name": "Brendan" };
+let html = pug.renderFile("./conditionals.pug", { "user": user });
+\end{lstlisting}
+
+\begin{lstlisting}[style=pug, name=conditionals.pug]
+if !user
+  a(href="/login") Per favore, autenticati.
+else if user.isAdmin
+  p Ai tuoi ordini, #{user.name}
+else
+  p Bentornato, #{user.name}
+\end{lstlisting}
+
+\subsection{Iterazioni}
+
+\begin{lstlisting}[style=js]
+let items = [
+  { "name": "Margherita",  "price": 5.50 },
+  { "name": "Marinara",    "price": 5.00 },
+  { "name": "Capricciosa", "price": 6.50 }
+];
+let html = pug.renderFile("./iteration.pug", { "items": items });
+\end{lstlisting}
+
+\begin{lstlisting}[style=pug, name=iteration.pug]
+ul
+  each item in items
+    li #{item.name} - EUR #{item.price.toFixed(2)}
+  else
+    li Nessuna pizza disponibile al momento!
+\end{lstlisting}
+
+\begin{lstlisting}[style=html, name=output.html]
+<ul>
+  <li>Margherita - EUR 5.50</li>
+  <li>Marinara - EUR 5.00</li>
+  <li>Capricciosa - EUR 6.50</li>
+</ul>
+\end{lstlisting}
+
+Il ramo \code{else} di un \code{each} viene eseguito quando la collezione è
+vuota: è una comodità che evita di scrivere a mano il controllo.
+
+\info{Non solo Pug}{
+  Pug è solo uno dei tanti motori di template disponibili. Altri molto noti sono
+  \term{EJS} (con una sintassi simile a JSP e PHP), \term{SquirrellyJS},
+  \term{Nunjucks}, \term{LiquidJS}, \term{Eta} e \term{Haml} (per Ruby). Cambia
+  la sintassi, non il concetto.}
+
+\section{Analizzare il corpo delle richieste}
+
+Gli utenti compilano il form della pagina per salvare nuovi elementi. Il form
+viene inviato con il metodo \code{POST}, quindi dobbiamo analizzare il corpo
+della richiesta per ottenere i nomi dei parametri e i loro valori. Non è così
+semplice come sembra.
+
+\begin{lstlisting}[style=pug, name=todo.pug]
+form(action="/todo" method="POST")
+  label(for="todo") Elemento da fare
+  input(type="text" id="todo" name="todo" required)
+  button(type="submit") Salva
+\end{lstlisting}
+
+\begin{lstlisting}[style=http, name=Richiesta generata]
+POST /todo HTTP/1.1
+
+todo=Learn+Node.js
+\end{lstlisting}
+
+\subsection{Il corpo arriva a pezzi}
+
+Il corpo della richiesta \textbf{potrebbe non essere ancora disponibile} quando
+iniziamo a elaborarla: magari l'utente ha una connessione lenta, o sta caricando
+file di grandi dimensioni, e il corpo diventerà disponibile più tardi.
+
+L'oggetto \code{request} (di tipo \code{http.IncomingMessage}) estende
+\code{stream.Readable}: genera un evento \code{data} ogni volta che un nuovo
+pezzo di dati diventa disponibile, e un evento \code{end} quando non c'è più
+nulla da consumare. Per leggere il corpo dobbiamo quindi operare in modo
+\textbf{asincrono}, sfruttando questi due eventi.
+
+\begin{lstlisting}[style=js, name=body-parser.js]
+function parseRequestBody(request) {
+  return new Promise((resolve, reject) => {
+    let body = [];
+    request
+      .on('data', chunk => { body.push(chunk); })
+      .on('end', () => {
+        body = Buffer.concat(body).toString();
+        // qui `body` contiene l'intero corpo come stringa
+        let data = parseRequestBodyString(body);
+        resolve(data);
+      });
+  });
+}
+\end{lstlisting}
+
+Si notino i due meccanismi che abbiamo studiato separatamente e che qui si
+incontrano: gli \textbf{eventi} (capitolo 7) per raccogliere i pezzi, e una
+\textbf{Promise} (capitolo 8) per esporre il risultato a chi ha chiamato.
+
+\subsection{Interpretare la stringa}
+
+Letto il corpo come stringa, si tratta di suddividerla per ottenere nomi e
+valori dei parametri. Ricordiamo che il corpo è una stringa della forma
+\code{p1=v1\&p2=v2\&...}, e che è \textbf{codificato come URL}.
+
+\begin{lstlisting}[style=js, name=body-parser.js]
+function parseRequestBodyString(body) {
+  let data = {};
+  let slices = body.split("&");
+
+  for (let slice of slices) {
+    let paramName = slice.split("=")[0];
+    paramName = decodeURIComponent(paramName.replace(/\+/g, " "));
+
+    let paramValue = slice.split("=")[1];
+    paramValue = decodeURIComponent(paramValue.replace(/\+/g, " "));
+
+    data[paramName] = paramValue;
+  }
+  return data;
+}
+\end{lstlisting}
+
+\warning{Ricordarsi della codifica}{
+  Il corpo è codificato come URL, esattamente come descritto nel capitolo su
+  HTML: la frase \guillemotleft Prove that P=NP\guillemotright\ viaggia come
+  \code{Prove+that+P\%3DNP}. Bisogna quindi sostituire i \code{+} con spazi
+  \textbf{e} applicare \code{decodeURIComponent}: saltare uno dei due passaggi
+  produce bug che si manifestano solo con certi input.}
+
+\section{Anatomia di un'applicazione web}
+
+Mettendo insieme i pezzi visti finora, si delinea l'architettura tipica di
+un'applicazione web.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      n/.style={wtnode, minimum width=3.0cm, minimum height=1.0cm},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                draw=neutral!45!black}]
+
+    \node[n, minimum height=1.8cm] (br) at (0,0)
+      {\textbf{Web Browser}\\[3pt]\scriptsize HTML, CSS, JS};
+
+    \node[n, draw=orange-gradient-6, fill=orange-gradient-1!40!white]
+      (rt) at (4.6,1.3) {\textbf{Router}};
+    \node[n] (bl) at (4.6,0) {\textbf{Logica di business}\\\scriptsize (controller)};
+    \node[n] (pr) at (4.6,-1.4) {\textbf{Presentazione}\\\scriptsize (template)};
+    \node[n, draw=green-gradient-6, fill=green-gradient-1!45!white]
+      (db) at (8.8,0) {\textbf{Persistenza}\\\scriptsize dei dati};
+
+    \draw[a] (br.east) to[out=25, in=180] node[wtlab, above, pos=0.5]
+      {richiesta HTTP} (rt.west);
+    \draw[a] (rt) -- (bl);
+    \draw[a] (bl) -- (pr);
+    \draw[a] (bl) -- (db);
+    \draw[a, draw=accent!70!black] (pr.west) to[out=180, in=-25]
+      node[wtlab, below, pos=0.5]{risposta HTTP} (br.east);
+
+    \begin{scope}[on background layer]
+      \node[rounded corners=5pt, draw=primary!40!white, line width=0.9pt,
+            fit=(rt)(bl)(pr)(db), inner sep=11pt,
+            label={[font=\Lato\scriptsize, text=primary!60!black]above:Backend}] {};
+      \node[rounded corners=5pt, draw=primary!40!white, line width=0.9pt,
+            fit=(br), inner sep=11pt,
+            label={[font=\Lato\scriptsize, text=primary!60!black]above:Frontend}] {};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{L'architettura tipica di un'applicazione web tradizionale.}
+  \label{fig:webapp-anatomy}
+\end{figure}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Web Templating} --- EduTech wiki, Università di Ginevra. \\
+        \urlx{https://edutechwiki.unige.ch/en/Web_templating}
+  \item \textbf{Single page apps in depth}, Mikito Takada. \\
+        \urlx{http://singlepageappbook.com/} \\
+        Parte rilevante: \textit{Templating: from data to HTML}.
+  \item \textbf{Node.js v.20.X (LTS) documentation}. \\
+        \urlx{https://nodejs.org/docs/latest-v20.x/api/index.html}
+  \item \textbf{A beginner's Guide to Pug}, James Hibbard. \\
+        \urlx{https://www.sitepoint.com/a-beginners-guide-to-pug/}
+\end{itemize}

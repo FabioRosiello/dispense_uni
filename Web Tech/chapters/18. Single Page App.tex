@@ -1,0 +1,388 @@
+\chapter{Single Page Application}
+
+Abbiamo imparato a sviluppare applicazioni web tradizionali, con CGI, PHP,
+Node.js puro e con un framework. Nelle applicazioni che abbiamo costruito le
+pagine sono generate dinamicamente sul server e inviate al browser per la
+visualizzazione: una volta arrivate al browser, però, sono intrinsecamente
+statiche.
+
+\section{Applicazioni multi-pagina}
+
+Nelle nostre applicazioni tradizionali, quando si cambia pagina (per esempio
+facendo clic su un collegamento):
+
+\begin{itemize}
+  \item viene inviata una nuova richiesta al server;
+  \item la nuova pagina viene restituita nella risposta e disegnata dal browser.
+\end{itemize}
+
+Questo approccio è noto come \term{multi-pagina}, e porta ad applicazioni web
+multi-pagina. Navigare verso una pagina diversa provoca sempre un
+\textbf{ricaricamento completo}.
+
+Nel capitolo 7 avevamo studiato JavaScript nell'ambiente del browser:
+manipolazione del DOM, recupero di dati, eventi. Finora, però, non abbiamo fatto
+un uso particolare di quelle funzionalità.
+
+\section{Single Page Application}
+
+\dfn{Single Page Application}{
+  Una \term{Single Page Application} (SPA) reagisce all'input dell'utente
+  \textbf{aggiornando dinamicamente il contenuto della pagina corrente}, invece
+  di caricare una nuova pagina dal server. L'intera applicazione viene caricata
+  con la richiesta iniziale, e da quel momento la pagina non viene più
+  ricaricata.}
+
+La complessità della generazione delle viste si sposta dal server al codice
+lato client: da \textit{thin client} a \textit{thick client}. Sono applicazioni
+a forte intensità di JavaScript.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      n/.style={rounded corners=3pt, line width=0.8pt, align=center,
+                minimum width=2.5cm, minimum height=0.85cm},
+      c/.style={n, draw=accent!60!black, fill=accent!10!white},
+      s/.style={n, draw=primary!65!black, fill=primary!10!white},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+                draw=neutral!45!black}]
+
+    % multipagina
+    \node[font=\Lato\scriptsize\bfseries, text=neutral!25!black] at (2.6,2.1)
+      {multi-pagina};
+    \node[c] (b1) at (0,1.2) {Browser};
+    \node[s] (s1) at (5.2,1.2) {Server};
+    \draw[a] ([yshift=5pt]b1.east) -- node[wtlab, above]{richiesta}
+             ([yshift=5pt]s1.west);
+    \draw[a] ([yshift=-5pt]s1.west) -- node[wtlab, below]{pagina HTML completa}
+             ([yshift=-5pt]b1.east);
+    \node[font=\Lato\scriptsize\itshape, text=red-gradient-6!75!black]
+      at (2.6,0.3) {ricaricamento completo a ogni navigazione};
+
+    % SPA
+    \node[font=\Lato\scriptsize\bfseries, text=neutral!25!black] at (2.6,-1.3)
+      {single page};
+    \node[c] (b2) at (0,-2.2) {Browser};
+    \node[s] (s2) at (5.2,-2.2) {API REST};
+    \draw[a] ([yshift=5pt]b2.east) -- node[wtlab, above]{richiesta di dati}
+             ([yshift=5pt]s2.west);
+    \draw[a] ([yshift=-5pt]s2.west) -- node[wtlab, below]{solo JSON}
+             ([yshift=-5pt]b2.east);
+    \node[font=\Lato\scriptsize\itshape, text=green-gradient-6!60!black]
+      at (2.6,-3.1) {il JavaScript lato client ridisegna solo ciò che cambia};
+  \end{tikzpicture}
+  \caption{Multi-pagina contro single page.}
+  \label{fig:spa-vs-mpa}
+\end{figure}
+
+Navigare verso una \guillemotleft pagina\guillemotright\ diversa non provoca un ricaricamento
+completo: i dati necessari vengono recuperati da un backend (per esempio una API
+REST) e il JavaScript lato client costruisce dinamicamente la nuova pagina.
+
+\section{Routing lato client}
+
+Le diverse \guillemotleft pagine\guillemotright\ di una SPA si chiamano tipicamente \term{viste}. La
+navigazione e l'aggiornamento delle viste sono gestiti \textbf{interamente} lato
+client, senza ricaricare la pagina dal server: è il \term{routing lato client}.
+
+Comporta tre cose:
+
+\begin{itemize}
+  \item aggiornare la URL nella barra degli indirizzi;
+  \item caricare e disegnare il contenuto (la vista) appropriato;
+  \item interagire con la \term{History API} del browser, perché i pulsanti
+        \guillemotleft indietro\guillemotright\ e \guillemotleft avanti\guillemotright\ continuino a funzionare come l'utente si
+        aspetta.
+\end{itemize}
+
+I componenti chiave sono quindi un \textbf{router} (che mappa le URL sulle
+viste), un meccanismo di \textbf{rendering delle viste} e una
+\textbf{gestione della cronologia}.
+
+\section{Una SPA da zero}
+
+\subsection{L'unico documento HTML}
+
+C'è un solo documento HTML, e non contiene alcun contenuto: soltanto un
+\tg{div} vuoto. È \code{main.js} a fare tutto il lavoro.
+
+\begin{lstlisting}[style=html, name=index.html]
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <title>Single Page Application</title>
+    <link rel="stylesheet" href="src/css/style.scss"/>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./src/js/main.js"></script>
+  </body>
+</html>
+\end{lstlisting}
+
+\subsection{La struttura di base}
+
+Lo script comincia creando tre elementi dentro il contenitore \code{app}: una
+barra di navigazione, un contenitore per il contenuto principale e un piè di
+pagina. La barra e il piè di pagina non cambieranno passando da una vista
+all'altra; il contenuto sì.
+
+\begin{lstlisting}[style=js, name=main.js]
+let nav = document.createElement("nav");
+nav.id = "nav";
+
+let content = document.createElement("main");
+content.id = "content";
+
+let footer = document.createElement("footer");
+footer.id = "footer";
+
+app.append(nav, content, footer);
+\end{lstlisting}
+
+\subsection{Le rotte}
+
+Ogni rotta associa una vista a una data URL, ed è indicizzata dal proprio
+percorso. A ciascuna sono associati un \code{title} (che diventerà il titolo
+della pagina) e una funzione \code{render} che restituisce una stringa HTML.
+
+\begin{lstlisting}[style=js, name=main.js]
+import about from "./views/about.js";   // altre importazioni omesse
+
+const routes = {
+  "/":         { title: "Home",             render: home },
+  "/about":    { title: "About",            render: about },
+  "/webtech":  { title: "Web Technologies", render: contact },
+};
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=views/about.js]
+export default () => /*html*/`
+  <h1>About</h1>
+  <p>
+    Questa e' una single page app. Navigare verso pagine diverse non
+    provoca un ricaricamento completo!
+  </p>
+`;
+\end{lstlisting}
+
+La generazione della vista è ridotta all'osso: una funzione che restituisce una
+stringa HTML. Può diventare molto più complessa --- tanto per cominciare, si
+potrebbe usare un motore di template.
+
+\subsection{Il router}
+
+\begin{lstlisting}[style=js, name=main.js]
+function router() {
+  let view = routes[location.pathname];   // rotta per il percorso corrente
+
+  if (view) {
+    document.title = view.title;          // aggiorna il titolo della pagina
+    content.innerHTML = view.render();    // aggiorna il contenuto
+  } else {
+    // nessuna rotta corrisponde: sostituisce la voce di cronologia e va a "/"
+    history.replaceState("", "", "/");
+    router();
+  }
+}
+\end{lstlisting}
+
+\subsection{I collegamenti di navigazione}
+
+\begin{lstlisting}[style=js, name=main.js]
+for (let route in routes) {
+  let link = document.createElement("a");
+  link.href = route;
+  link.innerText = routes[route].title;
+  link.setAttribute("data-link", "");   // attributo personalizzato
+  nav.append(link);
+}
+
+footer.innerHTML = renderFooter();
+\end{lstlisting}
+
+In una SPA possono coesistere collegamenti che devono comportarsi normalmente
+(per esempio verso siti esterni) e collegamenti che devono soltanto provocare un
+cambio di vista. Nell'esempio i secondi sono identificati dall'attributo
+\code{data-link}.
+
+\begin{lstlisting}[style=js, name=main.js]
+window.addEventListener("click", e => {
+  if (e.target.matches("[data-link]")) {
+    e.preventDefault();                        // niente ricaricamento
+    history.pushState("", "", e.target.href);  // nuova voce di cronologia
+    router();                                  // aggiorna la vista
+  }
+});
+\end{lstlisting}
+
+Si riconosce qui la \textbf{delegazione degli eventi} studiata nel capitolo 7:
+un solo gestore registrato su \code{window} serve tutti i collegamenti, compresi
+quelli creati dinamicamente in seguito.
+
+\subsection{Sincronizzarsi con la cronologia}
+
+Resta da invocare \code{router()} per allineare la vista al percorso corrente
+in due situazioni: quando l'utente preme il pulsante \guillemotleft indietro\guillemotright\ (evento
+\code{popstate}) e quando la pagina viene ricaricata per intero (evento
+\code{DOMContentLoaded}).
+
+\begin{lstlisting}[style=js, name=main.js]
+window.addEventListener("popstate", router);
+window.addEventListener("DOMContentLoaded", router);
+\end{lstlisting}
+
+\warning{Il server deve collaborare}{
+  Se l'utente ricarica la pagina mentre si trova su \code{/about}, il browser
+  invia al server una richiesta per \code{/about} --- che sul server non esiste
+  come file. Il server di una SPA va quindi configurato per restituire sempre
+  \code{index.html} per qualunque percorso, lasciando che sia il router lato
+  client a decidere quale vista mostrare.}
+
+\section{I componenti}
+
+Man mano che la complessità cresce, gestire intere viste come monoliti diventa
+rapidamente impraticabile: il codice si fa difficile da mantenere ed è
+complicato riusare pezzi di funzionalità in viste diverse.
+
+La strada è \textbf{scomporre l'interfaccia in componenti modulari}. Ogni
+componente incapsula una funzionalità specifica ed è l'\textbf{unico
+responsabile} del disegno della propria interfaccia e della gestione del proprio
+stato interno; le viste che lo usano non devono preoccuparsi di questi
+dettagli.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.2cm}}>{\raggedright\arraybackslash}p{8.6cm}@{}}
+  \textbf{Caratteristica} & \textbf{Significato} \\
+  \term{Modularità}    & devono essere autocontenuti e incapsulare una
+                         funzionalità specifica \\
+  \term{Incapsulamento}& devono incapsulare la propria logica, il proprio stato,
+                         il proprio layout e i propri stili \\
+  \term{Riusabilità}   & devono essere progettati per essere riusati in parti
+                         diverse dell'applicazione \\
+\end{tabular}
+\end{center}
+
+I componenti hanno un ruolo centrale in tutti i framework di front-end.
+
+\begin{esempio}{Un componente con le Web Components API}
+\begin{lstlisting}[style=js, name=components/counter.js]
+let count = 0;
+
+class Counter extends HTMLElement {
+  constructor() {
+    super();
+    this.innerHTML = `<button>Clicks : ${count}</button>`;
+
+    let btn = this.querySelector("button");
+    btn.onclick = () => {
+      btn.innerHTML = "Clicks : " + ++count;
+    };
+  }
+}
+
+customElements.define("click-counter", Counter);
+\end{lstlisting}
+
+Stiamo definendo un nuovo \code{HTMLElement} chiamato \code{<click-counter>},
+associato alla classe \code{Counter}. Il browser userà quella classe ogni volta
+che incontrerà un elemento \code{<click-counter>} nel DOM.
+
+\begin{lstlisting}[style=js, name=views/home.js]
+import "../components/counter.js";
+
+export default () => /*html*/`
+  <h1>Home</h1>
+  <p>Semplice contatore di clic</p>
+  <click-counter></click-counter>
+`;
+\end{lstlisting}
+
+Dal punto di vista della vista, il componente è indistinguibile da un tag HTML
+qualunque: è precisamente l'incapsulamento che cercavamo.
+\end{esempio}
+
+\section{Perché una SPA}
+
+Le SPA offrono alcuni vantaggi rispetto alle applicazioni multi-pagina
+tradizionali:
+
+\begin{itemize}
+  \item un'esperienza utente \textbf{più dinamica}, simile a quella di
+        un'applicazione desktop;
+  \item il caricamento iniziale è più lento (bisogna scaricare l'intera
+        applicazione), ma quelli successivi sono \textbf{molto} più rapidi;
+  \item \textbf{carico ridotto sul server}: dal server si recuperano solo i dati
+        necessari e solo quando servono, senza trasferire ogni volta interi
+        documenti HTML, con risparmio di banda.
+\end{itemize}
+
+\begin{infobox}{{Una nota su AJAX}}
+  Prima che la \code{fetch} API fosse introdotta con ES6, le richieste di rete
+  si effettuavano con \term{AJAX} (\textit{Asynchronous JavaScript And XML}),
+  implementato tramite l'interfaccia \code{XMLHttpRequest}. Oggi
+  \code{XMLHttpRequest} è largamente sostituito da \code{fetch}, ma è ancora
+  piuttosto comune e lo si può incontrare in alcuni pacchetti.
+
+\begin{lstlisting}[style=js]
+let xhttp = new XMLHttpRequest();
+xhttp.onreadystatechange = function () {
+  if (this.readyState == 4 && this.status == 200) {
+    document.getElementById("demo").innerHTML = xhttp.responseText;
+  }
+};
+xhttp.open("GET", "/url/to/fetch", true);
+xhttp.send();
+\end{lstlisting}
+\end{infobox}
+
+\section{I limiti del fare tutto a mano}
+
+Realizzare la lista di cose da fare come SPA in JavaScript puro è stato
+istruttivo, ma nonostante la semplicità dell'applicazione sono emerse alcune
+difficoltà.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.45}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{8.6cm}@{}}
+  \textbf{Problema} & \textbf{Perché è difficile} \\
+  \textbf{Gestione dello stato}
+    & bisogna tenere stato e interfaccia sempre allineati, e ricordarsi di
+      aggiornare le viste dopo ogni cambiamento di stato \\
+  \textbf{Manipolazione del DOM}
+    & manipolare il DOM con l'API \code{document} richiede molto codice
+      ripetitivo \\
+  \textbf{Routing lato client}
+    & il nostro router era elementare: e se servissero rotte parametriche,
+      reindirizzamenti, rotte protette? \\
+  \textbf{Rendering efficiente}
+    & ridisegniamo l'intera lista a ogni modifica; per essere efficienti
+      bisognerebbe aggiornare solo ciò che è cambiato \\
+\end{tabular}
+\end{center}
+
+I \term{framework di front-end} come \term{Angular}, \term{React},
+\term{Vue.js}, \term{Ember} e \term{Svelte} forniscono soluzioni già pronte per
+queste difficoltà, e tipicamente includono anche supporto strumentale:
+generazione di codice ripetitivo, automazione di build e rilascio.
+
+Ciascun framework fornisce inoltre un modo in qualche misura
+\guillemotleft standardizzato\guillemotright\ di costruire front-end: chi è abituato a lavorare con
+un dato framework avrà meno difficoltà a inserirsi in un altro progetto che usa
+lo stesso framework. Nel prossimo capitolo conosceremo Angular.
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{SPA (Single-page application)} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Glossary/SPA}
+  \item \textbf{Single page apps in depth}, Mikito Takada. \\
+        \urlx{http://singlepageappbook.com/} \\
+        Parte rilevante: \textit{Modern single page apps --- an overview}.
+  \item \textbf{Understanding client-side JavaScript frameworks} --- MDN web
+        docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Client-side_JavaScript_frameworks} \\
+        Parti rilevanti: \textit{Introduction to client-side frameworks} e
+        \textit{Framework main features}.
+\end{itemize}

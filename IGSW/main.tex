@@ -1,0 +1,215 @@
+\documentclass{unina_doc_class}
+
+\gdef\documentname{Ingegneria del Software}
+\gdef\documentyear{A.A. \ 2026-2027}
+\gdef\author{Fabio Rosiello}
+\pagestyle{plain}
+
+\gdef\xauthors{\hi{\iuser Fabio Rosiello}}
+
+% ------------------------------------------------------------
+% Pacchetti aggiuntivi
+% ------------------------------------------------------------
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{colortbl}
+\usepackage{needspace}
+\usetikzlibrary{shadows, shapes.multipart, shapes.symbols, shapes.arrows, decorations.pathmorphing}
+\tcbuselibrary{raster}
+
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% ------------------------------------------------------------
+% Evita che titoli, definizioni e riquadri si spezzino tra due pagine
+% ------------------------------------------------------------
+\let\oldsection\section
+\renewcommand{\section}{\Needspace{16\baselineskip}\oldsection}
+\let\oldsubsection\subsection
+\renewcommand{\subsection}{\Needspace{10\baselineskip}\oldsubsection}
+
+% Le definizioni non si spezzano mai; i riquadri cercano di restare compatti
+\renewcommand{\dfn}[2]{\Needspace{6\baselineskip}\begin{Definition*}[colbacktitle=red!75!black, breakable=false]{#1}{}#2\end{Definition*}}
+\let\oldinfo\info
+\renewcommand{\info}[2]{\Needspace{10\baselineskip}\oldinfo{#1}{#2}}
+\let\oldwarning\warning
+\renewcommand{\warning}[2]{\Needspace{10\baselineskip}\oldwarning{#1}{#2}}
+\let\olderror\error
+\renewcommand{\error}[2]{\Needspace{10\baselineskip}\olderror{#1}{#2}}
+\let\oldgbox\gbox
+\renewcommand{\gbox}[3]{\Needspace{12\baselineskip}\oldgbox{#1}{#2}{#3}}
+
+% ------------------------------------------------------------
+% Colori
+% ------------------------------------------------------------
+\definecolor{codegreen}{RGB}{80,160,80}
+\definecolor{codegray}{RGB}{130,130,130}
+\definecolor{boxbg}{RGB}{245,245,245}
+
+% Fasi del modello a cascata
+\definecolor{ph1}{HTML}{D7263D}
+\definecolor{ph2}{HTML}{B5179E}
+\definecolor{ph3}{HTML}{6A1B9A}
+\definecolor{ph4}{HTML}{283593}
+\definecolor{ph5}{HTML}{1565C0}
+\definecolor{ph6}{HTML}{00897B}
+
+% Caratteristiche di qualità
+\definecolor{q1}{HTML}{00695C}
+\definecolor{q2}{HTML}{283593}
+\definecolor{q3}{HTML}{00838F}
+\definecolor{q4}{HTML}{AD1457}
+\definecolor{q5}{HTML}{E65100}
+\definecolor{q6}{HTML}{C62828}
+\definecolor{q7}{HTML}{4527A0}
+\definecolor{q8}{HTML}{2E7D32}
+\definecolor{q9}{HTML}{5D4037}
+
+% Neutri
+\definecolor{swgray}{HTML}{607080}
+\definecolor{swlight}{HTML}{EEF2F7}
+\definecolor{swblue}{HTML}{2B50AA}
+\definecolor{swred}{HTML}{C62828}
+\definecolor{swgreen}{HTML}{2E7D32}
+\definecolor{sworange}{HTML}{E8590C}
+\definecolor{swteal}{HTML}{00677F}
+
+% ------------------------------------------------------------
+% Stili TikZ
+% ------------------------------------------------------------
+\tikzset{
+  phase/.style={rectangle, rounded corners=3pt, fill=#1, draw=#1!70!black,
+                text=white, font=\footnotesize\bfseries, align=center,
+                minimum height=1.05cm, minimum width=2.75cm, inner sep=3pt},
+  phaseoff/.style={rectangle, rounded corners=3pt, fill=swlight, draw=swgray!40,
+                text=swgray!90, font=\footnotesize\bfseries, align=center,
+                minimum height=1.05cm, minimum width=2.75cm, inner sep=3pt},
+  flow/.style={-{Stealth[length=2.6mm]}, line width=1.1pt, draw=swgray},
+  feedback/.style={-{Stealth[length=2.4mm]}, line width=0.9pt, dashed, draw=swred},
+  note/.style={font=\scriptsize, align=left, text=black!80},
+  card/.style={rectangle, rounded corners=3pt, draw=#1, line width=0.8pt, fill=#1!6,
+               align=center, font=\small, inner sep=5pt},
+  chip/.style={rectangle, rounded corners=2pt, fill=#1, text=white, font=\scriptsize\bfseries,
+               align=center, inner sep=3pt},
+  subchip/.style={rectangle, rounded corners=2pt, fill=#1!12, draw=#1!60, text=black,
+               font=\scriptsize, align=center, inner sep=2.5pt},
+}
+
+% Stick-man per diagrammi dei casi d'uso
+\newcommand{\stickman}[2]{%
+  \begin{scope}[shift={#1}, line width=0.9pt]
+    \draw (0,0.55) circle (0.15);
+    \draw (0,0.40) -- (0,-0.05);
+    \draw (-0.25,0.25) -- (0.25,0.25);
+    \draw (0,-0.05) -- (-0.2,-0.4);
+    \draw (0,-0.05) -- (0.2,-0.4);
+    \node[font=\scriptsize, below] at (0,-0.4) {#2};
+  \end{scope}}
+
+% Barra delle fasi del modello a cascata con la fase #1 evidenziata
+\newcommand{\waterfallbar}[1]{%
+  \begin{center}
+  \begin{tikzpicture}[x=3.12cm]
+    \foreach \i/\nome/\col in {1/{Requirements\\Engineering}/ph1,
+                               2/{System\\Design}/ph2,
+                               3/{Software e\\UI Design}/ph3,
+                               4/{Implemen-\\tation}/ph4,
+                               5/{Testing}/ph5,
+                               6/{Operation e\\Maintenance}/ph6}{
+      \ifnum\i=#1
+        \node[phase=\col, drop shadow] (wb\i) at (\i,0) {\nome};
+      \else
+        \node[phaseoff] (wb\i) at (\i,0) {\nome};
+      \fi
+    }
+    \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,5}{
+      \draw[-{Stealth[length=2mm]}, line width=1pt, swgray!70] (wb\i.east) -- (wb\j.west);
+    }
+  \end{tikzpicture}
+  \end{center}}
+
+% Scheda di una caratteristica di qualità
+% \qualitybox{colore}{Nome inglese}{Nome italiano}{Domanda guida}{Definizione}
+\newcommand{\qualitybox}[5]{%
+  \Needspace{10\baselineskip}%
+  \begin{tcolorbox}[enhanced, breakable=false, colback=#1!5, colframe=#1, boxrule=0.9pt, arc=3pt,
+    left=8pt, right=8pt, top=6pt, bottom=6pt, drop fuzzy shadow, before skip=4mm, after skip=4mm,
+    title={{\large\Gobold #2}\hfill{\small\itshape #3}}, colbacktitle=#1, coltitle=white]
+    #5\par\smallskip
+    {\color{#1!80!black}\bfseries\iquestion\ Domanda guida:} \textit{#4}
+  \end{tcolorbox}}
+
+\setcounter{secnumdepth}{0}
+
+% Con le sezioni non numerate, esempi ed esercizi vengono numerati per capitolo
+\makeatletter
+\@addtoreset{esempio}{chapter}
+\@addtoreset{esercizio}{chapter}
+\makeatother
+
+\renewenvironment{esempio}[1]{%
+  \Needspace{8\baselineskip}\refstepcounter{esempio}%
+  \vspace{0.8em}%
+  \noindent\rule{\linewidth}{0.5pt}\par%
+  \vspace{0.15em}%
+  \noindent\textbf{Esempio \thechapter.\theesempio}%
+  \ifx\relax#1\relax\else%
+    \textbf{ --- #1}%
+  \fi\par%
+  \vspace{0.3em}%
+}{%
+  \par\vspace{0.3em}%
+  \noindent\rule{\linewidth}{0.5pt}%
+  \vspace{0.8em}%
+}
+
+\renewenvironment{esercizio}[1]{%
+  \Needspace{12\baselineskip}\refstepcounter{esercizio}%
+  \vspace{0.8em}%
+  \noindent\rule{\linewidth}{1.2pt}\vspace{1pt}\par%
+  \noindent\rule{\linewidth}{0.4pt}\par%
+  \vspace{0.15em}%
+  \noindent\textbf{Esercizio \thechapter.\theesercizio}%
+  \ifx\relax#1\relax\else%
+    \textbf{ --- #1}%
+  \fi\par%
+  \vspace{0.3em}%
+}{%
+  \par\vspace{0.3em}%
+  \noindent\rule{\linewidth}{0.4pt}\vspace{1pt}\par%
+  \noindent\rule{\linewidth}{1.2pt}%
+  \vspace{0.8em}%
+}
+
+\raggedbottom
+\widowpenalty10000
+\clubpenalty10000
+\brokenpenalty10000
+
+\graphicspath{ {./Images/} }
+
+\begin{document}
+  \coverpage{26}{\documentyear}{30}{\documentname}
+  \tableofcontents
+
+  \input{chapters/chapter_0.tex}
+
+  \part{Ingegneria del Software e processi software}
+
+  \input{chapters/chapter_1.tex}
+
+  \input{chapters/chapter_2.tex}
+
+  \input{chapters/chapter_3.tex}
+
+  \part{La qualità del software}
+
+  \input{chapters/chapter_4.tex}
+
+  \part{Ingegneria dei requisiti}
+
+  \input{chapters/chapter_5.tex}
+
+\end{document}

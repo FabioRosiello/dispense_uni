@@ -1,0 +1,421 @@
+\chapter{Posta elettronica e applicazioni peer-to-peer}
+
+% ══════════════════════════════════════════════════════════════
+\section{La posta elettronica}
+% ══════════════════════════════════════════════════════════════
+
+La posta elettronica (\emph{e-mail}) è una delle applicazioni più antiche e importanti di Internet.
+È realizzata in modo \textbf{client-server}, con due tipi di host:
+
+\begin{itemize}
+    \item lo \textbf{user agent}: l'applicazione con cui l'utente gestisce la posta (Thunderbird, K-9 Mail,
+          l'app Mail del telefono, \dots);
+    \item il \textbf{mail server}: un server che conserva la posta e mantiene una \textbf{casella}
+          (\emph{mailbox}) per ciascun utente.
+\end{itemize}
+
+A differenza di HTTP, qui la comunicazione avviene \textbf{anche tra server}. Servono quindi due
+applicazioni (e due protocolli): una tra user agent e mail server, e una tra mail server e mail server.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily},
+  ms/.style={draw=netblue, fill=cloudbg, rounded corners, minimum width=2.4cm, minimum height=1.5cm, align=center}]
+  \node[ms] (s1) at (0,0) {\icon[0.5cm]{server}\\mail server\\di Alice};
+  \node[ms] (s2) at (7,0) {\icon[0.5cm]{server}\\mail server\\di Bob};
+  \node[ms] (s3) at (3.5,-2.6) {\icon[0.5cm]{server}\\altro\\mail server};
+  \node (ua1) at (-3.4,1.2) {\icon[1cm]{laptop}}; \node[below=-2pt of ua1] {user agent (Alice)};
+  \node (ua2) at (10.4,1.2) {\icon[0.7cm]{smartphone}}; \node[below=-2pt of ua2] {user agent (Bob)};
+  \node (ua3) at (-3.4,-2.2) {\icon[0.9cm]{pc}}; \node[below=-2pt of ua3] {user agent};
+  \draw[msg, netred, very thick] (ua1) -- node[above, sloped] {SMTP} (s1);
+  \draw[msg, netred, very thick] (s1) -- node[above] {SMTP} (s2);
+  \draw[msg, netgreen, very thick] (s2) -- node[above, sloped] {POP3 / IMAP / HTTP} (ua2);
+  \draw[msg, netred, {Stealth}-{Stealth}] (s1) -- node[above, sloped] {SMTP} (s3);
+  \draw[msg, netred, {Stealth}-{Stealth}] (s2) -- node[above, sloped] {SMTP} (s3);
+  \draw[{Stealth}-{Stealth}, thick, netgreen] (ua3) -- (s3);
+  \foreach \s in {s1, s2, s3} \draw[fill=llink] ([xshift=-0.35cm, yshift=-0.55cm]\s.south east) rectangle ++(0.3,0.25);
+  \node[lbl] at (8.9,-1.2) {\colorbox{llink}{\strut}\ casella di Bob};
+\end{tikzpicture}
+\caption{Il sistema di posta: SMTP per inviare (dagli user agent ai server e tra server), protocolli di accesso per leggere la posta dalla propria casella.}
+\end{figure}
+
+Gli utenti non si scambiano la posta direttamente (come nella messaggistica istantanea): si
+preferisce passare per i mail server, più affidabili e specializzati.
+
+% ══════════════════════════════════════════════════════════════
+\section{SMTP}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{SMTP}{
+    Il \textbf{Simple Mail Transfer Protocol} (SMTP) è il principale protocollo applicativo usato per
+    \textbf{trasferire la posta tra mail server}. Ha un lato client (chi invia) e un lato server (chi
+    riceve), entrambi eseguiti sui mail server, e usa il trasporto affidabile di \textbf{TCP} sulla
+    \textbf{porta 25}.
+}
+
+Quando un nuovo messaggio arriva sul server, viene messo nella casella del destinatario, in attesa
+che lo user agent lo scarichi.
+
+\subsection{Il flusso completo di una mail}
+
+Alice invia una mail a Bob (\texttt{bob@someschool.edu}). Sono coinvolti quattro elementi: lo user agent
+di Alice, il mail server di Alice, il mail server di Bob, lo user agent di Bob.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (a) at (0,0) {\icon[1cm]{laptop}}; \node[below=-2pt of a] {user agent di Alice};
+  \node[draw=netblue, fill=cloudbg, rounded corners, minimum width=2.6cm, minimum height=1.6cm] (sa) at (4,0) {};
+  \node at (4,0.45) {mail server di Alice};
+  \node[draw, fill=llink, minimum width=1.4cm, minimum height=0.4cm] at (4,-0.3) {coda messaggi};
+  \node[draw=netblue, fill=cloudbg, rounded corners, minimum width=2.6cm, minimum height=1.6cm] (sb) at (9.5,0) {};
+  \node at (9.5,0.45) {mail server di Bob};
+  \node[draw, fill=llink, minimum width=1.4cm, minimum height=0.4cm] at (9.5,-0.3) {casella di Bob};
+  \node (b) at (13.5,0) {\icon[0.7cm]{smartphone}}; \node[below=-2pt of b] {user agent di Bob};
+  \draw[msg, very thick] (a) -- node[above] {\circled{2}} (sa);
+  \draw[msg, very thick, netred] (sa) -- node[above] {\circled{3}\ \circled{4}\ SMTP su TCP} (sb);
+  \draw[msg, very thick, netgreen] (sb) -- node[above] {\circled{6}} (b);
+  \node[above=6pt of a] {\circled{1}};
+  \node[above=-2pt of sb.north] {\circled{5}};
+\end{tikzpicture}
+\caption{I sei passi dell'invio di una mail da Alice a Bob.}
+\end{figure}
+
+\begin{enumerate}
+    \item Alice apre il suo user agent, inserisce l'indirizzo di Bob, scrive il messaggio e chiede di inviarlo.
+    \item Lo user agent di Alice invia il messaggio al \textbf{suo} mail server, dove viene messo in una
+          \textbf{coda di messaggi}.
+    \item Il lato client di SMTP, sul server di Alice, vede il messaggio in coda e \textbf{apre una connessione
+          TCP} verso il server SMTP in esecuzione sul mail server di Bob.
+    \item Dopo un handshaking SMTP iniziale, il client SMTP invia il messaggio di Alice sulla connessione TCP.
+    \item Sul server di Bob il lato server di SMTP riceve il messaggio e lo mette nella \textbf{casella di Bob}.
+    \item Bob apre il proprio user agent e legge il messaggio quando vuole.
+\end{enumerate}
+
+\info{Nessun server intermedio}{
+    SMTP di norma \textbf{non} usa mail server intermedi: la connessione TCP va direttamente dal server di
+    Alice a quello di Bob, anche se sono ai lati opposti del pianeta. Se il server di Bob è spento, il
+    messaggio resta nella coda del server di Alice, che riprova più tardi.
+}
+
+\subsection{Dettagli del protocollo}
+
+\begin{itemize}
+    \item Il client SMTP (sul server mittente) apre una connessione TCP verso la \textbf{porta 25} del server
+          SMTP (sul server destinatario).
+    \item Se il server non risponde, il client \textbf{riprova più tardi}.
+    \item Stabilita la connessione, client e server fanno un \textbf{handshaking applicativo}: si presentano
+          prima di trasferire informazioni. In questa fase il client indica l'indirizzo del \textbf{mittente} e
+          quello del \textbf{destinatario}.
+    \item Poi il client invia il messaggio, contando sul trasferimento affidabile di TCP per farlo arrivare
+          senza errori.
+\end{itemize}
+
+\begin{esempio}{Un dialogo SMTP}
+Le righe che iniziano con \texttt{S:} sono inviate dal server, quelle con \texttt{C:} dal client
+(da Kurose). Come HTTP, anche SMTP usa comandi testuali leggibili.
+\begin{lstlisting}
+S: 220 hamburger.edu
+C: HELO crepes.fr
+S: 250 Hello crepes.fr, pleased to meet you
+C: MAIL FROM: <alice@crepes.fr>
+S: 250 alice@crepes.fr ... Sender ok
+C: RCPT TO: <bob@hamburger.edu>
+S: 250 bob@hamburger.edu ... Recipient ok
+C: DATA
+S: 354 Enter mail, end with "." on a line by itself
+C: Do you like ketchup?
+C: How about pickles?
+C: .
+S: 250 Message accepted for delivery
+C: QUIT
+S: 221 hamburger.edu closing connection
+\end{lstlisting}
+\end{esempio}
+
+% ══════════════════════════════════════════════════════════════
+\section{Accedere alla posta}
+% ══════════════════════════════════════════════════════════════
+
+Usare dei server SMTP è più affidabile della consegna diretta da utente a utente:
+
+\begin{itemize}
+    \item i server sono, per definizione, \textbf{sempre accesi} e visibili a tutti i dispositivi della rete
+          (il portatile di Bob, invece, può essere spento);
+    \item i server sono \textbf{certificati};
+    \item il server può \textbf{riprovare continuamente} a consegnare la posta se la consegna fallisce, un
+          processo piuttosto oneroso da fare sul proprio dispositivo.
+\end{itemize}
+
+D'altra parte, per \textbf{leggere} la posta dal proprio server serve un'altra applicazione
+client-server, con un protocollo diverso da SMTP (SMTP è un protocollo ``push'': serve a spingere la
+posta verso un server, non a tirarla giù). I più diffusi sono POP3, IMAP e HTTP.
+
+\subsection{POP3}
+
+\dfn{POP3}{
+    Il \textbf{Post Office Protocol --- Version 3} (POP3) è un protocollo di accesso alla posta
+    estremamente semplice. Lo user agent (client) apre una connessione TCP verso il mail server sulla
+    \textbf{porta 110}.
+}
+
+Stabilita la connessione, POP3 attraversa tre fasi:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}, ph/.style={draw, rounded corners, fill=#1, minimum width=3.6cm, minimum height=1.6cm, align=center, text width=3.4cm}]
+  \node[ph=lapp!60] (a) at (0,0) {\textbf{1. Autorizzazione}\\[2pt] \scriptsize invio di nome utente e password};
+  \node[ph=ltra!60] (t) at (4.8,0) {\textbf{2. Transazione}\\[2pt] \scriptsize scaricare messaggi, marcarli per la cancellazione, statistiche};
+  \node[ph=lnet!60] (u) at (9.6,0) {\textbf{3. Aggiornamento}\\[2pt] \scriptsize dopo \texttt{quit}: il server cancella i messaggi marcati};
+  \draw[msg, very thick] (a) -- (t); \draw[msg, very thick] (t) -- (u);
+\end{tikzpicture}
+\caption{Le tre fasi di una sessione POP3.}
+\end{figure}
+
+\begin{enumerate}
+    \item \textbf{Autorizzazione}: lo user agent invia nome utente e password per autenticare l'utente.
+    \item \textbf{Transazione}: lo user agent può recuperare messaggi, marcarli per la cancellazione, togliere
+          le marcature e ottenere statistiche sulla casella.
+    \item \textbf{Aggiornamento}: quando il client dà il comando \texttt{quit}, la sessione termina e il server
+          cancella i messaggi marcati.
+\end{enumerate}
+
+\subsection{IMAP}
+
+Con POP3 i messaggi si possono solo scaricare o cancellare: cercare, organizzare in cartelle e simili va
+fatto sulla macchina locale. Se si legge la posta da più dispositivi, questo è un problema.
+
+\dfn{IMAP}{
+    L'\textbf{Internet Mail Access Protocol} (IMAP, porta 143) permette al server di offrire funzioni
+    aggiuntive, mantenendo la posta \textbf{sul server}:
+    \begin{itemize}
+      \item creare e gestire \textbf{cartelle} sul server;
+      \item \textbf{cercare} nelle cartelle remote i messaggi che soddisfano certi criteri;
+      \item scaricare solo \textbf{parti} di un messaggio (solo le intestazioni, solo gli allegati, \dots);
+      \item collegare \textbf{più client} contemporaneamente alla stessa casella.
+    \end{itemize}
+}
+
+\subsection{HTTP (webmail)}
+
+Sempre più utenti inviano e leggono la posta dal \textbf{browser}. L'accesso via Web fu introdotto da
+Hotmail a metà degli anni '90 ed è oggi l'approccio più diffuso (Google, Yahoo!, Libero, e quasi tutte le
+università e le aziende, UniNA compresa). In questo caso lo user agent è un normale browser, e l'utente
+comunica con la propria casella remota via \textbf{HTTP} invece che con POP3 o IMAP.
+
+\warning{Tra server resta SMTP}{
+    HTTP sostituisce POP3/IMAP solo tra \textbf{user agent e server}. Tra \textbf{mail server} la posta
+    continua a viaggiare con SMTP.
+}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Protocollo} & \textbf{Tra} & \textbf{Porta TCP} & \textbf{Caratteristica} \\
+\midrule
+SMTP & server $\leftrightarrow$ server, user agent $\rightarrow$ server & 25 & invio (push) \\
+POP3 & user agent $\leftarrow$ server & 110 & scarica e (di solito) cancella \\
+IMAP & user agent $\leftrightarrow$ server & 143 & la posta resta sul server, cartelle, ricerca \\
+HTTP & browser $\leftrightarrow$ server & 80/443 & webmail \\
+\bottomrule
+\end{tabular}
+\caption{I protocolli della posta elettronica.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Peer-to-peer}
+% ══════════════════════════════════════════════════════════════
+
+A differenza del client-server, un'architettura P2P usa i server in modo minimo, o per nulla: coppie di
+host collegati in modo intermittente (i \textbf{peer}) comunicano direttamente. I peer non appartengono
+a un fornitore di servizi: sono computer e portatili controllati dagli utenti.
+
+\subsection{Distribuire un file: due modi}
+
+Un file, un server, e molti host che ne vogliono una copia.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \begin{scope}
+    \node[font=\small\bfseries\sffamily] at (0,2.4) {Client-server};
+    \node (srv) at (0,1.4) {\icon[0.7cm]{server}};
+    \node[right=1pt of srv, text=netred] {server: carica a $u_s$};
+    \foreach \x [count=\i] in {-2.4,-1.2,0,1.2,2.4} {
+      \node (c\i) at (\x,-0.8) {\icon[0.65cm]{laptop}};
+      \draw[-{Stealth}, thick, netred] (srv) -- node[fill=white, inner sep=0.5pt, font=\scriptsize\sffamily] {$F$} (c\i);
+    }
+    \node[lbl, text width=5.2cm] at (0,-2.0) {il server invia \textbf{$N$ copie} complete: $N F$ bit, tutti con la sua sola banda};
+  \end{scope}
+  \begin{scope}[xshift=8cm]
+    \node[font=\small\bfseries\sffamily] at (0,2.4) {Peer-to-peer};
+    \node (srv) at (0,1.4) {\icon[0.7cm]{server}};
+    \node[right=1pt of srv, text=netred] {server};
+    \foreach \x/\y [count=\i] in {-2.7/-1.0, -1.5/0.35, 0/-0.45, 1.5/0.35, 2.7/-1.0} {
+      \node (p\i) at (\x,\y) {\icon[0.6cm]{laptop}};
+    }
+    \draw[-{Stealth}, thick, netred, shorten >=2pt] (srv) -- node[right, font=\scriptsize\sffamily] {$\approx F$} (p3);
+    \foreach \a/\b in {3/2, 3/4, 2/1, 4/5} \draw[-{Stealth}, thick, netgreen!60!black, shorten >=3pt, shorten <=3pt] (p\a) -- (p\b);
+    \draw[-{Stealth}, thick, netgreen!60!black, shorten >=3pt, shorten <=3pt] (p1) to[bend right=25] (p3);
+    \draw[-{Stealth}, thick, netgreen!60!black, shorten >=3pt, shorten <=3pt] (p5) to[bend left=25] (p3);
+    \node[lbl, text width=5.2cm] at (0,-2.0) {il server invia \textbf{circa una copia}; i peer si passano i pezzi, ciascuno con la propria banda di upload $u_i$};
+  \end{scope}
+\end{tikzpicture}
+\caption{A sinistra il server invia $N$ copie; a destra ne invia circa una, e i peer si scambiano i pezzi tra loro.}
+\end{figure}
+
+Il ragionamento si può rendere quantitativo. Un file di $F$ bit va distribuito a $N$ peer; il server carica a
+velocità $u_s$, il peer $i$ carica a $u_i$, e $d_{\min}$ è la velocità di download del peer più lento.
+
+\dfn{Tempo minimo di distribuzione}{
+    $$D_{\text{cs}} = \max\left\{\frac{N F}{u_s},\ \frac{F}{d_{\min}}\right\} \qquad\qquad
+      D_{\text{P2P}} = \max\left\{\frac{F}{u_s},\ \frac{F}{d_{\min}},\ \frac{N F}{u_s + \sum_{i=1}^{N} u_i}\right\}$$
+}
+
+\begin{itemize}
+    \item \textbf{Client-server}: il server da solo deve inviare $N F$ bit alla velocità $u_s$, e nessun client può
+          finire prima di aver scaricato $F$ bit alla propria velocità (il più lento a $d_{\min}$). Il tempo
+          \textbf{cresce linearmente} con $N$, senza limite.
+    \item \textbf{P2P}: il server deve inviare almeno una copia ($F/u_s$); il peer più lento non può scaricare più
+          in fretta di $F/d_{\min}$; e i $N F$ bit complessivi vengono caricati usando la banda del server
+          \textbf{più quella di tutti i peer}. Ogni nuovo peer aggiunge un $F$ al numeratore, ma anche il suo $u_i$
+          al denominatore.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \begin{axis}[width=9cm, height=5.4cm, xlabel={numero di peer $N$}, ylabel={tempo minimo (ore)},
+      xmin=0, xmax=35, ymin=0, ymax=3.6, legend pos=north west, legend style={font=\scriptsize\sffamily},
+      tick label style={font=\scriptsize}, label style={font=\footnotesize\sffamily}, grid=major, grid style={gray!20}]
+    \addplot[very thick, netred, domain=0:35, samples=50] {x/10};
+    \addlegendentry{client-server}
+    \addplot[very thick, netblue, domain=0:35, samples=80] {max(0.1, x/(10+x))};
+    \addlegendentry{P2P}
+  \end{axis}
+\end{tikzpicture}
+\caption{Tempo minimo di distribuzione con $u_s = 10u$ (tutti i peer caricano a $u$), $F/u = 1$ ora e $d_{\min}$ abbondante (da Kurose): il client-server cresce come $N/10$, il P2P come $N/(10+N)$ e non supera mai 1 ora.}
+\end{figure}
+
+Mille volte i peer sono mille volte l'attesa nel client-server, e quasi nessuna attesa in più nel P2P: è la
+\textbf{auto-scalabilità} del P2P, e un esercizio numerico completo si trova nella parte degli esercizi.
+
+\info{Pro e contro del P2P}{
+    Nella condivisione di file il P2P \textbf{scala} di solito molto meglio del client-server. D'altra parte è
+    più \textbf{complesso da implementare}, e avere tanti client in comunicazione diretta tra loro pone
+    problemi di \textbf{sicurezza}.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{BitTorrent}
+% ══════════════════════════════════════════════════════════════
+
+Un protocollo P2P molto diffuso per la distribuzione di file è \textbf{BitTorrent} (circa 150--170
+milioni di utenti stimati nel 2023).
+
+\dfn{Torrent e chunk}{
+    Un \textbf{torrent} è l'insieme di tutti i peer che partecipano alla distribuzione di un certo file.
+    I peer di un torrent si scambiano \textbf{chunk}, pezzi del file di uguale dimensione
+    (tipicamente 256~kB).
+}
+
+\subsection{Il ciclo di vita di un peer}
+
+Quando un peer entra in un torrent, senza avere ancora alcun chunk:
+
+\begin{itemize}
+    \item comincia ad \textbf{accumulare chunk};
+    \item mentre scarica, \textbf{carica} anche chunk verso altri peer;
+    \item quando ha l'intero file può andarsene (egoisticamente) oppure restare (altruisticamente) a
+          continuare a caricare chunk per gli altri.
+\end{itemize}
+
+I peer possono lasciare il torrent in qualsiasi momento, anche con solo una parte dei chunk, e
+rientrare più tardi.
+
+\subsection{Il tracker}
+
+\dfn{Tracker}{
+    Ogni torrent ha un nodo di infrastruttura, il \textbf{tracker}, che tiene traccia dei peer che
+    partecipano al torrent. È, in sostanza, un \textbf{server}, in un'architettura che avrebbe dovuto farne a meno:
+    un altro esempio di architettura ibrida.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (tr) at (0,2.8) {\icon[0.7cm]{server}}; \node[right=2pt of tr, text=netred] {tracker};
+  \node[ellipse, minimum width=9.5cm, minimum height=3.8cm, fill=netgreen!8, draw=netgreen!60, thick] at (0.4,-0.6) {};
+  \node[text=netgreen!50!black, font=\small\bfseries\sffamily] at (-3.2,0.9) {torrent};
+  \node (alice) at (-6.2,0) {\icon[1cm]{laptop}}; \node[below=-2pt of alice, text=netblue] {nuovo peer (Alice)};
+  \foreach \x/\y/\ic [count=\i] in {-2.2/0.3/pc, 0/0.6/laptop, 2.4/0.2/pc, -1.2/-1.6/laptop, 1.3/-1.7/pc, 3.3/-1.1/laptop} {
+    \node (p\i) at (\x,\y) {\icon[0.6cm]{\ic}};
+  }
+  \draw[msg, dashed, netred] (alice) to[bend left=20] node[above, sloped] {1. registrazione} (tr);
+  \draw[msg, dashed, netred] (tr) to[bend left=10] node[below, sloped] {2. lista di peer} (alice);
+  \foreach \i in {1,4,2} \draw[{Stealth}-{Stealth}, thick, netblue] (alice) -- (p\i);
+  \node[text=netblue] at (-4.2,-1.8) {3. connessioni TCP};
+  \foreach \a/\b in {1/2, 2/3, 3/6, 4/5, 5/6, 1/4, 2/5} \draw[thick, black!35] (p\a) -- (p\b);
+  \foreach \i/\c in {1/lapp, 2/ltra, 3/lnet} \fill[\c] (5.2+\i*0.35,2.4) rectangle ++(0.3,0.3);
+  \node[right] at (6.4,2.55) {chunk del file};
+\end{tikzpicture}
+\caption{Un nuovo peer si registra presso il tracker, riceve un sottoinsieme di peer e apre con loro connessioni TCP.}
+\end{figure}
+
+Quando un nuovo peer entra in un torrent:
+
+\begin{itemize}
+    \item si \textbf{registra} presso il tracker e lo informa periodicamente del proprio stato;
+    \item il tracker gli fornisce gli indirizzi IP di un \textbf{sottoinsieme casuale} di peer del torrent;
+    \item avuta la lista, il nuovo peer prova ad aprire \textbf{connessioni TCP} concorrenti con tutti i peer
+          della lista, che diventano i suoi \textbf{vicini} (\emph{neighbors});
+    \item durante l'esecuzione alcuni vicini se ne vanno, mentre altri peer (fuori dalla lista iniziale)
+          possono chiedere di connettersi.
+\end{itemize}
+
+In ogni istante ogni peer ha un sottoinsieme diverso dei chunk. Periodicamente un peer chiede a ogni
+vicino (sulle connessioni TCP) la lista dei chunk che possiede.
+
+\subsection{Le politiche del client}
+
+\dfn{Rarest first}{
+    Chi \textbf{scarica} decide quali chunk chiedere, e a chi, secondo il principio \textbf{rarest first}:
+    si danno priorità ai chunk che hanno \textbf{meno copie} tra i vicini. Così i chunk rari vengono
+    ridistribuiti più rapidamente e il numero di copie di ciascun chunk nel torrent tende a equilibrarsi.
+}
+
+Chi \textbf{carica} decide a quali richieste rispondere secondo due principi intrecciati:
+
+\begin{itemize}
+    \item \textbf{Scambio} (\emph{trading}, detto anche \emph{tit-for-tat}): si dà priorità ai
+          \textbf{4 vicini migliori}, cioè quelli che in quel momento ci stanno inviando dati alla velocità più
+          alta. Il controllo viene ripetuto ogni \textbf{10 secondi} e la lista dei 4 migliori aggiornata.
+    \item \textbf{Selezione casuale} (\emph{optimistic unchoking}): ogni \textbf{30 secondi} si sceglie anche un
+          vicino \textbf{a caso} e gli si inviano chunk. Se lo scambio va bene (i due sono buoni partner), i due
+          entrano nelle rispettive liste dei migliori. Questo permette anche ai peer con velocità di upload
+          compatibili di trovarsi, e ai nuovi arrivati di ricevere i primi chunk.
+\end{itemize}
+
+\begin{esempio}{Perché la selezione casuale}
+Alice ha appena iniziato e non ha nulla da offrire: nessuno la metterebbe tra i propri 4 migliori. Grazie
+alla selezione casuale, prima o poi un peer (Bob) le invia qualche chunk; Alice diventa così capace di
+ricambiare, magari entra tra i migliori di Bob, e Bob tra i suoi. Chi carica di più riceve di più: i
+``parassiti'' che scaricano senza caricare vengono penalizzati.
+\end{esempio}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item La posta usa \textbf{user agent} e \textbf{mail server}; \textbf{SMTP} (TCP, porta 25) trasferisce i
+          messaggi fino alla casella del destinatario, anche tra server.
+    \item Per leggere la posta servono protocolli di accesso: \textbf{POP3} (semplice: autorizzazione,
+          transazione, aggiornamento), \textbf{IMAP} (cartelle e ricerca sul server), \textbf{HTTP} (webmail).
+    \item Nel \textbf{P2P} i peer sono client e server insieme: la distribuzione di file scala meglio.
+    \item \textbf{BitTorrent}: torrent, chunk, \textbf{tracker}; \textbf{rarest first} per scaricare,
+          \textbf{4 migliori ogni 10 s} + \textbf{uno casuale ogni 30 s} per caricare.
+\end{itemize}
+}

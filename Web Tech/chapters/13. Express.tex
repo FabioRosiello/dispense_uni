@@ -1,0 +1,723 @@
+\chapter{Express}
+
+Abbiamo sviluppato la stessa applicazione tre volte: con CGI e Bash, con PHP e
+con Node.js puro. Ogni volta abbiamo incontrato gli stessi punti dolenti:
+
+\begin{itemize}
+  \item molto lavoro ripetitivo e noioso (analizzare i cookie, leggere e
+        interpretare il corpo delle richieste);
+  \item nessuna gestione delle sessioni pronta all'uso (tranne che in PHP);
+  \item nessun supporto integrato ai \textit{middleware}, per esempio per
+        l'autenticazione;
+  \item nessun motore di template integrato.
+\end{itemize}
+
+Gestire il routing, generare template, gestire sessioni, autenticazione e
+autorizzazione sono compiti \textbf{comuni a ogni progetto}. Non vogliamo
+reinventare la ruota ogni volta.
+
+\section{Che cos'è un framework}
+
+\dfn{Framework}{
+  Un \term{framework} è un insieme predefinito di componenti software, strumenti
+  e buone pratiche che fa da fondamento per lo sviluppo di software. I
+  \term{web framework} sono progettati specificamente per semplificare e
+  snellire lo sviluppo di applicazioni web, fornendo un modo
+  \textbf{strutturato} di costruirle e organizzarle.}
+
+Framework e \textbf{librerie} non sono la stessa cosa, e la differenza è
+sostanziale.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.3cm}@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{6.3cm}@{}}
+  \textbf{Libreria} & \textbf{Framework} \\
+  È essenzialmente un insieme di funzioni che possiamo invocare per far
+  svolgere un compito.
+  & Incarna un progetto astratto, con molto più comportamento già
+    incorporato. \\
+  Ogni chiamata svolge il proprio lavoro e poi \textbf{restituisce il controllo}
+  a chi ha chiamato.
+  & Il codice scritto da noi viene \textbf{innestato} dentro il framework. \\
+  Il \textbf{nostro} codice controlla il flusso di esecuzione.
+  & È il \textbf{framework} a controllare il flusso di esecuzione, e invoca il
+    nostro codice quando serve. \\
+\end{tabular}
+\end{center}
+
+\subsection{Inversione del controllo}
+
+\dfn{Inversion of Control}{
+  L'\term{inversione del controllo} (IoC) è la caratteristica distintiva dei
+  framework: il flusso di controllo è \textbf{invertito} rispetto alla
+  programmazione imperativa tradizionale, e la responsabilità di gestirlo passa
+  dallo sviluppatore al framework.}
+
+È nota anche come \guillemotleft legge di Hollywood\guillemotright:
+\textit{\guillemotleft Non chiamarci tu, ti chiamiamo noi\guillemotright}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      n/.style={rounded corners=3pt, line width=0.8pt, align=center,
+                minimum width=2.4cm, minimum height=0.9cm},
+      u/.style={n, draw=primary!65!black, fill=primary!10!white},
+      l/.style={n, draw=neutral!55!white, fill=neutral!8!white},
+      f/.style={n, draw=orange-gradient-6, fill=orange-gradient-1!40!white,
+                minimum height=2.4cm},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+                draw=neutral!45!black}]
+
+    % libreria
+    \node[font=\Lato\scriptsize\bfseries, text=neutral!25!black] at (1.7,1.9)
+      {con una libreria};
+    \node[u, minimum width=4.4cm] (uc) at (1.7,0) {codice utente};
+    \node[l] (la) at (0.4,1.3) {libreria A};
+    \node[l] (lb) at (3.0,1.3) {libreria B};
+    \draw[a] (uc.north -| la) -- (la.south);
+    \draw[a, draw=accent!70!black] ([xshift=6pt]la.south) -- ([xshift=6pt]uc.north -| la);
+    \draw[a] (uc.north -| lb) -- (lb.south);
+    \draw[a, draw=accent!70!black] ([xshift=6pt]lb.south) -- ([xshift=6pt]uc.north -| lb);
+
+    % framework
+    \node[font=\Lato\scriptsize\bfseries, text=neutral!25!black] at (8.6,1.9)
+      {con un framework};
+    \node[f] (fw) at (7.0,0.35) {\textbf{Framework}};
+    \node[u, minimum width=2.4cm] (u1) at (10.2,1.1) {codice utente};
+    \node[u, minimum width=2.4cm] (u2) at (10.2,-0.4) {codice utente};
+    \draw[a] (fw.east |- u1) -- (u1.west);
+    \draw[a] (fw.east |- u2) -- (u2.west);
+    \node[font=\Lato\scriptsize\itshape, text=neutral!35!black] at (8.6,-1.3)
+      {è il framework a chiamare};
+  \end{tikzpicture}
+  \caption{Con una libreria il controllo resta a noi; con un framework passa
+           al framework.}
+  \label{fig:ioc}
+\end{figure}
+
+\subsection{Che cosa contiene un web framework}
+
+\begin{itemize}
+  \item \textbf{Funzionalità di base}: routing, analisi delle richieste,
+        validazione degli input, gestione dei cookie, sessioni.
+  \item \textbf{Motore di template}: aiuta a generare contenuto dinamico,
+        separando la logica dalla presentazione.
+  \item \textbf{Meccanismo ORM} (\textit{Object-Relational Mapping}):
+        semplifica l'interazione con il database permettendo di lavorare con
+        oggetti invece che con interrogazioni SQL.
+\end{itemize}
+
+\subsection{Framework opinionated}
+
+I framework possono essere più o meno \term{opinionated}.
+
+Un framework \textbf{fortemente opinionated} arriva con un insieme rigido di
+convenzioni, buone pratiche e decisioni prese dai suoi autori: impone un modo
+specifico di fare le cose e lascia poco margine allo sviluppatore. Un framework
+\textbf{unopinionated} non impone un modo specifico.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.3cm}@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{6.3cm}@{}}
+  \textbf{Pro} & \textbf{Contro} \\
+  Garantiscono maggiore coerenza fra progetti diversi.
+  & Possono avere una curva di apprendimento più ripida. \\
+  Accelerano lo sviluppo, riducendo l'affaticamento decisionale.
+  & Possono non essere abbastanza flessibili per un certo progetto. \\
+\end{tabular}
+\end{center}
+
+\section{Express}
+
+\term{Express} si autodefinisce un \guillemotleft framework web veloce, unopinionated e
+minimalista per Node.js\guillemotright, ed è di gran lunga il framework di back-end più
+diffuso per Node.js.
+
+\begin{lstlisting}[style=shell]
+npm install express
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=index.js]
+import express from "express";
+
+const app = express();     // crea un'applicazione express
+const PORT = 3000;
+
+app.get('/', (req, res) => {
+  res.send('Hello World!')
+});
+
+app.listen(PORT);
+\end{lstlisting}
+
+Vale la pena confrontare queste otto righe con le decine di righe di
+\code{switch} del capitolo 11.
+
+\section{Routing}
+
+Il \term{routing} è il modo in cui il framework stabilisce come gestire una
+richiesta verso un dato \textit{endpoint}. Una rotta si definisce con i metodi
+appropriati sull'oggetto \code{app}, tipicamente nella forma:
+
+\begin{center}
+  \code{app.<METODO>(<PERCORSO>, callback)}
+\end{center}
+
+\begin{lstlisting}[style=js]
+app.get("/hello", (req, res) => {
+  res.send("Hello");
+});
+
+app.post("/hello", (req, res) => {
+  res.send("Hello Post");
+});
+\end{lstlisting}
+
+\subsection{Percorsi delle rotte}
+
+I percorsi possono essere stringhe, schemi di stringa o espressioni regolari
+complete. In caso di più corrispondenze, si applica \textbf{la prima} rotta che
+corrisponde.
+
+\begin{lstlisting}[style=js, name=routes.js]
+app.get("/webtech", (req, res) => {
+  res.send("Web Technologies!");
+});
+
+// corrisponde a /webtech, /web-tech, /web-technologies, /webtechnologies...
+app.get("/web(-)?tech*", (req, res) => {
+  res.send("Web Technologies Pattern!");
+});
+
+// corrisponde a /webtech, /wirelesstech, /wtech, /whatever-tech...
+app.get(/^\/w.*tech$/, (req, res) => {
+  res.send("Web Technologies Regex!");
+});
+\end{lstlisting}
+
+\subsection{Parametri di rotta}
+
+Le rotte possono catturare segmenti di URL con un nome, detti \term{parametri},
+dichiarati nel percorso con la sintassi \code{:nomeParametro}. I parametri
+catturati sono resi disponibili nell'oggetto \code{req.params}.
+
+\begin{lstlisting}[style=js, name=params.js]
+// per una richiesta a /student/42/exams/TecWeb
+app.get("/student/:student_id/exams/:exam_name", (req, res) => {
+  res.send(req.params);   // {"student_id":"42","exam_name":"TecWeb"}
+});
+
+// si puo' vincolare il formato con una regex fra parentesi:
+// corrisponde a /student/42/exams/TecWeb ma NON a /student/bob/exams/TecWeb
+app.get("/student/:student_id([0-9]+)/exams/:exam_name", (req, res) => {
+  res.send(req.params);
+});
+\end{lstlisting}
+
+\info{Il problema risolto}{
+  Questo è esattamente il caso \code{GET /users/42/friends} che nel capitolo 11
+  avevamo indicato come impossibile da gestire con uno \code{switch} su stringhe
+  esatte. Con Express diventa una riga.}
+
+\subsection{Più gestori per una rotta}
+
+È possibile specificare più funzioni gestore per una rotta. Si comportano come
+\textit{middleware}, e \code{next} è la callback che invoca il gestore
+successivo.
+
+\begin{lstlisting}[style=js, name=handlers.js]
+let f1 = function (req, res, next) { console.log("f1"); next(); }
+let f2 = function (req, res, next) { console.log("f2"); next(); }
+let f3 = function (req, res, next) { console.log("f3"); next(); }
+
+app.get("/handlers", [f1, f2, f3], (req, res) => {
+  res.send("Done with all handlers");
+});
+\end{lstlisting}
+
+\subsection{Rotte concatenabili e router modulari}
+
+Con \code{app.route()} il percorso si specifica in un solo punto (meno
+ridondanza) e i gestori specifici per metodo si concatenano.
+
+\begin{lstlisting}[style=js, name=chained.js]
+app.route('/book')
+  .get((req, res) => {
+    res.send('Get a random book')
+  })
+  .post((req, res) => {
+    res.send('Add a book')
+  })
+  .delete((req, res) => {
+    res.send('Delete a book')
+  });
+\end{lstlisting}
+
+Si può anche creare un \term{router modulare}, caricabile all'occorrenza:
+
+\begin{lstlisting}[style=js, name=router.js]
+import express from "express";
+
+export const router = express.Router();
+
+router.get("/echo/:value", (req, res) => {
+  res.send(req.params.value);
+});
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=index.js]
+import { router as echoRouter } from "./router.js";
+
+const app = express();
+
+// monta echoRouter, opzionalmente sotto un certo percorso
+app.use("/custom", echoRouter);
+// le richieste a /custom/echo/:value saranno gestite dal router
+
+app.listen(3000);
+\end{lstlisting}
+
+È il modo con cui si tiene ordinata un'applicazione di dimensioni reali:
+un file di rotte per ciascuna area funzionale.
+
+\section{Rispondere al client}
+
+Sull'oggetto risposta (\code{res}) vanno invocati i metodi appropriati per
+inviare una risposta al client, \textbf{altrimenti la richiesta resta appesa}.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{8.4cm}@{}}
+  \textbf{Metodo} & \textbf{Descrizione} \\
+  \code{res.download()}   & propone il download di un file \\
+  \code{res.end()}        & termina il processo di risposta \\
+  \code{res.json()}       & invia una risposta JSON \\
+  \code{res.jsonp()}      & invia una risposta JSON con supporto JSONP \\
+  \code{res.redirect()}   & reindirizza una richiesta \\
+  \code{res.render()}     & genera un template di vista \\
+  \code{res.send()}       & invia una risposta di vario tipo \\
+  \code{res.sendFile()}   & invia un file come flusso di byte \\
+  \code{res.sendStatus()} & imposta il codice di stato e ne invia la
+                            rappresentazione testuale come corpo \\
+\end{tabular}
+\end{center}
+
+\subsection{Generare un template}
+
+\begin{lstlisting}[style=js, name=index.js]
+const app = express();
+
+app.set("view engine", "pug");
+
+app.get('/template', (req, res) => {
+  res.render("template");
+});
+
+app.listen(3000);
+\end{lstlisting}
+
+\begin{lstlisting}[style=pug, name=views/template.pug]
+doctype html
+html
+  head
+    title Pug Template rendered in Express
+  body
+    h1 Rendering a Pug Template in Express
+    p Il procedimento e' immediato.
+\end{lstlisting}
+
+I dati impostati nell'oggetto \code{res.locals} sono disponibili a tutte le
+viste generate per quella risposta.
+
+\begin{lstlisting}[style=js, name=locals.js]
+app.get("/example", (req, res) => {
+  res.locals.items = [
+    { name: "Web tech.", grade: "A+" },
+    { name: "Soft. Eng.", grade: "A" },
+    { name: "Calculus",  grade: "B" },
+  ];
+  res.render("example");
+});
+\end{lstlisting}
+
+\begin{lstlisting}[style=pug, name=views/example.pug]
+doctype html
+html
+  head
+    title List of Exams
+  body
+    h1 List of Exams
+    each exam in items
+      li #{exam.name} grade #{exam.grade}
+\end{lstlisting}
+
+\section{Il ciclo richiesta-risposta}
+
+Il ciclo richiesta-risposta è il cuore di Express. Quando arriva una richiesta:
+
+\begin{enumerate}
+  \item vengono creati un oggetto richiesta e un oggetto risposta;
+  \item viene eseguita una \textbf{sequenza} di uno o più passi di elaborazione
+        (analizzare il corpo, analizzare i cookie, stabilire una sessione,
+        \ldots);
+  \item viene preparata e inviata la risposta.
+\end{enumerate}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      m/.style={rounded corners=3pt, draw=primary!65!black, line width=0.8pt,
+                fill=primary!10!white, minimum width=2.3cm, minimum height=1.5cm,
+                align=center},
+      h/.style={m, draw=accent!60!black, fill=accent!12!white},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                draw=neutral!45!black},
+      r/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                draw=accent!70!black}]
+
+    \node[font=\Lato\scriptsize, anchor=east, align=right, text=neutral!25!black]
+      (in) at (-0.5,0.4) {richiesta\\ HTTP};
+
+    \node[m] (m1) at (1.4,0.4) {Middleware\\[2pt]\scriptsize log della\\\scriptsize richiesta};
+    \node[m] (m2) at (4.2,0.4) {Middleware\\[2pt]\scriptsize analisi del\\\scriptsize corpo};
+    \node[m] (m3) at (7.0,0.4) {Middleware\\[2pt]\scriptsize controllo\\\scriptsize autenticazione};
+    \node[h] (rh) at (9.8,0.4) {Gestore\\ della rotta\\[2pt]\scriptsize \code{res.render()}};
+
+    \draw[a] (in.east) -- (m1.west);
+    \draw[a] (m1) -- node[wtlab, above]{\code{next()}} (m2);
+    \draw[a] (m2) -- node[wtlab, above]{\code{next()}} (m3);
+    \draw[a] (m3) -- node[wtlab, above]{\code{next()}} (rh);
+
+    \node[font=\Lato\scriptsize, anchor=west, align=left, text=accent!60!black]
+      (out) at (11.3,-1.5) {risposta\\ HTTP};
+    \foreach \n in {m1,m2,m3,rh} {
+      \draw[r] (\n.south) -- ++(0,-0.55);
+    }
+    \draw[r, draw=accent!70!black] (1.4,-0.9) -- (10.9,-0.9) -- (out.west);
+    \node[font=\Lato\scriptsize\itshape, text=accent!55!black] at (5.5,-1.2)
+      {ogni livello può rispondere e interrompere la catena};
+
+    \begin{scope}[on background layer]
+      \node[rounded corners=5pt, draw=primary!35!white, line width=0.9pt,
+            fit=(m1)(m2)(m3), inner sep=9pt,
+            label={[font=\Lato\scriptsize, text=primary!60!black]above:pila dei
+            middleware}] {};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Il ciclo richiesta-risposta di Express.}
+  \label{fig:express-cycle}
+\end{figure}
+
+\section{I middleware}
+
+\dfn{Middleware}{
+  In Express i \term{middleware} sono funzioni che possono manipolare gli
+  oggetti richiesta e risposta correnti, oppure eseguire codice arbitrario. Si
+  chiamano così perché sono eseguiti \textbf{nel mezzo}, fra la ricezione di una
+  richiesta e l'invio della relativa risposta.}
+
+I middleware:
+
+\begin{itemize}
+  \item vengono eseguiti \textbf{nello stesso ordine in cui sono dichiarati};
+  \item ricevono come argomenti \code{req} (l'oggetto richiesta), \code{res}
+        (l'oggetto risposta) e \code{next} (una callback che invoca il
+        middleware successivo nella pila).
+\end{itemize}
+
+\begin{esempio}{Il primo middleware}
+\begin{lstlisting}[style=js, name=middleware.js]
+export function logger(req, res, next) {
+  console.log("LOGGER HAS BEEN CALLED!");
+  next();
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=index.js]
+app.use(logger);   // monta il middleware "logger" sul percorso "/"
+
+app.get('/', (req, res) => {
+  res.send('Hello World!')
+});
+
+app.listen(PORT);
+\end{lstlisting}
+\end{esempio}
+
+\begin{esempio}{Un middleware che arricchisce la richiesta}
+\begin{lstlisting}[style=js, name=middleware.js]
+export function addTimestamp(req, res, next) {
+  req.timestamp = new Date();
+  next();
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=index.js]
+app.use(addTimestamp);
+app.use(logger);
+
+app.get('/', (req, res) => {
+  res.send(`Richiesta ricevuta il ${req.timestamp}`)
+});
+\end{lstlisting}
+
+Qui si vede il punto centrale: un middleware può \textbf{aggiungere proprietà}
+all'oggetto richiesta, e tutti i middleware e i gestori successivi le trovano
+già pronte. È il meccanismo con cui l'oggetto \code{context} che avevamo
+passato a mano nel capitolo 12 diventa superfluo.
+\end{esempio}
+
+\warning{Dimenticare \code{next()}}{
+  Se un middleware non invoca \code{next()} e non invia una risposta, la
+  richiesta resta \textbf{appesa} finché il client non va in timeout. È l'errore
+  più comune con Express, e non produce alcun messaggio d'errore: semplicemente
+  la pagina non carica mai.}
+
+\section{Gestione degli errori}
+
+È importante assicurarsi che ogni errore verificatosi durante l'elaborazione dei
+middleware o delle rotte sia gestito correttamente da Express.
+
+Se un errore viene sollevato durante l'esecuzione di codice \textbf{sincrono},
+viene catturato automaticamente dal gestore di errori predefinito di Express.
+
+\begin{lstlisting}[style=js]
+app.get("/error", (req, res) => {
+  throw new Error("Si e' verificato un errore");
+});
+\end{lstlisting}
+
+Gli errori restituiti da funzioni \textbf{asincrone} invocate da gestori di
+rotta e middleware devono invece essere passati esplicitamente a \code{next()}.
+
+\begin{lstlisting}[style=js, name=async-error.js]
+app.get('/readfile', (req, res, next) => {
+  fs.readFile('/file-does-not-exist', (err, data) => {
+    if (err) {
+      next(err);       // passa l'errore a Express
+    } else {
+      res.send(data);
+    }
+  })
+});
+\end{lstlisting}
+
+A partire da Express 5, i gestori e i middleware che restituiscono una Promise
+invocano automaticamente \code{next(value)} quando questa viene rifiutata o
+solleva un errore, per cui non sarà più necessario farlo esplicitamente.
+
+\begin{lstlisting}[style=js]
+app.get('/user/:id', async (req, res, next) => {
+  const user = await getUserById(req.params.id)
+  res.send(user)
+});
+\end{lstlisting}
+
+\subsection{Gestori di errore personalizzati}
+
+Express include un gestore di errori predefinito, che stampa l'intera traccia di
+stack solo in modalità sviluppo. Se ne possono definire di propri: sono
+middleware speciali con \textbf{quattro} parametri di ingresso.
+
+\begin{lstlisting}[style=js, name=error-handler.js]
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Something broke!');
+});
+\end{lstlisting}
+
+\info{Quattro parametri, non tre}{
+  È l'\textbf{arità} della funzione a dire a Express che si tratta di un gestore
+  di errori: una funzione con tre parametri è un middleware normale, una con
+  quattro è un gestore di errori. Ometterne uno per distrazione fa sì che il
+  gestore non venga mai invocato, senza alcun avviso.}
+
+\section{Middleware utili}
+
+\subsection{express.static}
+
+Middleware integrato, progettato per servire file statici. Usa \code{req.url}
+per determinare se una richiesta corrisponde alla directory radice indicata.
+
+\begin{lstlisting}[style=js]
+// tutti i file nella directory /public saranno serviti come file statici
+app.use(express.static("public"));
+\end{lstlisting}
+
+Sostituisce da sola tutti i \code{case} con \code{fs.readFile} che avevamo
+scritto a mano nel capitolo 11.
+
+\subsection{express.urlencoded}
+
+Middleware integrato che analizza il corpo delle richieste con contenuto
+codificato come URL, cioè quelle inviate dai form.
+
+\begin{lstlisting}[style=js, name=form.js]
+app.use(express.urlencoded({ extended: false }));
+
+app.get("/form", (req, res) => { res.render("form"); });
+
+app.post("/form", (req, res) => {
+  res.send(`msg=${req.body.msg}; num=${req.body.num}`);
+});
+\end{lstlisting}
+
+\begin{lstlisting}[style=pug, name=views/form.pug]
+h1 Form
+form(action="/form" method="POST")
+  input(type="text" name="msg")
+  input(type="number" name="num")
+  input(type="submit")
+\end{lstlisting}
+
+Una riga sostituisce le due funzioni di analisi del corpo scritte a mano nel
+capitolo 11, gestione della codifica URL compresa.
+
+\subsection{express.json}
+
+Si comporta come \code{express.urlencoded}, ma analizza corpi in formato JSON.
+Sarà fondamentale nel capitolo sulle API REST.
+
+\begin{lstlisting}[style=js]
+app.use(express.json());
+
+app.post("/json", (req, res) => {
+  res.send(`exam=${req.body.exam}; grade=${req.body.grade}`);
+});
+\end{lstlisting}
+
+\begin{lstlisting}[style=http, name=Richiesta]
+POST http://localhost:3000/json HTTP/1.1
+Content-Type: application/json
+
+{
+  "exam": "Web Technologies",
+  "grade": "A+"
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=http, name=Risposta]
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: text/html; charset=utf-8
+Content-Length: 31
+
+exam=Web Technologies; grade=A+
+\end{lstlisting}
+
+\subsection{express-session}
+
+Middleware disponibile su npm, semplifica la gestione di una sessione
+memorizzata sul server: i dati restano sul server, l'identificatore viaggia in
+un cookie. È esattamente il meccanismo che nel capitolo 12 abbiamo implementato
+a mano.
+
+\begin{lstlisting}[style=js, name=session.js]
+app.use(session({
+  secret: "s3cr37",
+  saveUninitialized: false,
+  resave: false
+}));
+
+app.get("/session-counter", (req, res) => {
+  if (!req.session?.count) {
+    req.session.count = 1;
+    res.send("E' la prima volta che visiti questa pagina.");
+  } else {
+    req.session.count = req.session.count + 1;
+    res.send(`Hai visitato questa pagina ${req.session.count} volte.`);
+  }
+});
+\end{lstlisting}
+
+\warning{L'archivio predefinito non è per la produzione}{
+  L'archivio di sessione predefinito di \code{express-session} tiene tutto in
+  memoria: per la produzione va configurato un archivio dedicato, per esempio
+  basato su \textit{memcached} o \textit{Redis}. Sono gli stessi limiti già
+  discussi nel capitolo 12.}
+
+\subsection{cookie-parser}
+
+Analizza l'header \code{Cookie} delle richieste in arrivo e popola
+\code{req.cookies} con un oggetto le cui proprietà sono i nomi dei cookie.
+
+\begin{lstlisting}[style=js, name=cookies.js]
+app.use(cookieParser());
+
+app.get("/cookie-counter", (req, res) => {
+  if (!req.cookies?.count) {
+    res.cookie("count", 1, { maxAge: 10 * 60 * 1000 });
+    res.send("E' la prima volta che visiti questa pagina.");
+  } else {
+    res.cookie("count", parseInt(req.cookies.count) + 1,
+               { maxAge: 10 * 60 * 1000 });
+    res.send(`Hai visitato questa pagina ${parseInt(req.cookies.count) + 1} volte.`);
+  }
+});
+\end{lstlisting}
+
+\section{Messaggi flash}
+
+Spesso, nelle applicazioni web, gli utenti vengono \textbf{reindirizzati} dopo
+aver compiuto un'azione, per esempio riportati alla homepage dopo aver
+cancellato dei dati. È buona norma fornire un riscontro, così che sappiano se
+l'operazione è andata a buon fine.
+
+La parte difficile è che, dopo il reindirizzamento, comincia un ciclo
+richiesta-risposta \textbf{completamente nuovo}. Come tenere traccia del fatto
+che dobbiamo mostrare un messaggio?
+
+È l'ennesima variazione del solito problema: HTTP non ha stato. Si risolve nei
+modi già visti (cookie, sessioni), e alcuni middleware sono molto utili allo
+scopo. Uno è \term{connect-flash}.
+
+\begin{lstlisting}[style=js, name=flash.js]
+import flash from "connect-flash";
+
+app.use(flash());
+
+app.get("/redirect", (req, res) => {
+  req.flash("info", "Sei stato reindirizzato.");
+  req.flash("info", "Questa e' una dimostrazione dei messaggi flash.");
+  req.flash("success", "E' andato tutto bene.");
+  req.flash("error", "Ma abbiamo anche un messaggio di errore.");
+  res.redirect("/showflash");
+});
+
+app.get("/showflash", (req, res) => {
+  let infos     = req.flash("info");      // consuma i messaggi con quella chiave
+  let successes = req.flash("success");
+  let errors    = req.flash("error");
+  res.render("flash", { infos: infos, successes: successes, errors: errors });
+});
+\end{lstlisting}
+
+\begin{lstlisting}[style=pug, name=views/flash.pug]
+ul
+  each info in infos
+    li(style="color: blue") #{info}
+  each success in successes
+    li(style="color: green") #{success}
+  each error in errors
+    li(style="color: red") #{error}
+\end{lstlisting}
+
+Una volta consumati, i messaggi flash vengono \textbf{cancellati}: ricaricando
+la pagina \code{/showflash}, o visitandola direttamente senza essere stati
+reindirizzati, non compare alcun messaggio. È precisamente il comportamento che
+si desidera per una notifica \guillemotleft usa e getta\guillemotright.
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Express web framework (Node.js/JavaScript)} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Learn/Server-side/Express_Nodejs}
+  \item \textbf{Inversion of Control}, Martin Fowler. \\
+        \urlx{https://martinfowler.com/bliki/InversionOfControl.html}
+  \item \textbf{Express Guide} --- sito ufficiale. \\
+        \urlx{https://expressjs.com/en/guide/routing.html} \\
+        \urlx{https://expressjs.com/en/guide/writing-middleware.html} \\
+        \urlx{https://expressjs.com/en/guide/using-middleware.html} \\
+        \urlx{https://expressjs.com/en/guide/using-template-engines.html} \\
+        \urlx{https://expressjs.com/en/guide/error-handling.html}
+\end{itemize}

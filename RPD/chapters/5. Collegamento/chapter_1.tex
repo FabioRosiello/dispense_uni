@@ -1,0 +1,645 @@
+\chapter{Framing e rilevazione degli errori}
+
+\begin{center}
+\begin{tikzpicture}[node distance=0pt]
+  \node[lay app, minimum width=3.4cm] (a) {Applicazione};
+  \node[lay tra, minimum width=3.4cm, below=of a] (t) {Trasporto};
+  \node[lay net, minimum width=3.4cm, below=of t] (n) {Rete};
+  \node[lay link, minimum width=3.4cm, below=of n, line width=1.5pt, draw=netred] (l) {\bfseries Collegamento};
+  \node[lay phy, minimum width=3.4cm, below=of l, line width=1.5pt, draw=netred] (p) {\bfseries Fisico};
+  \draw[-{Stealth}, thick, netred] ([xshift=0.3cm]l.south east) -- ++(1,0) node[right, lbl, text=netred] {siamo qui};
+\end{tikzpicture}
+\end{center}
+
+% ══════════════════════════════════════════════════════════════
+\section{Dalla rete al collegamento e al livello fisico}
+% ══════════════════════════════════════════════════════════════
+
+Il livello di rete fornisce comunicazione tra due host, \emph{ovunque} si trovino. Il livello di collegamento e il livello fisico
+forniscono invece comunicazione tra due nodi \textbf{direttamente collegati}:
+
+\begin{itemize}
+    \item il \textbf{livello di collegamento} (\emph{link layer}) è la parte della pila dedicata alla trasmissione di pacchetti sui
+          collegamenti (canali di trasmissione), \textbf{da un nodo al successivo} della rete;
+    \item il \textbf{livello fisico} regola la struttura dei collegamenti (mezzo trasmissivo, connettori, tipi di cavo, \dots) e il modo
+          in cui i bit vengono rappresentati e trasmessi lungo il collegamento.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[lay app, minimum width=2.2cm] at (0,2.4) {Applicazione};
+  \node[lay tra, minimum width=2.2cm] at (0,1.8) {Trasporto};
+  \node[lay net, minimum width=2.2cm] at (0,1.2) {Rete};
+  \node[lay link, minimum width=2.2cm] at (0,0.6) {Collegamento};
+  \node[lay phy, minimum width=2.2cm] at (0,0) {Fisico};
+  \foreach \y/\t/\c in {2.1/{host -- host (processi)}/ltra, 1.2/{host -- host (instradamento)}/lnet, 0.3/{nodo -- nodo (un hop)}/llink} {
+    \node[anchor=west, font=\footnotesize\sffamily] at (1.9,\y) {$\leftarrow$ \t};
+  }
+  \node[draw, fill=white, anchor=west, text width=6.8cm, align=left] at (6.2,1.2) {Collegamento e fisico sono strettamente intrecciati: spesso vengono raggruppati in un unico livello detto \textbf{network access} (o ``link + fisico''), e alcuni protocolli comuni, come Ethernet, coprono entrambi.};
+\end{tikzpicture}
+\caption{Cosa garantisce ciascun livello.}
+\end{figure}
+
+A differenza dei livelli superiori, questi due livelli sono presenti in \textbf{tutti} i pezzi dell'infrastruttura di rete:
+
+\begin{itemize}
+    \item \textbf{nodi}: host (PC, server, \dots), router, switch, hub, access point Wi-Fi;
+    \item \textbf{collegamenti}: cablati (rame, fibra ottica) e senza fili (radiofrequenze).
+\end{itemize}
+
+\subsection{Un esempio di segnale: la codifica NRZ}
+
+A questo livello non abbiamo altro che \textbf{bit} (zeri e uni) trasmessi su una linea fisica, rappresentati da grandezze fisiche.
+L'esempio più semplice di codifica è la \textbf{NRZ} (\emph{Non-Return to Zero}): il tempo è diviso in intervalli uguali, e in ciascun
+intervallo il segnale vale $+L$ per rappresentare un 1 e $0$ (oppure $-L$) per rappresentare uno 0.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \draw[-{Stealth}] (0,0) -- (8.6,0) node[right] {$t$};
+  \draw[-{Stealth}] (0,-0.3) -- (0,1.6) node[above] {$s(t)$};
+  \node[left] at (0,1) {$+L$}; \node[left] at (0,0) {0};
+  \draw[very thick, netblue] (0,1) -- (1,1) -- (1,0) -- (2,0) -- (2,1) -- (4,1) -- (4,0) -- (6,0) -- (6,1) -- (7,1) -- (7,0) -- (8,0);
+  \foreach \x/\b in {0.5/1, 1.5/0, 2.5/1, 3.5/1, 4.5/0, 5.5/0, 6.5/1, 7.5/0} \node at (\x,-0.35) {\b};
+  \foreach \x in {1,...,8} \draw[dashed, black!30] (\x,0) -- (\x,1.3);
+\end{tikzpicture}
+\caption{La sequenza 10110010 in codifica NRZ: il tempo è diviso in intervalli uguali.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{L'ultimo incapsulamento}
+% ══════════════════════════════════════════════════════════════
+
+Per consegnare un datagramma IP dall'host sorgente all'host destinazione bisogna farlo ``saltare'' su ciascuno dei singoli
+collegamenti e dispositivi del percorso. Per essere trasferiti su un collegamento, i datagrammi vengono incapsulati in
+\textbf{frame} di collegamento, il cui formato dipende dal tipo di collegamento.
+
+\dfn{Frame}{
+    Il livello di collegamento accetta pacchetti dal livello di rete e li incapsula in \textbf{frame}, che invia usando il livello
+    fisico; in ricezione il processo è inverso. È l'\textbf{ultimo incapsulamento}: i frame vengono convertiti in \textbf{segnali} e
+    trasferiti sul collegamento secondo le sue specifiche. I segnali possono essere impulsi elettrici, luce o onde radio.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \begin{scope}
+    \node[font=\footnotesize\bfseries\sffamily] at (1.5,2.9) {Mittente};
+    \node[lay net, minimum width=3cm] (n1) at (1.5,2.2) {rete};
+    \node[lay link, minimum width=3cm] (l1) at (1.5,1.1) {collegamento};
+    \node[lay phy, minimum width=3cm] (p1) at (1.5,0) {fisico};
+    \node[field, fill=lnet!70, minimum width=1.4cm] at (1.5,2.2) {pacchetto};
+    \node[field, fill=llink, minimum width=0.4cm] (h) at (0.65,1.1) {H};
+    \node[field, fill=lnet!70, minimum width=1.4cm, right=0pt of h] (pl) {payload};
+    \node[field, fill=llink, minimum width=0.4cm, right=0pt of pl] {T};
+  \end{scope}
+  \begin{scope}[xshift=8cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (1.5,2.9) {Ricevente};
+    \node[lay net, minimum width=3cm] (n2) at (1.5,2.2) {rete};
+    \node[lay link, minimum width=3cm] (l2) at (1.5,1.1) {collegamento};
+    \node[lay phy, minimum width=3cm] (p2) at (1.5,0) {fisico};
+  \end{scope}
+  \draw[dashed, thick, netblue, {Stealth}-{Stealth}] (l1.east) -- node[above] {percorso virtuale dei dati (frame)} (l2.west);
+  \draw[very thick, netred, {Stealth}-{Stealth}] (p1.east) -- node[below] {percorso reale: segnali sul mezzo} (p2.west);
+  \draw[-{Stealth}, thick] (n1) -- (l1); \draw[-{Stealth}, thick] (l1) -- (p1);
+  \draw[-{Stealth}, thick] (p2) -- (l2); \draw[-{Stealth}, thick] (l2) -- (n2);
+\end{tikzpicture}
+\caption{Il frame: header (H), payload (il pacchetto di rete) e trailer (T).}
+\end{figure}
+
+\begin{esempio}{Quanti collegamenti per uscire di casa}
+Per raggiungere Internet, i pacchetti di un portatile in una rete aziendale possono dover attraversare 4 o 5 collegamenti (con e
+senza fili), un access point, uno switch e 2 o 3 router. Su ciascun collegamento il datagramma viaggia dentro un frame diverso,
+adatto a quel tipo di collegamento (per esempio un frame Wi-Fi fino all'access point, poi frame Ethernet).
+\end{esempio}
+
+% ══════════════════════════════════════════════════════════════
+\section{I servizi del livello di collegamento}
+% ══════════════════════════════════════════════════════════════
+
+Il livello di collegamento può offrire fino a quattro servizi.
+
+\subsection{1. Framing}
+
+Incapsulare i datagrammi in frame, con il datagramma come payload e un header e un trailer specifici. La struttura del frame dipende
+dai protocolli di collegamento e fisico.
+
+\subsection{2. Accesso al collegamento (link access)}
+
+Definire le regole di accesso al collegamento tramite un protocollo \textbf{MAC} (\emph{Medium Access Control}). Le regole
+dipendono dall'architettura del collegamento:
+
+\begin{itemize}
+    \item nei collegamenti \textbf{punto-punto} (un solo mittente e un solo ricevente) il protocollo MAC è semplice o inesistente:
+          il mittente può inviare un frame ogni volta che il collegamento è libero;
+    \item nei collegamenti \textbf{broadcast} c'è il \textbf{problema dell'accesso multiplo}: il protocollo MAC serve a coordinare le
+          trasmissioni dei molti nodi.
+\end{itemize}
+
+\subsection{3. Consegna affidabile}
+
+Garantire che i frame trasmessi sul collegamento vengano ricevuti.
+
+\begin{itemize}
+    \item Si usa spesso sui collegamenti soggetti a tassi di errore elevati, come quelli \textbf{senza fili}, con l'obiettivo di
+          correggere gli errori \textbf{localmente}, senza costringere gli estremi a ritrasmettere.
+    \item Può introdurre un forte overhead. Poiché altri protocolli (per esempio TCP) sono già affidabili, non è sempre implementata.
+\end{itemize}
+
+\subsection{4. Rilevazione e correzione degli errori}
+
+L'hardware di collegamento può subire il problema dell'\textbf{inversione dei bit} (\emph{bit flipping}). Molti protocolli di
+collegamento implementano strategie di controllo e correzione più sofisticate (e realizzate in hardware), in aggiunta a quelle dei
+livelli superiori (i checksum di TCP e IP).
+
+\begin{itemize}
+    \item Poiché non c'è un ulteriore incapsulamento, questi controlli coprono di fatto \textbf{l'intero messaggio}.
+    \item I controlli realizzati in hardware possono essere molto più veloci.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{L'implementazione: la NIC}
+% ══════════════════════════════════════════════════════════════
+
+Nei dispositivi di rete (end system, router, \dots) le funzioni del livello di collegamento sono realizzate sia in software sia,
+soprattutto, in hardware.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.45\linewidth}\centering
+  \includegraphics[width=0.85\linewidth]{cap18/nic_schema.png}
+\end{minipage}\hfill
+\begin{minipage}{0.45\linewidth}\centering
+  \includegraphics[width=0.85\linewidth]{cap18/nic.png}
+\end{minipage}
+\caption{A sinistra lo schema di un adattatore di rete collegato al bus dell'host; a destra un mini-PC (LattePanda) con la NIC integrata sulla scheda madre.}
+\end{figure}
+
+Nei computer ci sono adattatori di rete detti \textbf{NIC} (\emph{Network Interface Card}), con un chip specializzato
+(\textbf{controller}) che realizza le funzioni di collegamento. Un tempo erano schede separate dalla scheda madre (inserite negli slot
+PCI); oggi sono spesso integrate (\emph{LAN-on-motherboard}).
+
+\subsection{Software e hardware}
+
+\begin{itemize}
+    \item \textbf{Software}: gira sulla CPU e offre funzioni di alto livello come l'indirizzamento, la gestione di interrupt e
+          hardware, la gestione degli errori, l'incapsulamento e il decapsulamento dei datagrammi.
+    \begin{itemize}
+      \item A livello di collegamento c'è un indirizzo aggiuntivo, l'\textbf{indirizzo MAC}, che identifica la NIC.
+      \item I datagrammi vanno letti dalla memoria in incapsulamento (lato mittente) e scritti in memoria in decapsulamento (lato
+            ricevente), perché li usi il protocollo superiore.
+    \end{itemize}
+    \item \textbf{Hardware}: funziona come un tipico dispositivo di I/O, convertendo i dati nel segnale da trasmettere secondo il
+          protocollo fisico (Ethernet, wireless, \dots).
+\end{itemize}
+
+\subsection{Le tecnologie fisiche}
+
+Il protocollo di collegamento, e quindi la struttura del frame, dipende dalla tecnologia del collegamento fisico:
+
+\begin{itemize}
+    \item \textbf{Ethernet 802.3}: collegamento cablato basato su impulsi elettrici su cavi in rame con 4 doppini intrecciati (il più
+          comune) o su fotoni in cavi di fibra ottica;
+    \item \textbf{Wi-Fi 802.11}: collegamento senza fili a radiofrequenza (2,4 GHz, 5 GHz, 6 GHz);
+    \item \textbf{Bluetooth}: collegamento senza fili a radiofrequenza (2,4 GHz).
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lllll}
+\toprule
+\textbf{Tipo} & \textbf{Segnale} & \textbf{Distanza} & \textbf{Banda} & \textbf{Punto debole} \\
+\midrule
+Senza fili & radio & 30--50 m & fino a 1,3 Gb/s & sicurezza, velocità \\
+Doppino in rame & elettrico & 30--100 m & 1--25 Gb/s & interferenze \\
+Fibra ottica & luce & 100--200 km & 1--400+ Gb/s & fragilità \\
+\bottomrule
+\end{tabular}
+\caption{Pro e contro delle tecnologie fisiche (i limiti di distanza e banda cambiano continuamente).}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{I metodi di framing}
+% ══════════════════════════════════════════════════════════════
+
+Potremmo trasmettere un flusso ininterrotto di bit? No: sarebbe impossibile \textbf{identificare gli errori} e
+\textbf{ritrasmettere} solo le parti danneggiate. Inoltre bisogna distinguere i diversi pacchetti che arrivano come payload dal livello
+di rete. Il ricevente deve quindi capire \textbf{dove inizia e dove finisce} ogni frame. I metodi principali sono quattro:
+
+\begin{enumerate}
+    \item conteggio dei byte (\emph{byte count});
+    \item byte di flag con \emph{byte stuffing};
+    \item bit di flag con \emph{bit stuffing};
+    \item violazioni della codifica fisica.
+\end{enumerate}
+
+\subsection{Conteggio dei byte}
+
+\dfn{Byte count}{
+    Ogni frame inizia con un campo che indica il \textbf{numero di byte} del frame. È semplice, ma è difficilissimo
+    risincronizzarsi dopo un errore, e in pratica non è mai usato da solo.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\ttfamily}, b/.style={draw, minimum size=0.45cm, inner sep=0pt}]
+  \node[font=\footnotesize\bfseries\sffamily, anchor=west] at (-0.5,0.7) {Senza errori};
+  \foreach \v/\c [count=\i] in {5/netred!30,1/white,2/white,3/white,4/white, 5/netred!30,6/white,7/white,8/white,9/white, 8/netred!30,0/white,1/white,2/white,3/white,4/white,5/white,6/white, 8/netred!30,7/white,8/white,9/white,0/white,1/white,2/white,3/white}
+     \node[b, fill=\c] at (\i*0.45,0) {\v};
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (0.25,-0.35) -- (2.4,-0.35) node[midway, below=4pt, font=\scriptsize\sffamily] {frame 1: 5 byte};
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (2.5,-0.35) -- (4.65,-0.35) node[midway, below=4pt, font=\scriptsize\sffamily] {frame 2: 5 byte};
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (4.75,-0.35) -- (8.25,-0.35) node[midway, below=4pt, font=\scriptsize\sffamily] {frame 3: 8 byte};
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (8.35,-0.35) -- (11.85,-0.35) node[midway, below=4pt, font=\scriptsize\sffamily] {frame 4: 8 byte};
+  \begin{scope}[yshift=-2cm]
+    \node[font=\footnotesize\bfseries\sffamily, anchor=west] at (-0.5,0.7) {Con un errore};
+    \foreach \v/\c [count=\i] in {5/netred!30,1/white,2/white,3/white,4/white, 7/netorange!60,6/white,7/white,8/white,9/white, 8/white,0/white,1/white,2/white,3/white,4/white,5/white,6/white, 8/white,7/white,8/white,9/white,0/white,1/white,2/white,3/white}
+       \node[b, fill=\c] at (\i*0.45,0) {\v};
+    \draw[-{Stealth}, netorange, thick] (2.7,0.9) -- (2.7,0.3); \node[font=\scriptsize\sffamily, text=netorange] at (2.7,1.1) {errore: 5 diventa 7};
+    \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (2.5,-0.35) -- (5.55,-0.35) node[midway, below=4pt, font=\scriptsize\sffamily, text=netred] {frame 2 (sbagliato)};
+    \draw[-{Stealth}, netred, thick] (5.85,-1.1) -- (5.85,-0.3); \node[font=\scriptsize\sffamily, text=netred, anchor=west] at (6,-1.0) {ora questo viene letto come un conteggio};
+  \end{scope}
+\end{tikzpicture}
+\caption{Con il conteggio dei byte un solo errore sul contatore fa perdere la sincronizzazione su tutti i frame successivi.}
+\end{figure}
+
+\subsection{Byte di flag e byte stuffing}
+
+\dfn{Byte stuffing}{
+    Ogni frame è delimitato da uno speciale \textbf{byte di flag} (FLAG). Se il byte FLAG compare \textbf{nei dati}, va
+    ``protetto'' inserendo prima di esso un byte di escape (ESC); lo stesso vale per un ESC che compare nei dati. Il ricevente
+    rimuove ogni ESC e considera come dato il byte che lo segue.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, b/.style={draw, minimum height=0.45cm, minimum width=0.75cm, inner sep=1pt}]
+  \node[b, fill=netred!25] (f1) at (0,0) {FLAG}; \node[b, right=0pt of f1, minimum width=1.2cm] (hd) {header};
+  \node[b, right=0pt of hd, minimum width=4cm] (pl) {payload}; \node[b, right=0pt of pl, minimum width=1.2cm] (tr) {trailer};
+  \node[b, fill=netred!25, right=0pt of tr] {FLAG};
+  \node[font=\footnotesize\sffamily\bfseries, anchor=east] at (-0.6,0) {formato del frame};
+  \node[font=\footnotesize\bfseries\sffamily] at (2,-0.8) {dati originali}; \node[font=\footnotesize\bfseries\sffamily] at (7.2,-0.8) {dopo lo stuffing};
+  \tikzset{bw/.style={b, fill=white}, by/.style={b, fill=llink!70}, bs/.style={b, fill=netred!20}}
+  \foreach \row/\orig/\stuf in {
+     0/{A/bw,FLAG/by,B/bw}/{A/bw,ESC/bs,FLAG/by,B/bw},
+     1/{A/bw,ESC/by,B/bw}/{A/bw,ESC/bs,ESC/by,B/bw},
+     2/{A/bw,ESC/by,FLAG/by,B/bw}/{A/bw,ESC/bs,ESC/by,ESC/bs,FLAG/by,B/bw},
+     3/{A/bw,ESC/by,ESC/by,B/bw}/{A/bw,ESC/bs,ESC/by,ESC/bs,ESC/by,B/bw}} {
+    \foreach \x/\st [count=\i] in \orig \node[\st] at (0.8+\i*0.75,-1.4-\row*0.65) {\x};
+    \draw[-{Stealth}, thick] (4.2,-1.4-\row*0.65) -- (4.9,-1.4-\row*0.65);
+    \foreach \x/\st [count=\i] in \stuf \node[\st] at (4.9+\i*0.75,-1.4-\row*0.65) {\x};
+  }
+\end{tikzpicture}
+\caption{Byte stuffing: ogni FLAG o ESC nei dati viene preceduto da un ESC.}
+\end{figure}
+
+\begin{itemize}
+    \item Il frame diventa \textbf{più lungo}, ma dopo un errore è \textbf{facile risincronizzarsi}: basta cercare il prossimo FLAG.
+    \item Gli errori non si propagano come nel conteggio dei byte.
+    \item In ricezione: ogni coppia ESC-FLAG diventa un FLAG di dati, ogni coppia ESC-ESC un ESC di dati.
+\end{itemize}
+
+\subsection{Bit di flag e bit stuffing}
+
+\dfn{Bit stuffing}{
+    Il flag che delimita i frame è la sequenza di bit \texttt{01111110} (sei 1 consecutivi). Per evitare che compaia nei dati:
+    \begin{itemize}
+      \item \textbf{in trasmissione}, dopo \textbf{cinque 1 consecutivi} nei dati si inserisce uno \textbf{0};
+      \item \textbf{in ricezione}, ogni \textbf{0 che segue cinque 1} viene eliminato.
+    \end{itemize}
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\small\ttfamily}]
+  \node[anchor=east, font=\footnotesize\sffamily] at (-0.2,0) {dati};
+  \node[anchor=west] at (0,0) {0110111111111111111110010};
+  \node[anchor=east, font=\footnotesize\sffamily] at (-0.2,-0.8) {trasmessi};
+  \node[anchor=west] at (0,-0.8) {011011111\textcolor{netred}{\textbf{0}}11111\textcolor{netred}{\textbf{0}}11111\textcolor{netred}{\textbf{0}}10010};
+  \node[anchor=east, font=\footnotesize\sffamily] at (-0.2,-1.6) {ricevuti};
+  \node[anchor=west] at (0,-1.6) {0110111111111111111110010};
+  \node[font=\footnotesize\sffamily, text=netred, anchor=west] at (7.2,-0.8) {bit di stuffing inseriti};
+\end{tikzpicture}
+\caption{Bit stuffing: dopo cinque 1 si aggiunge uno 0, che il ricevente rimuove.}
+\end{figure}
+
+\subsection{Violazioni della codifica fisica}
+
+Si sfrutta la codifica della trasmissione fisica: al livello fisico si usa un simbolo (o una parola) \textbf{che non rappresenta
+dati}. Le violazioni della codifica delimitano i frame, e non serve alcuno stuffing, perché i simboli delimitatori \textbf{non possono
+comparire} nei dati. È il caso, per esempio, della codifica 4B/5B, in cui alcune parole da 5 bit non sono mai usate per i dati.
+
+% ══════════════════════════════════════════════════════════════
+\section{La rilevazione degli errori}
+% ══════════════════════════════════════════════════════════════
+
+A livello di collegamento si possono rilevare e correggere gli errori a livello di singolo bit. In assenza di informazione
+aggiuntiva non c'è nulla con cui confrontare il payload: bisogna aggiungerne.
+
+\dfn{Il problema}{
+    Siano $D$ i nostri dati, di $d$ bit. Per proteggerli dagli errori sui bit aggiungiamo al messaggio dei \textbf{bit di rilevazione
+    e correzione degli errori}, \textbf{EDC} (\emph{Error Detection and Correction}). L'obiettivo è capire se i $D'$ ed $EDC'$
+    ricevuti differiscono dagli originali $D$ ed $EDC$ e, se possibile, ricostruire gli originali.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[draw, fill=lnet!50, minimum width=1.4cm, minimum height=0.6cm] (dg) at (0,1) {datagramma};
+  \node[draw, fill=llink!60, minimum width=1.2cm, minimum height=0.6cm, right=0pt of dg] {header link};
+  \node[draw, fill=cloudbg, minimum width=2.6cm, minimum height=0.6cm] (d) at (0.6,0) {D};
+  \node[draw, fill=netred!25, minimum width=0.8cm, minimum height=0.6cm, right=0pt of d] (e) {EDC};
+  \node[draw, fill=cloudbg, minimum width=2.6cm, minimum height=0.6cm] (d2) at (9.2,0) {D'};
+  \node[draw, fill=netred!25, minimum width=0.8cm, minimum height=0.6cm, right=0pt of d2] (e2) {EDC'};
+  \draw[very thick, decorate, decoration={snake, amplitude=1.5pt, segment length=8pt}, -{Stealth}] (e.east) -- node[above=3pt] {collegamento soggetto a errori} (d2.west);
+  \node[diamond, draw, aspect=2.5, fill=white, inner sep=1pt] (q) at (9.6,1.3) {D'+EDC' = D+EDC ?};
+  \draw[-{Stealth}] (d2.north) -- (q);
+\end{tikzpicture}
+\caption{Il ricevente usa EDC' per verificare se D' è integro.}
+\end{figure}
+
+\warning{Nessuna garanzia assoluta}{
+    Anche usando bit di rilevazione possono restare errori non rilevati, in casi ``patologici''. Le tecniche migliori riducono
+    questa probabilità, ma al prezzo di più bit aggiuntivi e più calcoli.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il controllo di parità}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Controllo di parità}{
+    Il \textbf{controllo di parità} è la forma più semplice di rilevazione: si aggiunge al messaggio \textbf{un solo bit di parità},
+    scelto in modo che il numero totale di 1 nei $d+1$ bit sia \textbf{pari} (schema a parità pari) o \textbf{dispari} (schema a parità
+    dispari).
+}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Messaggio} & \textbf{Bit di parità (pari)} & \textbf{Bit di parità (dispari)} \\
+\midrule
+\texttt{10101100} (quattro 1) & 0 & 1 \\
+\texttt{11010000} (tre 1) & 1 & 0 \\
+\bottomrule
+\end{tabular}
+\caption{Bit di parità pari e dispari.}
+\end{table}
+
+Il ricevente deve solo contare gli 1 nei $d+1$ bit ricevuti: se con uno schema pari trova un numero dispari di 1 (o viceversa), sa che
+si è verificato \textbf{almeno un errore}.
+
+\begin{esempio}{Un errore rilevato e uno no}
+Si invia \texttt{10101100} con parità pari: \texttt{10101100 0}.
+\begin{itemize}
+    \item Si riceve \texttt{1010\textcolor{netred}{0}100 0}: tre 1, numero dispari $\Rightarrow$ \textbf{errore rilevato}.
+    \item Si riceve \texttt{1010\textcolor{netred}{0}10\textcolor{netred}{1} 0}: quattro 1, numero pari $\Rightarrow$ due errori, \textbf{non rilevati}.
+\end{itemize}
+\end{esempio}
+
+\warning{Gli errori arrivano a raffica}{
+    La parità funziona solo se si verifica un numero \textbf{dispari} di errori. Quanto è probabile? Se gli errori sui bit fossero rari
+    e indipendenti, la probabilità di errori multipli in un pacchetto sarebbe piccolissima. Ma nelle reti non è così: gli errori sono
+    spesso \textbf{raggruppati a raffica} (\emph{burst}), cioè sequenze in cui il primo e l'ultimo bit sono sbagliati e quelli in mezzo sono
+    un misto di bit sbagliati e corretti. In condizioni di burst la probabilità di errori non rilevati con la parità singola si avvicina al
+    \textbf{50\%}: non è davvero utile.
+}
+
+\subsection{La parità bidimensionale}
+
+\dfn{Parità bidimensionale}{
+    Nella \textbf{parità bidimensionale} il messaggio viene diviso in $n$ righe e $m$ colonne, e a \textbf{ogni riga} e \textbf{ogni
+    colonna} si associa un bit di parità.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\small\ttfamily}, c/.style={draw, minimum size=0.5cm, inner sep=0pt}]
+  \def\tabella#1#2#3{
+    \begin{scope}[shift={#1}]
+      \foreach \r [count=\i] in {#2} {
+        \foreach \v [count=\j] in \r {
+          \pgfmathsetmacro{\fillc}{(\i==5 || \j==6) ? "llink!60" : "white"}
+          \node[c, fill=\fillc] (c\i\j) at (\j*0.5,-\i*0.5) {\v};
+        }
+      }
+      #3
+    \end{scope}
+  }
+  \node[font=\footnotesize\bfseries\sffamily] at (1.75,0.2) {senza errori};
+  \tabella{(0,0)}{{1,0,1,0,1,1},{1,1,1,1,0,0},{0,1,1,1,0,1},{0,0,1,0,1,0},{0,0,0,0,0,0}}{}
+  \node[font=\footnotesize\bfseries\sffamily] at (5.75,0.2) {un errore};
+  \tabella{(4,0)}{{1,0,1,0,1,1},{1,0,1,1,0,0},{0,1,1,1,0,1},{0,0,1,0,1,0},{0,0,0,0,0,0}}{
+     \draw[netred, very thick] (0.25,-1.25) rectangle (3.25,-0.75);
+     \draw[netred, very thick] (0.75,-0.25) rectangle (1.25,-2.75);
+     \node[circle, draw=netred, very thick, minimum size=0.55cm] at (1,-1) {};
+  }
+  \node[font=\footnotesize\bfseries\sffamily] at (9.75,0.2) {due errori};
+  \tabella{(8,0)}{{1,0,1,0,1,1},{1,0,1,1,1,0},{0,1,1,1,0,1},{0,0,1,0,1,0},{0,0,0,0,0,0}}{
+     \draw[netred, very thick] (0.75,-0.25) rectangle (1.25,-2.75);
+     \draw[netred, very thick] (2.25,-0.25) rectangle (2.75,-2.75);
+  }
+  \node[font=\scriptsize\sffamily, text width=3cm, align=center] at (1.75,-3.2) {in giallo i bit di parità (pari)};
+  \node[font=\scriptsize\sffamily, text width=3.4cm, align=center] at (5.75,-3.2) {riga 2 e colonna 2 sbagliate: il bit all'incrocio è quello errato e si può correggere};
+  \node[font=\scriptsize\sffamily, text width=3.4cm, align=center] at (9.75,-3.2) {due colonne sbagliate, righe corrette: errore rilevato ma non correggibile};
+\end{tikzpicture}
+\caption{Parità bidimensionale: dati $4 \times 5$ bit, con parità di riga (ultima colonna) e di colonna (ultima riga).}
+\end{figure}
+
+\begin{itemize}
+    \item Il ricevente può rilevare che si è verificato un errore e anche \textbf{quale bit} è sbagliato (all'incrocio tra la riga e la
+          colonna con parità errata), e quindi tentare una \textbf{correzione}.
+    \item La parità bidimensionale può anche \textbf{rilevare} (ma non correggere!) qualsiasi combinazione di \textbf{due errori} in un pacchetto.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il CRC}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Cyclic Redundancy Check (CRC)}{
+    Il \textbf{CRC} è una tecnica di rilevazione degli errori molto diffusa.
+    \begin{itemize}
+      \item Per inviare $d$ bit di dati $D$, mittente e ricevente concordano una sequenza di $r+1$ bit detta \textbf{generatore} $G$,
+            con il bit più significativo (a sinistra) uguale a 1.
+      \item Per ogni $D$ il mittente sceglie $r$ bit aggiuntivi, i \textbf{bit CRC} ($R$), da accodare al messaggio, in modo che il
+            messaggio $M$ (cioè $D$ seguito da $R$) sia \textbf{divisibile modulo 2 per $G$} (resto = 0).
+      \item Il ricevente divide il messaggio ricevuto per $G$: se il resto è zero il messaggio è corretto, altrimenti c'è un errore.
+    \end{itemize}
+    La divisione si esegue allineando $G$ sotto il primo bit a 1 del messaggio e facendo lo \textbf{XOR} bit a bit.
+}
+
+\subsection{L'aritmetica modulo 2}
+
+Nel CRC le stringhe di bit sono interpretate come \textbf{polinomi a coefficienti binari}: \texttt{1011} è $x^3 + x + 1$. L'aritmetica
+è modulo 2 senza riporti né prestiti: \textbf{somma e sottrazione coincidono con lo XOR}.
+
+\begin{center}
+\begin{tabular}{cc|c}
+\toprule
+$x$ & $y$ & $x \oplus y$ \\
+\midrule
+0 & 0 & 0 \\ 0 & 1 & 1 \\ 1 & 0 & 1 \\ 1 & 1 & 0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\info{Perché funziona (con i polinomi)}{
+    Accodare $r$ zeri a $D$ equivale a moltiplicare $D(x)$ per $x^r$. Dividendo per il generatore si ottiene
+    $$x^r D(x) = Q(x)\,G(x) + R(x)$$
+    dove $Q$ è il quoziente e $R$ il resto (di grado minore di $r$). Allora il messaggio trasmesso
+    $$M(x) = x^r D(x) - R(x) = x^r D(x) + R(x) = Q(x)\,G(x)$$
+    è \textbf{divisibile per $G(x)$}. In binario, $M$ è semplicemente $D$ seguito dagli $r$ bit di $R$. Se durante la trasmissione si
+    aggiunge un errore $E(x)$, il ricevente trova resto $\neq 0$ a meno che anche $E(x)$ sia divisibile per $G(x)$, cosa che un buon
+    generatore rende molto improbabile.
+}
+
+\subsection{Un esempio completo}
+
+Messaggio di 6 bit con CRC di 3 bit: $d = 6$, $D = \texttt{101110}$, $r = 3$, $G = \texttt{1001}$.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.47\linewidth}
+\centering\textbf{\small Mittente: calcolo del CRC}\\[4pt]
+\begin{tabular}{r@{\,}l}
+\multicolumn{2}{l}{\small $D$ con $r=3$ zeri: \texttt{101110\textcolor{netred}{000}}} \\[3pt]
+& \texttt{\textbf{1}01110000} \\
+XOR & \texttt{1001\phantom{00000}} \\ \cline{2-2}
+& \texttt{00\textbf{1}01000\phantom{0}}\\[-2pt]
+& \texttt{\phantom{00}101000\phantom{0}} \\
+XOR & \texttt{\phantom{00}1001\phantom{000}} \\ \cline{2-2}
+& \texttt{\phantom{00}00\textbf{1}100\phantom{0}} \\
+XOR & \texttt{\phantom{0000}1001\phantom{0}} \\ \cline{2-2}
+& \texttt{\phantom{0000}0\textbf{1}010} \\
+XOR & \texttt{\phantom{00000}1001} \\ \cline{2-2}
+& \texttt{\phantom{00000}0\textcolor{netred}{\textbf{011}}} \\
+\end{tabular}\\[4pt]
+{\small gli ultimi $r$ bit del resto sono il CRC: \textcolor{netred}{\texttt{011}}}
+\end{minipage}\hfill
+\begin{minipage}{0.47\linewidth}
+\centering\textbf{\small Ricevente: verifica}\\[4pt]
+\begin{tabular}{r@{\,}l}
+\multicolumn{2}{l}{\small ricevuto $D$ + CRC: \texttt{101110\textcolor{netred}{011}}} \\[3pt]
+& \texttt{\textbf{1}01110011} \\
+XOR & \texttt{1001\phantom{00000}} \\ \cline{2-2}
+& \texttt{00\textbf{1}01001\phantom{0}}\\[-2pt]
+& \texttt{\phantom{00}101001\phantom{0}} \\
+XOR & \texttt{\phantom{00}1001\phantom{000}} \\ \cline{2-2}
+& \texttt{\phantom{00}00\textbf{1}101\phantom{0}} \\
+XOR & \texttt{\phantom{0000}1001\phantom{0}} \\ \cline{2-2}
+& \texttt{\phantom{0000}0\textbf{1}001} \\
+XOR & \texttt{\phantom{00000}1001} \\ \cline{2-2}
+& \texttt{\phantom{00000}0\textcolor{netgreen!60!black}{\textbf{000}}} \\
+\end{tabular}\\[4pt]
+{\small resto 0: il messaggio è integro}
+\end{minipage}
+\caption{Calcolo e verifica del CRC con $G = \texttt{1001}$: a ogni passo $G$ si allinea con il primo 1 rimasto.}
+\end{figure}
+
+\begin{enumerate}
+    \item Il mittente accoda $r = 3$ zeri a $D$: \texttt{101110000}.
+    \item Divide modulo 2 per $G$: allinea \texttt{1001} sotto il primo 1, fa lo XOR, poi si sposta sul primo 1 del risultato, e così via
+          (spostamenti di 0, 2, 2 e 1 posizioni).
+    \item Il resto, sugli ultimi $r$ bit, è \texttt{011}: è il CRC. Si trasmette \texttt{101110\,011}.
+    \item Il ricevente divide per $G$ il messaggio ricevuto: il resto è \texttt{000}, quindi il messaggio è integro.
+\end{enumerate}
+
+\warning{Se c'è un errore}{
+    Se durante la trasmissione un bit si inverte, per esempio si riceve \texttt{10\textcolor{netred}{0}110011}, la divisione dà un resto
+    diverso da zero (qui \texttt{001}) e il ricevente scarta il frame. Provate a verificarlo!
+}
+
+\subsection{I CRC standard}
+
+\begin{itemize}
+    \item Sono stati definiti standard internazionali per generatori a 8, 12, 16 e 32 bit ($r = 8, 12, 16, 32$).
+    \item Lo standard \textbf{CRC-32}, adottato in diversi protocolli di collegamento IEEE (tra cui Ethernet), usa il generatore a 33 bit:
+          $$G_{\text{CRC-32}} = \texttt{100000100110000010001110110110111}$$
+    \item Ogni standard CRC rileva \textbf{sicuramente} tutti gli errori a raffica di lunghezza inferiore a $r+1$ bit; per raffiche più
+          lunghe la probabilità di rilevare l'errore è
+          $$P = 1 - 0{,}5^{\,r}$$
+    \item La probabilità di rilevare l'errore quindi \textbf{cresce con $r$}: con CRC-32 si perde un errore su circa quattro miliardi.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{La distanza di Hamming}
+% ══════════════════════════════════════════════════════════════
+
+Oltre a rilevare gli errori, alcuni codici permettono di \textbf{correggerli}.
+
+\dfn{Codice e distanza di Hamming}{
+    Un codice trasforma dati di $n$ bit in \textbf{parole di codice} (\emph{codeword}) di $n + k$ bit. La \textbf{distanza di Hamming}
+    tra due parole è il numero di bit che è necessario invertire per trasformare una nell'altra, cioè il numero di bit in cui
+    differiscono. La distanza di Hamming \textbf{di un codice} è la \textbf{minima} distanza tra due parole valide qualsiasi del codice.
+}
+
+\begin{esempio}{Distanza tra due parole}
+$w_1 = \texttt{00110110}$, $w_2 = \texttt{00011010}$. Facendo lo XOR,
+$w_1 \oplus w_2 = \texttt{00101100}$: i bit diversi sono 3, quindi $d(w_1, w_2) = 3$.
+\end{esempio}
+
+I protocolli di collegamento usano per comunicare parole di lunghezza fissa che \textbf{non sono tutte quelle possibili}. Per esempio,
+delle $2^5$ parole possibili di 5 bit se ne usano $2^4$ (la metà), come nella codifica \textbf{4B/5B}. Ciò consente di rilevare gli
+errori, e anche di evitare lunghe sequenze di 1 o di 0 (utili per la sincronizzazione).
+
+\begin{esempio}{Un codice con distanza 5}
+Usiamo parole di 10 bit, ma ne usiamo solo 4 (per codificare 2 bit di dati, $n=2$, $k=8$):
+\begin{center}
+\begin{tabular}{cc}
+\toprule
+\textbf{Dati} & \textbf{Parola di codice} \\
+\midrule
+00 & \texttt{0000000000} \\
+01 & \texttt{0000011111} \\
+10 & \texttt{1111100000} \\
+11 & \texttt{1111111111} \\
+\bottomrule
+\end{tabular}
+\end{center}
+La distanza minima tra due parole è \textbf{5}. Se si riceve \texttt{0000011111}, è una parola valida. Se si riceve
+\texttt{0\textcolor{netred}{1}000111\textcolor{netred}{0}1}, non è valida: è a distanza 2 da \texttt{0000011111} e a distanza maggiore da tutte
+le altre, quindi si \textbf{corregge} in \texttt{0000011111} (dato 01). Si è trattato di uno schema didattico (v. Tanenbaum per i veri
+codici di Hamming, basati su questo principio ma più complicati).
+\end{esempio}
+
+\dfn{Capacità di rilevazione e correzione}{
+    Con un codice di distanza di Hamming $L$:
+    \begin{itemize}
+      \item si possono \textbf{rilevare} fino a $d$ errori se $L \geq d + 1$ (cioè $d \leq L - 1$): $d$ errori non bastano a trasformare
+            una parola valida in un'altra;
+      \item si possono \textbf{correggere} fino a $d$ errori se $L \geq 2d + 1$: la parola ricevuta resta più vicina a quella originale che
+            a qualsiasi altra.
+    \end{itemize}
+    Nell'esempio ($L = 5$): si rilevano fino a 4 errori e se ne correggono fino a 2.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \draw[thick] (0,0) -- (10,0);
+  \fill[netblue] (0,0) circle (4pt) node[below=5pt] {$w$ (valida)};
+  \fill[netblue] (10,0) circle (4pt) node[below=5pt] {$w'$ (valida)};
+  \foreach \x in {2,4,6,8} \fill[black!40] (\x,0) circle (2.5pt);
+  \draw[decorate, decoration={brace, amplitude=6pt, mirror}] (0,-0.7) -- (10,-0.7) node[midway, below=7pt] {distanza $L = 5$};
+  \fill[netred!20] (0,0.25) rectangle (4.9,0.55); \node[text=netred] at (2.45,0.85) {parole ricevute che si correggono in $w$};
+  \fill[netgreen!20] (5.1,0.25) rectangle (10,0.55); \node[text=netgreen!50!black] at (7.55,0.85) {parole ricevute che si correggono in $w'$};
+  \draw[-{Stealth}, netred, thick] (4,-0.15) to[bend right=30] node[below] {2 errori} (0,-0.15);
+\end{tikzpicture}
+\caption{Con distanza 5, una parola con al massimo 2 errori è ancora più vicina all'originale: si può correggere.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Collegamento e fisico trasportano frame \textbf{da un nodo al successivo}; il frame è l'ultimo incapsulamento e diventa segnale.
+    \item Servizi: \textbf{framing}, \textbf{accesso al collegamento} (MAC), \textbf{consegna affidabile}, \textbf{rilevazione e correzione}
+          degli errori. Realizzati soprattutto nella \textbf{NIC}.
+    \item Framing: conteggio dei byte (fragile), FLAG con \textbf{byte stuffing}, flag \texttt{01111110} con \textbf{bit stuffing}, violazioni della codifica.
+    \item \textbf{Parità} singola (rileva un numero dispari di errori), \textbf{bidimensionale} (corregge 1 errore, rileva 2).
+    \item \textbf{CRC}: si accodano $r$ bit perché $D\cdot 2^r + R$ sia divisibile modulo 2 per $G$; rileva le raffiche $< r+1$.
+    \item Distanza di Hamming $L$: rileva $L-1$ errori, ne corregge $\lfloor (L-1)/2 \rfloor$.
+\end{itemize}
+}

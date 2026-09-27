@@ -1,0 +1,387 @@
+\chapter{Esercizi sui fondamenti}
+
+Questa parte raccoglie gli esercizi svolti, organizzati per livello. Molti riprendono gli esempi visti nei capitoli teorici
+\textbf{con numeri diversi}, così da potersi esercitare davvero; altri sono le esercitazioni di laboratorio proposte a lezione,
+con lo svolgimento completo. Il consiglio è sempre lo stesso: \textbf{provare prima da soli}, e solo dopo leggere la soluzione.
+
+% ══════════════════════════════════════════════════════════════
+\section{Ritardi e tempi di trasmissione}
+% ══════════════════════════════════════════════════════════════
+
+\info{Richiamo: i ritardi di un pacchetto}{
+    Un pacchetto che attraversa un nodo accumula quattro ritardi:
+    $$d_{\text{nodo}} = d_{\text{elab}} + d_{\text{coda}} + d_{\text{trasm}} + d_{\text{prop}}$$
+    \begin{itemize}
+      \item $d_{\text{elab}}$: elaborazione (controllo degli errori, scelta dell'uscita), tipicamente microsecondi;
+      \item $d_{\text{coda}}$: attesa in coda, dipende dal traffico;
+      \item $d_{\text{trasm}} = L/R$: tempo per ``spingere'' sul collegamento tutti gli $L$ bit al rate $R$. Dipende dalla
+            \textbf{dimensione del pacchetto} e dal \textbf{rate}, \emph{non} dalla distanza;
+      \item $d_{\text{prop}} = d/s$: tempo che il segnale impiega a percorrere la distanza $d$ alla velocità $s$
+            ($2$--$3 \cdot 10^8$ m/s). Dipende dalla \textbf{distanza}, \emph{non} dal pacchetto.
+    \end{itemize}
+}
+
+\begin{esercizio}{Trasmissione contro propagazione}
+Un pacchetto di $L = 1000$ byte viaggia su un collegamento lungo $d = 2500$ km, con rate $R = 10$ Mb/s e velocità di
+propagazione $s = 2{,}5 \cdot 10^8$ m/s.
+\begin{enumerate}[label=(\alph*)]
+    \item Calcolare il tempo di trasmissione e il tempo di propagazione. Quale dei due domina?
+    \item Ripetere il calcolo con $R = 1$ Gb/s. Che cosa cambia?
+    \item Quanto è ``lungo'', in metri, un singolo bit sul cavo nei due casi?
+    \item Un collegamento via satellite geostazionario (quota $36\,000$ km, $s = 3\cdot 10^8$ m/s) collega due stazioni a
+          terra. Quanto vale il ritardo di propagazione tra le due stazioni?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Il pacchetto è di $1000 \cdot 8 = 8000$ bit.
+$$d_{\text{trasm}} = \frac{L}{R} = \frac{8000}{10^7} = 0{,}8 \text{ ms} \qquad
+  d_{\text{prop}} = \frac{d}{s} = \frac{2{,}5 \cdot 10^6 \text{ m}}{2{,}5 \cdot 10^8 \text{ m/s}} = 10 \text{ ms}$$
+Domina la propagazione (12,5 volte più grande); il totale, senza code ed elaborazione, è $10{,}8$ ms.
+
+\textbf{(b)} Con $R = 10^9$ b/s: $d_{\text{trasm}} = 8000/10^9 = 8\ \mu$s, mentre $d_{\text{prop}}$ resta $10$ ms. Il totale scende
+solo a $10{,}008$ ms: aumentare la banda \textbf{non accorcia la propagazione}.
+
+\textbf{(c)} In un secondo escono $R$ bit che si distribuiscono su $s$ metri, quindi ogni bit occupa $s/R$ metri:
+\begin{itemize}
+    \item a 10 Mb/s: $2{,}5\cdot 10^8 / 10^7 = 25$ m per bit (il pacchetto intero è lungo $200$ km);
+    \item a 1 Gb/s: $2{,}5\cdot 10^8 / 10^9 = 25$ cm per bit.
+\end{itemize}
+
+\textbf{(d)} Il segnale sale e scende: $d = 2 \cdot 36\,000$ km $= 7{,}2\cdot 10^7$ m, quindi
+$d_{\text{prop}} = 7{,}2\cdot 10^7 / 3\cdot 10^8 = 0{,}24$ s. Un RTT via satellite supera così il mezzo secondo, ed è per questo
+che le telefonate satellitari hanno quel fastidioso ritardo.
+
+\warning{L'analogia dell'autostrada}{
+    Pensate a una colonna di 10 auto (i bit) che attraversa un casello (il router) e poi percorre 100 km di autostrada. Il
+    tempo per far passare \emph{tutte} le auto dal casello è il ritardo di \textbf{trasmissione}; il tempo che ciascuna
+    impiega a percorrere l'autostrada è il ritardo di \textbf{propagazione}. Aprire più caselli (più banda) non rende
+    l'autostrada più corta.
+}
+
+\begin{esercizio}{Messaggio intero o pacchetti?}
+Un messaggio di $8 \cdot 10^6$ bit va dalla sorgente alla destinazione attraverso due router, cioè su $N = 3$ collegamenti
+da $R = 2$ Mb/s. Si trascurino propagazione, code ed elaborazione.
+\begin{enumerate}[label=(\alph*)]
+    \item Quanto tempo serve se il messaggio viene inviato \textbf{intero} (commutazione di messaggio, store-and-forward)?
+    \item Quanto tempo serve se viene diviso in $P = 800$ pacchetti da $10\,000$ bit ciascuno? Quando arriva il primo pacchetto?
+    \item Ricavare la formula generale e spiegare da dove viene il guadagno.
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Ogni nodo deve ricevere tutto il messaggio prima di inoltrarlo. Ogni collegamento richiede
+$8\cdot 10^6 / 2\cdot 10^6 = 4$ s, quindi il totale è $3 \cdot 4 = 12$ s.
+
+\textbf{(b)} Ogni pacchetto richiede $L/R = 10^4 / 2\cdot 10^6 = 5$ ms per collegamento.
+\begin{itemize}
+    \item Il \textbf{primo} pacchetto arriva dopo $3 \cdot 5 = 15$ ms.
+    \item La sorgente finisce di trasmettere l'\textbf{ultimo} pacchetto dopo $800 \cdot 5$ ms $= 4$ s; da lì servono altri 2
+          collegamenti, cioè $10$ ms. Il messaggio è completo dopo $4{,}01$ s.
+\end{itemize}
+
+\textbf{(c)} La figura mostra il caso di $P = 3$ pacchetti su $N = 3$ collegamenti, con il tempo diviso in intervalli da $L/R$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1.25cm, y=0.8cm, every node/.style={font=\scriptsize\sffamily}]
+  \foreach \r/\n in {0/{collegamento 1}, 1/{collegamento 2}, 2/{collegamento 3}} \node[anchor=east] at (0,-\r-0.5) {\n};
+  \foreach \t in {0,...,5} \draw[black!25] (\t,0) -- (\t,-3);
+  \foreach \t in {1,...,5} \node at (\t-0.5,0.3) {$t_{\t}$};
+  \foreach \r in {0,...,3} \draw[black!25] (0,-\r) -- (5,-\r);
+  \foreach \r in {0,1,2} {
+    \foreach \p/\c in {1/netblue!55, 2/netgreen!55, 3/netorange!60} {
+      \pgfmathtruncatemacro{\s}{\r+\p-1}
+      \fill[\c] (\s+0.05,-\r-0.1) rectangle (\s+0.95,-\r-0.9);
+      \node at (\s+0.5,-\r-0.5) {p\p};
+    }
+  }
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (0,-3.15) -- (5,-3.15) node[midway, below=6pt] {$(P + N - 1)\cdot L/R = (3+3-1)\cdot L/R = 5\cdot L/R$};
+\end{tikzpicture}
+\caption{Con i pacchetti i collegamenti lavorano \emph{in parallelo}, come una catena di montaggio.}
+\end{figure}
+
+Il primo pacchetto impiega $N$ intervalli, e ciascuno dei $P-1$ successivi arriva un intervallo dopo il precedente:
+$$T = (P + N - 1)\cdot\frac{L}{R} = (800 + 3 - 1) \cdot 5 \text{ ms} = 4{,}01 \text{ s}$$
+Con il messaggio intero, invece, $T = N \cdot P \cdot L/R$: i collegamenti lavorano \emph{uno alla volta}. Dividere in pacchetti
+permette ai router di lavorare contemporaneamente; inoltre un errore costringe a ritrasmettere solo un pacchetto, e più
+comunicazioni possono alternarsi sullo stesso collegamento. Il prezzo sono gli header di ogni pacchetto e la necessità di
+riordinarli a destinazione.
+
+\begin{esercizio}{Throughput e collo di bottiglia}
+Un server invia un file di 4 MB a un client attraverso tre collegamenti in serie: $R_1 = 500$ kb/s, $R_2 = 2$ Mb/s,
+$R_3 = 1$ Mb/s.
+\begin{enumerate}[label=(\alph*)]
+    \item Qual è il throughput del trasferimento, in assenza di altro traffico?
+    \item Quanto dura, approssimativamente, il trasferimento?
+    \item Il collegamento centrale viene condiviso in parti uguali da 10 trasferimenti contemporanei. Come cambiano le risposte?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\begin{center}
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (s) at (0,0) {\icon[0.7cm]{server}}; \node[below=-1pt of s] {server};
+  \node (r1) at (3,0) {\icon[0.8cm]{router}};
+  \node (r2) at (6,0) {\icon[0.8cm]{router}};
+  \node (c) at (9,0) {\icon[0.8cm]{laptop}}; \node[below=-1pt of c] {client};
+  \draw[wired, line width=1pt] (s) -- node[above] {$R_1 = 500$ kb/s} (r1);
+  \draw[wired, line width=3pt] (r1) -- node[above] {$R_2 = 2$ Mb/s} (r2);
+  \draw[wired, line width=2pt] (r2) -- node[above] {$R_3 = 1$ Mb/s} (c);
+  \node[text=netred] at (1.5,-0.45) {collo di bottiglia};
+\end{tikzpicture}
+\end{center}
+
+\textbf{(a)} Il throughput è limitato dal collegamento più lento: $\min\{R_1, R_2, R_3\} = 500$ kb/s.
+
+\textbf{(b)} $4$ MB $= 32 \cdot 10^6$ bit, quindi $T = 32\cdot 10^6 / 5 \cdot 10^5 = 64$ s.
+
+\textbf{(c)} Ogni trasferimento ottiene $R_2/10 = 200$ kb/s sul collegamento centrale, che diventa il nuovo collo di bottiglia:
+throughput $= \min\{500, 200, 1000\} = 200$ kb/s, e il trasferimento dura $32\cdot 10^6 / 2\cdot 10^5 = 160$ s. Il collo di
+bottiglia non è sempre il collegamento con il rate più basso: dipende anche da \textbf{quanto è condiviso}.
+
+% ══════════════════════════════════════════════════════════════
+\section{Commutazione di circuito e di pacchetto}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Quanti utenti su un collegamento}
+Un collegamento da 1 Mb/s è condiviso da utenti che, quando sono attivi, trasmettono a 100 kb/s; ogni utente è attivo in
+media il 10\% del tempo, in modo indipendente dagli altri.
+\begin{enumerate}[label=(\alph*)]
+    \item Con la commutazione di circuito, quanti utenti si possono servire?
+    \item Con la commutazione di pacchetto e 35 utenti, qual è la probabilità che esattamente $n$ utenti siano attivi?
+    \item Qual è la probabilità che più di 10 utenti siano attivi contemporaneamente? Commentare.
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Ogni circuito riserva 100 kb/s anche quando l'utente tace: $1000/100 = 10$ utenti.
+
+\textbf{(b)} Ogni utente è attivo con probabilità $p = 0{,}1$, indipendentemente dagli altri: il numero di utenti attivi segue
+una \textbf{distribuzione binomiale}
+$$P(n \text{ attivi}) = \binom{35}{n}\, p^n (1-p)^{35-n}$$
+Per esempio $P(0) \approx 0{,}025$, $P(3) \approx 0{,}225$ (il valore più probabile), $P(10) \approx 0{,}0013$.
+
+\textbf{(c)} Il collegamento va in sovraccarico solo se ci sono almeno 11 utenti attivi:
+$$P(n > 10) = 1 - \sum_{n=0}^{10} \binom{35}{n}\, 0{,}1^n\, 0{,}9^{35-n} \approx 1 - 0{,}99958 = 0{,}00042$$
+Circa \textbf{4 volte su diecimila}. La commutazione di pacchetto serve quindi 3,5 volte gli utenti del circuito, con prestazioni
+quasi identiche: è il guadagno della \textbf{multiplazione statistica}, che sfrutta il fatto che il traffico dati è
+\emph{a raffiche} (\emph{bursty}). Il prezzo è che, in quei rari momenti, i pacchetti si accodano e possono andare persi: non c'è
+più una garanzia.
+
+\begin{esercizio}{Un file su un circuito TDM}
+Quanto tempo serve per inviare un file di $640\,000$ bit dall'host A all'host B su una rete a commutazione di circuito, se tutti
+i collegamenti sono da $1{,}536$ Mb/s, ognuno usa TDM con 24 slot, e servono 500 ms per stabilire il circuito? Quanto
+servirebbe se il collegamento fosse tutto per noi?
+\end{esercizio}
+
+\svolgimento
+Con TDM a 24 slot, a ogni circuito spetta $1{,}536 / 24 = 64$ kb/s. Il trasferimento dura
+$640\,000 / 64\,000 = 10$ s, a cui si sommano i $0{,}5$ s di instaurazione: $\mathbf{10{,}5}$ \textbf{s}.
+
+Se potessimo usare l'intero collegamento, la trasmissione durerebbe $640\,000 / 1\,536\,000 \approx 0{,}42$ s (per
+collegamento). Il circuito ci \textbf{garantisce} i 64 kb/s, ma ci impedisce di usare la capacità lasciata libera dagli altri.
+
+% ══════════════════════════════════════════════════════════════
+\section{Topologie}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Contare collegamenti e porte}
+Una rete ha $n = 8$ nodi.
+\begin{enumerate}[label=(\alph*)]
+    \item Quanti collegamenti servono con topologia a maglia completa, a stella, ad anello e a bus? Quante porte deve avere ogni
+          nodo nella maglia completa?
+    \item Si aggiunge un nono nodo: quanti collegamenti in più servono in ciascun caso?
+    \item Che cosa succede, in ciascuna topologia, se si guasta un singolo collegamento? E se si guasta il nodo centrale della stella?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} e \textbf{(b)}:
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Topologia} & \textbf{Collegamenti con 8 nodi} & \textbf{Con 9 nodi} & \textbf{In più} \\
+\midrule
+Maglia completa & $\frac{8\cdot 7}{2} = 28$ & $\frac{9 \cdot 8}{2} = 36$ & 8 \\
+Stella & 8 (più il nodo centrale) & 9 & 1 \\
+Anello & 8 & 9 & 1 (se ne toglie uno e se ne aggiungono due) \\
+Bus & 1 dorsale + 8 derivazioni & 1 + 9 & 1 derivazione \\
+\bottomrule
+\end{tabular}
+\caption{Collegamenti richiesti dalle diverse topologie.}
+\end{table}
+Nella maglia completa ogni nodo è collegato a tutti gli altri: servono $n - 1 = 7$ porte per nodo. Aggiungere un nodo costa
+$n$ collegamenti nuovi e una porta in più su \emph{ogni} nodo esistente: è la crescita quadratica che rende la maglia completa
+impraticabile per reti grandi.
+
+\textbf{(c)} Guasto di un collegamento:
+\begin{itemize}
+    \item \textbf{maglia completa}: nessun effetto sulla connettività, esistono altri cammini;
+    \item \textbf{stella}: resta isolato solo il nodo di quel collegamento;
+    \item \textbf{anello}: se l'anello è unidirezionale la rete si interrompe; se è bidirezionale (o doppio) i messaggi
+          possono girare nell'altro verso;
+    \item \textbf{bus}: se si guasta la dorsale la rete si divide in due parti (e il segnale riflesso può disturbare tutti).
+\end{itemize}
+Se si guasta il \textbf{centro della stella} si ferma tutta la rete: è il suo \emph{single point of failure}.
+
+\begin{esercizio}{Perché esistono gli IXP}
+Sei ISP regionali vogliono scambiarsi traffico direttamente, a coppie. Quanti collegamenti di peering servono? E se si
+incontrano tutti in un IXP? Ripetere con 50 ISP.
+\end{esercizio}
+
+\svolgimento
+Collegare tutti con tutti è una maglia completa: $\frac{6 \cdot 5}{2} = 15$ collegamenti. Con un IXP ogni ISP porta un solo
+collegamento al punto di scambio: $6$ collegamenti. Con 50 ISP: $\frac{50 \cdot 49}{2} = 1225$ contro $50$. L'IXP trasforma una
+maglia in una \textbf{stella}, ed è il motivo per cui questi punti neutrali di scambio si sono diffusi.
+
+% ══════════════════════════════════════════════════════════════
+\section{Stratificazione e incapsulamento}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Quanto pesano gli header}
+Un'applicazione invia messaggi di $M$ byte. Lungo la pila TCP/IP su Ethernet si aggiungono un header TCP da 20 byte, un header
+IP da 20 byte e 18 byte di header e trailer Ethernet.
+\begin{enumerate}[label=(\alph*)]
+    \item Che frazione dei byte trasmessi è occupata dagli header se $M = 100$ byte? E se $M = 1460$ byte?
+    \item In una sessione remota ogni tasto premuto invia 1 byte. Che frazione è overhead?
+    \item Ricavare la formula per una pila di $n$ strati, ognuno dei quali aggiunge $h$ byte.
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+Gli header valgono in tutto $h_{\text{tot}} = 20 + 20 + 18 = 58$ byte.
+
+\begin{center}
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[field, fill=llink, minimum width=1.3cm] (e) at (0,0) {Ethernet 14};
+  \node[field, fill=lnet, minimum width=1.2cm, right=0pt of e] (i) {IP 20};
+  \node[field, fill=ltra, minimum width=1.2cm, right=0pt of i] (t) {TCP 20};
+  \node[field, fill=lapp, minimum width=4.2cm, right=0pt of t] (m) {messaggio: $M$ byte};
+  \node[field, fill=llink, minimum width=1.2cm, right=0pt of m] {CRC 4};
+\end{tikzpicture}
+\end{center}
+
+\textbf{(a)}
+$$M = 100: \quad \frac{58}{100 + 58} \approx 36{,}7\% \qquad\qquad M = 1460: \quad \frac{58}{1460 + 58} \approx 3{,}8\%$$
+
+\textbf{(b)} $\dfrac{58}{1 + 58} \approx 98{,}3\%$: per spedire un byte se ne trasmettono 59. I messaggi piccoli sono i più
+penalizzati dalla stratificazione.
+
+\textbf{(c)} La frazione occupata dagli header è
+$$\frac{n\,h}{M + n\,h}$$
+che tende a 0 per messaggi grandi e a 1 per messaggi piccoli.
+
+\begin{esercizio}{A quale livello?}
+Per ciascuna voce indicare il livello della pila a cinque strati coinvolto e, dove ha senso, l'unità di dati.
+\begin{enumerate}
+    \item Scegliere il cammino di un pacchetto tra i router.
+    \item Consegnare i dati al processo giusto, individuato da un numero di porta.
+    \item Delimitare i frame e rilevare gli errori su un singolo collegamento.
+    \item Trasformare i bit in segnali elettrici o luminosi.
+    \item Chiedere una pagina Web a un server.
+    \item Ritrasmettere dati persi lungo il percorso tra i due estremi.
+    \item Tradurre un nome come \texttt{www.unina.it} in un indirizzo IP.
+    \item Uno switch; un router; un hub (ripetitore).
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\begin{table}[H]
+\centering
+\begin{tabular}{clp{6.6cm}}
+\toprule
+\textbf{\#} & \textbf{Livello} & \textbf{Nota} \\
+\midrule
+1 & Rete & routing; unità: datagramma \\
+2 & Trasporto & consegna processo-a-processo; unità: segmento \\
+3 & Collegamento & consegna \emph{hop-to-hop}; unità: frame \\
+4 & Fisico & unità: bit \\
+5 & Applicazione & HTTP; unità: messaggio \\
+6 & Trasporto & il trasferimento affidabile è di TCP (end-to-end) \\
+7 & Applicazione & il DNS è un'applicazione che offre un servizio alle altre applicazioni \\
+8 & Collegamento; Rete; Fisico & lo switch implementa 2 livelli, il router 3, l'hub solo il fisico \\
+\bottomrule
+\end{tabular}
+\caption{Livelli e unità di dati.}
+\end{table}
+
+\begin{esercizio}{Che servizio serve?}
+Per ciascuna applicazione scegliere il tipo di servizio più adatto tra i sei visti nel capitolo sulla stratificazione, e dire
+se ci si aspetta che usi TCP o UDP.
+(a) scaricare un file ISO; (b) una telefonata VoIP; (c) una query DNS; (d) stampare un libro diviso in pagine;
+(e) pubblicità inviata in massa; (f) un messaggio con conferma di lettura.
+\end{esercizio}
+
+\svolgimento
+\begin{itemize}
+    \item \textbf{(a)} Flusso di byte affidabile (TCP): non può mancare nemmeno un byte.
+    \item \textbf{(b)} Connessione inaffidabile (tipicamente UDP): un pacchetto perso è un piccolo ``click'', uno in ritardo è inutile.
+    \item \textbf{(c)} Richiesta-risposta (UDP): una domanda, una risposta; se si perde, si ripete.
+    \item \textbf{(d)} Flusso di messaggi affidabile: i confini tra le pagine vanno preservati.
+    \item \textbf{(e)} Datagram inaffidabile: nessuno si preoccupa se qualche messaggio va perso.
+    \item \textbf{(f)} Datagram con conferma: niente connessione, ma il mittente vuole sapere che il messaggio è arrivato.
+\end{itemize}
+
+\begin{esercizio}{Chi legge quale header}
+L'host A invia una richiesta HTTP al server B. Il percorso attraversa uno switch, poi un router, poi arriva a B. Per ciascun
+dispositivo dire fino a quale livello ``apre'' il pacchetto e quali campi legge o modifica.
+\end{esercizio}
+
+\svolgimento
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, lay/.style={minimum width=1.6cm, minimum height=0.45cm, font=\tiny\sffamily}]
+  % host A
+  \node[lay app, lay] (a5) at (0,0) {Applicazione};
+  \node[lay tra, lay, below=0pt of a5] (a4) {Trasporto};
+  \node[lay net, lay, below=0pt of a4] (a3) {Rete};
+  \node[lay link, lay, below=0pt of a3] (a2) {Collegamento};
+  \node[lay phy, lay, below=0pt of a2] (a1) {Fisico};
+  \node[lay link, lay] (s2) at (3.3,-1.35) {Collegamento};
+  \node[lay phy, lay, below=0pt of s2] (s1) {Fisico};
+  \node[lay net, lay] (r3) at (6.6,-0.9) {Rete};
+  \node[lay link, lay, below=0pt of r3] (r2) {Collegamento};
+  \node[lay phy, lay, below=0pt of r2] (r1) {Fisico};
+  \node[lay app, lay] (b5) at (9.9,0) {Applicazione};
+  \node[lay tra, lay, below=0pt of b5] (b4) {Trasporto};
+  \node[lay net, lay, below=0pt of b4] (b3) {Rete};
+  \node[lay link, lay, below=0pt of b3] (b2) {Collegamento};
+  \node[lay phy, lay, below=0pt of b2] (b1) {Fisico};
+  \foreach \x/\n in {0/host A, 3.3/switch, 6.6/router, 9.9/server B} \node[font=\footnotesize\bfseries\sffamily] at (\x,0.55) {\n};
+  \draw[very thick, netred, -{Stealth}, rounded corners=2pt] (0.95,0) -- (0.95,-2.25) -- (2.35,-2.25) -- (2.35,-1.0) -- (4.25,-1.0)
+     -- (4.25,-2.25) -- (5.65,-2.25) -- (5.65,-0.55) -- (7.55,-0.55) -- (7.55,-2.25) -- (8.85,-2.25) -- (8.85,0);
+\end{tikzpicture}
+\caption{Il pacchetto sale lungo la pila solo fino al livello che il dispositivo implementa.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Switch} (livello 2): legge l'header Ethernet, in particolare il \textbf{MAC di destinazione}, per scegliere la
+          porta d'uscita. Non modifica il frame e non guarda dentro il payload.
+    \item \textbf{Router} (livello 3): rimuove l'header Ethernet, legge l'\textbf{IP di destinazione} per scegliere l'uscita,
+          \textbf{decrementa il TTL} e ricalcola il checksum IP, poi incapsula il datagramma in un \textbf{nuovo frame} con nuovi MAC.
+          Non legge l'header TCP né la richiesta HTTP.
+    \item \textbf{Server B}: decapsula tutti gli strati fino alla richiesta HTTP, che consegna al processo server individuato
+          dalla porta di destinazione (80).
+\end{itemize}
+Ogni strato tratta il proprio payload come \textbf{opaco}: il router trasporta la richiesta HTTP senza sapere che esiste.
+
+\begin{esercizio}{Simplex, half-duplex o full-duplex?}
+Classificare: (a) una trasmissione televisiva; (b) una coppia di walkie-talkie; (c) una telefonata; (d) una tastiera
+collegata a un computer; (e) un segmento Ethernet condiviso su hub; (f) un collegamento Ethernet commutato moderno.
+\end{esercizio}
+
+\svolgimento
+(a) simplex; (b) half-duplex (si parla a turno, ``passo''); (c) full-duplex; (d) simplex; (e) half-duplex (una stazione
+alla volta, altrimenti collisione); (f) full-duplex (coppie di fili separate per i due versi, niente collisioni).
+
+\gbox{\iinfo\ Formule da ricordare}{primary!80!black}{
+\begin{itemize}
+    \item $d_{\text{trasm}} = L/R$; \quad $d_{\text{prop}} = d/s$; \quad lunghezza di un bit sul mezzo $= s/R$.
+    \item $P$ pacchetti su $N$ collegamenti store-and-forward: $T = (P + N - 1)\cdot L/R$.
+    \item Throughput end-to-end $= \min_i R_i$ (tenendo conto della condivisione).
+    \item Maglia completa: $n(n-1)/2$ collegamenti; stella e anello: $n$.
+    \item Overhead degli header: $n\,h / (M + n\,h)$.
+\end{itemize}
+}

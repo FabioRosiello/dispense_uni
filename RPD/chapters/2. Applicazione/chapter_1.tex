@@ -1,0 +1,728 @@
+\chapter{Il livello applicativo: architetture e servizi}
+
+Cominciamo la discesa lungo la pila partendo, come vuole l'approccio top-down, dallo strato più
+alto: quello che l'utente vede.
+
+\begin{center}
+\begin{tikzpicture}[node distance=0pt]
+  \node[lay app, minimum width=3.4cm, line width=1.5pt, draw=netred] (a) {\bfseries Applicazione};
+  \node[lay tra, minimum width=3.4cm, below=of a] (t) {Trasporto};
+  \node[lay net, minimum width=3.4cm, below=of t] (n) {Rete};
+  \node[lay link, minimum width=3.4cm, below=of n] (l) {Collegamento};
+  \node[lay phy, minimum width=3.4cm, below=of l] (p) {Fisico};
+  \draw[-{Stealth}, thick, netred] ([xshift=0.3cm]a.east) -- ++(1,0) node[right, lbl, text=netred] {siamo qui};
+\end{tikzpicture}
+\end{center}
+
+Abbiamo l'intera pila; ora apriamo lo strato in cima.
+\begin{itemize}
+    \item Un'applicazione \textbf{non sposta dati}: li consegna allo strato sotto e li ritrova all'altro capo.
+    \item Il trasporto le offre (se lo chiede) un \textbf{flusso di dati affidabile}: niente perso, niente fuori ordine.
+    \item Due applicazioni su due host si comportano \textbf{come se parlassero direttamente}, purché seguano lo
+          stesso protocollo.
+\end{itemize}
+
+\info{Che cosa resta da fare al programmatore?}{
+    Tutto ciò che sta \textbf{sopra} quel flusso: \textbf{quali messaggi} esistono, \textbf{che cosa significano}
+    e \textbf{chi parla per primo}. È esattamente ciò che definisce un protocollo applicativo.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Che cos'è un'applicazione di rete}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Applicazione di rete}{
+    Un'\textbf{applicazione di rete} è composta da \textbf{più programmi} che girano su
+    \textbf{end system diversi} (host) e che \textbf{comunicano tra loro attraverso la rete}.
+}
+
+\begin{esempio}{Un'applicazione Web}
+Un'applicazione Web è fatta di due programmi distinti:
+\begin{itemize}
+    \item il \textbf{browser}, in esecuzione sull'host dell'utente (desktop, laptop, tablet, smartphone);
+    \item il \textbf{server Web}, in esecuzione sull'host che ospita il sito.
+\end{itemize}
+Possono essere scritti in linguaggi diversi e girare su sistemi operativi diversi: l'unica cosa che
+devono condividere è il \textbf{protocollo} (HTTP).
+\end{esempio}
+
+Qualche applicazione di rete tipica: social network, Web, messaggistica, posta elettronica, giochi
+multiutente, streaming video (YouTube, Netflix), condivisione di file P2P, voice over IP,
+videoconferenza, ricerca su Internet, login remoto.
+
+\warning{Il Web è tecnicamente un'applicazione}{
+    Nel linguaggio comune ``Internet'' e ``Web'' sono usati come sinonimi, ma il Web è
+    \textbf{una delle applicazioni} che girano sopra Internet, non è Internet.
+}
+
+\subsection{Creare un'applicazione di rete}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.4\linewidth}\centering
+  \includegraphics[width=0.9\linewidth]{cap03/app_stack_endsystem.png}
+\end{minipage}\hfill
+\begin{minipage}{0.56\linewidth}
+Creare un'applicazione di rete significa scrivere programmi che:
+\begin{itemize}
+  \item girano su \textbf{end system diversi}, magari scritti in linguaggi diversi o per sistemi
+        operativi diversi;
+  \item comunicano attraverso la rete (per esempio tramite \textbf{socket}) usando uno
+        specifico \textbf{protocollo}.
+\end{itemize}
+Notate nella figura che la pila completa (applicazione, trasporto, rete, collegamento, fisico) c'è
+\textbf{solo sugli host} ai bordi della rete.
+\end{minipage}
+\caption{Le applicazioni girano solo sugli end system.}
+\end{figure}
+
+\info{Non si scrive software per il nucleo della rete}{
+    Non c'è bisogno di scrivere software per i dispositivi del \emph{network core} (router, switch):
+    \begin{itemize}
+      \item i dispositivi di rete \textbf{non eseguono applicazioni utente};
+      \item esistono librerie specifiche (i \textbf{socket}) che implementano le funzionalità di rete.
+    \end{itemize}
+    È una conseguenza diretta del modello a strati: l'applicazione vede soltanto il servizio che le offre
+    il trasporto, e ignora come sia realizzato. Router e switch non eseguono applicazioni utente, e non vi
+    lascerebbero installarne una. Questa restrizione \textbf{non è un limite}: è proprio il motivo per cui
+    nuove applicazioni nascono e si diffondono così in fretta, senza toccare l'infrastruttura.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Architetture delle applicazioni di rete}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Architettura applicativa}{
+    L'\textbf{architettura} di un'applicazione di rete è progettata dallo \textbf{sviluppatore}
+    dell'applicazione e determina come l'applicazione è strutturata sui vari end system.
+    Le due architetture fondamentali sono \textbf{client-server} e \textbf{peer-to-peer}.
+}
+
+\warning{Architettura applicativa e architettura di rete}{
+    Non confondete l'\emph{architettura dell'applicazione} (decisa dallo sviluppatore: client-server o P2P)
+    con l'\emph{architettura della rete} (la pila a cinque strati di Internet, che è fissata e offre
+    all'applicazione un insieme di servizi).
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \begin{scope}
+    \node[font=\small\bfseries\sffamily] at (0,2.5) {Client-server};
+    \node (srv) at (0,0) {\icon[0.8cm]{server}};
+    \node[below=-1pt of srv, text=netred] {server sempre attivo};
+    \foreach \a/\ic in {90/laptop, 30/pc, -30/smartphone, -90/laptop, 210/pc, 150/smartphone} {
+      \node (c\a) at (\a:2.1) {\icon[0.65cm]{\ic}};
+      \draw[msg, netblue, {Stealth}-{Stealth}] (c\a) -- (srv);
+    }
+    \node[lbl] at (0,-3.1) {i client parlano solo con il server};
+  \end{scope}
+  \begin{scope}[xshift=8cm]
+    \node[font=\small\bfseries\sffamily] at (0,2.5) {Peer-to-peer};
+    \foreach \a/\ic [count=\i] in {90/laptop, 30/pc, -30/laptop, -90/pc, 210/laptop, 150/pc} {
+      \node (p\i) at (\a:1.9) {\icon[0.65cm]{\ic}};
+    }
+    \foreach \x/\y in {1/2, 1/4, 2/3, 2/5, 3/6, 4/5, 5/6, 6/1, 3/4} \draw[msg, netgreen, {Stealth}-{Stealth}] (p\x) -- (p\y);
+    \node[lbl] at (0,-3.1) {i peer comunicano direttamente tra loro};
+  \end{scope}
+\end{tikzpicture}
+\caption{Le due architetture applicative fondamentali.}
+\end{figure}
+
+\subsection{Architettura client-server}
+
+\dfn{Architettura client-server}{
+    I nodi sono \textbf{eterogenei}: esiste un host \textbf{sempre attivo} (il \emph{server}) che fornisce
+    servizi in risposta alle richieste di molti altri host (i \emph{client}).
+}
+
+\begin{itemize}
+    \item I client \textbf{non comunicano direttamente} tra loro: due browser non si scambiano mai nulla.
+    \item Il server ha un \textbf{indirizzo fisso e ben noto} (un nome o un indirizzo IP): un client può
+          sempre contattarlo inviandogli un pacchetto di richiesta.
+    \item \textbf{Il client parla per primo}: il server aspetta di essere contattato, e risponde.
+    \item Spesso servono \textbf{molti server} per reggere tutte le richieste; il client di solito non se
+          ne accorge e li percepisce come un server unico.
+\end{itemize}
+
+I server multipli possono essere organizzati in tre modi:
+
+\begin{itemize}
+    \item \textbf{raggruppati in data center}, con un numero enorme di server in un unico luogo: vanno
+          alimentati, raffreddati, mantenuti e ben collegati;
+    \item \textbf{sparsi come server distribuiti} in tutto il mondo: vanno interconnessi e coordinati;
+    \item organizzati in \textbf{data center distribuiti}, combinando le due soluzioni: è ciò che fanno davvero
+          i grandi fornitori.
+\end{itemize}
+
+E il fornitore continua a pagare, mese dopo mese, l'interconnessione e la banda che esce da quegli edifici.
+
+\warning{La conseguenza del client-server}{
+    Tutto ciò che l'applicazione fa passa per il server, che è quindi insieme il \textbf{limite alla
+    scalabilità} (quanti client si possono servire) e il \textbf{punto di guasto unico} (\emph{single point of
+    failure}): se il server cade, il servizio non esiste più per nessuno.
+}
+
+\begin{esempio}{Il Web come applicazione client-server}
+C'è un server Web sempre attivo che riceve richieste dai browser degli utenti. Quando riceve la
+richiesta di un oggetto (una pagina, un'immagine), risponde inviando l'oggetto richiesto. Il server
+è raggiungibile da tutti gli host, perché il suo indirizzo è noto, ed è acceso quando lo si interroga.
+Richiesta, risposta, e un server che c'era già prima che qualcuno chiedesse: è tutta qui la forma del
+client-server.
+\end{esempio}
+
+\subsection{Architettura peer-to-peer (P2P)}
+
+\dfn{Architettura peer-to-peer}{
+    I nodi sono (idealmente) \textbf{omogenei}: l'applicazione sfrutta la \textbf{comunicazione diretta}
+    tra coppie di host collegati in modo \textbf{intermittente}, detti \emph{peer}. I peer non sono di
+    proprietà del fornitore del servizio, ma sono computer controllati dagli utenti.
+}
+
+\begin{itemize}
+    \item È usata spesso per applicazioni ad \textbf{alta intensità di traffico} (condivisione di file).
+    \item Non c'è un server unico con indirizzo fisso: ogni peer ha il proprio indirizzo, che può anche cambiare.
+    \item È \textbf{auto-scalabile} (\emph{self-scalability}): ogni peer genera carico chiedendo un file, ma
+          aggiunge anche \textbf{capacità} servendolo ad altri. La capacità cresce insieme alla domanda: nessun
+          progetto client-server ha questa proprietà.
+    \item È \textbf{economica}: non servono infrastrutture né grande banda da parte del fornitore.
+    \item Ha però problemi di \textbf{sicurezza}, \textbf{prestazioni} e \textbf{affidabilità}: nessuno possiede
+          le macchine coinvolte.
+\end{itemize}
+
+\info{Il P2P puro è raro: le architetture ibride}{
+    Le applicazioni P2P pure sono rare: la maggior parte ha un'architettura \textbf{ibrida}. In molte
+    applicazioni di messaggistica e di telefonia su Internet un \textbf{server} tiene traccia degli
+    indirizzi IP degli utenti, ma i messaggi da utente a utente viaggiano \textbf{direttamente} tra gli
+    host, senza passare per server intermedi. Nella condivisione di file il server può anche tenere
+    l'elenco dei file disponibili, per velocizzare la ricerca (così facevano Napster e, in parte,
+    BitTorrent con i tracker).
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (S) at (0,2.2) {\icon[0.7cm]{server}};
+  \node[right=2pt of S, lbl, text width=3.2cm, align=left] {server di indicizzazione: ``Bob è all'indirizzo X''};
+  \node (A) at (-3.5,0) {\icon[1cm]{laptop}}; \node[below=-2pt of A] {Alice};
+  \node (B) at (3.5,0) {\icon[0.9cm]{pc}}; \node[below=-2pt of B] {Bob};
+  \draw[msg, dashed, netblue] (A) -- node[above, sloped] {1. dov'è Bob?} (S);
+  \draw[msg, dashed, netblue] (B) -- node[above, sloped] {0. registrazione} (S);
+  \draw[msg, very thick, netgreen, {Stealth}-{Stealth}] (A) -- node[below=2pt] {2. messaggi diretti, peer-to-peer} (B);
+\end{tikzpicture}
+\caption{Un'architettura ibrida: il server serve solo a trovarsi, poi i peer parlano direttamente.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Comunicazione tra processi}
+% ══════════════════════════════════════════════════════════════
+
+Come abbiamo già detto, chi comunica \textbf{non è un programma e non è una macchina}, ma un
+\textbf{processo}: un programma in esecuzione, su macchine diverse e potenzialmente con sistemi operativi diversi.
+
+\begin{itemize}
+    \item Nel Web il processo del browser scambia messaggi con il processo del server Web.
+    \item Nella condivisione di file P2P un file passa dal processo di un peer al processo di un altro peer.
+\end{itemize}
+
+\dfn{Processo client e processo server}{
+    In ogni coppia di processi che comunicano:
+    \begin{itemize}
+      \item il \textbf{processo client} è quello che \textbf{inizia} la comunicazione;
+      \item il \textbf{processo server} è quello che \textbf{attende} di essere contattato.
+    \end{itemize}
+}
+
+Nel Web il browser è il client e il server Web è il server. Nel P2P il peer che scarica fa da
+client e quello che carica fa da server: in un'applicazione P2P i processi possono
+\textbf{cambiare ruolo}, e lo stesso peer può essere client su una connessione e server su un'altra.
+
+\subsection{I socket}
+
+La maggior parte delle applicazioni è fatta di coppie di processi che si mandano messaggi
+attraverso la rete sottostante. Il punto in cui un processo ``consegna'' i messaggi alla rete ha un
+nome preciso.
+
+\dfn{Socket}{
+    Seguendo il modello a strati, un \textbf{socket} è l'\textbf{interfaccia software tra il livello
+    applicativo e il livello di trasporto}: è la ``porta'' attraverso cui un processo invia e riceve
+    messaggi sulla rete. È anche l'\textbf{API} (\emph{Application Programming Interface}) tra
+    l'applicazione e la rete.
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\linewidth]{cap03/processi_socket.png}
+    \caption{Il processo è controllato dallo sviluppatore; ciò che sta sotto il socket (TCP con i suoi buffer e le sue variabili) è controllato dal sistema operativo.}
+\end{figure}
+
+\begin{esempio}{I socket come cassette postali}
+\begin{center}
+\includegraphics[width=0.42\linewidth]{cap03/socket_cassetta.png}
+\end{center}
+\begin{itemize}
+    \item Un processo che vuole mandare un messaggio a un processo su un altro host \textbf{lo mette nella
+          cassetta postale} (il socket).
+    \item Il processo mittente dà per scontato che, dall'altra parte della sua porta, ci sia
+          un'\textbf{infrastruttura di trasporto} che porterà il messaggio fino alla cassetta del destinatario.
+    \item Quando il messaggio arriva all'host di destinazione, passa attraverso la cassetta (il socket) del
+          processo ricevente.
+\end{itemize}
+Chi imbuca una lettera non deve sapere come funziona il sistema postale.
+\end{esempio}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \newcommand{\casa}[2]{%
+    \begin{scope}[shift={(#1)}]
+      \draw[thick, fill=lapp!40] (0,0) rectangle (1.8,1.3);
+      \draw[thick, fill=netred!50] (-0.2,1.3) -- (0.9,2.1) -- (2.0,1.3) -- cycle;
+      \draw[thick, fill=ltra] (1.2,0) rectangle (1.65,0.8);
+      \fill (1.3,0.4) circle (1.2pt);
+      \node[font=\scriptsize\bfseries\sffamily] at (0.55,0.75) {#2};
+    \end{scope}}
+  \casa{0,0}{processo}
+  \casa{10,0}{processo}
+  \node[text=netblue] at (1.45,-0.3) {socket = porta};
+  \node[text=netblue] at (11.45,-0.3) {socket = porta};
+  \node[netcloud, minimum width=4.5cm, minimum height=1.6cm] (net) at (6.2,0.55) {infrastruttura di trasporto};
+  \draw[-{Stealth}, very thick, netred] (1.7,0.45) -- node[above, lbl] {messaggio} (net.west);
+  \draw[-{Stealth}, very thick, netred] (net.east) -- (11.25,0.45);
+  \node[lbl, text width=3.2cm] at (1,-1.1) {spinge il messaggio fuori dalla propria porta};
+  \node[lbl, text width=3.2cm] at (11,-1.1) {lo riceve dalla propria porta, e solo allora agisce};
+\end{tikzpicture}
+\caption{Un processo è una casa e il suo socket è la porta: il mittente spinge fuori il messaggio e dà per scontato che qualcosa, fuori, lo porti a destinazione.}
+\end{figure}
+
+\warning{Cosa controlla lo sviluppatore}{
+    Lo sviluppatore ha il \textbf{controllo completo} di tutto ciò che sta sul lato applicativo del
+    socket, ma \textbf{pochissimo controllo} sul lato del trasporto. Può soltanto:
+    \begin{enumerate}
+      \item \textbf{scegliere il protocollo di trasporto} (TCP o UDP);
+      \item eventualmente impostare qualche parametro del trasporto (dimensione massima dei buffer, dei
+            segmenti, \dots).
+    \end{enumerate}
+    Scelto il protocollo, l'applicazione viene costruita dando per scontati i servizi che quel protocollo offre.
+    La scelta si fa \textbf{una volta, all'inizio}, e tutto il resto ne discende: è una \textbf{decisione di
+    progetto}, non un dettaglio di configurazione.
+}
+
+\subsection{Indirizzare i processi: indirizzo e identificatore}
+
+Riprendendo l'analogia postale, un processo ha bisogno di un \textbf{indirizzo} per ricevere
+messaggi. Ma su un host girano contemporaneamente molte applicazioni di rete: per individuare il
+processo destinatario servono \textbf{due} informazioni.
+
+\begin{enumerate}
+    \item Un \textbf{indirizzo dell'host}, per trovare la macchina giusta sulla rete.
+    \item Un \textbf{identificatore del processo}, per trovare il processo giusto dentro quella macchina.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node[draw=netgreen!70!black, thick, rounded corners, minimum width=3.6cm, minimum height=3cm] (h1) at (0,0) {};
+  \node[above=1pt of h1, text=netgreen!60!black] {telefono \texttt{93.45.7.12}};
+  \node[ellipse, draw, fill=lapp!50, minimum width=1.9cm] (tg) at (-0.4,0.7) {Telegram};
+  \node[ellipse, draw, fill=lapp!50, minimum width=1.9cm] (br) at (-0.4,-0.7) {Opera};
+  \node[field, fill=ltra, minimum width=0.4cm] (p1) at (1.75,0.7) {};
+  \node[field, fill=ltra, minimum width=0.4cm] (p2) at (1.75,-0.7) {};
+  \draw (tg) -- (p1); \draw (br) -- (p2);
+  \node[above=-1pt of p1, text=netblue, font=\scriptsize\ttfamily] {51001}; \node[below=-1pt of p2, text=netblue, font=\scriptsize\ttfamily] {51000};
+  \node[netcloud, minimum width=3.4cm, minimum height=2cm] (net) at (5.6,0) {rete};
+  \node[draw=netgreen!70!black, thick, rounded corners, minimum width=2.8cm, minimum height=1.2cm] (h2) at (10.6,1.4) {};
+  \node[above=1pt of h2, text=netgreen!60!black] {un altro telefono};
+  \node[ellipse, draw, fill=lapp!50] (tg2) at (10.8,1.4) {Telegram};
+  \node[field, fill=ltra, minimum width=0.4cm] (q1) at (9.15,1.4) {};
+  \node[above=-1pt of q1, text=netblue, font=\scriptsize\ttfamily] {51002};
+  \draw (tg2) -- (q1);
+  \node[draw=netgreen!70!black, thick, rounded corners, minimum width=2.8cm, minimum height=1.2cm] (ws) at (10.6,-1.4) {};
+  \node[below=1pt of ws, text=netgreen!60!black] {server Web UniNA};
+  \node[ellipse, draw, fill=lapp!50] (ws2) at (10.8,-1.4) {server Web};
+  \node[field, fill=ltra, minimum width=0.4cm] (q2) at (9.15,-1.4) {};
+  \node[below=-1pt of q2, text=netblue, font=\scriptsize\ttfamily] {80};
+  \draw (ws2) -- (q2);
+  \draw[netred, thick, dashed, -{Stealth}] (p1) .. controls (4,1.7) and (7.5,1.9) .. (q1);
+  \draw[netblue, thick, dashed, -{Stealth}] (p2) .. controls (4,-1.7) and (7.5,-1.9) .. (q2);
+  \node[draw=primary, fill=primary!10, rounded corners, text width=7cm, align=center] at (5.6,-3.0) {\textbf{indirizzo}: livello di \textbf{rete}, trova l'host\\\textbf{porta}: livello di \textbf{trasporto}, trova il processo};
+\end{tikzpicture}
+\caption{Un telefono con la messaggistica e il browser aperti, che parlano con due destinazioni diverse nello stesso momento. Entrambi i flussi partono dallo stesso indirizzo: a tenerli separati, a entrambi i capi, è la porta.}
+\end{figure}
+
+\dfn{Indirizzo IP e numero di porta}{
+    In Internet:
+    \begin{itemize}
+      \item un \textbf{host} è identificato da un \textbf{indirizzo IP} (in IPv4, una quantità a 32 bit,
+            scritta come quattro numeri tra 0 e 255, per esempio \texttt{143.225.161.30});
+      \item un \textbf{processo} è identificato da un \textbf{numero di porta} (16 bit).
+    \end{itemize}
+    L'indirizzo lavora a livello di \textbf{rete} (instradamento), l'identificatore a livello di \textbf{trasporto}.
+}
+
+Le applicazioni più diffuse hanno \textbf{numeri di porta assegnati per convenzione}: un server Web
+ascolta sulla porta \textbf{80} (443 per HTTPS), un server di posta SMTP sulla porta \textbf{25}. L'elenco
+ufficiale delle porte ben note è mantenuto dalla \textbf{IANA} (\emph{Internet Assigned Numbers Authority}).
+È questa convenzione che permette a un client di contattare un servizio mai visto prima: senza, ogni client
+dovrebbe sapere in anticipo ``a quale porta bussare''.
+
+\subsection{Un indirizzo appartiene a un'interfaccia}
+
+Un portatile è collegato contemporaneamente via cavo Ethernet e via Wi-Fi: quanti indirizzi ha? \textbf{Due},
+uno per interfaccia. Un indirizzo IP non dà il nome a una macchina: dà il nome a \textbf{un punto di
+collegamento a una rete}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (lap) at (0,0) {\icon[1.3cm]{laptop}};
+  \node[left=2pt of lap] {un portatile};
+  \node[draw=netblue, fill=netblue!8, rounded corners, font=\scriptsize\ttfamily] (e) at (2.4,0.9) {eth0: 192.168.1.20};
+  \node[draw=netgreen!70!black, fill=netgreen!8, rounded corners, font=\scriptsize\ttfamily] (w) at (2.4,-0.9) {wlan0: 192.168.1.35};
+  \draw[wired] (lap) -- (e.west);
+  \draw[wireless] (lap) -- (w.west);
+  \node (sw) at (6,0.9) {\icon[0.9cm]{switch}};
+  \node (ap) at (6,-0.9) {\icon[0.8cm]{accesspoint}};
+  \draw[wired] (e) -- (sw); \draw[wireless] (w) -- (ap);
+  \node (r) at (8.5,0) {\icon[1cm]{router}};
+  \draw[wired] (sw) -- (r); \draw[wired] (ap) -- (r);
+  \draw[netred, very thick] (4.1,1.15) -- (4.5,0.65); \draw[netred, very thick] (4.1,0.65) -- (4.5,1.15);
+  \node[text=netred, lbl, anchor=west] at (4.6,1.45) {cavo staccato};
+  \node[lbl, text width=4.2cm, anchor=west] at (9.3,0) {per il livello di rete sono \textbf{due host distinti}, raggiunti per due cammini diversi};
+\end{tikzpicture}
+\caption{Staccando il cavo, l'indirizzo di \texttt{eth0} smette di rispondere, mentre quello di \texttt{wlan0} continua a funzionare.}
+\end{figure}
+
+Ci torneremo quando gli indirizzi smetteranno di appartenere alle macchine e cominceranno ad appartenere
+alle \textbf{reti} (capitolo sull'indirizzamento IP).
+
+\subsection{IPv4 e l'indirizzo che vuol dire “qui”}
+
+\dfn{Indirizzo IPv4 e localhost}{
+    Un indirizzo \textbf{IPv4} è una quantità a \textbf{32 bit}, scritta come quattro numeri decimali tra 0 e 255
+    separati da punti, uno per byte. L'indirizzo \texttt{127.0.0.1} (\texttt{localhost}) è speciale: non indica
+    una macchina remota ma \textbf{questa} macchina. Due processi locali comunicano attraverso di esso
+    esattamente come farebbero attraverso la rete, ma \textbf{nulla lascia l'host}.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node[draw=netgreen!70!black, thick, rounded corners, minimum width=7cm, minimum height=2.4cm] (h) at (0,0) {};
+  \node[anchor=north east, text=netgreen!60!black] at (h.north east) {host};
+  \node[ellipse, draw, fill=lapp!50, minimum width=1.8cm] (c) at (-2.2,0.4) {client};
+  \node[ellipse, draw, fill=lapp!50, minimum width=1.8cm] (s) at (2.2,0.4) {server};
+  \node[draw, fill=lnet!60, rounded corners, align=center, font=\scriptsize\ttfamily] (lo) at (0,-0.6) {127.0.0.1\\localhost};
+  \draw[{Stealth}-{Stealth}, thick, netblue] (c) to[bend right=25] (lo.west);
+  \draw[{Stealth}-{Stealth}, thick, netblue] (lo.east) to[bend right=25] (s);
+  \node (nic) at (5.4,0) {\icon[0.9cm]{switch}};
+  \node[below=-1pt of nic, lbl] {verso la rete};
+  \draw[black!50, line width=1.5pt] (h.east) -- (nic);
+  \draw[netred, very thick] (3.95,0.25) -- (4.35,-0.25); \draw[netred, very thick] (3.95,-0.25) -- (4.35,0.25);
+  \node[text=netred, lbl, anchor=north, text width=2cm] at (4.15,-0.35) {nulla raggiunge il cavo};
+\end{tikzpicture}
+\caption{Client e server sulla stessa macchina: è così che proverete i vostri programmi prima di avere un secondo host.}
+\end{figure}
+
+\subsection{Un nome non è un indirizzo}
+
+Nessuno scrive \texttt{143.225.161.30}: si scrive \texttt{www.unina.it}, e i due designano lo stesso server Web.
+\begin{itemize}
+    \item Il \textbf{nome} è per le persone: leggibile, stabile, e sopravvive al cambio della macchina che c'è sotto.
+    \item L'\textbf{indirizzo} è ciò su cui lavora il livello di rete: è ciò che serve all'instradamento per consegnare.
+    \item Il \textbf{DNS} (\emph{Domain Name System}) traduce l'uno nell'altro. È un \textbf{database distribuito}
+          (nessuna macchina lo contiene tutto) ed è a sua volta un'\textbf{applicazione} che gira sulla rete: lo
+          apriremo tra poco.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{I servizi di trasporto disponibili alle applicazioni}
+% ══════════════════════════════════════════════════════════════
+
+Il livello di trasporto, sotto l'applicazione, offre protocolli che realizzano su richiesta alcune
+proprietà, dette \textbf{qualità del servizio} (QoS, \emph{Quality of Service}).
+
+\begin{itemize}
+    \item \textbf{Affidabilità} del trasferimento dati: i dati inviati da un estremo arrivano
+          \textbf{corretti e completi} all'altro. Alcune applicazioni (file, posta, transazioni bancarie)
+          non tollerano perdite; altre (audio e video) tollerano qualche perdita.
+    \item \textbf{Throughput}: il ritmo, in bit/s, a cui il processo mittente può consegnare bit al
+          processo ricevente. Alcune applicazioni multimediali hanno bisogno di un throughput minimo.
+    \item \textbf{Temporizzazione} (\emph{timing}): ogni bit immesso nel socket arriva al socket del
+          destinatario entro un certo tempo. Serve a telefonia, videoconferenza, giochi in tempo reale.
+    \item \textbf{Sicurezza}: cifratura e decifratura dei messaggi, integrità, autenticazione.
+\end{itemize}
+
+Scegliere un protocollo di trasporto significa scegliere tra queste quattro cose. La domanda da farsi è:
+\textbf{quale delle quattro serve davvero alla mia applicazione?}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llll}
+\toprule
+\textbf{Applicazione} & \textbf{Perdite} & \textbf{Throughput} & \textbf{Sensibile al tempo} \\
+\midrule
+Trasferimento file & nessuna & elastico & no \\
+Posta elettronica & nessuna & elastico & no \\
+Documenti Web & nessuna & elastico, pochi kb/s & no \\
+Telefonia su Internet & tollerate & da pochi kb/s a 1 Mb/s & sì, centinaia di ms \\
+Videoconferenza & tollerate & da 10 kb/s a 5 Mb/s & sì, centinaia di ms \\
+Audio/video registrato & tollerate & come sopra & sì, pochi secondi \\
+Giochi interattivi & tollerate & da pochi kb/s a 10 kb/s & sì, centinaia di ms \\
+\bottomrule
+\end{tabular}
+\caption{Che cosa chiedono al trasporto le applicazioni reali.}
+\end{table}
+
+\dfn{Throughput elastico}{
+    Un'applicazione ha un throughput \textbf{elastico} se usa tutto il throughput che trova: di più è meglio, ma
+    anche con meno funziona (più lentamente).
+}
+
+Internet offre alle applicazioni \textbf{due} protocolli di trasporto:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{2.3cm}p{6cm}p{6cm}}
+\toprule
+ & \textbf{TCP} (\emph{Transmission Control Protocol}) & \textbf{UDP} (\emph{User Datagram Protocol}) \\
+\midrule
+Connessione & \textbf{sì}: handshake tra i processi prima dei dati & \textbf{no}: si invia e basta \\
+Affidabilità & trasferimento \textbf{affidabile} e ordinato & nessuna garanzia di consegna \\
+Controlli & di flusso e di congestione & nessuno \\
+Servizio & flusso di byte affidabile & datagram inaffidabile, ``minimale'' \\
+Non offre & garanzie di tempo e di throughput minimo & garanzie di tempo e di throughput minimo \\
+\bottomrule
+\end{tabular}
+\caption{I due servizi di trasporto di Internet.}
+\end{table}
+
+TCP rallenta il mittente quando la rete è congestionata: lo fa \textbf{per il bene della rete}, non della vostra
+applicazione.
+
+\info{UDP non è un TCP difettoso}{
+    UDP è ciò che resta quando si \textbf{rifiuta di pagare} per le garanzie: niente handshake, niente conferme,
+    niente rallentamenti imposti. Per un'applicazione che deve rispondere in fretta, o che gestisce da sé le
+    perdite, è la scelta giusta.
+}
+
+\subsection{Che cosa Internet non garantisce}
+
+Dei quattro servizi elencati all'inizio, i protocolli di trasporto di Internet ne forniscono \textbf{uno solo}:
+l'affidabilità (con TCP).
+\begin{itemize}
+    \item \textbf{Nessuna garanzia di throughput né di tempo}: né TCP né UDP le offrono. Le applicazioni sensibili al
+          tempo funzionano lo stesso perché sono \textbf{progettate per farcela}, non perché la rete le aiuti.
+    \item \textbf{Nessuna sicurezza}: ciò che si spinge nel socket viaggia così come è stato scritto, password compresa.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node[lay app, minimum width=3.2cm] (a) at (0,1.9) {Applicazione};
+  \node[draw=netgreen!70!black, fill=netgreen!20, minimum width=3.2cm, minimum height=0.55cm] (tls) at (0,1.2) {TLS: cifra / decifra};
+  \draw[very thick, netblue] (-1.9,0.8) -- (1.9,0.8) node[right, text=netblue] {socket};
+  \node[lay tra, minimum width=3.2cm] (t) at (0,0.3) {TCP};
+  \node[lay net, minimum width=3.2cm] at (0,-0.4) {IP \dots};
+  \draw[decorate, decoration={brace, amplitude=5pt}] (-1.8,0.95) -- (-1.8,2.2) node[midway, left=6pt, lbl, text width=2.6cm, align=right] {livello applicativo};
+  \node[lbl, text width=6cm, align=left, anchor=west] at (3.2,1.4) {l'applicazione cifra \textbf{prima} del socket e decifra \textbf{dopo}: TCP trasporta byte già illeggibili};
+\end{tikzpicture}
+\caption{TLS non è un terzo protocollo di trasporto: è un miglioramento di TCP, implementato nel livello applicativo.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{I protocolli di livello applicativo}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Protocollo di livello applicativo}{
+    Un \textbf{protocollo applicativo} definisce come i processi di un'applicazione, in esecuzione su end
+    system diversi, si scambiano i messaggi. In particolare definisce:
+    \begin{enumerate}
+      \item i \textbf{tipi} di messaggi scambiati (per esempio richieste e risposte);
+      \item la \textbf{sintassi} dei vari tipi di messaggio: quali campi ci sono e come sono delimitati;
+      \item la \textbf{semantica} dei campi: il significato dell'informazione che contengono;
+      \item le \textbf{regole} che stabiliscono quando e come un processo invia messaggi e risponde.
+    \end{enumerate}
+}
+
+I protocolli possono essere \textbf{aperti} (le regole sono pubbliche, tipicamente in un RFC: HTTP,
+SMTP, DNS) oppure \textbf{proprietari}, deliberatamente chiusi (come quello di Skype o di molte app di
+messaggistica).
+
+\subsection{Un protocollo non è l'applicazione}
+
+Il Web è un'applicazione; HTTP ne è \textbf{un pezzo}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node[draw=primary, thick, rounded corners, minimum width=11.5cm, minimum height=2.5cm] (web) at (0,0) {};
+  \node[anchor=north west, font=\small\bfseries\sffamily, text=primary] at (web.north west) {l'applicazione Web};
+  \node[draw, fill=lapp!40, rounded corners, minimum width=2.2cm, minimum height=0.9cm] (b) at (-4.2,-0.2) {browser};
+  \node[draw, fill=lapp!40, rounded corners, minimum width=2.2cm, minimum height=0.9cm] (s) at (4.2,-0.2) {server Web};
+  \node[draw, fill=black!8, rounded corners, minimum width=2cm, minimum height=0.6cm] at (0,0.55) {formato HTML};
+  \draw[{Stealth}-{Stealth}, very thick, netred] (b) -- node[below, text=netred, font=\footnotesize\bfseries\sffamily] {protocollo HTTP} (s);
+  \node[lbl, text=netred] at (0,-0.95) {l'unica parte su cui i due capi devono mettersi d'accordo};
+\end{tikzpicture}
+\caption{Il Web ha bisogno di un formato per i documenti (HTML), di browser e di server: HTTP fissa soltanto formato e ordine dei messaggi tra browser e server.}
+\end{figure}
+
+Lo stesso vale per il video on demand: server, fatturazione, l'app sul telefono, e \textbf{DASH} per i messaggi.
+Perché insistere sulla distinzione? Perché il protocollo è \textbf{l'unica parte su cui entrambi i capi devono
+concordare}: tutto il resto ciascuna parte lo costruisce come vuole.
+
+\subsection{Protocolli applicativi comuni}
+
+Ecco alcuni protocolli applicativi di uso comune, con il trasporto che usano:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lp{8.6cm}ll}
+\toprule
+\textbf{Protocollo} & \textbf{Descrizione} & \textbf{Porta} & \textbf{Trasporto} \\
+\midrule
+DHCP & \emph{Dynamic Host Configuration Protocol}: assegna gli indirizzi IP & 67, 68 & UDP \\
+DNS & \emph{Domain Name System}: traduce i nomi in indirizzi IP & 53 & UDP, TCP \\
+HTTP / HTTPS & \emph{HyperText Transfer Protocol (Secure)}: trasferisce pagine Web & 80 / 443 & TCP \\
+SMTP / SMTPS & \emph{Simple Mail Transfer Protocol (Secure)}: invia la posta & 25 / 465 & TCP \\
+SNMP & \emph{Simple Network Management Protocol}: gestisce i dispositivi di rete & 161 & UDP \\
+Telnet / SSH & \emph{Teletype Network / Secure SHell}: riga di comando su host remoti & 23 / 22 & TCP \\
+FTP / FTPS & \emph{File Transfer Protocol (Secure)}: trasferisce file & 21 / 990 & TCP \\
+\bottomrule
+\end{tabular}
+\caption{Protocolli applicativi comuni e relative porte ben note.}
+\end{table}
+
+\info{Le versioni ``Secure''}{
+    Molte applicazioni scambiano informazioni sensibili (credenziali, dati personali). Sulle reti pubbliche
+    i messaggi vanno protetti: da qui le varianti sicure (HTTPS, SMTPS, FTPS, SSH) di quasi ogni protocollo.
+    Telnet, per esempio, trasmette tutto in chiaro, password comprese; SSH offre lo stesso servizio (una
+    riga di comando remota) con tutto cifrato. Su una rete pubblica, usare la variante in chiaro è un errore.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{FTP e FTPS}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{FTP}{
+    L'\textbf{FTP} (\emph{File Transfer Protocol}) è uno dei protocolli più antichi di Internet (prima
+    versione nel 1971) e serve a \textbf{trasferire file} tra host attraverso la rete, secondo il modello
+    client-server.
+}
+
+\begin{itemize}
+    \item Nella versione base il trasferimento avviene \textbf{in chiaro}: nome utente, password e file
+          viaggiano leggibili da chiunque intercetti il traffico. Va quindi usato in reti locali o private.
+    \item La versione sicura \textbf{FTPS} (\emph{FTP Secure}) protegge nome utente e password e cifra i contenuti.
+    \item Sia FTP sia FTPS hanno due componenti: il \textbf{protocollo}, che specifica i comandi (elencare,
+          prendere, cancellare file, \dots), e un'\textbf{applicazione} che lo implementa, con un lato client e
+          un lato server.
+\end{itemize}
+
+\subsection{Due connessioni: controllo e dati}
+
+A differenza dei protocolli visti finora, FTP \textbf{non} trasporta comandi e dati sulla stessa connessione.
+\begin{itemize}
+    \item La \textbf{connessione di controllo}, sulla porta \textbf{21}, si apre per prima e resta aperta per tutta
+          la sessione: solo comandi e risposte.
+    \item Ogni trasferimento (un \texttt{get}, un \texttt{put}, persino un \texttt{ls}) apre una \textbf{seconda
+          connessione} solo per i dati, che viene chiusa alla fine del trasferimento.
+    \item Tenere il controllo separato dai dati si chiama segnalazione \textbf{fuori banda} (\emph{out-of-band}).
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \begin{scope}
+    \node[font=\small\bfseries\sffamily] at (3,1.5) {Modalità attiva};
+    \node (c) at (0,0) {\icon[1cm]{laptop}}; \node[below=-2pt of c] {client};
+    \node (s) at (6,0) {\icon[0.75cm]{server}}; \node[below=-2pt of s] {server};
+    \draw[-{Stealth}, very thick, netblue] (0.7,0.45) -- node[above] {controllo: il client apre (porta 21)} (5.6,0.45);
+    \draw[-{Stealth}, very thick, netgreen!60!black] (5.6,-0.25) -- node[below] {dati: il \textbf{server} apre (dalla porta 20)} (0.7,-0.25);
+    \node[draw=netred, fill=netred!8, rounded corners, text width=5.2cm, align=center] at (3,-1.75) {un client dietro NAT o firewall \textbf{non} è raggiungibile dall'esterno: la connessione dati fallisce};
+  \end{scope}
+  \begin{scope}[xshift=8.2cm]
+    \node[font=\small\bfseries\sffamily] at (3,1.5) {Modalità passiva};
+    \node (c) at (0,0) {\icon[1cm]{laptop}}; \node[below=-2pt of c] {client};
+    \node (s) at (6,0) {\icon[0.75cm]{server}}; \node[below=-2pt of s] {server};
+    \draw[-{Stealth}, very thick, netblue] (0.7,0.45) -- node[above] {controllo: il client apre (porta 21)} (5.6,0.45);
+    \draw[-{Stealth}, very thick, netgreen!60!black] (0.7,-0.25) -- node[below] {dati: apre \textbf{ancora il client}} (5.6,-0.25);
+    \node[draw=netgreen!70!black, fill=netgreen!8, rounded corners, text width=5.2cm, align=center] at (3,-1.75) {esiste proprio per questo: il client apre entrambe le connessioni};
+  \end{scope}
+\end{tikzpicture}
+\caption{Chi apre la connessione dati? In modalità attiva il server si ricollega al client; in modalità passiva è il client ad aprire entrambe.}
+\end{figure}
+
+\subsection{Una sessione FTP}
+
+Sul server un \textbf{demone} attende in background le connessioni; sul client si usa il programma \texttt{ftp}.
+
+\begin{lstlisting}[language=bash]
+$ sudo apt install vsftpd          # lato server, una volta sola
+$ systemctl status vsftpd          # il demone e' in esecuzione?
+
+$ ftp 143.225.161.30               # lato client
+Name: student
+Password:
+230 Login successful.
+ftp> ls                            # da qui in poi, il prompt ftp>
+ftp> get report.pdf                # dal server al client
+226 Transfer complete.
+ftp> bye                           # bye o quit, non exit
+\end{lstlisting}
+
+I codici numerici (230, 226) sono le \textbf{risposte} del server sulla connessione di controllo: 230 conferma
+l'accesso, 226 la fine del trasferimento.
+
+\info{Il demone}{
+    Il lato server è implementato come \textbf{demone} (\emph{daemon}): un programma che gira in background
+    e resta in attesa che i client si connettano. Quasi ogni server che scriverete in questo corso ha questa
+    forma: un demone, in attesa.
+}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Comando} & \textbf{Effetto} \\
+\midrule
+\texttt{help} & elenca i comandi FTP disponibili \\
+\texttt{cd} / \texttt{lcd} & cambia directory sulla macchina remota / locale \\
+\texttt{ls} & mostra file e directory nella directory remota corrente \\
+\texttt{pwd} & stampa la directory di lavoro remota \\
+\texttt{mkdir} / \texttt{rmdir} & crea / rimuove una directory remota \\
+\texttt{delete} & cancella un file nella directory remota \\
+\texttt{get} & copia un file dal server alla macchina locale (\emph{download}) \\
+\texttt{put} & copia un file dalla macchina locale al server (\emph{upload}) \\
+\bottomrule
+\end{tabular}
+\caption{I comandi FTP principali.}
+\end{table}
+
+Due comandi, \texttt{get} e \texttt{put}, sono la ragione per cui il protocollo esiste; il resto è navigazione.
+Attenzione a \texttt{lcd}: è l'unico che agisce sulla \textbf{vostra} macchina.
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Un'applicazione di rete è fatta di programmi su \textbf{end system diversi}; il nucleo della rete
+          non esegue applicazioni.
+    \item Architetture: \textbf{client-server} (server sempre attivo, indirizzo noto) e \textbf{P2P} (peer
+          intermittenti, scalabile); nella pratica spesso \textbf{ibride}.
+    \item Comunicano \textbf{processi}, attraverso i \textbf{socket}: l'interfaccia tra applicazione e trasporto.
+    \item Un processo si raggiunge con \textbf{indirizzo IP} (host, livello di rete) + \textbf{numero di porta}
+          (processo, livello di trasporto).
+    \item Un indirizzo IP appartiene a un'\textbf{interfaccia}; \texttt{127.0.0.1} indica l'host stesso; il DNS
+          traduce i nomi (per le persone) in indirizzi (per la rete).
+    \item Le applicazioni chiedono al trasporto affidabilità, throughput, tempi, sicurezza; Internet offre
+          \textbf{TCP} (connessione, affidabile) e \textbf{UDP} (senza connessione, minimale), e garantisce solo
+          l'affidabilità: niente throughput, tempi o sicurezza (TLS si aggiunge sopra TCP, a livello applicativo).
+    \item Un protocollo applicativo definisce tipi, sintassi, semantica dei messaggi e regole di scambio, ed è
+          solo \textbf{un pezzo} dell'applicazione.
+    \item \textbf{FTP} usa due connessioni: controllo (porta 21, per tutta la sessione) e dati (una per
+          trasferimento); modalità attiva e passiva.
+\end{itemize}
+}

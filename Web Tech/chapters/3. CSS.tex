@@ -1,0 +1,1628 @@
+\chapter{CSS}
+
+\section{Perché serve il CSS}
+
+Fino a questo punto abbiamo imparato a scrivere documenti HTML. HTML si occupa
+della \textbf{struttura} e della \textbf{semantica} di un documento, e non dice
+assolutamente nulla sul suo \textbf{aspetto}.
+
+Un elemento \tg{em} specifica che il suo contenuto va enfatizzato, ma non dice
+\textit{come} l'enfasi debba essere resa: si potrebbe usare il corsivo, un
+colore diverso, uno sfondo diverso. La scelta è demandata a un altro linguaggio.
+
+\dfn{CSS}{
+  \term{CSS} (\textit{Cascading Style Sheets}) è un linguaggio
+  \textbf{dichiarativo} e \textbf{basato su regole} che serve a specificare come
+  i documenti debbano essere presentati agli utenti.}
+
+Questa separazione fra struttura e presentazione non è un capriccio accademico:
+è ciò che permette di cambiare completamente l'aspetto di un sito di mille
+pagine modificando un solo file, e di presentare lo stesso contenuto in modo
+diverso su uno schermo, su carta o a un sintetizzatore vocale.
+
+\section{Anatomia di una regola}
+
+Un \term{foglio di stile} (\textit{stylesheet}) è un insieme di \term{regole}.
+Ogni regola è composta da un \textbf{selettore} e da un blocco di
+\textbf{dichiarazioni}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      cd/.style={font=\FiraCode\large, inner sep=1pt, outer sep=0pt,
+                 anchor=base west},
+      lab/.style={font=\Lato\footnotesize, align=center, inner sep=2pt}]
+
+    % il codice
+    \node[cd, text=codetag] (sel) at (0,0) {selettore};
+    \node[cd, text=neutral!30!black] (ob) at ([xshift=6pt]sel.base east) {\{};
+    \node[cd, text=codeattr] (p1) at (0.8,-0.9) {proprietà};
+    \node[cd, text=neutral!30!black] (c1) at (p1.base east) {:};
+    \node[cd, text=codestring] (v1) at ([xshift=6pt]c1.base east) {valore};
+    \node[cd, text=neutral!30!black] (s1) at (v1.base east) {;};
+    \node[cd, text=codeattr] (p2) at (0.8,-1.8) {proprietà};
+    \node[cd, text=neutral!30!black] (c2) at (p2.base east) {:};
+    \node[cd, text=codestring] (v2) at ([xshift=6pt]c2.base east) {valore};
+    \node[cd, text=neutral!30!black] (s2) at (v2.base east) {;};
+    \node[cd, text=neutral!30!black] (cb) at (0,-2.7) {\}};
+
+    % selettore (sopra)
+    \node[lab, text=codetag, anchor=south] (lsel) at ([yshift=16pt]sel.north) {Selettore};
+    \draw[wtdash] (lsel.south) -- (sel.north);
+
+    % proprieta' e valore (sotto la seconda dichiarazione)
+    \node[lab, text=codeattr, anchor=north] (lpro) at ([yshift=-40pt]p2.south) {Proprietà};
+    \draw[wtdash] (lpro.north) -- (p2.south);
+    \node[lab, text=codestring, anchor=north] (lval) at ([yshift=-40pt]v2.south) {Valore};
+    \draw[wtdash] (lval.north) -- (v2.south);
+
+    % dichiarazione (a destra della prima riga)
+    \draw[decorate, decoration={brace, amplitude=4pt, mirror}, draw=primary!70!black,
+          line width=0.8pt] ([yshift=-3pt]p1.south west) -- ([yshift=-3pt]s1.south east);
+    \node[lab, text=primary!70!black, anchor=west] at ([xshift=14pt]s1.east)
+      {\textbf{Dichiarazione}\\(coppia proprietà-valore)};
+
+    % blocco di dichiarazioni (a sinistra)
+    \draw[decorate, decoration={brace, amplitude=6pt}, draw=accent!70!black,
+          line width=0.8pt] (-0.35,-3.0) -- (-0.35,0.35);
+    \node[lab, text=accent!70!black, anchor=east, align=right,
+          font=\Lato\small\bfseries] at (-0.65,-1.3) {Blocco di\\dichiarazioni};
+  \end{tikzpicture}
+  \caption{Struttura di una regola CSS.}
+  \label{fig:css-rule}
+\end{figure}
+
+Il \term{selettore} specifica \textbf{quali} elementi HTML sono interessati
+dalla regola. Le \term{dichiarazioni} sono coppie \textbf{proprietà-valore} che
+specificano lo stile da applicare, separate dal punto e virgola.
+
+Il modo più utile di immaginare una regola è come un'istruzione in due tempi:
+\textbf{prima} il selettore individua degli elementi nell'albero del documento,
+\textbf{poi} le dichiarazioni vengono applicate a ciascuno di quegli elementi.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      cd/.style={font=\FiraCode\small, inner sep=1.5pt, anchor=base west},
+      n/.style={rounded corners=2pt, draw=neutral!55!white, line width=0.7pt,
+                fill=neutral!6!white, inner sep=2.5pt, font=\FiraCode\scriptsize},
+      hit/.style={n, draw=primary!75!black, fill=primary!16!white, line width=1.1pt},
+      tit/.style={font=\Lato\footnotesize\bfseries, text=neutral!30!black},
+      badge/.style={circle, fill=#1, text=white, inner sep=1.4pt,
+                    font=\Lato\bfseries\scriptsize}]
+
+    % 1. la regola
+    \node[tit, anchor=west] at (0,1.85) {La regola};
+    \fill[naplesyellow!12!white, rounded corners=3pt] (0,-1.55) rectangle (4.4,1.2);
+    \node[cd] (h1) at (0.25,0.65) {h1};
+    \node[cd] at ([xshift=4pt]h1.base east) {\{};
+    \node[cd, text=codeattr] (d1) at (0.6,0.0) {color: \textcolor{codestring}{red};};
+    \node[cd, text=codeattr] (d2) at (0.6,-0.65) {font-size: \textcolor{codestring}{50px};};
+    \node[cd] at (0.25,-1.3) {\}};
+    \draw[rounded corners=2pt, draw=primary!75!black, line width=1.1pt]
+      ([xshift=-2pt,yshift=-3pt]h1.south west) rectangle ([xshift=2pt,yshift=2pt]h1.north east);
+    \draw[rounded corners=2pt, draw=accent!70!black, line width=0.9pt, dashed]
+      ([xshift=-3pt,yshift=-4pt]d2.south west) rectangle ([xshift=4pt,yshift=3pt]d2.east |- d1.north);
+
+    % 2. il documento
+    \begin{scope}[xshift=6.1cm]
+      \node[tit, anchor=west] at (0,1.85) {Il documento (albero)};
+      \node[n] (html) at (2.3,0.95) {<html>};
+      \node[n] (body) at (2.3,0.25) {<body>};
+      \node[hit] (th1) at (1.2,-0.5) {<h1>};
+      \node[n] (tp)  at (3.4,-0.5) {<p>};
+      \node[n] (e1)  at (2.8,-1.25) {<em>};
+      \node[n] (e2)  at (4.0,-1.25) {<em>};
+      \foreach \a/\b in {html/body, body/th1, body/tp, tp/e1, tp/e2}
+        \draw[neutral!50!black, line width=0.6pt] (\a.south) -- (\b.north);
+    \end{scope}
+
+    % 3. il risultato
+    \begin{scope}[xshift=12.2cm]
+      \node[tit, anchor=west] at (0,1.85) {Il risultato};
+      \draw[neutral!40!white, fill=white, rounded corners=3pt, line width=0.8pt]
+        (0,-1.55) rectangle (6.1,1.2);
+      \fill[neutral!12!white, rounded corners=3pt] (0.02,0.85) rectangle (6.08,1.18);
+      \foreach \c/\x in {red-gradient-3/0.2, yellow-gradient-5/0.42, green-gradient-6/0.64}
+        \fill[\c] (\x,1.015) circle (2.3pt);
+      \node[anchor=west, font=\Lora\bfseries\fontsize{24}{26}\selectfont,
+            text=css-red, inner sep=1pt] (big) at (0.2,0.15) {Hello CSS};
+      \node[anchor=west, font=\Lora\footnotesize, inner sep=1pt] at (0.2,-0.95)
+        {La nostra \textit{prima} pagina con \textit{stile}!};
+    \end{scope}
+
+    % passo 1: dal selettore agli elementi
+    \draw[-{Stealth[length=6pt,width=5pt]}, draw=primary!75!black, line width=1.1pt,
+          rounded corners=4pt]
+      ([yshift=2pt]h1.north) -- (h1.north |- 0,1.45) -- (5.3,1.45) |- (th1.west);
+    \node[badge=primary!75!black] at (5.3,0.45) {1};
+
+    % passo 2: dalle dichiarazioni al risultato
+    \draw[-{Stealth[length=6pt,width=5pt]}, draw=accent!70!black, line width=1.1pt,
+          rounded corners=4pt]
+      (th1.south) -- (th1.south |- 0,-1.95) -- (11.6,-1.95) |- ([xshift=-1pt]12.2,0.15);
+    \node[badge=accent!70!black] at (9.3,-1.95) {2};
+  \end{tikzpicture}
+
+  \vspace{4pt}
+  {\Lato\footnotesize
+   \tikz[baseline=-3pt]\node[circle, fill=primary!75!black, text=white, inner sep=1.4pt,
+     font=\Lato\bfseries\scriptsize]{1}; il selettore sceglie gli elementi del documento
+   \qquad
+   \tikz[baseline=-3pt]\node[circle, fill=accent!70!black, text=white, inner sep=1.4pt,
+     font=\Lato\bfseries\scriptsize]{2}; le dichiarazioni ne cambiano l'aspetto}
+  \caption{Come si applica una regola: il selettore \code{h1} individua gli
+           elementi \tg{h1} del documento, e \code{color} e
+           \code{font-size} ne cambiano colore e dimensione. Gli altri elementi
+           non vengono toccati.}
+  \label{fig:css-rule-apply}
+\end{figure}
+
+\begin{esempio}{Il primo foglio di stile}
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=index.html]
+<h1>Hello CSS</h1>
+<p>
+  La nostra <em>prima</em> pagina
+  con <em>stile</em>!
+</p>
+\end{lstlisting}
+
+\begin{lstlisting}[style=css, name=style.css]
+h1 {
+  color: red;
+  font-size: 50px;
+}
+
+em {
+  color: blue;
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[index.html]
+  {\Lora\bfseries\Huge\textcolor{css-red}{Hello CSS}}\\[6pt]
+  La nostra \textcolor{css-blue}{\textit{prima}} pagina con
+  \textcolor{css-blue}{\textit{stile}}!
+\end{browser}
+\end{affianco}
+
+Si noti che \code{em} resta in corsivo anche dopo la nostra regola: noi abbiamo
+cambiato solo il colore, il corsivo arriva da un'altra parte. Da dove, lo
+vediamo subito.
+\end{esempio}
+
+\section{Gli stili predefiniti del browser}
+
+C'è una domanda naturale a questo punto: le prime pagine che abbiamo scritto,
+senza una riga di CSS, avevano comunque un aspetto. Le intestazioni erano più
+grandi e in grassetto, i \tg{p} andavano a capo, gli \tg{em} erano in corsivo,
+gli \tg{strong} in grassetto, i link blu e sottolineati, le \tg{ul} avevano i
+pallini. Da dove veniva tutto questo?
+
+Dal fatto che i browser applicano a ogni pagina un proprio foglio di stile di
+base, detto \term{user agent stylesheet} (foglio di stile dello \textit{user
+agent}, cioè del programma che visualizza la pagina).
+
+Questi valori predefiniti sono grosso modo gli stessi su tutti i browser, ma
+qualche differenza esiste, e vedremo che ha delle conseguenze.
+
+\info{I \guillemotleft CSS reset\guillemotright}{
+  Proprio perché gli stili predefiniti differiscono leggermente da browser a
+  browser, molti progetti iniziano il proprio foglio di stile con un
+  \textit{reset} (o una \textit{normalizzazione}): un blocco di regole che
+  azzera margini, spaziature e dimensioni predefinite, in modo da partire da una
+  base identica ovunque. È il motivo per cui si incontrano spesso, in cima ai
+  fogli di stile reali, regole come \code{* \{ margin: 0; padding: 0; \}}.}
+
+\section{Come includere il CSS in una pagina}
+
+Ci sono tre modi per applicare stili a un documento HTML.
+
+\subsection{Foglio di stile esterno}
+
+Il primo, e di gran lunga il migliore, è collegare un file \code{.css} esterno
+con un elemento \tg{link} nell'\tg{head} del documento.
+
+\begin{lstlisting}[style=html, name=head con foglio esterno]
+<head>
+  <meta charset="UTF-8">
+  <title>CSS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+\end{lstlisting}
+
+\begin{itemize}
+  \item l'attributo \attr{rel="stylesheet"} specifica la \textbf{relazione} fra
+        il documento corrente e quello collegato;
+  \item l'attributo \attr{href="style.css"} specifica la \textbf{URL} del foglio
+        di stile da caricare.
+\end{itemize}
+
+Il meccanismo è lo stesso che abbiamo visto per \tg{img}: il browser effettua
+una \textbf{richiesta HTTP aggiuntiva} per procurarsi il foglio di stile
+\textit{prima} di disegnare la pagina.
+
+\subsection{Elemento style}
+
+Le regole CSS possono anche essere definite direttamente dentro un elemento
+\tg{style}, sempre nell'\tg{head}.
+
+\begin{lstlisting}[style=html, name=head con style interno]
+<head>
+  <meta charset="UTF-8">
+  <title>CSS</title>
+  <style>
+    h1 {
+      color: red;
+      font-size: 50px;
+    }
+  </style>
+</head>
+\end{lstlisting}
+
+\subsection{Attributo style (stile inline)}
+
+Infine, un singolo elemento può essere stilizzato \term{inline} tramite
+l'attributo globale \attr{style}. Il valore dell'attributo è una sequenza di
+dichiarazioni separate da punto e virgola, e si applica \textbf{solo} a
+quell'elemento.
+
+\begin{affianco}[0.62]
+\begin{lstlisting}[style=html, name=stile inline]
+<em style="color: fuchsia; font-weight: bold;">stile inline</em>
+\end{lstlisting}
+\risultato
+\begin{browser}[stile inline]
+  \textcolor{css-fuchsia}{\textbf{\textit{stile inline}}}
+\end{browser}
+\end{affianco}
+
+Che cosa succede se un elemento con uno stile inline è selezionato
+\textbf{anche} da una regola del foglio di stile? Riprendiamo il primo esempio e
+aggiungiamo un attributo \attr{style} al primo \tg{em}.
+
+\begin{esempio}{Lo stile inline sostituisce quello del foglio di stile}
+\begin{affianco}[0.6]
+\codicepiccolo
+\begin{lstlisting}[style=html, name=index.html]
+<h1>Hello CSS</h1>
+<p>
+  La nostra <em style="color: fuchsia; font-weight: bold;">prima</em>
+  pagina con <em>stile</em>!
+</p>
+\end{lstlisting}
+\begin{lstlisting}[style=css, name=style.css]
+h1 {
+  color: red;
+  font-size: 50px;
+}
+
+em {
+  color: blue;
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[index.html]
+  {\Lora\bfseries\Huge\textcolor{css-red}{Hello CSS}}\\[6pt]
+  La nostra \textcolor{css-fuchsia}{\textbf{\textit{prima}}} pagina con
+  \textcolor{css-blue}{\textit{stile}}!
+\end{browser}
+\end{affianco}
+
+Sul primo \tg{em} ora agiscono due fonti di stile che dicono cose diverse sulla
+stessa proprietà:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{0.8cm}}l@{\hspace{0.8cm}}l@{\hspace{0.8cm}}l@{}}
+  \textbf{Proprietà} & \textbf{Regola \code{em}} & \textbf{Attributo \attr{style}} & \textbf{Valore applicato} \\
+  \attr{color}       & \code{blue}          & \code{fuchsia}          & \code{fuchsia} (\textbf{sostituito}) \\
+  \attr{font-weight} & ---                  & \code{bold}             & \code{bold} (\textbf{aggiunto}) \\
+  \attr{font-style}  & ---                  & ---                     & \code{italic} (dal browser) \\
+\end{tabular}
+\end{center}
+
+Il colore dichiarato inline \textbf{sostituisce} quello della regola \code{em},
+ma \textbf{solo per quell'elemento}: il secondo \tg{em}, che non ha l'attributo,
+resta blu. Le dichiarazioni che non vanno in conflitto, invece, si sommano: il
+grassetto si aggiunge, e il corsivo continua ad arrivare dallo stile predefinito
+del browser. Il motivo per cui vince lo stile inline lo vedremo con precisione
+parlando della \textbf{cascata}: gli stili inline appartengono a un livello con
+priorità più alta del foglio di stile.
+\end{esempio}
+
+\warning{Perché il foglio esterno è preferibile}{
+  È una domanda che il docente pone a lezione, e vale la pena rispondere per
+  esteso.
+
+  \begin{itemize}
+    \item \textbf{Riuso}: un solo file serve tutte le pagine del sito. Con
+          \tg{style} andrebbe copiato in ognuna, e con lo stile inline andrebbe
+          ripetuto su ogni elemento.
+    \item \textbf{Manutenzione}: cambiare il colore del marchio significa
+          modificare una riga anziché mille.
+    \item \textbf{Cache}: il browser scarica \code{style.css} una sola volta e
+          lo riusa per tutte le pagine successive, che diventano più leggere e
+          più veloci. Il CSS incorporato viene invece riscaricato con ogni
+          pagina.
+    \item \textbf{Separazione delle responsabilità}: il markup resta leggibile e
+          descrive solo la struttura.
+    \item \textbf{Specificità}: come vedremo, lo stile inline ha la priorità più
+          alta di tutte ed è difficilissimo da sovrascrivere. Usarlo
+          diffusamente porta rapidamente a un foglio di stile ingestibile,
+          pieno di \code{!important}.
+  \end{itemize}}
+
+\section{Selettori}
+
+I selettori sono una parte fondamentale del CSS: specificano a quali elementi si
+applica una regola.
+
+\info{I selettori non servono solo a stilizzare}{
+  Vale la pena impararli bene, perché tornano ovunque:
+  \begin{itemize}
+    \item in \textbf{JavaScript}, per scegliere su quali elementi della pagina
+          intervenire quando la si rende dinamica;
+    \item nel \textbf{testing web automatico}, per indicare con quali elementi
+          il test deve interagire;
+    \item nello \textbf{scraping} e nel \textit{crawling}, per selezionare gli
+          elementi che contengono le informazioni da estrarre.
+  \end{itemize}}
+
+\subsection{Selettori semplici}
+
+Esistono cinque tipi di selettori semplici.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{0.9cm}}l@{\hspace{0.9cm}}>{\raggedright\arraybackslash}p{7.2cm}@{}}
+  \textbf{Tipo} & \textbf{Forma} & \textbf{Corrisponde a} \\
+  Universale & \code{*} & qualunque elemento. \\
+  Di tipo    & \code{a} & tutti gli elementi di un dato tipo (nome del tag). \\
+  Di id      & \code{\#idElemento} & l'elemento con quell'attributo \attr{id}. \\
+  Di classe  & \code{.nomeClasse} & gli elementi con quella \attr{class}. \\
+  Di attributo & \code{[attr]}, \code{[attr='val']} & gli elementi che hanno
+                 quell'attributo (con quel valore). \\
+\end{tabular}
+\end{center}
+
+\begin{esempio}{Selettore universale e selettore di tipo}
+Il selettore \textbf{universale} \code{*} corrisponde a qualunque elemento:
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=lista.html]
+<p>Ecco una lista:</p>
+<ul>
+  <li>Anna</li>
+  <li>Bruno</li>
+  <li><a href="/car/">Carlo</a></li>
+  <li>Davide</li>
+</ul>
+<a href="/">Torna alla homepage</a>
+\end{lstlisting}
+\begin{lstlisting}[style=css, name=lista.css]
+* {              /* colora TUTTI gli elementi */
+  color: hotpink;
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[lista.html]
+  \color{css-hotpink}
+  Ecco una lista:\\[3pt]
+  \begin{itemize}[leftmargin=1.8em, itemsep=0pt, topsep=0pt, parsep=0pt]
+    \item Anna
+    \item Bruno
+    \item \uline{Carlo}
+    \item Davide
+  \end{itemize}
+  \vspace{3pt}
+  \uline{Torna alla homepage}
+\end{browser}
+\wtnota{Anche i link diventano rosa: \code{*} seleziona direttamente anche
+        gli \tg{a}, e batte il blu predefinito del browser.}
+\end{affianco}
+
+Il selettore \textbf{di tipo} è semplicemente il nome del tag. Con la stessa
+pagina e questo foglio di stile:
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=css, name=lista.css]
+a {              /* solo i collegamenti */
+  background: yellow;
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[lista.html]
+  Ecco una lista:\\[3pt]
+  \begin{itemize}[leftmargin=1.8em, itemsep=0pt, topsep=0pt, parsep=0pt]
+    \item Anna
+    \item Bruno
+    \item \colorbox{css-yellow}{\wtlink{Carlo}}
+    \item Davide
+  \end{itemize}
+  \vspace{3pt}
+  \colorbox{css-yellow}{\wtlink{Torna alla homepage}}
+\end{browser}
+\end{affianco}
+\end{esempio}
+
+\begin{esempio}{Selettori di id, di classe e di attributo}
+\begin{affianco}[0.58]
+\begin{lstlisting}[style=html, name=form.html]
+<form>
+  <label for="msg">Messaggio: </label>
+  <input id="msg" type="text" name="msg"><br>
+  <label for="num">Numero: </label>
+  <input id="num" type="number" name="num">
+</form>
+\end{lstlisting}
+\begin{lstlisting}[style=css, name=form.css]
+/* l'elemento con id="msg" */
+#msg {
+  background: cyan;
+}
+
+/* tutti gli elementi con un attributo for */
+[for] {
+  background: yellow;
+}
+
+/* tutti gli elementi con type="number" */
+[type='number'] {
+  background: cyan;
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[form.html]
+  \colorbox{css-yellow}{Messaggio:}\ \wtcampo[2.8cm][css-cyan]{}\\[5pt]
+  \colorbox{css-yellow}{Numero:}\ \wtcampo[2.8cm][css-cyan]{\hfill{\tiny$\updownarrow$}}
+\end{browser}
+\wtnota{Le due \tg{label} hanno l'attributo \attr{for}: diventano gialle.\\
+        Il primo campo è \code{\#msg}, il secondo ha \code{type="number"}.}
+\end{affianco}
+
+Per il selettore di classe, si ricordi che un elemento può appartenere a
+\textbf{più classi}, elencate nell'attributo \attr{class} separate da spazi:
+
+\begin{affianco}[0.58]
+\begin{lstlisting}[style=html, name=bottoni.html]
+<button>Azzera il form</button>
+<button class="primary btn">Continua</button>
+\end{lstlisting}
+\begin{lstlisting}[style=css, name=bottoni.css]
+.primary {
+  background: blue;
+  color: white;
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[bottoni.html]
+  \wtbottone{Azzera il form}\ \wtbottone[css-blue][white][css-blue]{Continua}
+\end{browser}
+\end{affianco}
+
+Il secondo pulsante appartiene sia a \code{primary} sia a \code{btn}, quindi
+riceve gli stili di entrambe.
+\end{esempio}
+
+\subsection{Corrispondenza parziale sugli attributi}
+
+Tre operatori aggiuntivi permettono di confrontare solo una \textbf{parte} del
+valore di un attributo.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.5cm}}l@{}}
+  \textbf{Operatore} & \textbf{Significato} \\
+  \code{[attr*='x']} & il valore \textbf{contiene} \code{x} \\
+  \code{[attr\textasciicircum='x']} & il valore \textbf{inizia} con \code{x} \\
+  \code{[attr\$='x']} & il valore \textbf{termina} con \code{x} \\
+\end{tabular}
+\end{center}
+
+\begin{esempio}{Selezionare i link in base alla loro destinazione}
+\begin{affianco}[0.58]
+\begin{lstlisting}[style=css, name=link.css]
+[href*='programming'] {   /* contiene 'programming' */
+  text-decoration: overline;
+}
+
+[href^='https'] {         /* inizia con 'https' */
+  color: red;
+}
+
+[href$='.it/'] {          /* termina con '.it/' */
+  color: green;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=html, name=link.html]
+<a href="http://bookofprogramming.com/">Link 1</a>
+<a href="https://programming.net/">Link 2</a>
+<a href="http://webtechnologies.it/">Link 3</a>
+\end{lstlisting}
+\risultato
+\begin{browser}[link.html]
+  \wtsopra{css-link}{Link 1}\quad \wtsopra{css-red}{Link 2}\quad
+  \textcolor{css-green}{\uline{Link 3}}
+\end{browser}
+\end{affianco}
+
+Il primo link ottiene la sopralineatura; il secondo la ottiene \textit{e}
+diventa rosso (soddisfa due regole); il terzo diventa verde. Si noti che
+\code{text-decoration: overline} \textbf{sostituisce} la sottolineatura
+predefinita dei link, invece di aggiungersi a essa: solo il terzo link,
+che non ha ricevuto la regola, resta sottolineato.
+\end{esempio}
+
+\subsection{Selettori composti}
+
+È possibile \textbf{combinare} più selettori semplici concatenandoli senza
+spazi. Il risultato seleziona l'\textbf{intersezione}: gli elementi che
+soddisfano \textit{tutti} i selettori indicati.
+
+\begin{esempio}{Intersezione di condizioni}
+\begin{affianco}[0.62]
+\codicepiccolo
+\begin{lstlisting}[style=css, name=composti.css]
+/* link che si aprono in una nuova scheda */
+a[target='_blank'] {
+  color: red;
+}
+
+/* link appartenenti alla classe my-class */
+a.my-class {
+  color: green;
+}
+
+/* entrambe le condizioni insieme */
+a[href*='programming'].my-class {
+  background: yellow;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=composti.html]
+<a href="http://bookofprogramming.com/" target="_blank">Link 1</a>
+<a class="my-class" href="https://programming.net/">Link 2</a>
+<em class="my-class">Hello</em>
+\end{lstlisting}
+\risultato
+\begin{browser}[composti.html]
+  \textcolor{css-red}{\uline{Link 1}}\quad
+  \colorbox{css-yellow}{\textcolor{css-green}{\uline{Link 2}}}\quad
+  \textit{Hello}
+\end{browser}
+\end{affianco}
+
+L'ultimo elemento è un \tg{em}, non un \tg{a}: pur avendo la classe giusta, non
+viene selezionato da nessuna delle tre regole.
+\end{esempio}
+
+\subsection{Combinatori}
+
+I \term{combinatori} servono a selezionare elementi in base alla loro
+\textbf{posizione nel documento}. Qui torna utile ricordare che un documento
+HTML è un albero. La sintassi è \code{selettore1 combinatore selettore2}.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}c@{\hspace{0.9cm}}l@{\hspace{0.9cm}}>{\raggedright\arraybackslash}p{7.4cm}@{}}
+  \textbf{Simbolo} & \textbf{Nome} & \textbf{Seleziona} \\
+  spazio    & discendente         & gli elementi \textit{contenuti} (a qualunque profondità). \\
+  \code{>}  & figlio              & solo i \textit{figli diretti}. \\
+  \code{+}  & fratello adiacente  & il fratello \textit{immediatamente successivo}. \\
+  \code{\textasciitilde} & fratello generale & \textit{tutti} i fratelli successivi. \\
+\end{tabular}
+\end{center}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCode\scriptsize,
+      level distance=1.0cm,
+      n/.style={rounded corners=2pt, draw=neutral!55!white, line width=0.7pt,
+                fill=neutral!6!white, inner sep=3pt},
+      sel/.style={n, draw=primary!70!black, fill=primary!14!white,
+                  line width=1pt},
+      tgt/.style={n, draw=accent!70!black, fill=accent!16!white, line width=1pt},
+      edge from parent/.style={draw=neutral!50!black, line width=0.6pt,
+                               edge from parent path=
+                               {(\tikzparentnode.south) -- (\tikzchildnode.north)}},
+      level 1/.style={sibling distance=2.9cm},
+      level 2/.style={sibling distance=1.5cm}]
+
+    \node[n] {<body>}
+      child { node[sel] {<section>}
+        child { node[n] {<p>}
+          child { node[tgt] {<em>} } }
+        child { node[tgt] {<em>} } }
+      child { node[n] {<div>}
+        child { node[n] {<em>} } };
+
+    \node[font=\Lato\scriptsize, anchor=west, text=primary!70!black]
+      at (2.6,0.15) {\code{section} = elemento di partenza};
+    \node[font=\Lato\scriptsize, anchor=west, text=accent!70!black]
+      at (2.6,-0.4) {\code{section em} seleziona questi due};
+    \node[font=\Lato\scriptsize, anchor=west, text=neutral!35!black]
+      at (2.6,-0.95) {\code{section > em} solo quello a destra};
+  \end{tikzpicture}
+  \caption{Discendente contro figlio diretto.}
+  \label{fig:combinators}
+\end{figure}
+
+\begin{esempio}{Combinatore discendente}
+\begin{affianco}[0.55]
+\begin{lstlisting}[style=css]
+section em {
+  color: teal;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=discendente.html]
+<section>
+  <p>
+    Uno studente chiese a Fu-Tzu della natura
+    del ciclo di Dati e Controllo. Fu-Tzu rispose:
+    <em>pensa a un compilatore che compila se stesso.</em>
+  </p>
+</section>
+<em>-- Frammento dal Libro della Programmazione</em>
+\end{lstlisting}
+\risultato
+\begin{browser}[discendente.html]
+  Uno studente chiese a Fu-Tzu della natura del ciclo di Dati e Controllo.
+  Fu-Tzu rispose: \textcolor{css-teal}{\textit{pensa a un compilatore che
+  compila se stesso.}}\\[8pt]
+  \textit{-{}- Frammento dal Libro della Programmazione}
+\end{browser}
+\end{affianco}
+
+Solo il primo \tg{em} diventa \textit{teal}: il secondo è fuori dalla
+\tg{section}. Si noti che il primo \tg{em} non è figlio diretto della
+\tg{section} (c'è un \tg{p} in mezzo), ma il combinatore discendente non se ne
+cura.
+\end{esempio}
+
+\begin{esempio}{Combinatore figlio}
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=css]
+main > em {
+  color: teal;
+  font-variant: small-caps;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=figlio.html]
+<main>
+  <em>Selettori</em> CSS:
+  <p>Ci <em>piacciono</em>.</p>
+</main>
+\end{lstlisting}
+\risultato
+\begin{browser}[figlio.html]
+  \textcolor{css-teal}{\textit{S\scalebox{0.8}{ELETTORI}}} CSS:\\[8pt]
+  Ci \textit{piacciono}.
+\end{browser}
+\wtnota{\code{font-variant: small-caps} rende le minuscole come maiuscolette.}
+\end{affianco}
+
+Qui viene selezionato solo il primo \tg{em}, che è figlio diretto di
+\tg{main}. Il secondo è dentro un \tg{p}, quindi è un \textit{nipote} e non
+corrisponde.
+\end{esempio}
+
+\begin{esempio}{Fratello adiacente e fratello generale}
+Entrambi gli esempi usano la stessa lista.
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=fratelli.html]
+<ul>
+  <li>Tsu-li</li>
+  <li class="master">Fu-Tzu</li>
+  <li>Tsu-ssu</li>
+  <li class="disciple">Li-Win</li>
+</ul>
+\end{lstlisting}
+\begin{lstlisting}[style=css, name=adiacente.css]
+.master + li {        /* il fratello subito dopo */
+  color: red;
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[fratelli.html]
+  \begin{itemize}[leftmargin=1.8em, itemsep=0pt, topsep=0pt, parsep=0pt]
+    \item Tsu-li
+    \item Fu-Tzu
+    \item \textcolor{css-red}{Tsu-ssu}
+    \item Li-Win
+  \end{itemize}
+\end{browser}
+\end{affianco}
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=css, name=generale.css]
+.master ~ li.disciple {   /* un fratello successivo */
+  color: red;             /* con classe disciple   */
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[fratelli.html]
+  \begin{itemize}[leftmargin=1.8em, itemsep=0pt, topsep=0pt, parsep=0pt]
+    \item Tsu-li
+    \item Fu-Tzu
+    \item Tsu-ssu
+    \item \textcolor{css-red}{Li-Win}
+  \end{itemize}
+\end{browser}
+\end{affianco}
+
+Con \code{+} viene colorato soltanto \code{Tsu-ssu}, che segue immediatamente
+l'elemento con classe \code{master}. Con \code{\textasciitilde} vengono
+considerati tutti i fratelli successivi, ma il selettore composto
+\code{li.disciple} restringe la scelta a \code{Li-Win}.
+
+Attenzione: entrambi i combinatori guardano solo \textbf{in avanti}. In CSS non
+esiste un combinatore \guillemotleft fratello precedente\guillemotright.
+\end{esempio}
+
+\section{Pseudo-classi}
+
+Gli elementi HTML possono trovarsi in \textbf{stati} diversi, per esempio a
+causa dell'interazione con l'utente o della loro relazione con altri elementi.
+
+Le \term{pseudo-classi} iniziano con i due punti (\code{:}) e permettono di
+stilizzare gli elementi in base al loro stato. Si distinguono quattro famiglie:
+stati interattivi, stati storici, stati dei form e stati derivanti da relazioni
+con altri elementi.
+
+\subsection{Stati interattivi}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.1cm}}>{\raggedright\arraybackslash}p{9.4cm}@{}}
+  \textbf{Pseudo-classe} & \textbf{Seleziona} \\
+  \code{:hover}  & gli elementi su cui è posizionato un dispositivo di
+                   puntamento (il mouse). \\
+  \code{:active} & lo stato in cui un elemento è attivamente sollecitato
+                   (per esempio un pulsante mentre è premuto). \\
+  \code{:focus}  & lo stato in cui un elemento (un link, un campo di input) ha
+                   il \textit{fuoco}, cioè è attualmente selezionato. \\
+\end{tabular}
+\end{center}
+
+\begin{esempio}{Stati interattivi}
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=css, name=interattivi.css]
+em:hover {
+  background: yellow;
+}
+
+input[type='text']:focus {
+  background: cyan;
+}
+
+button:active {
+  background: blue;
+  color: white;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=html, name=interattivi.html]
+<p>Sto imparando <em>HTML</em> e <em>CSS</em>.</p>
+Messaggio: <input type="text"><br><br>
+<button>Tienimi premuto</button>
+\end{lstlisting}
+\risultato
+\begin{browser}[interattivi.html]
+  Sto imparando \textit{HTML} e
+  \colorbox{css-yellow}{\textit{CSS}}\wtpuntatore.\wtstato{mouse sopra}\\[8pt]
+  Messaggio: {\setlength{\fboxrule}{1.4pt}\fcolorbox{dtblue}{css-cyan}{%
+    \makebox[2.6cm][l]{\rule[-2.5pt]{0pt}{9.5pt}{\wtuifont ciao$\vert$}}}}%
+  \wtstato{fuoco}\\[8pt]
+  \wtbottone[css-blue][white][css-blue]{Tienimi premuto}\wtstato{premuto}
+\end{browser}
+\wtnota{I tre stati sono mostrati insieme per comodità: nella realtà ognuno
+        dura solo finché dura l'interazione.}
+\end{affianco}
+\end{esempio}
+
+\info{\code{:focus} e l'accessibilità}{
+  Lo stile di \code{:focus} è ciò che permette a chi naviga con la tastiera (con
+  il tasto \code{Tab}) di sapere \textit{dove si trova} nella pagina. Il
+  contorno predefinito che i browser disegnano attorno all'elemento con il fuoco
+  è brutto, e la tentazione di scrivere \code{:focus \{ outline: none; \}} è
+  forte. Farlo senza fornire un'alternativa visibile rende la pagina
+  inutilizzabile senza mouse.}
+
+\subsection{Stati storici}
+
+Servono a \guillemotleft ricordare\guillemotright\ quali link sono già stati visitati.
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=css, name=storici.css]
+:link {          /* link non ancora visitati */
+  color: red;
+}
+
+:visited {       /* link gia' visitati */
+  color: darkred;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=storici.html]
+<a href="./js/">Nuovo link</a>
+<a href="./css/">Link visitato</a>
+\end{lstlisting}
+\risultato
+\begin{browser}[storici.html]
+  \textcolor{css-red}{\uline{Nuovo link}}\quad
+  \textcolor{css-darkred}{\uline{Link visitato}}
+\end{browser}
+\wtnota{Supponendo di aver già aperto in passato la pagina \code{./css/}.}
+\end{affianco}
+
+\warning{Gli stati storici e la privacy}{
+  Ciò che si può stilizzare su \code{:visited} è deliberatamente limitatissimo
+  (in pratica solo il colore): permettere di più consentirebbe a un sito
+  malevolo di scoprire quali altri siti l'utente ha visitato, misurando gli
+  effetti dello stile. Si noti inoltre che l'anteprima integrata di Visual
+  Studio Code non supporta gli stati storici: per verificarli occorre aprire la
+  pagina in Firefox o in un altro browser vero.}
+
+\subsection{Stati dei form}
+
+\begin{affianco}[0.58]
+\codicepiccolo
+\begin{lstlisting}[style=css, name=form-states.css]
+:disabled {
+  border: 2px dashed red;
+}
+
+:invalid {
+  color: red;
+}
+
+:checked ~ em {
+  color: deeppink;
+  font-weight: bold;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=form-states.html]
+<div>
+  <label for="mail">Messaggio:</label>
+  <input id="mail" type="email">
+  <button disabled>Annulla</button>
+  <button>Iscriviti</button>
+</div>
+<input type="checkbox"> Casella<br><br>
+<em>Che bel form!</em>
+\end{lstlisting}
+\risultato
+\begin{browser}[form-states.html]
+  Messaggio:\wtcampo[2.2cm]{\textcolor{css-red}{mario.rossi}}%
+  \tikz[baseline=(b.base)]{\node[draw=css-red, dashed, line width=1.2pt,
+    fill=neutral!6!white, inner sep=2.5pt, font=\wtuifont,
+    text=neutral!50!white] (b) {Annulla};}%
+  \wtbottone{Iscriviti}\\[5pt]
+  \wtcasella{1} Casella\\[8pt]
+  \textcolor{css-deeppink}{\textbf{\textit{Che bel form!}}}
+\end{browser}
+\wtnota{L'indirizzo è senza \code{@}, quindi \code{:invalid}: testo rosso.\\
+        La casella è spuntata, quindi l'\tg{em} diventa rosa e in grassetto.}
+\end{affianco}
+
+Da notare l'ultima regola: combinando \code{:checked} con il combinatore
+fratello generale si riesce a cambiare l'aspetto di un \textbf{altro} elemento
+in base allo stato di una casella di spunta, senza scrivere una riga di
+JavaScript.
+
+\info{Che cosa conta come \code{:invalid}}{
+  Un campo \code{type="email"} è considerato valido se contiene qualcosa che
+  somiglia a un indirizzo di posta. Tecnicamente possono esistere indirizzi
+  senza punto: \code{user@localhost} e \code{user@com} sono indirizzi
+  formalmente validi. La validazione del browser è quindi più permissiva di
+  quanto ci si aspetti, e non sostituisce mai la validazione lato server.}
+
+\subsection{Relazioni di posizione}
+
+% Risultato di posizioni.html. Argomenti: quale em e' rosso nel primo
+% paragrafo (0 nessuno, 1 Anna, 3 Carlo) e nel secondo (0 nessuno, 2 Bruno).
+\newcommand{\posrosso}[2]{\ifnum#1=1 \textcolor{css-red}{#2}\else #2\fi}
+\newcommand{\posizioni}[4]{%
+  {\Lora\large
+   \textit{\posrosso{\ifnum#1=1 1\else 0\fi}{Anna}}
+   \textbf{Bruno}
+   \textit{\posrosso{\ifnum#2=3 1\else 0\fi}{Carlo}}\\[2pt]
+   \textbf{Anna}
+   \textit{\posrosso{\ifnum#4=2 1\else 0\fi}{Bruno}}
+   \textbf{Carlo}}}
+\newcommand{\posizionibox}[4]{%
+  \raisebox{-0.45\height}{\fcolorbox{neutral!45!white}{white}{%
+    \begin{minipage}{3.9cm}\centering\vspace{2pt}%
+      \let\large\normalsize\posizioni{#1}{#2}{#3}{#4}\vspace{2pt}\end{minipage}}}}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{9.2cm}@{}}
+  \textbf{Pseudo-classe} & \textbf{Seleziona} \\
+  \code{:first-child}, \code{:last-child} & il primo (l'ultimo) figlio fra un
+        insieme di fratelli, \textbf{indipendentemente dal tag}. \\
+  \code{:only-child} & gli elementi che non hanno fratelli. \\
+  \code{:first-of-type}, \code{:last-of-type} & il primo (l'ultimo) fra i
+        fratelli, considerando \textbf{solo} gli elementi dello stesso tipo. \\
+  \code{:nth-child(n)}, \code{:nth-of-type(n)} & gli elementi che occupano la
+        posizione \textit{n} fra i loro fratelli. \\
+\end{tabular}
+\end{center}
+
+\warning{In CSS si conta a partire da 1}{
+  A differenza di quasi tutti i linguaggi di programmazione, l'indicizzazione in
+  CSS \textbf{parte da 1}. \code{:nth-child(1)} è il primo figlio, non il
+  secondo.}
+
+La distinzione fra \code{-child} e \code{-of-type} è la fonte di errori più
+comune, e conviene fissarla con un esempio.
+
+\begin{esempio}{\code{-child} contro \code{-of-type}}
+\begin{affianco}[0.6]
+\begin{lstlisting}[style=html, name=posizioni.html]
+<p>
+  <em>Anna</em> <strong>Bruno</strong> <em>Carlo</em>
+</p>
+<p>
+  <strong>Anna</strong> <em>Bruno</em> <strong>Carlo</strong>
+</p>
+\end{lstlisting}
+\risultato
+\begin{browser}[posizioni.html]
+  \posizioni{0}{0}{0}{0}
+\end{browser}
+\wtnota{Senza CSS: gli \tg{em} in corsivo, gli \tg{strong} in grassetto.}
+\end{affianco}
+
+Applicando cinque selettori diversi, con la regola \code{\{ color: red; \}}, si
+ottengono cinque risultati diversi.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}l@{\hspace{0.6cm}}c@{\hspace{0.6cm}}>{\raggedright\arraybackslash}p{9.6cm}@{}}
+  \textbf{Selettore} & \textbf{Risultato} & \textbf{Perché} \\[2pt]
+  \code{em:last-child} & \posizionibox{0}{3}{0}{0} &
+     \textit{Carlo} nel primo paragrafo: è l'ultimo figlio \textbf{ed} è un
+     \code{em}. Nel secondo paragrafo l'ultimo figlio è uno \code{strong},
+     quindi niente. \\[6pt]
+  \code{em:last-of-type} & \posizionibox{0}{3}{0}{2} &
+     \textit{Carlo} nel primo paragrafo e \textit{Bruno} nel secondo: in
+     entrambi è l'ultimo \code{em}, indipendentemente da che cosa venga dopo. \\[6pt]
+  \code{em:first-child} & \posizionibox{1}{0}{0}{0} &
+     \textit{Anna} nel primo paragrafo soltanto: nel secondo il primo figlio è
+     uno \code{strong}. \\[6pt]
+  \code{em:first-of-type} & \posizionibox{1}{0}{0}{2} &
+     \textit{Anna} nel primo paragrafo e \textit{Bruno} nel secondo. \\[6pt]
+  \code{em:nth-child(2)} & \posizionibox{0}{0}{0}{2} &
+     niente nel primo paragrafo (il secondo figlio è uno \code{strong}) e
+     \textit{Bruno} nel secondo. \\
+\end{tabular}
+\end{center}
+
+La regola da ricordare: \code{-child} conta \textbf{tutti} i fratelli e poi
+verifica il tipo; \code{-of-type} conta \textbf{solo} i fratelli dello stesso
+tipo.
+\end{esempio}
+
+\begin{esempio}{Righe alternate con \code{even} e \code{odd}}
+\code{:nth-child()} accetta anche le parole chiave \code{even} (pari) e
+\code{odd} (dispari), oltre a espressioni della forma \code{an+b}.
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=lezioni.html]
+<p>Lezioni:</p>
+<ol>
+  <li>Introduzione</li>
+  <li>HTML</li>
+  <li>CSS (basi)</li>
+  <li>CSS (framework e Sass)</li>
+  <li>JavaScript</li>
+</ol>
+\end{lstlisting}
+
+\begin{lstlisting}[style=css, name=lezioni.css]
+li:nth-child(even) {
+  color: red;
+}
+
+li:nth-child(odd) {
+  color: blue;
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[lezioni.html]
+  Lezioni:
+  \begin{enumerate}[leftmargin=1.9em, itemsep=0pt, topsep=2pt, parsep=0pt]
+    \item \textcolor{css-blue}{Introduzione}
+    \item \textcolor{css-red}{HTML}
+    \item \textcolor{css-blue}{CSS (basi)}
+    \item \textcolor{css-red}{CSS (framework e Sass)}
+    \item \textcolor{css-blue}{JavaScript}
+  \end{enumerate}
+\end{browser}
+\wtnota{Anche i numeri dell'elenco prendono il colore della riga.}
+\end{affianco}
+
+È il modo classico per ottenere le righe alternate di una tabella senza
+aggiungere classi a mano.
+\end{esempio}
+
+\subsection{Il conteggio senza selettore di tipo}
+
+Negli esempi visti finora la pseudo-classe era sempre preceduta da un tipo
+(\code{li:nth-child(even)}, \code{em:first-child}). Ma il tipo si può
+\textbf{omettere}: \code{:nth-child(even)} è equivalente a
+\code{*:nth-child(even)}, perché quando manca il selettore di tipo si sottintende
+quello universale.
+
+La conseguenza è che il conteggio riguarda \textbf{tutti} i fratelli, di
+qualunque tag: \code{even} corrisponde alle posizioni 2, 4, 6\ldots\ e
+\code{odd} alle posizioni 1, 3, 5\ldots
+
+\begin{esempio}{\code{:nth-child()} senza selettore di tipo}
+\begin{affianco}[0.55]
+\begin{lstlisting}[style=css, name=senza-tipo.css]
+:nth-child(odd)  { color: crimson; }
+:nth-child(even) { color: blue; }
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=senza-tipo.html]
+<h3>1. Intestazione</h3>
+<p>2. Paragrafo</p>
+<div>3. Contenitore
+  <p>1. Paragrafo annidato</p>
+  <p>2. Paragrafo annidato</p>
+</div>
+<p>4. Paragrafo</p>
+\end{lstlisting}
+\risultato
+\begin{browser}[senza-tipo.html]
+  {\Lora\bfseries\large\color{css-crimson}1. Intestazione}\\[5pt]
+  {\color{css-blue}2. Paragrafo}\\[5pt]
+  {\color{css-crimson}3. Contenitore}\\[3pt]
+  \hspace*{0.6em}{\color{css-crimson}1. Paragrafo annidato}\\[3pt]
+  \hspace*{0.6em}{\color{css-blue}2. Paragrafo annidato}\\[5pt]
+  {\color{css-blue}4. Paragrafo}
+\end{browser}
+\end{affianco}
+
+Nel \tg{body} ci sono quattro figli: l'intestazione è il primo (dispari,
+cremisi), il primo paragrafo il secondo (pari, blu), il \tg{div} il terzo
+(dispari, cremisi) e l'ultimo paragrafo il quarto (pari, blu).
+
+Il punto interessante sono i due paragrafi \textbf{annidati}: il conteggio
+\textbf{riparte da capo per ogni genitore}. Dentro al \tg{div} sono il primo e
+il secondo figlio, quindi tornano a essere dispari e pari, indipendentemente da
+quanti elementi li precedono nella pagina.
+\end{esempio}
+
+\warning{Il testo del contenitore non è un figlio}{
+  Nell'esempio, il \tg{div} contiene il testo \guillemotleft 3.
+  Contenitore\guillemotright\ e due paragrafi. Quel testo non è un elemento, quindi
+  non viene contato: i figli del \tg{div} sono \textbf{due}, non tre. Le
+  pseudo-classi di posizione contano soltanto gli \textbf{elementi}, mai i nodi
+  di testo.}
+
+\section{Pseudo-elementi}
+
+Gli \term{pseudo-elementi} permettono di agire su parti specifiche del contenuto
+di un elemento, \textbf{senza aggiungere marcatura HTML}. La sintassi usa i
+\textbf{doppi} due punti: \code{selettore::pseudo-elemento}.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{9.0cm}@{}}
+  \textbf{Pseudo-elemento} & \textbf{Bersaglio} \\
+  \code{::first-letter} & la prima lettera del contenuto di un elemento
+                          di tipo blocco. \\
+  \code{::first-line}   & la prima riga del contenuto di un elemento di tipo
+                          blocco. \\
+  \code{::selection}    & il contenuto attualmente selezionato dall'utente. \\
+  \code{::before}       & crea un elemento che diventa il \textbf{primo} figlio
+                          dell'elemento selezionato. \\
+  \code{::after}        & crea un elemento che diventa l'\textbf{ultimo} figlio
+                          dell'elemento selezionato. \\
+\end{tabular}
+\end{center}
+
+\begin{esempio}{Prima lettera, prima riga e selezione}
+\begin{affianco}[0.55]
+\codicepiccolo
+\begin{lstlisting}[style=html, name=pseudoelementi.html]
+<p>Uno studente era rimasto immobile davanti al computer per ore,
+con lo sguardo cupo. Stava cercando di scrivere una soluzione
+elegante a un problema difficile, ma non riusciva a trovare
+l'approccio giusto.</p>
+<p>Fu-Tzu lo colpi' sulla nuca e grido': "Scrivi qualcosa!" Lo
+studente comincio' a scrivere una soluzione brutta. Quando ebbe
+finito, comprese all'improvviso la soluzione elegante.</p>
+\end{lstlisting}
+\begin{lstlisting}[style=css, name=pseudoelementi.css]
+p::first-letter {
+  font-weight: bold;
+}
+
+p::first-line {
+  color: red;
+}
+
+p:last-child::selection {
+  background: red;
+  color: white;
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[pseudoelementi.html]
+  \raggedright
+  {\color{css-red}\textbf{U}no studente era rimasto immobile davanti al}\\
+  computer per ore, con lo sguardo cupo. Stava cercando di scrivere una
+  soluzione elegante a un problema difficile, ma non riusciva a trovare
+  l'approccio giusto.\par\vspace{6pt}
+  {\color{css-red}\textbf{F}u-Tzu lo colpì sulla nuca e gridò: «Scrivi}\\
+  qualcosa!» Lo studente cominciò a scrivere una soluzione brutta.
+  {\setlength{\fboxsep}{0.5pt}\colorbox{css-red}{\textcolor{white}{Quando ebbe
+  finito}}}, comprese all'improvviso la soluzione elegante.
+\end{browser}
+\wtnota{In entrambi i paragrafi la prima lettera è in grassetto e la prima riga
+        è rossa. Nel secondo, che è l'ultimo figlio, la parte selezionata con il
+        mouse diventa bianca su rosso.}
+\end{affianco}
+
+Si noti che \code{::first-line} dipende da come il testo viene effettivamente
+mandato a capo: allargando la finestra, la prima riga contiene parole diverse e
+la colorazione cambia di conseguenza. È una cosa che nessun markup statico
+potrebbe esprimere.
+\end{esempio}
+
+\begin{esempio}{Generare contenuto con \code{::before} e \code{::after}}
+\begin{affianco}[0.55]
+\codicepiccolo
+\begin{lstlisting}[style=html, name=dialogo.html]
+<p class="narrator">Un eremita passo' dieci anni
+a scrivere il programma perfetto.
+Annuncio' con orgoglio:</p>
+<p class="hermit">Il mio programma sa calcolare
+il moto delle stelle su un 286 con MS DOS.</p>
+<p class="narrator">Fu-Tzu rispose:</p>
+<p class="fu-tzu">Nessuno possiede piu' un 286,
+ne' usa MS DOS.</p>
+\end{lstlisting}
+
+\begin{lstlisting}[style=css, name=dialogo.css]
+.narrator::before {
+  content: "Narratore >> ";
+  font-weight: bold;
+}
+
+.narrator::after {
+  content: " <<";
+  font-weight: bold;
+}
+
+.hermit::before  { content: "Eremita: "; font-size: 24px; }
+.fu-tzu::before  { content: "Fu-Tzu: ";  font-size: 24px; }
+\end{lstlisting}
+
+\risultato
+\begin{browser}[dialogo.html]
+  \raggedright
+  \textbf{Narratore >{}> }Un eremita passò dieci anni a scrivere il
+  programma perfetto. Annunciò con orgoglio:\textbf{ <{}<}\par\vspace{6pt}
+  {\large Eremita: }Il mio programma sa calcolare il moto delle stelle
+  su un 286 con MS DOS.\par\vspace{6pt}
+  \textbf{Narratore >{}> }Fu-Tzu rispose:\textbf{ <{}<}\par\vspace{6pt}
+  {\large Fu-Tzu: }Nessuno possiede più un 286, né usa MS DOS.
+\end{browser}
+\wtnota{Nessuna delle scritte \textit{Narratore}, \textit{Eremita} e
+        \textit{Fu-Tzu} è presente nell'HTML: le genera il CSS.}
+\end{affianco}
+
+La proprietà \attr{content} è obbligatoria: senza di essa lo pseudo-elemento non
+viene generato affatto.
+\end{esempio}
+
+\error{Il contenuto generato non è vero contenuto}{
+  Il testo prodotto da \attr{content} vive solo nella presentazione: non è
+  presente nel DOM come nodo di testo normale, il comportamento dei lettori di
+  schermo nei suoi confronti è incoerente fra browser, e i motori di ricerca in
+  genere lo ignorano. Va usato per \textbf{decorazioni} (icone, virgolette,
+  separatori), mai per informazione che l'utente deve poter leggere o copiare.}
+
+\section{La cascata}
+
+Siamo arrivati alla \guillemotleft C\guillemotright\ di CSS.
+
+Può capitare che \textbf{due o più regole} si applichino allo stesso elemento, e
+che siano in \textbf{conflitto}, cioè assegnino valori diversi alla stessa
+proprietà. Chi vince?
+
+\dfn{Cascata}{
+  La \term{cascata} (\textit{cascade}) è l'algoritmo usato per risolvere questi
+  conflitti. Prende in ingresso l'insieme delle proprietà in conflitto che si
+  applicano a un elemento e restituisce un'unica proprietà, detta
+  \textit{cascaded}, da applicare effettivamente.}
+
+La cascata considera quattro aspetti, \textbf{nell'ordine}:
+
+\begin{enumerate}
+  \item origine e importanza;
+  \item livelli (\textit{layer});
+  \item specificità;
+  \item posizione e ordine di comparsa della regola.
+\end{enumerate}
+
+L'ordine è essenziale: si passa al criterio successivo \textbf{solo} se il
+precedente non ha deciso.
+
+\subsection{Origine e importanza}
+
+Il CSS che scriviamo noi (detto \term{authored CSS}) non è l'unico applicato a
+una pagina.
+
+\begin{itemize}
+  \item Esistono gli \term{user agent styles}, i fogli di stile inclusi per
+        impostazione predefinita dai browser.
+  \item Possono esistere \term{local user styles}, aggiunti da estensioni del
+        browser o a livello di sistema operativo, tipicamente per motivi di
+        \textbf{accessibilità}: una persona ipovedente potrebbe volere schemi di
+        colore ad alto contrasto e caratteri più grandi.
+\end{itemize}
+
+A queste tre origini si aggiunge la regola \code{!important}, che si scrive in
+coda alla dichiarazione e ne aumenta l'importanza:
+
+\begin{lstlisting}[style=css]
+h1 {
+  color: red !important;
+}
+\end{lstlisting}
+
+Combinando origine e importanza si ottengono sei livelli di priorità.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\footnotesize,
+      row/.style={draw=primary!60!black, line width=0.7pt, minimum width=7.2cm,
+                  minimum height=0.62cm, align=center, anchor=north}]
+    \node[row, fill=primary!4!white]  (a) at (0,0) {User Agent Styles};
+    \node[row, fill=primary!8!white,  below=0pt of a] (b) {Local User Styles};
+    \node[row, fill=primary!14!white, below=0pt of b] (c) {Authored Styles};
+    \node[row, fill=primary!22!white, below=0pt of c] (d) {Authored Styles \code{!important}};
+    \node[row, fill=primary!32!white, below=0pt of d] (e) {Local User Styles \code{!important}};
+    \node[row, fill=primary!45!white, below=0pt of e] (f) {User Agent Styles \code{!important}};
+
+    \draw[-{Stealth[length=7pt]}, line width=1.1pt, draw=accent!70!black]
+      ([xshift=-0.45cm]a.north west) -- ([xshift=-0.45cm]f.south west);
+    \node[font=\Lato\scriptsize, text=accent!70!black, anchor=south, rotate=90]
+      at ([xshift=-0.62cm]$(a.west)!0.5!(f.west)$) {priorità crescente};
+  \end{tikzpicture}
+  \caption{I sei bucket di origine e importanza, dal meno al più prioritario.}
+  \label{fig:cascade-origin}
+\end{figure}
+
+\info{Perché \code{!important} dello user agent vince su tutto}{
+  A prima vista sembra un'inversione assurda. La ragione è l'accessibilità: se
+  un utente ha impostato nel proprio browser o nel sistema operativo uno stile
+  ad alto contrasto marcato \code{!important}, nessun sito deve poterlo
+  scavalcare. Le esigenze dell'utente vengono prima di quelle dell'autore della
+  pagina.}
+
+\subsection{Livelli}
+
+All'interno di ciascun bucket di origine e importanza possono esistere più
+\term{livelli di cascata} (\textit{cascade layer}).
+
+\begin{itemize}
+  \item Livelli personalizzati possono essere definiti con la regola
+        \code{@layer} (che in questo corso non approfondiamo). Quelli dichiarati
+        \textbf{più tardi} hanno priorità maggiore.
+  \item Tutto il resto del CSS (quello dentro \tg{style} o importato con
+        \tg{link}) appartiene a un \textbf{livello senza nome}.
+  \item Gli \textbf{stili inline} appartengono a un livello a sé, con la
+        priorità più alta di tutte.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\footnotesize,
+      row/.style={draw=accent!55!black, line width=0.7pt, minimum width=7.2cm,
+                  minimum height=0.62cm, align=center, anchor=north}]
+    \node[row, fill=accent!4!white]  (a) at (0,0) {Livelli con nome (dichiarati per primi)};
+    \node[row, fill=accent!9!white,  below=0pt of a] (b) {Livelli con nome (dichiarati per ultimi)};
+    \node[row, fill=accent!16!white, below=0pt of b] (c) {Livello senza nome};
+    \node[row, fill=accent!26!white, below=0pt of c] (d) {Stili inline};
+
+    \draw[-{Stealth[length=7pt]}, line width=1.1pt, draw=primary!70!black]
+      ([xshift=-0.45cm]a.north west) -- ([xshift=-0.45cm]d.south west);
+    \node[font=\Lato\scriptsize, text=primary!70!black, anchor=south, rotate=90]
+      at ([xshift=-0.62cm]$(a.west)!0.5!(d.west)$) {priorità crescente};
+  \end{tikzpicture}
+  \caption{I livelli di cascata dentro un singolo bucket.}
+  \label{fig:cascade-layers}
+\end{figure}
+
+\subsection{Specificità}
+
+Quando due regole in conflitto appartengono allo \textbf{stesso} bucket di
+origine-importanza \textbf{e} allo stesso livello, si considera la
+\term{specificità}. L'idea è che debba vincere il selettore \textbf{più
+specifico}.
+
+\begin{affianco}[0.46]
+\begin{lstlisting}[style=css, name=cascade.css]
+.primary {
+  color: blue;
+}
+
+h1 {
+  color: red;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=cascade.html]
+<h1 class="primary">Cascading!</h1>
+\end{lstlisting}
+\risultato
+\begin{browser}[cascade.html]
+  {\Lora\bfseries\Huge\textcolor{css-blue}{Cascading!}}
+\end{browser}
+\begin{devtools}{Analisi pagina}
+  \dtgruppo{Regole dell'elemento \texttt{<h1 class="primary">}}
+  \dtregola{.primary}{cascade.css:1}
+  \dtdich{color}{blue}
+  \dtchiudi
+  \dtregola{h1}{cascade.css:5}
+  \dtbarrata{color}{red}
+  \dtchiudi
+  \dtregola{h1}{(user agent) html.css}
+  \dtdich{display}{block}
+  \dtdich{font-size}{2em}
+  \dtdich{font-weight}{bold}
+  \dtchiudi
+\end{devtools}
+\wtnota{Il pannello degli stili dei DevTools: in alto la regola più specifica,
+        barrata la dichiarazione che ha perso.}
+\end{affianco}
+
+Il titolo diventa \textbf{blu}: il selettore di classe è più specifico del
+selettore di tipo, anche se compare prima.
+
+Il CSS definisce con precisione come calcolare la specificità di un selettore:
+
+\begin{itemize}
+  \item si ignora il selettore universale;
+  \item si conta il numero di selettori di \textbf{id} \quad ($= A$);
+  \item si conta il numero di selettori di \textbf{classe}, di
+        \textbf{attributo} e di \textbf{pseudo-classe} \quad ($= B$);
+  \item si conta il numero di selettori di \textbf{tipo} e di
+        \textbf{pseudo-elemento} \quad ($= C$).
+\end{itemize}
+
+La specificità è la \textbf{terna numerica} $(A, B, C)$ così calcolata.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.4cm}}c@{}}
+  \textbf{Selettore} & \textbf{Specificità} $(A,B,C)$ \\
+  \code{\#id}                                    & $(1, 0, 0)$ \\
+  \code{em.master[target]}                       & $(0, 2, 1)$ \\
+  \code{\#navbar ul li a.nav-link[href*='/']}    & $(1, 2, 3)$ \\
+  \code{article.item section p::first-letter}    & $(0, 1, 4)$ \\
+  \code{a:hover}                                 & $(0, 1, 1)$ \\
+  \code{*}                                       & $(0, 0, 0)$ \\
+\end{tabular}
+\end{center}
+
+Il confronto fra due specificità avviene considerando le tre componenti
+\textbf{in ordine}:
+
+\begin{itemize}
+  \item vince la specificità con $A$ maggiore;
+  \item a parità di $A$, vince quella con $B$ maggiore;
+  \item a parità anche di $B$, vince quella con $C$ maggiore;
+  \item se tutti e tre i valori coincidono, le due specificità sono uguali.
+\end{itemize}
+
+\warning{Non è un numero a tre cifre}{
+  La terna \textbf{non} va letta come il numero $ABC$: le componenti non si
+  \guillemotleft riportano\guillemotright. Un solo selettore di id, con specificità $(1,0,0)$,
+  batte undici selettori di classe, che valgono $(0,11,0)$. Nessuna quantità di
+  classi potrà mai superare un id.}
+
+\begin{esempio}{Confronti di specificità}
+\begin{center}
+\renewcommand{\arraystretch}{1.45}
+\begin{tabular}{@{}l@{\hspace{0.7cm}}c@{\hspace{0.9cm}}l@{\hspace{0.7cm}}c@{\hspace{0.9cm}}c@{}}
+  \textbf{Selettore 1} & \textbf{Spec. 1} & \textbf{Selettore 2} & \textbf{Spec. 2} & \textbf{Vince} \\
+  \code{a[target]} & $(0,1,1)$ & \code{.list a} & $(0,1,1)$ & pareggio \\
+  \code{\#msg} & $(1,0,0)$ & \code{input[type].inp} & $(0,2,1)$ & il 1\textsuperscript{o} \\
+  \code{\#nav > \#brd a.lk} & $(2,1,1)$ & \code{em.foo.bar.light} & $(0,3,1)$ & il 1\textsuperscript{o} \\
+  \code{[id='nav'] a} & $(0,1,1)$ & \code{\#nav a} & $(1,0,1)$ & il 2\textsuperscript{o} \\
+\end{tabular}
+\end{center}
+
+L'ultimo caso è istruttivo: \code{[id='nav']} e \code{\#nav} selezionano
+esattamente lo stesso elemento, ma il primo è un selettore di attributo
+($B$) e il secondo un selettore di id ($A$). A parità di risultato, la
+specificità è diversa.
+\end{esempio}
+
+\subsection{Posizione e ordine di comparsa}
+
+Quando due proprietà appartengono allo stesso bucket, allo stesso livello e
+hanno la stessa specificità, vince l'\textbf{ultima a comparire}.
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=css, name=cascade.css]
+h1 {
+  color: red;
+}
+
+h1 {
+  color: blue;   /* vince questa: e' l'ultima */
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[cascade.html]
+  {\Lora\bfseries\Huge\textcolor{css-blue}{Cascading!}}
+\end{browser}
+\end{affianco}
+
+La regola si applica sia all'interno dello stesso foglio di stile, sia
+all'ordine con cui i fogli di stile compaiono nel documento.
+
+\begin{affianco}[0.55]
+\begin{lstlisting}[style=html, name=ordine.html]
+<head>
+  <meta charset="UTF-8">
+  <title>Cascading</title>
+  <link rel="stylesheet" href="blue.css">
+  <link rel="stylesheet" href="red.css">
+</head>
+<body>
+  <h1>Cascading!</h1>
+</body>
+\end{lstlisting}
+\begin{minipage}[t]{0.48\linewidth}
+\begin{lstlisting}[style=css, name=blue.css]
+h1 {
+  color: blue;
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\linewidth}
+\begin{lstlisting}[style=css, name=red.css]
+h1 {
+  color: red;
+}
+\end{lstlisting}
+\end{minipage}
+\risultato
+\begin{browser}[ordine.html]
+  {\Lora\bfseries\Huge\textcolor{css-red}{Cascading!}}
+\end{browser}
+\end{affianco}
+
+Se \code{blue.css} contiene \code{h1 \{ color: blue; \}} e \code{red.css}
+contiene \code{h1 \{ color: red; \}}, il titolo sarà \textbf{rosso}: \code{red.css}
+è collegato per ultimo.
+
+\subsection{Riepilogo dell'algoritmo}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      q/.style={rounded corners=3pt, draw=primary!65!black, line width=0.8pt,
+                fill=primary!8!white, align=center, minimum width=2.5cm,
+                minimum height=1.15cm, inner sep=3pt},
+      r/.style={rounded corners=3pt, draw=accent!60!black, line width=0.8pt,
+                fill=accent!10!white, align=center, minimum width=2.5cm,
+                minimum height=0.95cm, inner sep=3pt, font=\Lato\scriptsize},
+      w/.style={rounded corners=3pt, draw=green-gradient-6, line width=0.9pt,
+                fill=green-gradient-1!50!white, align=center,
+                minimum width=2.3cm, minimum height=0.95cm, inner sep=3pt},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+                draw=neutral!45!black},
+      lb/.style={font=\Lato\scriptsize, fill=white, inner sep=1.5pt}]
+
+    \node[q] (q1) at (0,0)   {Stesso bucket\\origine/importanza?};
+    \node[q] (q2) at (3.9,0) {Stesso\\livello?};
+    \node[q] (q3) at (7.8,0) {Stessa\\specificità?};
+    \node[w]  (w)  at (11.5,0) {Vince\\l'ultima\\a comparire};
+
+    \node[r] (r1) at (0,-2.1)   {Vince il bucket\\più prioritario};
+    \node[r] (r2) at (3.9,-2.1) {Vince il livello\\più prioritario};
+    \node[r] (r3) at (7.8,-2.1) {Vince il selettore\\più specifico};
+
+    \draw[a] (q1) -- node[lb]{sì} (q2);
+    \draw[a] (q2) -- node[lb]{sì} (q3);
+    \draw[a] (q3) -- node[lb]{sì} (w);
+
+    \draw[a] (q1) -- node[lb]{no} (r1);
+    \draw[a] (q2) -- node[lb]{no} (r2);
+    \draw[a] (q3) -- node[lb]{no} (r3);
+  \end{tikzpicture}
+  \caption{L'algoritmo della cascata: si scende di criterio solo in caso di parità.}
+  \label{fig:cascade-flow}
+\end{figure}
+
+\info{Vedere la cascata nei DevTools}{
+  Il pannello degli stili dei DevTools mostra tutte le regole che si applicano
+  all'elemento selezionato, ordinate dalla più specifica (in alto) alla meno
+  specifica (in basso), con \textbf{barrate} le dichiarazioni che hanno perso il
+  confronto. È il modo più rapido per capire perché una regola \guillemotleft non
+  funziona\guillemotright. Gli stili dello user agent sono nascosti per impostazione
+  predefinita: per vederli basta premere \code{F1} nei DevTools e cambiare le
+  impostazioni. Un esempio di questo pannello è accanto all'esempio sulla
+  specificità, poco sopra.}
+
+\section{Ereditarietà}
+
+Alcune proprietà CSS vengono \term{ereditate} dagli elementi antenati, se non è
+stato impostato un valore specifico.
+
+Le proprietà ereditabili sono soprattutto quelle legate al testo, come
+\attr{color}, \attr{font-size}, \attr{font-family}, \attr{font-weight} e
+\attr{font-style}.
+
+\begin{esempio}{Ereditarietà in azione}
+\begin{affianco}[0.46]
+\begin{lstlisting}[style=css, name=eredita.css]
+p {
+  font-family: sans-serif;
+  color: red;
+  font-style: normal;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=eredita.html]
+<p>
+  Hello <em>Inheritance</em>
+</p>
+\end{lstlisting}
+\risultato
+\begin{browser}[eredita.html]
+  {\Lato\large\color{css-red}Hello \textit{Inheritance}}
+\end{browser}
+\begin{devtools}{Analisi pagina}
+  \dtgruppo{Regole dell'elemento \texttt{<em>}}
+  \dtregola{i, cite, em, var, dfn}{(user agent) html.css}
+  \dtdich{font-style}{italic}
+  \dtchiudi
+  \dtgruppo{Ereditato da p}
+  \dtregola{p}{eredita.css:1}
+  \dtdich{font-family}{sans-serif}
+  \dtdich{color}{red}
+  \dtbarrata{font-style}{normal}
+  \dtchiudi
+\end{devtools}
+\wtnota{Selezionando l'\tg{em} nei DevTools: \code{font-style: normal}
+        ereditato dal \tg{p} è barrato, perché perde contro la regola
+        del browser che si applica direttamente all'\tg{em}.}
+\end{affianco}
+
+L'elemento \tg{em} non ha regole proprie, eppure diventa rosso e senza grazie:
+eredita \attr{color} e \attr{font-family} dal \tg{p} che lo contiene.
+
+Resta invece \textbf{in corsivo}, nonostante il padre dichiari
+\code{font-style: normal}. Il motivo è che l'\tg{em} ha una regola propria che
+gli assegna il corsivo: quella dello user agent stylesheet. Un valore ereditato
+non compete con una regola che si applica direttamente all'elemento --- perde
+sempre.
+\end{esempio}
+
+\warning{L'ereditarietà ha la priorità più bassa in assoluto}{
+  Le proprietà ereditate hanno la specificità più bassa fra tutti i metodi di
+  stilizzazione: \textbf{qualunque} regola che si applichi direttamente
+  all'elemento le sovrascrive, compresi gli stili predefiniti del browser. È
+  esattamente ciò che accade nell'esempio qui sopra, ed è uno degli inganni più
+  frequenti quando si comincia con il CSS.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Learn CSS} --- web.dev. Sezioni 1, da 3 a 6, 14 e 15. \\
+        \urlx{https://web.dev/learn/css/}
+  \item \textbf{Introducing the CSS Cascade} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Web/CSS/Cascade}
+  \item \textbf{Flukeout} --- un gioco per imparare i selettori CSS. \\
+        \urlx{https://flukeout.github.io/}
+\end{itemize}

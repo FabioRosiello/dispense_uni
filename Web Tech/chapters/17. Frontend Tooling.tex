@@ -1,0 +1,585 @@
+\chapter{Strumenti di front-end}
+
+Abbiamo iniziato dalle tecnologie fondamentali (HTML, CSS, JavaScript),
+costruito pagine statiche e poi siamo passati alla programmazione lato server.
+Le pagine che generavamo dinamicamente restavano però semplici: un solo foglio
+di stile, pochissimo JavaScript lato client, nessuna libreria esterna.
+
+I front-end moderni sono molto più complessi:
+
+\begin{itemize}
+  \item il codice JavaScript lato client è sempre più articolato;
+  \item si usano molte librerie e moduli;
+  \item si transpila e si applica il \textit{downleveling};
+  \item si ottimizzano i file serviti;
+  \item si usano spesso pre- e post-processori per i fogli di stile.
+\end{itemize}
+
+Servono strumenti per assistere lo sviluppatore e automatizzare questi
+passaggi.
+
+\section{Pre- e post-processori CSS}
+
+Il CSS di per sé può essere piacevole, ma i fogli di stile diventano presto
+grandi, complessi e difficili da mantenere. Gli strumenti di pre- e
+post-elaborazione permettono di creare in modo efficiente fogli di stile
+robusti, scalabili e ottimizzati.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      n/.style={wtnode, minimum width=2.9cm, minimum height=1.0cm},
+      f/.style={wtnodeplain, minimum width=2.2cm, minimum height=0.9cm},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                draw=neutral!45!black}]
+
+    \node[f] (src) at (0,0) {file sorgente};
+    \node[n, draw=orange-gradient-6, fill=orange-gradient-1!40!white]
+      (pre) at (3.4,0) {\textbf{Pre-processore}};
+    \node[f] (c1) at (6.5,0) {CSS};
+    \node[n, draw=azure-gradient-6, fill=azure-gradient-1!45!white]
+      (post) at (9.6,0) {\textbf{Post-processore}};
+    \node[f] (c2) at (12.6,0) {CSS};
+
+    \draw[a] (src) -- (pre);
+    \draw[a] (pre) -- (c1);
+    \draw[a] (c1) -- (post);
+    \draw[a] (c2.south) -- ++(0,-0.9) node[below, font=\Lato\scriptsize,
+                                          text=neutral!30!black] {browser};
+    \draw[a] (post) -- (c2);
+  \end{tikzpicture}
+  \caption{La catena di elaborazione di un foglio di stile moderno.}
+  \label{fig:css-pipeline}
+\end{figure}
+
+\subsection{Pre-processori}
+
+I \term{pre-processori CSS} sono \guillemotleft compilatori\guillemotright\ speciali che generano
+codice CSS a partire da file scritti in una sintassi propria. Tale sintassi si
+può vedere come un'\textbf{estensione} del CSS di base, che introduce
+funzionalità nuove (per esempio le variabili) per scrivere fogli di stile
+manutenibili in modo più efficiente.
+
+I più diffusi sono \term{Sass}, \term{LESS} e \term{Stylus}.
+
+\subsection{Post-processori}
+
+I \term{post-processori} elaborano e trasformano automaticamente fogli di stile
+già esistenti. Si usano tipicamente per:
+
+\begin{itemize}
+  \item \textbf{downleveling}, cioè riscrivere costrutti recenti in forme
+        comprese da browser più vecchi:
+\end{itemize}
+
+\begin{lstlisting}[style=css]
+/* prima */                  /* dopo */
+body {                       body {
+  color: oklch(61% 0.2 29);    color: rgb(225, 65, 52);
+}                            }
+\end{lstlisting}
+
+\begin{itemize}
+  \item \textbf{autoprefissatura}, cioè aggiungere i prefissi specifici dei
+        browser:
+\end{itemize}
+
+\begin{lstlisting}[style=css]
+/* prima */                  /* dopo */
+.example {                   .example {
+  transition: all .5s;         -webkit-transition: all .5s;
+}                              -o-transition: all .5s;
+                               transition: all .5s;
+                             }
+\end{lstlisting}
+
+\begin{itemize}
+  \item \textbf{ottimizzazioni}, come la minificazione o l'eliminazione delle
+        parti inutilizzate;
+  \item \textbf{imposizione di convenzioni} e rilevamento di errori.
+\end{itemize}
+
+Il post-processore più diffuso è \term{PostCSS}.
+
+\section{Sass}
+
+\term{Sass} si autodefinisce \guillemotleft CSS con i superpoteri\guillemotright\ ed è attualmente il
+pre-processore CSS più diffuso. Esiste dal 2006. Gli altri pre-processori
+offrono grosso modo le stesse funzionalità con una sintassi leggermente diversa.
+
+\begin{lstlisting}[style=shell]
+npm install -g sass
+\end{lstlisting}
+
+\subsection{Due sintassi}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.3cm}@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{6.3cm}@{}}
+  \textbf{Sintassi SCSS} & \textbf{Sintassi indentata} \\
+  Estensione \code{.scss}. & Estensione \code{.sass}. \\
+  È un \textbf{superset} del CSS: qualunque CSS valido è SCSS valido.
+  & Basata sull'indentazione, come Python. \\
+  È la sintassi più diffusa. & Era la sintassi originale. \\
+\end{tabular}
+\end{center}
+
+\subsection{Variabili}
+
+Le variabili permettono di riusare valori in tutto il foglio di stile. Al momento
+della compilazione vengono sostituite dal loro valore.
+
+\begin{lstlisting}[style=css, name=file.scss]
+$font-stack: Helvetica, sans-serif;
+$primary-color: #333;
+
+body {
+  font: $font-stack;
+  color: $primary-color;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=css, name=file.css]
+body {
+  font: Helvetica, sans-serif;
+  color: #333;
+}
+\end{lstlisting}
+
+\subsection{Annidamento}
+
+In HTML esiste una chiara gerarchia di elementi annidati; nel CSS puro non
+possiamo avere regole annidate. Sass lo permette, e rende il codice più
+leggibile.
+
+\begin{lstlisting}[style=css, name=nesting.scss]
+nav {
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  li { display: inline-block; }
+
+  a {
+    display: block;
+    padding: 6px 12px;
+    text-decoration: none;
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=css, name=nesting.css]
+nav ul { margin: 0; padding: 0; list-style: none; }
+nav li { display: inline-block; }
+nav a  { display: block; padding: 6px 12px; text-decoration: none; }
+\end{lstlisting}
+
+\warning{Annidare troppo è una cattiva pratica}{
+  Ogni livello di annidamento aggiunge un elemento al selettore generato, e
+  quindi aumenta la \textbf{specificità}. Selettori troppo specifici sono
+  difficili da sovrascrivere e rendono il foglio di stile fragile: torna qui
+  tutto quello che abbiamo studiato sulla cascata nel capitolo 3. Come regola
+  pratica, non superare i tre livelli.}
+
+\subsection{Mixin}
+
+I \term{mixin} permettono di riusare un gruppo di dichiarazioni. Si dichiarano
+con la regola \code{@mixin} e si includono con \code{@include}.
+
+\begin{lstlisting}[style=css, name=mixins.scss]
+@mixin clear-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  li {
+    display: inline-block;
+  }
+}
+
+nav ul {
+  background-color: aliceblue;
+  @include clear-list;
+}
+\end{lstlisting}
+
+I mixin possono anche avere parametri, con valori predefiniti:
+
+\begin{lstlisting}[style=css, name=theme.scss]
+@mixin theme($color: DarkBlue) {
+  background: $color;
+  color: #fff;
+}
+
+.info   { @include theme; }
+.danger { @include theme($color: DarkRed); }
+\end{lstlisting}
+
+\subsection{Moduli e parziali}
+
+\begin{lstlisting}[style=css, name=base.scss]
+$font-stack: Helvetica, sans-serif;
+$primary-color: #333;
+
+body {
+  font: $font-stack;
+  color: $primary-color;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=css, name=example.scss]
+@use 'base';
+
+.inverse {
+  background: base.$primary-color;
+  color: white;
+}
+\end{lstlisting}
+
+I file Sass il cui nome inizia con un trattino basso sono detti \term{parziali}:
+sono pensati solo per essere inclusi da altri file, e Sass non genera per essi
+un file CSS autonomo. Un file che raccoglie tutte le variabili è un buon esempio
+di parziale.
+
+\begin{lstlisting}[style=css, name=_variables.scss]
+$primary-color: purple;
+$accent-color: orange;
+$background-color: beige;
+\end{lstlisting}
+
+\subsection{Liste, mappe e controllo di flusso}
+
+\begin{lstlisting}[style=css]
+$list: (120px, 240px, 480px, 800px);
+$map: ("xs": 480px, "md": 768px, "lg": 1024px);
+\end{lstlisting}
+
+Sass offre regole per decidere \textbf{se} emettere degli stili, o per emetterli
+più volte con piccole variazioni: si può pensarlo come un motore di template per
+generare CSS. Sono disponibili \code{@if}/\code{@else}, \code{@each},
+\code{@for} e \code{@while}.
+
+\begin{lstlisting}[style=css, name=avatar.scss]
+@use "sass:math";
+
+@mixin avatar($size, $circle: false) {
+  width: $size;
+  height: $size;
+
+  @if $circle {
+    border-radius: math.div($size, 2);
+  }
+}
+
+.square-av { @include avatar(100px, $circle: false); }
+.circle-av { @include avatar(100px, $circle: true);  }
+\end{lstlisting}
+
+\begin{lstlisting}[style=css, name=hidden.scss]
+$sizes: ("xs": 480px, "md": 768px, "lg": 1024px);
+
+@each $sizeName, $sizeMaxWidth in $sizes {
+  @media screen and (max-width: $sizeMaxWidth) {
+    .hidden-#{$sizeName} {
+      display: none;
+    }
+  }
+}
+\end{lstlisting}
+
+Da tre righe di dichiarazione si generano tre media query complete: è
+esattamente il tipo di ripetizione che rende ingestibili i fogli di stile
+scritti a mano.
+
+\section{Framework CSS}
+
+Anche scrivendo il CSS del front-end ci si ritrova a risolvere sempre gli stessi
+problemi: creare un sistema di impaginazione, definire una tipografia coerente,
+dare stile a tabelle, liste e componenti, azzerare gli stili predefiniti dei
+browser per ottenere un aspetto uniforme.
+
+Esistono molti \term{framework CSS} che forniscono un insieme di stili di uso
+generale, utilizzabili così come sono oppure come base da rifinire. Fra i più
+diffusi: \term{Bootstrap} (il più popolare, originariamente di Twitter),
+\term{Tailwind} (noto per l'approccio \textit{utility-first}),
+\term{Materialize}, \term{Foundation}, \term{Bulma}, \term{PureCSS}.
+
+\info{Non sono framework in senso stretto}{
+  Nonostante il nome, non sono framework come quelli visti nel capitolo 13: non
+  c'è inversione del controllo, non chiamano il nostro codice. Sono
+  \textbf{insiemi di fogli di stile} da importare, con classi da applicare agli
+  elementi.}
+
+I framework sono uno o più file CSS: basta importarli nelle nostre pagine e
+usare le classi che forniscono. Si possono scaricare e servire dal proprio
+server, oppure si può ricorrere a una \term{CDN} (\textit{Content Delivery
+Network}) che li ospita per noi --- comodo per prototipare, ma con qualche
+implicazione sulla privacy, dato che ogni visitatore contatta un server di terze
+parti.
+
+\subsection{Personalizzare un framework}
+
+Potremmo non volere che il nostro sito assomigli a tutti gli altri costruiti con
+lo stesso framework, e gli stili predefiniti potrebbero non soddisfare
+esigenze particolari. Ci sono due strade:
+
+\begin{itemize}
+  \item la maggior parte dei framework CSS è costruita con Sass o strumenti
+        simili: si possono \textbf{cambiare le variabili} di build (colori,
+        caratteri, dimensioni) e ricompilare il framework;
+  \item si possono definire stili personalizzati che \textbf{sovrascrivono}
+        alcuni stili del framework.
+\end{itemize}
+
+\begin{lstlisting}[style=css, name=custom.scss]
+// sovrascrittura delle variabili di Bootstrap
+$primary: #00647a;
+$secondary: rgb(254, 203, 110);
+
+@import "../node_modules/bootstrap/scss/bootstrap.scss";
+\end{lstlisting}
+
+Compilando con Sass si ottiene la propria versione personalizzata di Bootstrap.
+
+\section{Bundling e minificazione}
+
+\subsection{Bundling}
+
+\dfn{Bundling}{
+  Il \term{bundling} combina più file CSS o JavaScript in un unico file, così
+  che il browser effettui \textbf{meno richieste HTTP} per caricare una
+  pagina.}
+
+Le richieste HTTP aggiuntive introducono latenza. Le strategie di caching
+aiutano nei caricamenti successivi, ma includere molti fogli di stile e molti
+script ha comunque un impatto sul \textbf{primo} caricamento: il bundling è
+un'ottimizzazione ampiamente adottata.
+
+\begin{lstlisting}[style=html, name=prima.html]
+<link rel="stylesheet" href="a.css">
+<link rel="stylesheet" href="b.css">
+<!-- altri fogli di stile -->
+<script type="javascript" src="a.js"></script>
+<script type="javascript" src="b.js"></script>
+<script type="javascript" src="c.js"></script>
+<!-- altri script -->
+\end{lstlisting}
+
+\begin{lstlisting}[style=html, name=dopo.html]
+<link rel="stylesheet" href="bundle.css">
+<script type="javascript" src="bundle.js"></script>
+\end{lstlisting}
+
+\warning{L'ordine conta}{
+  L'ordine in cui i singoli file vengono accodati nel bundle è significativo: per
+  il CSS decide chi vince nella cascata a parità di specificità, per JavaScript
+  decide quali definizioni sono disponibili al momento dell'esecuzione.}
+
+\info{Una nota storica}{
+  Prima che i moduli ES fossero disponibili nei browser non esisteva alcun modo
+  di scrivere codice JavaScript modulare lato client. Strumenti come
+  \term{Webpack}, \term{Rollup} e \term{Parcel} nacquero proprio per concatenare
+  tutti i moduli sorgente in una forma che i browser potessero comprendere.}
+
+\subsection{Tree shaking}
+
+I \textit{bundler} eseguono spesso anche il \term{tree shaking}, cioè
+l'eliminazione del codice morto.
+
+Spesso ci serve solo una parte delle funzionalità dei moduli che importiamo, e i
+moduli possono essere piuttosto grandi: includere un intero modulo quando ne
+usiamo una sola funzione è inefficiente. Il tree shaking analizza importazioni ed
+esportazioni per \textbf{potare} dal bundle finale tutto il codice inutilizzato,
+con un impatto notevole sulla dimensione e quindi sulle prestazioni.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      m/.style={rounded corners=3pt, draw=primary!60!black, line width=0.7pt,
+                fill=primary!10!white, minimum width=2.6cm, minimum height=0.55cm},
+      f/.style={rounded corners=2pt, draw=neutral!50!white, line width=0.6pt,
+                fill=neutral!8!white, minimum width=1.15cm, minimum height=0.5cm},
+      d/.style={f, draw=red-gradient-5, fill=red-gradient-1!30!white},
+      a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt,
+                draw=neutral!45!black}]
+
+    \node[f] (i) at (4.3,-1.6) {index.js};
+
+    \node[m] (ma) at (1.4,-0.7) {Modulo A};
+    \node[m] (mb) at (4.3,-0.7) {Modulo B};
+    \node[m] (mc) at (7.2,-0.7) {Modulo C};
+
+    \foreach \x/\lab/\st in {0.2/f1/f, 1.4/f2/f, 2.6/f3/d,
+                             3.7/f4/d, 4.9/f5/f, 6.1/f6/f, 7.3/f7/f, 8.5/f8/f} {
+      \node[\st] at (\x,0.4) {\lab};
+    }
+
+    \draw[a] (ma) -- (i);
+    \draw[a] (mb) -- (i);
+    \draw[a] (mc) -- (i);
+
+    \node[font=\Lato\scriptsize, text=red-gradient-6!75!black, anchor=west]
+      at (9.4,0.4) {codice inutilizzato:};
+    \node[font=\Lato\scriptsize, text=red-gradient-6!75!black, anchor=west]
+      at (9.4,0.0) {escluso dal bundle};
+  \end{tikzpicture}
+  \caption{Il tree shaking esclude dal bundle il codice mai raggiunto.}
+  \label{fig:tree-shaking}
+\end{figure}
+
+\subsection{Minificazione}
+
+Quando scriviamo codice, l'indentazione e i nomi significativi delle variabili
+sono essenziali per leggibilità, comprensibilità e manutenibilità. Ai browser,
+però, non serve codice leggibile: possiamo ottimizzare il trasferimento
+rimuovendo gli spazi \guillemotleft superflui\guillemotright\ e accorciando il codice senza
+alterarne il funzionamento. È la \term{minificazione}.
+
+\begin{lstlisting}[style=js, name=originale.js (188 byte)]
+let msg = "Hello";
+let name = "Web Technologies";
+let str = `${msg}, ${name}!`;
+let b = true;
+if (b === true)
+  document.getElementById('msg').innerHTML = str;
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=minificato.js (123 byte)]
+let msg="Hello",name="Web Technologies",str=`${msg},${name}!`,b=!0;!0===b&&
+(document.getElementById("msg").innerHTML=str);
+\end{lstlisting}
+
+Una compressione del 34,57\%, cioè 65 byte risparmiati. L'effetto è tanto
+maggiore quanto più grandi sono i file sorgente:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}r@{\hspace{1.0cm}}r@{\hspace{1.0cm}}r@{}}
+  \textbf{Libreria} & \textbf{Originale} & \textbf{Minificata} &
+  \textbf{Risparmio} \\
+  React 18.2.0     & $\sim$85 kB  & $\sim$25 kB & $\sim$70\% \\
+  Moment.js 2.29.4 & $\sim$151 kB & $\sim$75 kB & $\sim$50\% \\
+\end{tabular}
+\end{center}
+
+\section{Vite}
+
+\term{Vite} (si pronuncia \guillemotleft vit\guillemotright) è uno strumento che assiste lo
+sviluppatore sia in fase di sviluppo sia in fase di rilascio. Ha due componenti
+chiave:
+
+\begin{itemize}
+  \item un \textbf{server di sviluppo} con numerose funzionalità avanzate per
+        snellire il lavoro;
+  \item uno \textbf{strumento di build} per creare risorse statiche altamente
+        ottimizzate, pronte per la produzione.
+\end{itemize}
+
+\begin{lstlisting}[style=shell]
+npm create vite@latest
+\end{lstlisting}
+
+Il comando chiede il nome del progetto, il framework (Vanilla, Vue, React,
+Preact, Lit, Svelte, Solid, Qwik) e la variante (JavaScript o TypeScript), poi
+genera lo scheletro del progetto.
+
+\begin{lstlisting}[style=json, name=package.json]
+{
+  "name": "hello-vite",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "vite": "^5.0.8"
+  }
+}
+\end{lstlisting}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.2cm}}>{\raggedright\arraybackslash}p{8.8cm}@{}}
+  \textbf{Comando} & \textbf{Effetto} \\
+  \code{dev}     & avvia il server di sviluppo. Vite osserva le modifiche ai
+                   file sorgente e ricarica automaticamente l'applicazione
+                   (\textit{live reload}). \\
+  \code{build}   & genera un bundle ottimizzato, pronto per la produzione. \\
+  \code{preview} & è un semplice server statico che serve i file generati
+                   durante la fase di build. \\
+\end{tabular}
+\end{center}
+
+\subsection{Aggiungere Sass}
+
+\begin{lstlisting}[style=shell]
+npm install -D sass
+\end{lstlisting}
+
+Basta poi creare un foglio di stile Sass e importarlo nel file \code{main.ts}:
+Vite rileva automaticamente che si tratta di un file Sass, lo compila e lo
+include nel bundle dopo il file CSS originale.
+
+\subsection{Che cosa fa la build}
+
+\begin{console}[Terminale]
+$ npm run build
+
+> hello-vite@0.0.0 build
+> tsc && vite build
+
+vite v5.0.10 building for production...
+ 8 modules transformed.
+dist/index.html                   0.46 kB | gzip: 0.29 kB
+dist/assets/index-v5kLGx6_.css    1.21 kB | gzip: 0.63 kB
+dist/assets/index-DiAK_ebR.js     3.05 kB | gzip: 1.62 kB
+ built in 173ms
+\end{console}
+
+In una sola invocazione Vite ha:
+
+\begin{itemize}
+  \item analizzato quali risorse statiche sono effettivamente usate;
+  \item compilato i file Sass in CSS e quelli TypeScript in JavaScript;
+  \item riunito i file Sass e CSS in un unico file, e i file JavaScript in un
+        altro;
+  \item minificato i bundle;
+  \item applicato il \term{fingerprinting} ai nomi dei file finali;
+  \item spostato tutto nella directory \code{/dist}, aggiornando
+        \code{index.html} con le importazioni corrette.
+\end{itemize}
+
+\subsection{Fingerprinting dei nomi}
+
+I bundle prodotti hanno nomi curiosi: \code{index-v5kLGx6\_.css},
+\code{index-DiAK\_ebR.js}. L'ultima parte del nome è un \textbf{hash del
+contenuto}: costruendo una nuova versione dell'applicazione, se i file cambiano,
+cambia anche il nome.
+
+\info{Perché serve}{
+  Supponiamo che i file si chiamassero semplicemente \code{index.css} e
+  \code{index.js}. Un browser che visita la pagina un minuto prima del rilascio
+  di una nuova versione continuerebbe a usare per un certo tempo le copie
+  vecchie conservate nella propria cache, e vedrebbe un sito rotto. Cambiando
+  il nome a ogni modifica, il problema scompare: la cache del vecchio file
+  resta valida, ma nessuno lo richiede più.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Client-side Tooling Overview} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Understanding_client-side_tools/Overview}
+  \item \textbf{Sass: Guide}. \\
+        \urlx{https://sass-lang.com/guide/}
+  \item \textbf{Bootstrap: Getting Started}. \\
+        \urlx{https://getbootstrap.com/docs/5.3/getting-started/introduction/}
+  \item \textbf{Get started with Tailwind CSS}. \\
+        \urlx{https://tailwindcss.com/docs/installation}
+  \item \textbf{Vite: Official Guide}. \\
+        \urlx{https://vitejs.dev/guide/}
+\end{itemize}

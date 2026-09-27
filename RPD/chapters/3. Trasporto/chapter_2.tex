@@ -1,0 +1,502 @@
+\chapter{Il trasferimento dati affidabile}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il problema}
+% ══════════════════════════════════════════════════════════════
+
+Siamo in stazione ad aspettare il treno numero 6, previsto al binario 5. Il treno cambia binario e
+arriverà al 9: la stazione lo comunica con un messaggio, ``\emph{Il treno 6 arriverà al binario 9}''.
+Cosa succede se la comunicazione è inaffidabile?
+
+\begin{itemize}
+    \item le parole possono \textbf{perdersi}: ``\emph{Il treno \%\&! arriverà al binario 9}'';
+    \item possono essere \textbf{alterate}: ``\emph{Il treno 7 arriverà al binario 9}'';
+    \item possono essere \textbf{scambiate}: ``\emph{Il treno 9 arriverà al binario 6}'';
+    \item possono essere \textbf{duplicate}: ``\emph{Il treno 66 arriverà al binario 9}''.
+\end{itemize}
+
+Nel primo caso ci si accorge che il messaggio è sbagliato; negli altri si rischia di prendere il treno
+sbagliato o di perdere quello giusto.
+
+Il controllo degli errori (per esempio con il checksum) permette al destinatario almeno di capire se un
+messaggio è corrotto, ma non basta. Il trasferimento affidabile è uno dei problemi centrali delle reti, e
+non viene affrontato solo dal trasporto, ma anche dal livello di collegamento e spesso da quello applicativo.
+
+\dfn{Canale affidabile}{
+    In un canale affidabile sono garantite tre cose:
+    \begin{enumerate}
+      \item nessun bit trasmesso viene \textbf{corrotto} (da 0 a 1 o viceversa);
+      \item nessun bit viene \textbf{perso} o \textbf{duplicato};
+      \item tutti i bit arrivano \textbf{nell'ordine} in cui sono stati inviati.
+    \end{enumerate}
+}
+
+\warning{Si parte da un canale inaffidabile}{
+    In generale si deve assumere che il livello di rete sottostante sia \textbf{inaffidabile}. È un'ipotesi
+    realistica: TCP è un protocollo affidabile costruito sopra IP, che è inaffidabile. Studieremo il problema
+    complicando il canale un passo alla volta: prima solo bit corrotti, poi anche pacchetti persi.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node[lay app, minimum width=3cm] (sa) at (0,1.2) {processo mittente};
+  \node[lay app, minimum width=3cm] (ra) at (8,1.2) {processo ricevente};
+  \node[draw, fill=ltra, minimum width=3cm, minimum height=0.9cm, align=center] (st) at (0,0) {protocollo di trasferimento\\affidabile (mittente)};
+  \node[draw, fill=ltra, minimum width=3cm, minimum height=0.9cm, align=center] (rt) at (8,0) {protocollo di trasferimento\\affidabile (ricevente)};
+  \draw[-{Stealth}, thick] (sa) -- (st); \draw[-{Stealth}, thick] (rt) -- (ra);
+  \draw[{Stealth}-{Stealth}, very thick, netred, decorate, decoration={snake, amplitude=1.5pt, segment length=8pt, pre length=3pt, post length=3pt}] (st) -- node[above=3pt] {canale inaffidabile} node[below=3pt, text=netred] {bit corrotti, pacchetti persi} (rt);
+  \draw[dashed, primary, thick] (sa.east) -- node[above] {servizio offerto: canale affidabile} (ra.west);
+\end{tikzpicture}
+\caption{Il protocollo di trasferimento affidabile offre all'applicazione un canale affidabile, costruendolo sopra un canale che non lo è.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Stop-and-wait con corruzione dei pacchetti}
+% ══════════════════════════════════════════════════════════════
+
+Supponiamo che il canale possa solo \textbf{corrompere} i bit, senza perdere pacchetti. La corruzione è un
+problema tipico, dovuto soprattutto alle componenti fisiche: un pacchetto viene trasmesso, propagato,
+memorizzato in buffer molte volte durante il viaggio.
+
+\dfn{Stop-and-wait}{
+    Nel protocollo \textbf{stop-and-wait} il mittente invia un messaggio e \textbf{aspetta una conferma} prima
+    di inviarne un altro:
+    \begin{itemize}
+      \item un \textbf{ACK} (\emph{acknowledgment} positivo) significa che il messaggio è arrivato integro;
+      \item un \textbf{NAK} (\emph{acknowledgment} negativo) significa che c'è stato un errore e il messaggio va ripetuto.
+    \end{itemize}
+    I protocolli basati sulla ritrasmissione si chiamano \textbf{ARQ} (\emph{Automatic Repeat reQuest}).
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.85, every node/.style={font=\footnotesize\sffamily}]
+  \timeline{a}{0}{Host A}{5.6}
+  \timeline{b}{6}{Host B}{5.6}
+  \draw[msg] (0,-0.3) -- node[above, sloped] {``Treno''} (6,-1.0);
+  \draw[msg, netgreen] (6,-1.2) -- node[above, sloped] {ACK} (0,-1.9);
+  \draw[msg] (0,-2.1) -- node[above, sloped] {``6''} (6,-2.8);
+  \node[text=netred, anchor=west] at (6.2,-2.8) {checksum errato: corrotto!};
+  \draw[msg, netred] (6,-3.0) -- node[above, sloped] {NAK} (0,-3.7);
+  \draw[msg] (0,-3.9) -- node[above, sloped] {``6'' (ritrasmesso)} (6,-4.6);
+  \draw[msg, netgreen] (6,-4.8) -- node[above, sloped] {ACK} (0,-5.5);
+\end{tikzpicture}
+\caption{Stop-and-wait con conferme positive e negative.}
+\end{figure}
+
+\subsection{I due problemi dello stop-and-wait ingenuo}
+
+\begin{itemize}
+    \item Che succede se è \textbf{l'ACK o il NAK a essere corrotto}? Il mittente non sa cosa sia successo al suo messaggio.
+    \item Se il mittente, nel dubbio, ritrasmette, come fa B a sapere se il messaggio è una \textbf{ripetizione} o un
+          \textbf{messaggio nuovo}?
+\end{itemize}
+
+\dfn{Numero di sequenza}{
+    Si aggiunge all'header dei pacchetti un campo, il \textbf{numero di sequenza}, che indica l'ordine dei
+    pacchetti. Il ricevente può così riconoscere e scartare i duplicati.
+}
+
+In stop-and-wait c'è \textbf{un solo messaggio alla volta} sulla linea: non serve numerare l'intera
+sequenza, basta distinguere il pacchetto attuale dal precedente. È sufficiente \textbf{un bit}
+($s = 0$ oppure $s = 1$).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.85, every node/.style={font=\footnotesize\sffamily}]
+  \timeline{a}{0}{Host A}{5.6}
+  \timeline{b}{6}{Host B}{5.6}
+  \draw[msg] (0,-0.3) -- node[above, sloped] {``Treno'' [$s=0$]} (6,-1.0);
+  \draw[msg, netgreen] (6,-1.2) -- node[above, sloped] {ACK [$s=0$]} (0,-1.9);
+  \draw[msg] (0,-2.1) -- node[above, sloped] {``6'' [$s=1$]} (6,-2.8);
+  \node[text=netred, anchor=west] at (6.2,-2.8) {corrotto};
+  \draw[msg, netred] (6,-3.0) -- node[above, sloped] {NAK [$s=1$]} (0,-3.7);
+  \draw[msg] (0,-3.9) -- node[above, sloped] {``6'' [$s=1$]} (6,-4.6);
+  \node[anchor=west, text width=4.5cm, align=left] at (6.2,-4.6) {$s=1$ di nuovo: è la \textbf{ritrasmissione} del messaggio precedente, non uno nuovo};
+  \draw[msg, netgreen] (6,-4.8) -- node[above, sloped] {ACK [$s=1$]} (0,-5.5);
+\end{tikzpicture}
+\caption{Con un bit di sequenza il ricevente distingue un messaggio nuovo da una ritrasmissione.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Stop-and-wait con perdita dei pacchetti}
+% ══════════════════════════════════════════════════════════════
+
+Ora il canale può anche \textbf{perdere} pacchetti. È realistico: i dispositivi di rete possono avere i
+buffer pieni quando il traffico è intenso.
+
+Con lo stop-and-wait visto finora c'è un problema evidente: il \textbf{blocco}. Se un messaggio si perde,
+il mittente aspetta per sempre un ACK che non arriverà, e nessuno invia più nulla. Succede sia se si perde
+il messaggio sia se si perde l'ACK: in entrambi i casi A non riceve lo stimolo per inviare di nuovo.
+
+\dfn{Timeout}{
+    Il mittente fa partire un \textbf{timer} a ogni invio. Se il timer scade (\textbf{timeout}) prima che
+    arrivi la conferma, il mittente \textbf{ritrasmette} il messaggio. Il meccanismo funziona sia quando si
+    perde il pacchetto sia quando si perde l'ACK; un approccio simile si usa nel DNS su UDP.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.8, every node/.style={font=\scriptsize\sffamily}]
+  \begin{scope}
+    \node[font=\footnotesize\bfseries\sffamily] at (1.75,1.1) {(a) si perde il pacchetto};
+    \timeline{a}{0}{A}{5.5}
+    \timeline{b}{3.5}{B}{5.5}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {pkt [$s=0$]} (3.5,-1.0);
+    \draw[msg, netgreen] (3.5,-1.2) -- node[above, sloped] {ACK 0} (0,-1.9);
+    \draw[msglost] (0,-2.1) -- (2.0,-2.5); \node[text=netred] at (2.4,-2.2) {persa};
+    \draw[netorange, thick] (-0.25,-2.1) -- (-0.25,-4.0); \node[text=netorange, rotate=90] at (-0.5,-3.05) {timeout};
+    \draw[msg] (0,-4.0) -- node[above, sloped] {pkt [$s=1$]} (3.5,-4.7);
+    \draw[msg, netgreen] (3.5,-4.9) -- node[above, sloped] {ACK 1} (0,-5.5);
+  \end{scope}
+  \begin{scope}[xshift=5.2cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (1.75,1.1) {(b) si perde l'ACK};
+    \timeline{a}{0}{A}{5.5}
+    \timeline{b}{3.5}{B}{5.5}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {pkt [$s=0$]} (3.5,-1.0);
+    \draw[msglost] (3.5,-1.2) -- (1.6,-1.6); \node[text=netred] at (1.2,-1.3) {perso};
+    \draw[netorange, thick] (-0.25,-0.3) -- (-0.25,-2.6); \node[text=netorange, rotate=90] at (-0.5,-1.45) {timeout};
+    \draw[msg] (0,-2.6) -- node[above, sloped] {pkt [$s=0$]} (3.5,-3.3);
+    \node[anchor=west, text width=1.8cm, align=left, text=netblue] at (3.6,-3.3) {duplicato: scartato, ma ri-inviato l'ACK};
+    \draw[msg, netgreen] (3.5,-3.8) -- node[above, sloped] {ACK 0} (0,-4.5);
+  \end{scope}
+  \begin{scope}[xshift=10.8cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (1.75,1.1) {(c) timeout troppo breve};
+    \timeline{a}{0}{A}{5.5}
+    \timeline{b}{3.5}{B}{5.5}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {M1 [$s=0$]} (3.5,-1.3);
+    \draw[netorange, thick] (-0.25,-0.3) -- (-0.25,-1.6); \node[text=netorange, rotate=90] at (-0.5,-0.95) {timeout};
+    \draw[msg, netgreen] (3.5,-1.5) -- node[above, sloped] {ACK 0} (0,-2.5);
+    \draw[msg, netred] (0,-1.6) -- node[below, sloped] {M1 [$s=0$] di nuovo} (3.5,-2.6);
+    \node[anchor=north, text width=3.6cm, align=center, text=netred] at (1.75,-3.1) {il timeout è minore dell'RTT: A ritrasmette M1 anche se messaggio e ACK non si sono persi};
+  \end{scope}
+\end{tikzpicture}
+\caption{Il timeout salva lo stop-and-wait dal blocco. In caso di duplicato il ricevente scarta il pacchetto ma deve rimandare l'ACK.}
+\end{figure}
+
+\subsection{La stima del timeout}
+
+La difficoltà è scegliere un timeout adatto, e questo dipende dall'\textbf{RTT}:
+
+\begin{itemize}
+    \item un timeout \textbf{troppo lungo} rallenta la comunicazione (dopo una perdita si aspetta a vuoto);
+    \item un timeout \textbf{troppo breve} fa sovrapporre i pacchetti, con ritrasmissioni inutili (caso (c) della figura).
+\end{itemize}
+
+Un timeout ragionevole deve essere \textbf{un po' più lungo dell'RTT}. Il timeout salva lo stop-and-wait dal
+blocco, ma le \textbf{prestazioni} restano pessime, come vediamo ora.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il modello “ad acqua”}
+% ══════════════════════════════════════════════════════════════
+
+Per ragionare sui tempi si può immaginare la trasmissione come acqua che passa da un serbatoio a un altro
+attraverso un tubo.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  % fase 1
+  \begin{scope}
+    \draw[thick] (0,0) rectangle (1,1.6); \fill[netblue!50] (0.02,0.02) rectangle (0.98,0.8);
+    \draw[thick] (1,0.2) -- (3.4,0.2); \draw[thick] (1,0.5) -- (3.4,0.5); \fill[netblue!50] (1,0.22) rectangle (1.9,0.48);
+    \draw[thick] (3.4,0) rectangle (4.4,1.6);
+    \node at (2.2,-0.5) {1. si svuota il serbatoio: tempo $t$};
+  \end{scope}
+  \begin{scope}[yshift=-2.6cm]
+    \draw[thick] (0,0) rectangle (1,1.6);
+    \draw[thick] (1,0.2) -- (3.4,0.2); \draw[thick] (1,0.5) -- (3.4,0.5); \fill[netblue!50] (1.4,0.22) rectangle (3.0,0.48);
+    \draw[thick] (3.4,0) rectangle (4.4,1.6);
+    \node at (2.2,-0.5) {2. l'acqua scorre nel tubo: $\text{RTT}/2$};
+  \end{scope}
+  \begin{scope}[yshift=-5.2cm]
+    \draw[thick] (0,0) rectangle (1,1.6);
+    \draw[thick] (1,0.2) -- (3.4,0.2); \draw[thick] (1,0.5) -- (3.4,0.5); \fill[netblue!50] (2.6,0.22) rectangle (3.4,0.48);
+    \draw[thick] (3.4,0) rectangle (4.4,1.6); \fill[netblue!50] (3.42,0.02) rectangle (4.38,0.8);
+    \node at (2.2,-0.5) {3. si riempie il serbatoio di arrivo: tempo $t$};
+  \end{scope}
+  \node[draw, fill=cloudbg, rounded corners, text width=6.8cm, align=left, anchor=west] at (5.6,-2.2) {
+    \begin{itemize}\setlength\itemsep{1pt}
+      \item $t$ = tempo per ``versare'' tutti i bit nel collegamento (tempo di trasmissione, $L/R$);
+      \item $\text{RTT}/2$ = tempo di propagazione fino al destinatario;
+      \item l'ultima goccia arriva dopo $\text{RTT}/2 + t$ dall'inizio.
+    \end{itemize}
+    \textbf{Tempo totale} $= \text{RTT}/2 + t$
+  };
+\end{tikzpicture}
+\caption{Il trasferimento come flusso d'acqua: mentre il serbatoio si svuota l'acqua già si muove nel tubo, e l'ultima goccia arriva dopo $\text{RTT}/2 + t$.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Le prestazioni dello stop-and-wait}
+% ══════════════════════════════════════════════════════════════
+
+Consideriamo il caso ideale di due host sulle coste opposte degli Stati Uniti. L'RTT alla velocità della
+luce è di circa \textbf{30 ms} (0,03 s). Supponiamo:
+
+\begin{itemize}
+    \item un canale con \textbf{velocità di trasmissione} $R = 1$ Gb/s $= 10^9$ bit/s;
+    \item pacchetti di \textbf{dimensione} $L = 1000$ byte $= 8000$ bit.
+\end{itemize}
+
+Il tempo per immettere il pacchetto nel canale è:
+$$t = \frac{L}{R} = \frac{8000\ \text{bit}}{10^9\ \text{bit/s}} = 8\cdot 10^{-6}\ \text{s} = 8\ \mu\text{s}$$
+
+In stop-and-wait:
+
+\begin{itemize}
+    \item il mittente comincia a trasmettere al tempo $t_0$;
+    \item l'ultimo bit entra nel canale a $t_0 + 0{,}000008$ s;
+    \item il pacchetto impiega $0{,}015$ s per arrivare;
+    \item l'ultimo bit arriva a $t = \text{RTT}/2 + L/R = 0{,}015008$ s;
+    \item supponendo gli ACK piccolissimi (tempo di trasmissione trascurabile), l'ACK torna al mittente a
+          $t = \text{RTT} + L/R = 0{,}030008$ s.
+\end{itemize}
+
+\dfn{Utilizzo del mittente}{
+    L'\textbf{utilizzo} è la frazione di tempo in cui il mittente è effettivamente occupato a trasmettere:
+    $$U_{\text{mittente}} = \frac{L/R}{\text{RTT} + L/R} = \frac{0{,}000008}{0{,}030008} \approx 0{,}00027$$
+}
+
+Su 0,030008 s di tempo complessivo, il mittente ha trasmesso solo lo 0,027\% del tempo: è rimasto
+\textbf{in attesa il 99,973\% del tempo}. Un collegamento da 1 Gb/s usato così trasmette in media
+circa 267 kb/s!
+
+% ══════════════════════════════════════════════════════════════
+\section{Il pipelining}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Pipelining}{
+    Con il \textbf{pipelining} il mittente può inviare \textbf{più pacchetti} senza aspettare le conferme.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.8, every node/.style={font=\scriptsize\sffamily}]
+  \begin{scope}
+    \node[font=\footnotesize\bfseries\sffamily] at (1.8,1.1) {Stop-and-wait};
+    \timeline{a}{0}{mittente}{4.3}
+    \timeline{b}{3.6}{ricevente}{4.3}
+    \fill[netblue!40] (0,0) -- (3.6,-1.5) -- (3.6,-1.7) -- (0,-0.2) -- cycle;
+    \draw[msg, netgreen] (3.6,-1.7) -- node[above, sloped] {ACK} (0,-3.2);
+    \fill[netblue!40] (0,-3.2) -- (3.6,-4.7) -- (3.6,-4.9) -- (0,-3.4) -- cycle;
+  \end{scope}
+  \begin{scope}[xshift=7cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (1.8,1.1) {Pipelining (3 pacchetti)};
+    \timeline{a}{0}{mittente}{4.3}
+    \timeline{b}{3.6}{ricevente}{4.3}
+    \foreach \k in {0,1,2} \fill[netblue!40] (0,-\k*0.25) -- (3.6,-1.5-\k*0.25) -- (3.6,-1.7-\k*0.25) -- (0,-0.2-\k*0.25) -- cycle;
+    \foreach \k in {0,1,2} \draw[msg, netgreen] (3.6,-1.7-\k*0.25) -- (0,-3.2-\k*0.25);
+    \node[text=netgreen!60!black] at (1.8,-3.9) {3 ACK};
+    \foreach \k in {0,1,2} \fill[netblue!40] (0,-3.2-\k*0.25) -- (3.6,-4.7-\k*0.25) -- (3.6,-4.9-\k*0.25) -- (0,-3.4-\k*0.25) -- cycle;
+  \end{scope}
+\end{tikzpicture}
+\caption{Nello stesso tempo il pipelining trasmette più pacchetti: l'utilizzo cresce (quasi) in proporzione.}
+\end{figure}
+
+Con 3 pacchetti invece di uno: l'ultimo bit dell'ultimo pacchetto entra nel canale a $t_0 + 0{,}000024$ s,
+arriva a $0{,}015024$ s e l'ACK torna a $0{,}030024$ s. Il mittente ha lavorato tre volte tanto:
+$$U = \frac{3\cdot L/R}{\text{RTT} + L/R} = \frac{0{,}000024}{0{,}030008} \approx 0{,}0008$$
+cioè ha aspettato il 99,92\% del tempo invece del 99,973\%. Il guadagno cresce con il numero di pacchetti
+inviati in parallelo.
+
+Il pipelining ha però delle conseguenze:
+
+\begin{itemize}
+    \item l'intervallo dei \textbf{numeri di sequenza} deve crescere: ogni pacchetto in viaggio (escluse le
+          ritrasmissioni) deve avere un numero univoco, e ci possono essere più pacchetti in viaggio non ancora confermati;
+    \item servono dei \textbf{buffer} per conservare i pacchetti, sia al mittente (quelli inviati ma non
+          confermati) sia eventualmente al ricevente (non sappiamo se ci sono ``buchi'' nella trasmissione).
+\end{itemize}
+
+I due protocolli fondamentali basati sul pipelining sono \textbf{Go-Back-N} e \textbf{Selective Repeat}.
+
+% ══════════════════════════════════════════════════════════════
+\section{Go-Back-N}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Go-Back-N (GBN)}{
+    Nel protocollo \textbf{Go-Back-N} (detto anche protocollo a \emph{finestra scorrevole}) il mittente può
+    trasmettere più pacchetti senza aspettare le conferme, ma può avere \textbf{al massimo $N$ pacchetti
+    non confermati} contemporaneamente.
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\linewidth]{cap09/gbn_finestra.png}
+    \caption{La finestra del mittente in Go-Back-N: blu i pacchetti già confermati, azzurri quelli inviati e non confermati, bianchi quelli utilizzabili, grigi quelli non ancora utilizzabili.}
+\end{figure}
+
+Il mittente mantiene due indici:
+
+\begin{itemize}
+    \item \texttt{base}: il numero di sequenza del \textbf{più vecchio pacchetto non confermato};
+    \item \texttt{nextseqnum}: il più piccolo numero di sequenza \textbf{non ancora usato} (il prossimo da inviare).
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Intervallo} & \textbf{Stato dei pacchetti} \\
+\midrule
+$[0,\ \texttt{base}-1]$ & trasmessi e confermati \\
+$[\texttt{base},\ \texttt{nextseqnum}-1]$ & inviati ma non ancora confermati \\
+$[\texttt{nextseqnum},\ \texttt{base}+N-1]$ & possono essere inviati \\
+$[\texttt{base}+N,\ +\infty)$ & non utilizzabili finché non arriva una nuova conferma \\
+\bottomrule
+\end{tabular}
+\caption{Le zone della finestra di Go-Back-N ($N$ è la dimensione della finestra).}
+\end{table}
+
+Quando arriva la conferma di \texttt{base}, la finestra \textbf{scorre} in avanti. In GBN gli ACK sono
+\textbf{cumulativi}: ``ACK $n$'' significa ``ho ricevuto correttamente tutto fino a $n$ compreso''. C'è un
+unico timer, per il pacchetto più vecchio non confermato; se scade, il mittente \textbf{ritrasmette tutti i
+pacchetti inviati e non confermati}: da qui il nome ``torna indietro di $N$''.
+
+\subsection{Il ricevente in GBN}
+
+Il ricevente di GBN è molto semplice:
+
+\begin{itemize}
+    \item \textbf{scarta i pacchetti fuori ordine}, anche se sono integri;
+    \item consegna all'applicazione solo i pacchetti \textbf{in ordine}, e conferma l'ultimo ricevuto in ordine;
+    \item i pacchetti scartati (non confermati) verranno prima o poi ritrasmessi dal mittente.
+\end{itemize}
+
+Si buttano via anche pacchetti buoni, ma il processo resta semplice: il mittente mantiene gli indici della
+finestra, il ricevente solo il numero di sequenza del prossimo pacchetto atteso.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.4\linewidth}\centering
+  \includegraphics[width=0.9\linewidth]{cap09/gbn_esempio.png}
+\end{minipage}\hfill
+\begin{minipage}{0.56\linewidth}
+Finestra di dimensione $N=4$; il pacchetto 2 si perde.
+\begin{itemize}
+  \item Il ricevente riceve 0 e 1 e li conferma.
+  \item Arrivano 3, 4 e 5: sono \textbf{fuori ordine} (manca il 2), quindi vengono \textbf{scartati}, e per ciascuno
+        il ricevente rimanda ACK~1 (l'ultimo ricevuto in ordine).
+  \item Al mittente scade il timer del pacchetto 2: ritrasmette 2, 3, 4 e 5.
+\end{itemize}
+\end{minipage}
+\caption{Go-Back-N in azione: poiché si perde pkt2, anche pkt3, pkt4 e pkt5 vanno scartati e ritrasmessi, pur essendo arrivati integri.}
+\end{figure}
+
+\warning{Una reazione a catena}{
+    Lo svantaggio di scartare pacchetti ricevuti correttamente è che bisogna \textbf{rispedirli}. È una reazione a
+    catena: se si perdono pacchetti per problemi di rete, molti pacchetti buoni ma fuori ordine vengono buttati,
+    costringendo il mittente a ritrasmetterli; e le ritrasmissioni stesse possono perdersi o danneggiarsi,
+    richiedendo ancora altre ritrasmissioni.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Selective Repeat}
+% ══════════════════════════════════════════════════════════════
+
+Anche se GBN è molto meglio dello stop-and-wait, con finestre grandi un solo errore può causare la
+ritrasmissione di moltissimi pacchetti, per lo più inutilmente.
+
+\dfn{Selective Repeat (SR)}{
+    Nel protocollo \textbf{Selective Repeat} il mittente \textbf{ritrasmette solo i pacchetti che
+    probabilmente sono andati persi o corrotti}:
+    \begin{itemize}
+      \item come in GBN, si usa una finestra di dimensione $N$ per limitare i pacchetti non confermati;
+      \item a differenza di GBN, ogni pacchetto è \textbf{confermato singolarmente} (ACK non cumulativi) e ha
+            il \textbf{proprio timer};
+      \item il ricevente \textbf{conserva in un buffer} e conferma anche i pacchetti fuori ordine, e li consegna
+            all'applicazione quando i ``buchi'' sono stati colmati.
+    \end{itemize}
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\linewidth]{cap09/sr_finestre.png}
+    \caption{Selective Repeat: finestra del mittente (sopra) e del ricevente (sotto). Il ricevente accetta e conserva i pacchetti che cadono nella propria finestra, anche se fuori ordine.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.48\linewidth}\centering
+  \includegraphics[width=0.95\linewidth]{cap09/sr_esempio.png}
+\end{minipage}\hfill
+\begin{minipage}{0.48\linewidth}
+Stesso scenario di prima: finestra $N=4$, si perde il pacchetto 2.
+\begin{itemize}
+  \item Il ricevente conferma 0 e 1 e li consegna.
+  \item Riceve 3, 4 e 5 fuori ordine: li \textbf{mette nel buffer} e li conferma singolarmente (ACK 3, ACK 4, ACK 5).
+  \item Scade il timer del solo pacchetto 2, che viene ritrasmesso.
+  \item Quando arriva pkt2, il ricevente consegna in blocco 2, 3, 4 e 5 all'applicazione.
+\end{itemize}
+Non si rispediscono pkt3, pkt4 e pkt5, evitando altre possibili perdite o errori.
+\end{minipage}
+\caption{Selective Repeat in azione.}
+\end{figure}
+
+\subsection{Il vincolo sui numeri di sequenza}
+
+In SR la dimensione della finestra è legata al numero di sequenza, che è \textbf{finito} (il campo nell'header ha
+un numero limitato di bit, e i numeri vengono riusati ciclicamente).
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.38\linewidth}\centering
+  \includegraphics[width=0.9\linewidth]{cap09/sr_dilemma.png}
+\end{minipage}\hfill
+\begin{minipage}{0.58\linewidth}
+Numeri di sequenza da 0 a 3 (quattro valori) e finestra di dimensione 3. I pacchetti 0, 1, 2 arrivano correttamente
+e i loro ACK partono (ma non sono ancora arrivati). La finestra del ricevente avanza su $[3, 0, 1]$, anche se non è
+certo che gli ACK siano arrivati.
+\begin{itemize}
+  \item \textbf{Caso (a)}: gli ACK dei primi tre pacchetti si perdono e il mittente, allo scadere dei timer,
+        ritrasmette il pacchetto 0 (vecchio). Il ricevente lo accetta come \textbf{nuovo} pacchetto 0!
+  \item \textbf{Caso (b)}: gli ACK arrivano, il mittente invia i nuovi 3 e 0, ma il 3 si perde. Il ricevente riceve
+        uno 0 che stavolta è davvero nuovo.
+\end{itemize}
+Il ricevente \textbf{non può distinguere} i due casi: ai suoi occhi sono identici.
+\end{minipage}
+\caption{Il dilemma di Selective Repeat con finestra troppo grande.}
+\end{figure}
+
+\dfn{Vincolo della finestra}{
+    Per evitare l'ambiguità, lo spazio dei numeri di sequenza deve essere \textbf{almeno il doppio} della
+    dimensione della finestra:
+    $$\text{numero di valori di sequenza} \geq 2N \quad\Longleftrightarrow\quad N \leq \frac{\text{numero di valori}}{2}$$
+    Nell'esempio, con 4 valori la finestra può essere al massimo 2.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{3cm}p{3.6cm}p{3.6cm}p{3.6cm}}
+\toprule
+ & \textbf{Stop-and-wait} & \textbf{Go-Back-N} & \textbf{Selective Repeat} \\
+\midrule
+Pacchetti in viaggio & 1 & fino a $N$ & fino a $N$ \\
+Numeri di sequenza & 1 bit ($s=0/1$) & range più ampio & almeno $2N$ valori \\
+ACK & per ogni pacchetto & cumulativi & individuali \\
+Timer & uno & uno (pacchetto più vecchio) & uno per pacchetto \\
+Fuori ordine al ricevente & --- & scartati & bufferizzati \\
+Ritrasmissione & il pacchetto & tutti i non confermati & solo quelli persi \\
+Complessità & minima & bassa & più alta \\
+\bottomrule
+\end{tabular}
+\caption{I protocolli di trasferimento affidabile a confronto.}
+\end{table}
+
+\riepilogo{
+\begin{itemize}
+    \item Un canale affidabile garantisce bit non corrotti, niente perdite o duplicati, ordine corretto.
+    \item Contro la corruzione: \textbf{checksum}, \textbf{ACK/NAK} e \textbf{numeri di sequenza} (ARQ).
+    \item Contro le perdite: \textbf{timeout} e ritrasmissione; il timeout deve essere un po' più lungo dell'RTT.
+    \item Lo stop-and-wait ha un \textbf{utilizzo} bassissimo: $U = \frac{L/R}{\text{RTT}+L/R}$.
+    \item Il \textbf{pipelining} invia più pacchetti senza aspettare: \textbf{Go-Back-N} (ACK cumulativi, scarta i
+          fuori ordine, ritrasmette tutto) e \textbf{Selective Repeat} (ACK individuali, bufferizza, ritrasmette
+          solo i persi, sequenze $\geq 2N$).
+\end{itemize}
+}

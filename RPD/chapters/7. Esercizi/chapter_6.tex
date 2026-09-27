@@ -1,0 +1,575 @@
+\chapter{Domande di ripasso}
+
+Questo capitolo raccoglie le domande di ripasso proposte durante il corso e una selezione di domande tipiche, organizzate per
+argomento, con risposte sintetiche. Vale l'avvertenza data in aula: \textbf{le risposte devono essere complete e possono essere
+concise}. Le domande della sessione di ripasso su HTTP (parti di un URL, handshake, pipelining), DNS (cambio di indirizzo,
+risoluzione con cache) e CIDR (tavola con L1, L2, R0) sono svolte per esteso nei capitoli di esercizi precedenti.
+
+\info{Tre tipi di domande}{
+    \begin{enumerate}
+      \item \textbf{Definitorie} (``che cos'è X?''): definizione precisa più almeno un esempio.
+      \item \textbf{Di confronto} (``confrontare X e Y''): individuare l'asse lungo cui differiscono (locale/globale, con/senza stato,
+            con/senza connessione, hardware/software) e dirlo esplicitamente.
+      \item \textbf{Di calcolo}: subnetting, longest prefix matching, CRC, checksum, Dijkstra, frammentazione, RTT, finestre. Vanno
+            esercitate a mano: contano i passaggi, non solo il risultato.
+    \end{enumerate}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Fondamenti}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Reti e Internet}
+\begin{enumerate}[label=(\alph*)]
+    \item Che cos'è una rete di calcolatori? Che cosa significano ``autonomi'' e ``interconnessi''?
+    \item Che cos'è un protocollo?
+    \item Confrontare commutazione di circuito e commutazione di pacchetto.
+    \item Perché si dice che Internet è una ``rete di reti''? Che ruolo hanno ISP, IXP e reti dei content provider?
+    \item Perché IP è la ``vita stretta'' della clessidra di Internet?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Una collezione di dispositivi di calcolo \textbf{autonomi} (nessuno comanda gli altri: ognuno ha capacità di calcolo
+propria) e \textbf{interconnessi} (possono scambiarsi informazione, via cavo, fibra, radio\dots).
+
+\textbf{(b)} Un protocollo definisce il \textbf{formato} e l'\textbf{ordine} dei messaggi scambiati tra due o più entità, e le
+\textbf{azioni} da compiere quando un messaggio viene inviato o ricevuto.
+
+\textbf{(c)} Nel \textbf{circuito} le risorse (una banda in FDM, uno slot in TDM) sono \textbf{riservate} per tutta la sessione: prestazioni
+garantite, ma capacità sprecata quando l'utente tace e costo di instaurazione. Nel \textbf{pacchetto} i dati sono divisi in pacchetti che
+condividono i collegamenti \textbf{su richiesta}, con store-and-forward: nessuna garanzia (code, ritardi, perdite), ma molti più utenti
+serviti grazie alla multiplazione statistica (35 utenti invece di 10 nell'esempio classico). È la scelta vincente per il traffico dati, che
+è a raffiche.
+
+\textbf{(d)} Perché è l'interconnessione di moltissime reti indipendenti. Gli host si collegano a \textbf{ISP di accesso}, che si collegano
+a ISP regionali e questi a pochi ISP globali (tier 1); gli ISP dello stesso livello si scambiano traffico con accordi di
+\textbf{peering}, spesso negli \textbf{IXP}, punti neutrali di scambio che evitano di collegare tutti con tutti. I grandi
+\textbf{content provider} (Google, Microsoft, \dots) hanno reti proprie che arrivano vicino agli utenti, scavalcando la gerarchia.
+
+\textbf{(e)} Sopra IP ci sono moltissime applicazioni e protocolli di trasporto, sotto moltissime tecnologie di collegamento; in mezzo
+c'è \textbf{un solo} protocollo di rete. Tutto ciò che parla IP può comunicare con tutto il resto: nuove applicazioni e nuove tecnologie
+fisiche si aggiungono senza cambiare il centro.
+
+\begin{esercizio}{Topologie e categorie di reti}
+\begin{enumerate}[label=(\alph*)]
+    \item Distinguere collegamenti punto-punto e multipunto.
+    \item Confrontare le topologie a bus, anello, stella e maglia (costo, guasti, prestazioni).
+    \item Distinguere PAN, LAN, MAN e WAN.
+    \item Distinguere comunicazione simplex, half-duplex e full-duplex.
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Punto-punto: un collegamento \textbf{dedicato} tra esattamente due dispositivi. Multipunto (broadcast): più dispositivi
+\textbf{condividono} lo stesso collegamento e sentono tutti le trasmissioni altrui, quindi serve un protocollo di accesso al mezzo.
+
+\textbf{(b)}
+\begin{itemize}
+    \item \textbf{Bus}: economico e semplice, ma la dorsale è un punto di guasto unico e le collisioni aumentano con il traffico.
+    \item \textbf{Anello}: ogni nodo ripete il segnale; niente collisioni (con token), ma un guasto può interrompere l'anello (se non è doppio).
+    \item \textbf{Stella}: $n$ collegamenti, facile da gestire e da estendere, un guasto isola un solo nodo; il centro è il punto critico.
+    \item \textbf{Maglia completa}: massima robustezza e prestazioni, ma $n(n-1)/2$ collegamenti: costo quadratico. Nella pratica si usano
+          maglie parziali e topologie ibride.
+\end{itemize}
+
+\textbf{(c)} In base all'estensione: \textbf{PAN} (pochi metri, dispositivi di una persona, per esempio Bluetooth); \textbf{LAN}
+(edificio o campus, privata, bassa latenza e pochi errori, tempo di trasmissione nel caso peggiore noto); \textbf{MAN} (una città, per
+esempio le reti via cavo); \textbf{WAN} (un paese o un continente: host collegati da una subnet di router e linee di trasmissione, spesso
+affittate).
+
+\textbf{(d)} Simplex: un solo verso (TV). Half-duplex: entrambi i versi ma a turno (walkie-talkie). Full-duplex: entrambi
+contemporaneamente (telefono, Ethernet commutata).
+
+\begin{esercizio}{Il modello a strati}
+\begin{enumerate}[label=(\alph*)]
+    \item Elencare i 7 strati del modello ISO/OSI e il compito di ciascuno.
+    \item Qual è la differenza tra servizio, interfaccia e protocollo?
+    \item Distinguere servizi orientati alla connessione e senza connessione.
+    \item Spiegare incapsulamento e decapsulamento.
+    \item Perché un router non implementa l'intera pila?
+    \item Perché la pila TCP/IP si è imposta sul modello OSI?
+    \item Quali vantaggi offre l'architettura a strati, e qual è il suo prezzo?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Dal basso: \textbf{fisico} (trasmissione dei bit sul mezzo), \textbf{collegamento} (frame tra nodi adiacenti, rilevazione
+degli errori, accesso al mezzo), \textbf{rete} (instradamento dei pacchetti da host a host), \textbf{trasporto} (da processo a processo,
+affidabilità, controllo di flusso), \textbf{sessione} (dialogo e sincronizzazione), \textbf{presentazione} (rappresentazione dei dati:
+codifica, compressione, cifratura), \textbf{applicazione} (servizi per l'utente). La pila di Internet ne usa cinque: sessione e
+presentazione confluiscono nell'applicazione.
+
+\textbf{(b)} Il \textbf{servizio} è ciò che uno strato offre a quello superiore (\emph{che cosa} fa); l'\textbf{interfaccia} è il modo in cui
+lo strato superiore vi accede (le primitive); il \textbf{protocollo} sono le regole con cui lo strato dialoga con la propria entità paritaria
+sull'altra macchina (\emph{come} lo fa). Il protocollo si può cambiare senza toccare il servizio.
+
+\textbf{(c)} Orientato alla connessione: si stabilisce una connessione, la si usa, la si chiude (come una telefonata); l'ordine è
+preservato. Senza connessione: ogni messaggio porta l'indirizzo completo e viaggia per conto suo (come la posta), l'ordine non è
+garantito. Entrambi possono essere affidabili o no.
+
+\textbf{(d)} Scendendo (mittente) ogni strato aggiunge al payload ricevuto il proprio header (ed eventualmente un trailer); risalendo
+(destinatario) lo stesso strato lo legge e lo rimuove. Il payload è \textbf{opaco}: uno strato non sa, e non deve sapere, che cosa contiene.
+
+\textbf{(e)} Perché il suo compito è la consegna \textbf{da host a host}: gli bastano i livelli fisico, collegamento e rete. A quale processo
+sia destinato il pacchetto non gli interessa; solo gli host implementano tutta la pila.
+
+\textbf{(f)} Per \textbf{tempismo} (TCP/IP era già diffuso quando uscirono i protocolli OSI), \textbf{progetto} (modello e protocolli
+complessi, strati squilibriati), \textbf{implementazioni} (le prime erano enormi e lente) e \textbf{politica} (OSI era percepito come
+imposto da ministeri e burocrazie), mentre le implementazioni TCP/IP erano gratuite, per esempio in Unix BSD. OSI resta lo standard
+\emph{de iure} e un ottimo modello concettuale; TCP/IP è lo standard \emph{de facto}.
+
+\textbf{(g)} Vantaggi: una \textbf{struttura} esplicita con cui ragionare sul sistema, e soprattutto la \textbf{modularità} (si cambia
+l'implementazione di uno strato, per esempio un driver o una tecnologia di accesso, senza toccare gli altri, purché il servizio resti
+lo stesso). Prezzo: \textbf{maggiore complessità} (interfacce da progettare e implementare, overhead), \textbf{ridondanze} (funzioni come
+il controllo degli errori ripetute in più strati), \textbf{rigidità} (le informazioni interne a uno strato sono nascoste; quando servono
+altrove bisogna riprogettare o ricorrere a soluzioni \emph{quick and dirty}).
+
+\begin{esercizio}{Banda e throughput}
+\begin{enumerate}[label=(\alph*)]
+    \item Distinguere transmission rate, banda e throughput.
+    \item Che cosa significa store-and-forward? E cut-through?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Il \textbf{transmission rate} è il massimo che un dispositivo può trasmettere; la \textbf{banda} è il massimo che un
+\emph{cammino} (collegamenti e nodi) può trasportare; il \textbf{throughput} è la quantità che sta \emph{effettivamente} fluendo.
+Vale sempre throughput $\le$ banda $\le$ rate del dispositivo più lento.
+
+\textbf{(b)} Store-and-forward: un nodo riceve \textbf{tutto} il pacchetto prima di inoltrarlo (può controllarne l'integrità, ma
+aggiunge $L/R$ di ritardo a ogni salto). Cut-through: inizia a inoltrare appena ha letto l'intestazione (meno ritardo, ma può propagare
+pacchetti danneggiati).
+
+% ══════════════════════════════════════════════════════════════
+\section{Livello applicativo}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Architetture e protocolli}
+\begin{enumerate}[label=(\alph*)]
+    \item Confrontare architettura client-server e peer-to-peer.
+    \item Perché HTTP è senza stato, e come si recupera lo stato?
+    \item Descrivere il caching Web e il GET condizionale.
+    \item Perché la posta elettronica usa protocolli diversi?
+    \item Descrivere le politiche di BitTorrent.
+    \item Perché FTP usa due connessioni? Che differenza c'è tra modalità attiva e passiva?
+    \item Qual è la differenza tra un'applicazione e il suo protocollo applicativo?
+    \item Quanti indirizzi IP ha un portatile collegato via cavo e via Wi-Fi? A che cosa serve \texttt{127.0.0.1}?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Nel client-server c'è un \textbf{server} sempre attivo, con indirizzo fisso e noto, e i client non comunicano direttamente tra
+loro. Nel P2P i peer sono (idealmente) equivalenti, connessi in modo intermittente, e comunicano direttamente: il sistema scala meglio
+perché ogni peer porta anche capacità di servizio, ma è più complesso da gestire e pone problemi di sicurezza e affidabilità.
+
+\textbf{(b)} Per semplicità e per poter servire un numero enorme di richieste senza ricordare nulla dei client. Lo stato si recupera con i
+\textbf{cookie}: il server crea un identificativo (\texttt{Set-Cookie}), il browser lo memorizza e lo riallega a ogni richiesta
+(\texttt{Cookie}), e il server lo usa come chiave nel proprio database.
+
+\textbf{(c)} Una \textbf{cache} (proxy) soddisfa le richieste al posto del server di origine con copie locali: riduce tempi di risposta e
+traffico sul collegamento verso Internet. Con il \textbf{GET condizionale} (\texttt{If-Modified-Since}) la cache chiede l'oggetto solo se
+è cambiato; altrimenti il server risponde \texttt{304 Not Modified} senza corpo.
+
+\textbf{(d)} Perché la comunicazione avviene in due tratte diverse: tra mail server si usa \textbf{SMTP} (porta 25, protocollo \emph{push});
+per leggere la posta dalla propria casella l'utente usa un protocollo di \emph{accesso} (\textbf{POP3}, \textbf{IMAP} o HTTP per la webmail).
+
+\textbf{(e)} In download: \textbf{rarest first}, si chiedono prima i chunk con meno copie tra i vicini. In upload: \textbf{tit-for-tat}, si
+serve chi ci fornisce al ritmo più alto (i migliori 4, rivalutati ogni 10 s), più un vicino scelto a caso ogni 30 s
+(\emph{optimistic unchoking}) per dare una possibilità ai nuovi peer.
+
+\textbf{(f)} Per tenere separati comandi e dati (segnalazione \textbf{fuori banda}): la connessione di \textbf{controllo} (porta 21)
+resta aperta per tutta la sessione, mentre ogni trasferimento (\texttt{get}, \texttt{put}, anche \texttt{ls}) apre e chiude una
+connessione \textbf{dati}. In modalità \textbf{attiva} è il server ad aprire la connessione dati verso il client, cosa impossibile se il
+client è dietro un NAT o un firewall; in modalità \textbf{passiva} il client apre entrambe le connessioni.
+
+\textbf{(g)} L'applicazione comprende tutto: per il Web, il formato dei documenti (HTML), i browser, i server. Il protocollo (HTTP)
+fissa solo il formato e l'ordine dei messaggi tra le parti, ed è l'unica cosa su cui i due capi devono concordare.
+
+\textbf{(h)} Due: un indirizzo appartiene a un'\textbf{interfaccia}, non alla macchina, e per il livello di rete il portatile è come
+due host distinti raggiunti per cammini diversi. \texttt{127.0.0.1} (\texttt{localhost}) indica la macchina stessa: due processi
+locali comunicano attraverso di esso come in rete, senza che nulla esca dall'host; serve per provare client e server su un solo computer.
+
+\begin{esercizio}{Socket e DNS}
+\begin{enumerate}[label=(\alph*)]
+    \item Quali sono le differenze nella sequenza di chiamate tra un'applicazione UDP e una TCP?
+    \item Da quanti elementi è identificato un socket UDP? E uno TCP?
+    \item Perché il server TCP ha bisogno di due socket?
+    \item Confrontare query ricorsive e iterative nel DNS.
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)}
+\begin{center}
+\small
+\begin{tabular}{p{6.5cm}p{6.5cm}}
+\toprule
+\textbf{UDP} & \textbf{TCP} \\
+\midrule
+\texttt{socket()}; \texttt{bind()} solo sul server & \texttt{socket()}; server: \texttt{bind()}, \texttt{listen()}, \texttt{accept()} \\
+nessuna connessione & client: \texttt{connect()} (three-way handshake) \\
+\texttt{sendto()} / \texttt{recvfrom()} con l'indirizzo a ogni messaggio & \texttt{send()} / \texttt{read()}: l'indirizzo è fissato dalla connessione \\
+\texttt{close()} & \texttt{close()} (sul server anche del socket dedicato) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{(b)} Un socket UDP è identificato dalla coppia (IP, porta) di destinazione: lo stesso socket riceve da client diversi. Un socket TCP
+connesso dalla quadrupla (IP sorgente, porta sorgente, IP destinazione, porta destinazione).
+
+\textbf{(c)} Il \textbf{welcoming socket} resta in ascolto per accettare nuove connessioni; per ogni client \texttt{accept()} crea un
+\textbf{socket dedicato}, usato per la comunicazione. Così il server continua ad accettare client mentre serve quelli già connessi.
+
+\textbf{(d)} In una query \textbf{ricorsiva} il server interrogato si fa carico dell'intera risoluzione e restituisce la risposta finale; in
+una \textbf{iterativa} risponde con ciò che sa (spesso un rinvio al server successivo). Tipicamente l'host fa una query ricorsiva al server
+locale, che procede in modo iterativo; i server in alto nella gerarchia non offrono ricorsione, per non tenere stato.
+
+% ══════════════════════════════════════════════════════════════
+\section{Livello di trasporto}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{UDP e TCP}
+\begin{enumerate}[label=(\alph*)]
+    \item Quali sono le responsabilità del livello di trasporto? Quali copre UDP?
+    \item Perché usare UDP invece di TCP?
+    \item Qual è la relazione tra MSS e MTU?
+    \item Perché il fast retransmit aspetta 3 ACK duplicati e non uno?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} (1) Consegna da processo a processo (multiplexing e demultiplexing con le porte); (2) controllo di integrità (checksum);
+(3) trasferimento affidabile; (4) controllo di flusso e di congestione. UDP copre solo le prime due; TCP tutte.
+
+\textbf{(b)} Controllo più fine da parte dell'applicazione (utile nel tempo reale), nessun handshake (una query DNS è una domanda e una
+risposta), nessuno stato di connessione (più client serviti), header minimo (8 byte contro 20).
+
+\textbf{(c)} $\text{MSS} = \text{MTU} - 40$ byte (20 di header IP e 20 di header TCP, senza opzioni): con MTU Ethernet di 1500 byte,
+MSS di 1460 byte.
+
+\textbf{(d)} Perché un ACK duplicato può nascere anche da un semplice \textbf{riordino}: se due segmenti arrivano scambiati, il ricevente
+invia un duplicato prima di ricevere quello mancante. Tre duplicati sono un indizio molto più affidabile di una perdita.
+
+\begin{esercizio}{Trasferimento affidabile}
+\begin{enumerate}[label=(\alph*)]
+    \item Confrontare Go-Back-N e Selective Repeat.
+    \item Perché in Selective Repeat la finestra non può superare metà dello spazio dei numeri di sequenza?
+    \item Perché il timeout deve essere maggiore dell'RTT, ma non troppo?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} In \textbf{GBN} il ricevente accetta solo pacchetti in ordine e invia ACK cumulativi; il mittente, allo scadere del timer
+(unico, sul pacchetto più vecchio), ritrasmette tutta la finestra. Ricevente semplicissimo, ma molte ritrasmissioni inutili. In
+\textbf{SR} il ricevente bufferizza i pacchetti fuori ordine e conferma ciascuno; il mittente ha un timer per pacchetto e ritrasmette solo
+quelli persi. Più efficiente, più complesso.
+
+\textbf{(b)} Perché altrimenti, se gli ACK vanno persi, un pacchetto ritrasmesso può cadere nella nuova finestra del ricevente ed essere
+scambiato per un pacchetto nuovo con lo stesso numero (si veda l'esercizio nel capitolo sul trasporto).
+
+\textbf{(c)} Troppo corto: ritrasmissioni inutili, che aggiungono traffico proprio quando la rete è lenta. Troppo lungo: si reagisce tardi
+alle perdite. $\text{EstimatedRTT} + 4\,\text{DevRTT}$ dà un margine che si adatta alla variabilità.
+
+\begin{esercizio}{Connessione e congestione}
+\begin{enumerate}[label=(\alph*)]
+    \item Descrivere il problema dei due eserciti e la sua rilevanza per TCP.
+    \item Distinguere controllo di flusso e controllo di congestione.
+    \item Perché un timeout riporta cwnd a 1 MSS mentre 3 ACK duplicati la dimezzano soltanto?
+    \item Perché i numeri di sequenza iniziali sono casuali?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Due eserciti alleati devono attaccare insieme, ma comunicano con messaggeri che possono essere catturati: qualunque sia il
+numero di conferme, chi invia l'ultima non sa se è arrivata. Nessun protocollo garantisce l'accordo su un canale inaffidabile. TCP accetta
+un compromesso: il three-way handshake (e la chiusura con TIME\_WAIT) non è perfetto ma è adeguato, e i timer risolvono le situazioni
+ambigue.
+
+\textbf{(b)} Il \textbf{flusso} protegge il \textbf{ricevente} dal traboccamento del buffer (rwnd, annunciata dal ricevente); la
+\textbf{congestione} protegge la \textbf{rete} (cwnd, stimata dal mittente osservando perdite e ritardi). Il mittente rispetta
+$\text{LastByteSent} - \text{LastByteAcked} \le \min\{\text{cwnd}, \text{rwnd}\}$.
+
+\textbf{(c)} Un timeout significa che non arriva più nulla: congestione grave, si riparte da capo. Tre ACK duplicati dimostrano che i
+segmenti successivi stanno arrivando: congestione lieve, basta dimezzare. In entrambi i casi ssthresh $=$ cwnd/2.
+
+\textbf{(d)} Per non confondere segmenti di una vecchia connessione (con le stesse porte) con quelli di una nuova, e per rendere difficile a
+un attaccante indovinare i numeri e iniettare segmenti falsificati.
+
+% ══════════════════════════════════════════════════════════════
+\section{Livello di rete}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{IP e indirizzamento}
+\begin{enumerate}[label=(\alph*)]
+    \item Che cos'è il servizio best effort e perché è sufficiente?
+    \item Distinguere forwarding e routing, data plane e control plane.
+    \item Perché un indirizzo IP appartiene a un'interfaccia e non a un host?
+    \item Perché l'indirizzamento a classi è stato abbandonato?
+    \item Perché IPv6 ha eliminato il checksum e la frammentazione nei router?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} La rete ``fa del suo meglio'' senza garanzie su consegna, ordine, ritardo o banda. Basta perché le garanzie che servono vengono
+ricostruite agli estremi (TCP, applicazioni): è il principio \textbf{end-to-end}, nucleo semplice e intelligenza ai bordi.
+
+\textbf{(b)} Il \textbf{forwarding} (data plane) è l'azione locale di spostare un pacchetto dall'ingresso all'uscita giusta: nanosecondi, in
+hardware. Il \textbf{routing} (control plane) calcola i cammini sull'intera rete e riempie le tabelle: secondi, in software.
+
+\textbf{(c)} Perché ogni interfaccia è collegata a una subnet diversa e deve inviare e ricevere datagrammi su quella subnet: un router con tre
+interfacce ha tre indirizzi, uno per subnet.
+
+\textbf{(d)} Per lo spreco: le classi avevano dimensioni fisse (A 16 milioni, B 65\,536, C 256 indirizzi). A chi servivano 300 indirizzi
+toccava una classe B, sprecandone oltre 65\,000. Con CIDR basta un /23 (512 indirizzi).
+
+\textbf{(e)} Il checksum va ricalcolato a ogni salto (il TTL cambia) ed è ridondante, perché collegamento e trasporto controllano già
+gli errori. La frammentazione nei router è lenta e complessa: in IPv6 un router che riceve un datagramma troppo grande lo scarta e invia
+un ICMPv6 \emph{Packet Too Big}, e sarà il mittente a ridurre la dimensione.
+
+\begin{esercizio}{DHCP, NAT e ICMP}
+\begin{enumerate}[label=(\alph*)]
+    \item Descrivere i 4 passi di DHCP e spiegare perché usa il broadcast.
+    \item Perché il NAT cambia la porta sorgente? Qual è il suo limite fondamentale?
+    \item Come funziona traceroute?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Discover (broadcast, da 0.0.0.0 porta 68 a 255.255.255.255 porta 67), Offer (con l'indirizzo proposto in \texttt{yiaddr}),
+Request (il client accetta un'offerta), ACK (conferma). Il broadcast serve perché l'host non ha ancora un indirizzo e non sa chi sia il
+server; la request è in broadcast per informare tutti i server di quale offerta è stata scelta.
+
+\textbf{(b)} Perché host diversi possono scegliere la stessa porta: il NAT deve garantire coppie (IP WAN, porta) uniche per distinguere le
+risposte. Il limite è che le connessioni \textbf{iniziate dall'esterno} non trovano una riga nella tabella: servono port forwarding, UPnP,
+STUN/TURN o hole punching. Inoltre il NAT viola la stratificazione (un dispositivo di rete modifica le porte, che sono di trasporto).
+
+\textbf{(c)} Invia sonde (UDP verso porte improbabili) con TTL $= 1, 2, 3, \dots$ Il router a cui il TTL scade scarta la sonda e risponde con
+ICMP \emph{Time Exceeded}, rivelando il proprio indirizzo; quando la sonda raggiunge la destinazione, questa risponde con ICMP \emph{Port
+Unreachable} e traceroute si ferma. Per ogni salto misura il tempo di andata e ritorno; un asterisco indica una risposta mancata.
+
+\begin{esercizio}{Routing}
+\begin{enumerate}[label=(\alph*)]
+    \item Confrontare Distance Vector e Link State.
+    \item Spiegare il count-to-infinity e le sue cause.
+    \item Perché il flooding, pur trovando sempre il cammino, è impraticabile?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)}
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+& \textbf{Distance Vector} & \textbf{Link State} \\
+\midrule
+Conoscenza & locale (vettori dei vicini) & globale (tutto il grafo) \\
+Algoritmo & Bellman-Ford & Dijkstra \\
+Funzionamento & decentralizzato, asincrono & ogni nodo calcola sulla mappa completa \\
+Messaggi & solo ai vicini & link-state packet in flooding a tutti \\
+Convergenza & lenta, count-to-infinity & più rapida \\
+Robustezza & un errore si propaga ai calcoli degli altri & ogni nodo calcola la propria tabella \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{(b)} Il vettore $D_x(y)$ si calcola dai vettori dei vicini, che contengono solo i \textbf{costi} e non i \textbf{cammini}: un nodo
+può scegliere un vicino il cui cammino migliore passa per il nodo stesso. Quando un collegamento peggiora, i due nodi si rimandano stime
+crescenti a piccoli passi finché non si raggiunge il costo alternativo (o all'infinito, se il collegamento cade). Contromisure: poisoned
+reverse, split horizon, un ``infinito'' finito (16 in RIP).
+
+\textbf{(c)} Esplora tutti i cammini ed è robustissimo, ma genera una quantità di traffico enorme (che cresce esponenzialmente senza
+controlli sui duplicati): va bene solo in contesti particolari (diffusione di informazioni a tutti, reti militari), non come routing di Internet.
+
+% ══════════════════════════════════════════════════════════════
+\section{Livello di collegamento}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Framing ed errori}
+\begin{enumerate}[label=(\alph*)]
+    \item Elencare i metodi di framing e spiegare perché il conteggio dei byte non si usa.
+    \item Perché la parità singola è quasi inutile nelle reti reali?
+    \item Che cosa rileva e corregge la parità bidimensionale?
+    \item Quanti errori rileva e corregge un codice con distanza di Hamming $d$?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Conteggio dei byte, byte di flag con byte stuffing, bit di flag con bit stuffing, violazioni della codifica fisica. Il
+conteggio non si usa (da solo) perché se il campo di conteggio si corrompe non è più possibile ritrovare l'inizio dei frame successivi.
+
+\textbf{(b)} Rileva solo un numero dispari di errori, e gli errori reali arrivano a raffiche: la probabilità di non accorgersene è vicina al 50\%.
+
+\textbf{(c)} Rileva e \textbf{corregge} un errore singolo (incrocio di riga e colonna); rileva ma non corregge qualsiasi coppia di errori.
+
+\textbf{(d)} Rileva $d - 1$ errori e ne corregge $\lfloor (d-1)/2 \rfloor$: servono distanza $k + 1$ per rilevarne $k$, $2k + 1$ per correggerne $k$.
+
+\begin{esercizio}{Accesso multiplo}
+\begin{enumerate}[label=(\alph*)]
+    \item Quali sono i requisiti ideali di un protocollo ad accesso multiplo?
+    \item Qual è il difetto strutturale di TDMA e FDMA?
+    \item Se tutti i nodi ascoltano il canale prima di trasmettere, perché ci sono ancora collisioni?
+    \item Perché Ethernet ha una dimensione minima dei frame?
+    \item Che cosa sono i problemi del terminale nascosto ed esposto, e come li affronta MACA?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Con un solo nodo attivo, usare tutto il rate $R$; con $M$ nodi attivi, $R/M$ ciascuno in media; essere
+\textbf{decentralizzato} (niente punto di guasto unico, niente sincronizzazione globale); essere \textbf{semplice} ed economico.
+
+\textbf{(b)} Un nodo ha sempre e solo $R/N$, anche quando tutti gli altri tacciono: viola il primo requisito.
+
+\textbf{(c)} Per il \textbf{ritardo di propagazione}: un nodo può trovare libero un canale su cui un altro ha già iniziato a trasmettere, ma il
+cui segnale non è ancora arrivato.
+
+\textbf{(d)} Perché CSMA/CD rilevi la collisione, il mittente deve essere ancora in trasmissione quando il segnale della collisione torna
+indietro: il frame deve durare almeno $2\tau$. Da qui i 64 byte minimi e il campo pad.
+
+\textbf{(e)} Nel wireless \textbf{A} e \textbf{C} possono non sentirsi pur raggiungendo entrambi \textbf{B}: ascoltando il canale lo
+trovano libero e collidono in B (\textbf{terminale nascosto}); viceversa un nodo può rinunciare a trasmettere perché sente una trasmissione
+che in realtà non disturberebbe il suo destinatario (\textbf{terminale esposto}). MACA fa precedere i dati da un breve \textbf{RTS}, a cui il
+destinatario risponde con un \textbf{CTS} che indica la durata: chi sente il CTS tace, chi sente solo l'RTS può trasmettere.
+
+\begin{esercizio}{Switch e ARP}
+\begin{enumerate}[label=(\alph*)]
+    \item Confrontare switch e router.
+    \item Che cos'è il self-learning?
+    \item Perché le LAN commutate devono avere una topologia ad albero (senza cicli)?
+    \item Come cambiano IP e MAC di destinazione lungo un percorso con più salti?
+    \item Perché servono sia gli indirizzi MAC sia gli indirizzi IP?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Lo \textbf{switch} lavora al livello 2 con indirizzi MAC, è plug-and-play, veloce e senza algoritmo di routing (tabelle
+per self-learning). Il \textbf{router} lavora al livello 3 con indirizzi IP, esegue algoritmi di routing, va configurato, isola i domini di
+broadcast e supporta qualunque topologia.
+
+\textbf{(b)} Quando riceve un frame, lo switch registra che il \textbf{MAC sorgente} è raggiungibile dalla porta di arrivo; per la
+destinazione inoltra se la conosce, fa flooding se non la conosce, filtra se è sulla stessa porta. Le righe scadono dopo un TTL.
+
+\textbf{(c)} Senza routing, un frame in broadcast (o in flooding) in un ciclo girerebbe per sempre moltiplicandosi: una \textbf{tempesta di
+broadcast}. Per questo le reti commutate usano alberi (in pratica calcolati da un protocollo di spanning tree).
+
+\textbf{(d)} Il MAC di destinazione è quello del \textbf{prossimo salto} e cambia a ogni collegamento; l'IP di destinazione è quello della
+\textbf{destinazione finale} e resta invariato (salvo NAT). Ogni router decapsula e reincapsula il datagramma in un nuovo frame.
+
+\textbf{(e)} Il MAC è piatto, assegnato dal costruttore e portabile: identifica l'interfaccia su un collegamento. L'IP è gerarchico e
+dipende dalla rete a cui si è collegati: permette di aggregare e instradare. Tenerli separati rende gli strati indipendenti (una LAN
+può trasportare anche protocolli diversi da IP) e consente a una scheda di cambiare rete senza cambiare MAC.
+
+% ══════════════════════════════════════════════════════════════
+\section{Sicurezza}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Attacchi e crittografia}
+\begin{enumerate}[label=(\alph*)]
+    \item Distinguere virus e worm.
+    \item Elencare i tre tipi di attacco DoS.
+    \item Perché lo sniffing è così difficile da rilevare?
+    \item Enunciare il principio di Kerckhoffs e spiegarne la ragione.
+    \item Perché il one-time pad, pur essendo inviolabile, non si usa in pratica?
+    \item Confrontare crittografia simmetrica e asimmetrica.
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Un \textbf{virus} richiede un'interazione dell'utente (aprire un allegato, eseguire un programma); un \textbf{worm} entra da solo,
+sfruttando applicazioni di rete vulnerabili, e si propaga automaticamente.
+
+\textbf{(b)} Attacco a una \textbf{vulnerabilità} (messaggi costruiti per far bloccare un servizio o il sistema operativo);
+\textbf{bandwidth flooding} (inondare la vittima di pacchetti); \textbf{connection flooding} (aprire moltissime connessioni TCP, anche
+semi-aperte come nel SYN flood).
+
+\textbf{(c)} Perché è \textbf{passivo}: non inietta traffico, quindi dall'esterno non lascia tracce. La difesa non è la rilevazione ma la
+\textbf{cifratura}: se non si può impedire l'ascolto, si rende incomprensibile ciò che viene ascoltato.
+
+\textbf{(d)} Gli algoritmi devono essere \textbf{pubblici}; solo le \textbf{chiavi} sono segrete. Un algoritmo pubblico viene analizzato da
+tutta la comunità e le sue debolezze emergono e si correggono; un algoritmo segreto sembra sicuro solo finché qualcuno non lo rompe, e non
+lo si può sapere. La \emph{security through obscurity} non funziona.
+
+\textbf{(e)} Il pad deve essere casuale, lungo quanto i messaggi e mai riusato: va distribuito in modo sicuro, e se esiste un canale sicuro
+abbastanza capiente per il pad tanto vale usarlo per il messaggio. In più ci sono problemi di sincronizzazione.
+
+\textbf{(f)} Nella \textbf{simmetrica} (DES, AES) mittente e destinatario condividono la stessa chiave: veloce, ma la chiave va scambiata in
+modo sicuro e ne serve una per ogni coppia. Nell'\textbf{asimmetrica} (RSA) ognuno ha una chiave pubblica e una privata: niente segreto da
+scambiare, ma molto più lenta. In pratica si usano insieme: l'asimmetrica per scambiare una \textbf{chiave di sessione} simmetrica.
+
+\begin{esercizio}{Autenticazione e SSL}
+\begin{enumerate}[label=(\alph*)]
+    \item Perché cifrare la password non basta ad autenticarsi?
+    \item A che cosa serve un'autorità di certificazione?
+    \item Descrivere le fasi di SSL/TLS.
+    \item Perché SSL mette un numero di sequenza dentro la parte protetta dei record?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Perché la password cifrata può essere registrata e \textbf{rigiocata} (playback attack). Serve un \textbf{nonce}: un valore
+usato una sola volta, scelto dal verificatore, da cifrare con la chiave condivisa.
+
+\textbf{(b)} Garantisce che una chiave pubblica appartenga davvero a chi dice di esserne il proprietario: firma un \textbf{certificato} che lega
+l'identità alla chiave. Senza, un man-in-the-middle potrebbe sostituire la propria chiave (come nell'attacco a Diffie-Hellman).
+
+\textbf{(c)} \textbf{Handshake}: dopo la connessione TCP, il server invia il certificato; il client lo verifica, genera un \emph{master secret},
+lo cifra con la chiave pubblica del server e lo invia, e i due si scambiano MAC di tutti i messaggi dell'handshake (contro manomissioni).
+\textbf{Derivazione delle chiavi}: dal master secret si ricavano quattro chiavi (cifratura e MAC, per ciascun verso). \textbf{Trasferimento
+dati}: il flusso è diviso in record; a ogni record si aggiunge un MAC, si cifra e si passa a TCP.
+
+\textbf{(d)} Il numero di sequenza TCP è in chiaro e un man-in-the-middle potrebbe riordinare, duplicare o eliminare record. Includendo un
+numero di sequenza nel calcolo del MAC, ogni alterazione dell'ordine invalida il MAC: si protegge l'integrità dell'intero flusso.
+
+\begin{esercizio}{Firewall e IDS}
+\begin{enumerate}[label=(\alph*)]
+    \item Qual è il limite del filtraggio tradizionale e come lo risolve quello stateful?
+    \item Quando serve un application gateway?
+    \item Distinguere IDS basati su firme e basati su anomalie.
+    \item A che cosa serve una DMZ?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Il filtro tradizionale è \textbf{senza stato}: una regola che lascia entrare i segmenti con ACK $= 1$ e porta sorgente 80
+fa passare anche segmenti che non appartengono ad alcuna connessione (usati negli attacchi). Il filtro \textbf{stateful} tiene una tabella
+delle connessioni (riconosce SYN, SYN-ACK, FIN, e usa timeout di inattività) e ammette solo i pacchetti di connessioni esistenti.
+
+\textbf{(b)} Quando le decisioni dipendono da \textbf{utenti} o \textbf{contenuti applicativi} (per esempio Telnet solo per alcuni utenti
+autenticati): queste informazioni non sono negli header IP/TCP/UDP. Il prezzo: un gateway per applicazione, prestazioni più basse, client
+configurati per usarlo.
+
+\textbf{(c)} Basati su \textbf{firme}: confrontano il traffico con un database di attacchi noti; precisi, ma ciechi agli attacchi nuovi. Basati
+su \textbf{anomalie}: costruiscono un profilo del traffico normale e segnalano ciò che se ne discosta; possono scoprire attacchi nuovi, ma
+producono falsi positivi.
+
+\textbf{(d)} È una zona a sicurezza ridotta, tra un firewall esterno più permissivo e uno interno restrittivo, dove si mettono i server che
+devono essere raggiungibili da Internet (Web, posta, DNS). Se uno di essi viene compromesso, l'attaccante è ancora fuori dalla rete interna.
+
+% ══════════════════════════════════════════════════════════════
+\section{Consigli per la preparazione}
+% ══════════════════════════════════════════════════════════════
+
+\warning{Gli errori più frequenti}{
+    \begin{itemize}
+      \item Confondere consegna \textbf{host-to-host} (rete) e \textbf{process-to-process} (trasporto).
+      \item Attribuire il three-way handshake a HTTP invece che a TCP.
+      \item Confondere il \textbf{MAC address} (livello 2) con il \textbf{MAC crittografico} (\emph{Message Authentication Code}).
+      \item Dimenticare che il MAC di destinazione cambia a ogni salto, l'IP di destinazione no.
+      \item Dire che il TTL di IP è un tempo: è un \textbf{contatore di salti}.
+      \item Nel CRC: dimenticare gli $r$ zeri, allineare male $G$, usare la sottrazione con prestiti invece dello XOR.
+      \item Nel checksum: dimenticare il wrap around o il complemento finale.
+      \item Nel subnetting: proporre maschere con bit non contigui; dimenticare che rete e broadcast non sono assegnabili.
+      \item Nella frammentazione: esprimere l'offset in byte invece che in unità da 8 byte, o dimenticare che i dati devono essere multipli di 8.
+      \item Nella stima dell'RTT: non dichiarare l'ordine di aggiornamento di EstimatedRTT e DevRTT.
+    \end{itemize}
+}
+
+\info{Come prepararsi}{
+    \begin{itemize}
+      \item Per ogni capitolo, rileggere il riquadro ``In breve'' e provare a spiegarlo ad alta voce senza guardare.
+      \item Rifare gli esercizi di calcolo \textbf{a mano}, su carta, controllando i passaggi con le soluzioni solo alla fine.
+      \item Ripetere almeno una volta le esercitazioni con Wireshark: vedere i pacchetti veri fissa i concetti molto più della teoria.
+      \item Per le domande di confronto, preparare piccole tabelle a due colonne (come quelle di questo capitolo).
+    \end{itemize}
+}

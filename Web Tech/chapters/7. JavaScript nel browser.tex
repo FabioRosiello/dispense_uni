@@ -1,0 +1,1107 @@
+\chapter{JavaScript nel browser}
+
+Finora abbiamo studiato il \textbf{linguaggio} JavaScript. Il linguaggio però
+può essere eseguito in \textbf{ambienti ospite} (\textit{host environment})
+diversi:
+
+\begin{itemize}
+  \item i \term{web browser}, per i quali JavaScript è stato originariamente
+        creato;
+  \item i \term{web server}, per esempio tramite il runtime Node.js.
+\end{itemize}
+
+Ogni ambiente ospite fornisce oggetti e funzioni \textbf{propri}, in aggiunta a
+quelli inclusi nel nucleo del linguaggio. In questo capitolo studiamo l'ambiente
+del browser.
+
+\section{L'ambiente del browser}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\footnotesize,
+      grp/.style={rounded corners=4pt, line width=0.9pt, align=center,
+                  minimum width=3.5cm, minimum height=2.5cm},
+      it/.style={font=\FiraCodeNL\scriptsize, anchor=north, align=center}]
+
+    \node[font=\Lato\bfseries, text=primary!75!black] (w) at (0,2.35) {\code{window}};
+
+    \node[grp, draw=neutral!55!white, fill=neutral!7!white] (core) at (-4.0,0.4) {};
+    \node[font=\Lato\scriptsize\bfseries, text=neutral!30!black, anchor=north]
+      at (-4.0,1.55) {Core JavaScript};
+    \node[it, text=neutral!25!black] at (-4.0,1.1)
+      {Object \quad Function\\ Array \quad Map \quad Set\\ \ldots};
+
+    \node[grp, draw=primary!60!black, fill=primary!7!white] (dom) at (0,0.4) {};
+    \node[font=\Lato\scriptsize\bfseries, text=primary!70!black, anchor=north]
+      at (0,1.55) {DOM};
+    \node[font=\Lato\scriptsize, text=primary!55!black, anchor=north]
+      at (0,1.22) {Document Object Model};
+    \node[it, text=primary!60!black] at (0,0.85) {document};
+
+    \node[grp, draw=accent!60!black, fill=accent!8!white] (bom) at (4.0,0.4) {};
+    \node[font=\Lato\scriptsize\bfseries, text=accent!70!black, anchor=north]
+      at (4.0,1.55) {BOM};
+    \node[font=\Lato\scriptsize, text=accent!55!black, anchor=north]
+      at (4.0,1.22) {Browser Object Model};
+    \node[it, text=accent!60!black] at (4.0,0.85)
+      {navigator \quad screen\\ location \quad history\\ frames \quad \ldots};
+
+    \begin{scope}[on background layer]
+      \node[rounded corners=5pt, draw=primary!70!black, line width=1.1pt,
+            fill=primary!2!white, fit=(w)(core)(dom)(bom), inner sep=9pt] {};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{L'ambiente del browser: il nucleo del linguaggio, il DOM e il BOM.}
+  \label{fig:browser-env}
+\end{figure}
+
+\subsection{L'oggetto window}
+
+L'ambiente del browser ha un oggetto \guillemotleft radice\guillemotright\ chiamato \term{window},
+che svolge due ruoli:
+
+\begin{enumerate}
+  \item è l'\textbf{oggetto globale} per il codice JavaScript;
+  \item rappresenta la \textbf{finestra del browser} e fornisce i metodi per
+        controllarla.
+\end{enumerate}
+
+Le funzioni e le variabili globali sono, di fatto, proprietà dell'oggetto
+\code{window}.
+
+\begin{lstlisting}[style=js, name=window.js]
+let msg = "Hello!";
+
+function greet(name) {
+  console.log(`${msg}, ${name}!`);
+}
+
+greet("Web Technologies");       // Hello, Web Technologies!
+window.greet("window object");   // Hello, window object!
+\end{lstlisting}
+
+\subsection{Il DOM e il BOM}
+
+Il \term{DOM} (\textit{Document Object Model}) rappresenta il contenuto del
+documento corrente. L'oggetto \code{document} è il punto d'ingresso principale
+alla pagina e fornisce i modi per accedere ai contenuti e modificarli.
+
+\begin{lstlisting}[style=html, name=dom-primo.html]
+<body>
+  <p>Hello!</p>
+  <script>
+    document.body.style.background = "pink";
+    document.querySelector("p").innerText = "Hello DOM!";
+  </script>
+</body>
+\end{lstlisting}
+
+Il \term{BOM} (\textit{Browser Object Model}) comprende invece gli oggetti
+aggiuntivi forniti dal browser per lavorare \textbf{con il browser stesso},
+non con il contenuto del documento.
+
+\begin{lstlisting}[style=js, name=bom.js]
+// location contiene informazioni sulla URL del documento corrente
+console.log(location.href);        // http://localhost:3000/07-JavaScript...
+
+// screen contiene informazioni sul display usato dall'utente
+console.log(screen.availWidth);    // 2048
+
+// navigator contiene dettagli sul browser e sulla piattaforma
+console.log(navigator.userAgent);  // Mozilla/5.0 (Windows NT 10.0...
+
+// history rappresenta la cronologia di navigazione
+history.back();                    // come premere "indietro" nel browser
+\end{lstlisting}
+
+\section{Il DOM}
+
+Quando abbiamo studiato i selettori CSS avevamo accennato al fatto che i
+documenti HTML si possono vedere come \textbf{alberi}: parlavamo di discendenti,
+figli, fratelli. Il DOM \textbf{formalizza} quell'intuizione.
+
+\begin{itemize}
+  \item Ogni tag HTML è un oggetto nel DOM.
+  \item I tag annidati sono \textbf{figli} di quelli che li racchiudono.
+  \item Anche il \textbf{contenuto testuale} di un tag è un oggetto, ed è figlio
+        del tag.
+  \item Gli \textbf{attributi} di un tag sono accessibili come proprietà
+        dell'oggetto corrispondente.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{minipage}[c]{0.38\linewidth}
+\begin{lstlisting}[style=html, basicstyle=\linespread{1.1}\scriptsize\FiraCodeNL]
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>DOM</title>
+  </head>
+  <body>
+    <table>
+      <tbody>
+        <tr>
+          <th>Exam</th>
+          <th>Grade</th>
+        </tr>
+        <tr>
+          <td>
+            <a href="/wt">Web T.</a>
+          </td>
+          <td>30</td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[c]{0.59\linewidth}
+    \centering
+    % Il disegno e' piu' largo della colonna: si lascia a TikZ la spaziatura
+    % corretta (niente nodi sovrapposti) e si riscala il risultato.
+    \resizebox{\linewidth}{!}{%
+    \begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+        level distance=0.95cm,
+        n/.style={rounded corners=2pt, draw=primary!60!black, line width=0.7pt,
+                  fill=primary!8!white, inner sep=2pt},
+        t/.style={rounded corners=2pt, draw=green-gradient-6, line width=0.7pt,
+                  fill=green-gradient-1!45!white, inner sep=2pt, align=center,
+                  font=\FiraCodeNL\tiny},
+        edge from parent/.style={draw=neutral!50!black, line width=0.55pt,
+                                 edge from parent path=
+                                 {(\tikzparentnode.south) -- (\tikzchildnode.north)}},
+        level 1/.style={sibling distance=5.4cm},
+        level 2/.style={sibling distance=2.7cm},
+        level 3/.style={sibling distance=2.7cm},
+        level 4/.style={sibling distance=2.7cm},
+        level 5/.style={sibling distance=1.35cm}]
+      \node[n] {<html>}
+        child { node[n] {<head>}
+          child { node[n] {<meta>} }
+          child { node[n] {<title>}
+            child { node[t] {\#text\\ DOM} } } }
+        child { node[n] {<body>}
+          child { node[n] {<table>}
+            child { node[n] {<tbody>}
+              child { node[n] {<tr>}
+                child { node[n] {<th>} }
+                child { node[n] {<th>} } }
+              child { node[n] {<tr>}
+                child { node[n] {<td>}
+                  child { node[n] {<a>} } }
+                child { node[n] {<td>} } } } } };
+    \end{tikzpicture}}
+  \end{minipage}
+  \caption{Un documento HTML e il corrispondente albero DOM.}
+  \label{fig:dom-example}
+\end{figure}
+
+\warning{Anche gli spazi sono nodi}{
+  La figura è una semplificazione. Il DOM reale include anche gli \textbf{spazi}
+  e gli \textbf{a-capo} fra i tag, sotto forma di nodi di testo. Per brevità
+  questi nodi vengono di norma omessi nei disegni, ma esistono: è il motivo per
+  cui \code{document.body.firstChild} molto spesso non è l'elemento che ci si
+  aspetta, ma un nodo di testo contenente \code{"\textbackslash n\textbackslash t"}.}
+
+Anche i \textbf{commenti} HTML, pur non essendo visualizzati, vengono analizzati
+e aggiunti al DOM come speciali nodi commento.
+
+\subsection{Tipi di nodo}
+
+La specifica del DOM definisce 12 tipi di nodo. Nella pratica se ne usano
+quattro:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.1cm}}>{\raggedright\arraybackslash}p{8.4cm}@{}}
+  \textbf{Tipo} & \textbf{Rappresenta} \\
+  nodo \code{document} & la radice e il punto d'ingresso del DOM \\
+  nodi \textit{Element} & gli elementi HTML \\
+  nodi \textit{Text}    & il contenuto testuale \\
+  nodi \textit{Comment} & i commenti \\
+\end{tabular}
+\end{center}
+
+\section{Trovare elementi}
+
+L'oggetto \code{document} fornisce diversi metodi per selezionare elementi.
+
+\begin{lstlisting}[style=html, name=trova.html]
+<ul>
+  <li id="a">A</li>
+  <li class="foo bar">B</li>
+  <li name="c">C</li>
+</ul>
+<script>
+  console.log(document.getElementById("a"));
+  console.log(document.getElementsByClassName("foo"));  // HTMLCollection (1)
+  console.log(document.getElementsByName("c"));         // NodeList (1)
+  console.log(document.getElementsByTagName("li"));     // HTMLCollection (3)
+</script>
+\end{lstlisting}
+
+I metodi \code{querySelector(css)} e \code{querySelectorAll(css)} sono i più
+versatili, perché prendono in ingresso un \textbf{selettore CSS}: tutto ciò che
+abbiamo imparato nel capitolo sui CSS torna utile qui.
+
+\begin{itemize}
+  \item \code{querySelector} restituisce solo il \textbf{primo} elemento che
+        corrisponde al selettore;
+  \item \code{querySelectorAll} restituisce una \textbf{lista} di
+        corrispondenze;
+  \item tutti i metodi restituiscono \code{null} quando non trovano nulla.
+\end{itemize}
+
+\begin{lstlisting}[style=html, name=queryselector.html]
+<ul>
+  <li id="a">A</li> <li class="foo bar">B</li> <li name="c">C</li>
+</ul>
+<script>
+  console.log(document.querySelector("ul > li"));         // primo <li>
+  console.log(document.querySelectorAll("ul > li"));      // NodeList (3)
+  console.log(document.querySelector("ul > li.myclass")); // null
+</script>
+\end{lstlisting}
+
+\subsection{Collezioni vive}
+
+Tutti i metodi della famiglia \code{getElementsBy*} restituiscono una
+\code{HTMLCollection}, detta anche \term{collezione viva}: si aggiorna
+automaticamente e riflette sempre lo stato corrente del documento.
+
+\begin{esempio}{Una collezione che cambia da sola}
+\begin{lstlisting}[style=html, name=live.html]
+<a href="/">First link</a>
+<script>
+  let links = document.getElementsByTagName("a");
+  console.log(links);   // HTMLCollection (1)
+</script>
+
+<a href="/">Second Link</a> <a href="/">Third Link</a>
+<script>
+  console.log(links);   // HTMLCollection (3)  -- senza rieseguire la ricerca!
+</script>
+\end{lstlisting}
+
+La variabile \code{links} non è stata riassegnata, eppure contiene tre elementi:
+la collezione si è aggiornata da sé.
+\end{esempio}
+
+\subsection{Cercare dentro un elemento}
+
+Quando i metodi di ricerca sono invocati su \code{document}, cercano
+nell'\textbf{intero} documento HTML. Se gli elementi che ci servono sono
+discendenti di un altro elemento, può essere più efficiente invocare i metodi di
+ricerca \textbf{sull'elemento antenato}.
+
+\begin{lstlisting}[style=js, name=ricerca-locale.js]
+let sidebar = document.getElementById("sidebar");
+let sidebarLinks = sidebar.querySelectorAll("a");   // cerca solo nella sidebar
+\end{lstlisting}
+
+\subsection{Riepilogo}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{0.8cm}}l@{\hspace{0.7cm}}c@{\hspace{0.7cm}}c@{}}
+  \textbf{Metodo} & \textbf{Cerca per\ldots} & \textbf{Su elementi?} &
+  \textbf{Collez. viva?} \\
+  \code{querySelector}          & selettore CSS   & sì & no \\
+  \code{querySelectorAll}       & selettore CSS   & sì & no \\
+  \code{getElementById}         & attributo id    & no & no \\
+  \code{getElementsByName}      & attributo name  & no & sì \\
+  \code{getElementsByTagName}   & nome del tag o \code{*} & sì & sì \\
+  \code{getElementsByClassName} & attributo class & sì & sì \\
+\end{tabular}
+\end{center}
+
+\info{Quale usare}{
+  Nella pratica \code{querySelector} e \code{querySelectorAll} coprono
+  praticamente ogni esigenza e hanno il vantaggio di usare la stessa sintassi
+  dei CSS. Gli altri metodi restano utili quando serve una collezione viva,
+  oppure per \code{getElementById}, che è il più veloce di tutti.}
+
+\section{Navigare il DOM}
+
+Gli elementi HTML più esterni sono disponibili anche come proprietà
+dell'oggetto \code{document}:
+
+\begin{itemize}
+  \item \code{document.documentElement} per l'elemento \tg{html};
+  \item \code{document.head} per l'elemento \tg{head};
+  \item \code{document.body} per l'elemento \tg{body}.
+\end{itemize}
+
+In generale, ogni nodo del DOM contiene riferimenti al proprio genitore, ai
+fratelli e ai figli. Questi riferimenti sono in \textbf{sola lettura}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+      e/.style={rounded corners=3pt, draw=primary!65!black, line width=1pt,
+                fill=primary!12!white, minimum width=2.2cm, minimum height=0.85cm},
+      r/.style={rounded corners=2pt, draw=neutral!55!white, line width=0.7pt,
+                fill=neutral!8!white, minimum width=2.4cm, minimum height=0.6cm},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+                draw=accent!70!black}]
+
+    \node[e] (el) at (0,0) {<elem>};
+
+    \node[r] (par) at (0,1.6)  {parentNode};
+    \node[r] (ps)  at (-3.2,0) {previousSibling};
+    \node[r] (ns)  at (3.2,0)  {nextSibling};
+    \node[r] (fc)  at (-2.6,-1.6) {firstChild};
+    \node[r] (lc)  at (2.6,-1.6)  {lastChild};
+    \node[r] (cn)  at (0,-2.6)    {childNodes};
+
+    \draw[a] (el) -- (par);
+    \draw[a] (el) -- (ps);
+    \draw[a] (el) -- (ns);
+    \draw[a] (el) -- (fc);
+    \draw[a] (el) -- (lc);
+    \draw[a] (el) -- (cn);
+  \end{tikzpicture}
+  \caption{Le proprietà di navigazione fra i nodi del DOM.}
+  \label{fig:dom-nav}
+\end{figure}
+
+\begin{esempio}{Navigazione fra nodi}
+\begin{lstlisting}[style=html, name=navigazione.html]
+<body>
+  <main>
+    <h1>Hello DOM!</h1>
+    <p>DOM is <em>FUN</em>!</p>
+  </main>
+  <script>
+    console.log(document.body.firstChild.nextSibling); // elemento main
+    console.log(document.body.childNodes[1]);          // elemento main
+    console.log(document.querySelector("em").parentNode); // elemento p
+  </script>
+</body>
+\end{lstlisting}
+
+Si noti \code{firstChild.nextSibling}: il primo figlio di \code{body} è il nodo
+di testo contenente l'a-capo e l'indentazione, non \code{<main>}.
+\end{esempio}
+
+\subsection{Navigare fra soli elementi}
+
+Spesso vogliamo \textbf{ignorare} i nodi di testo e di commento e concentrarci
+sui soli elementi. Esistono proprietà di navigazione dedicate:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.6cm}}l@{}}
+  \textbf{Tutti i nodi} & \textbf{Solo elementi} \\
+  \code{parentNode}      & \code{parentElement} \\
+  \code{previousSibling} & \code{previousElementSibling} \\
+  \code{nextSibling}     & \code{nextElementSibling} \\
+  \code{firstChild}      & \code{firstElementChild} \\
+  \code{lastChild}       & \code{lastElementChild} \\
+  \code{childNodes}      & \code{children} \\
+\end{tabular}
+\end{center}
+
+\info{Usare quasi sempre la colonna di destra}{
+  Nella pratica le proprietà \code{*Element*} sono quelle che si usano: evitano
+  di dover saltare a mano i nodi di testo generati dall'indentazione del
+  sorgente HTML, che sono un dettaglio di formattazione e non contenuto.}
+
+\section{Proprietà dei nodi}
+
+\subsection{Nome e tipo}
+
+\code{nodeName} e \code{tagName} danno informazioni sul tipo di un nodo. Sono in
+sola lettura.
+
+\begin{lstlisting}[style=html, name=nodename.html]
+<body>
+  <h1 id="h">Hello <em>DOM!</em></h1>
+  <!-- commento -->
+  <script>
+    let body = document.body;
+    console.log(body.firstChild.nodeName);          // #text
+    console.log(body.firstChild.tagName);           // undefined
+    console.log(body.childNodes[3].nodeName);       // #comment
+    console.log(body.firstElementChild.nodeName);   // H1
+    console.log(body.firstElementChild.tagName);    // H1
+  </script>
+</body>
+\end{lstlisting}
+
+\subsection{Attributi}
+
+Gli attributi \textbf{standard} vengono analizzati e resi disponibili come
+proprietà degli elementi corrispondenti. Quelli non standard no, e vanno letti
+con \code{getAttribute()}.
+
+\begin{lstlisting}[style=html, name=attributi.html]
+<body>
+  <input id="x" class="inp ok" name="field" custom="y">
+  <script>
+    let i = document.body.firstElementChild;
+    console.log(i.id);          // x
+    console.log(i.classList);   // DOMTokenList ["inp", "ok"]
+    console.log(i.name);        // field
+    console.log(i.custom);      // undefined: custom non e' standard
+    console.log(i.getAttribute("custom"));   // y
+  </script>
+</body>
+\end{lstlisting}
+
+Queste proprietà sono anche \textbf{scrivibili}:
+
+\begin{lstlisting}[style=html, name=attributi-scrittura.html]
+<body>
+  <input id="x" class="inp ok" name="field" custom="y">
+  <script>
+    let i = document.body.firstElementChild;
+    i.id = "w";
+    i.classList.remove("ok");
+    i.classList.add("err");
+    i.setAttribute("custom", "k");
+    i.removeAttribute("name");
+  </script>
+</body>
+
+<!-- l'input dopo l'esecuzione dello script -->
+<input id="w" class="inp err" custom="k">
+\end{lstlisting}
+
+\subsection{innerHTML e outerHTML}
+
+\begin{itemize}
+  \item \code{innerHTML} permette di accedere al codice HTML \textbf{contenuto}
+        in un \code{HTMLElement};
+  \item \code{outerHTML} permette di accedere al codice HTML
+        \textbf{dell'intero} elemento.
+\end{itemize}
+
+\begin{lstlisting}[style=html, name=innerhtml.html]
+<body>
+  <h1 id="h">Hello <em>DOM!</em></h1>
+  <script>
+    let body = document.body;
+    console.log(body.firstElementChild.innerHTML);
+    // Hello <em>DOM!</em>
+    console.log(body.firstChild.innerHTML);
+    // undefined (un nodo di testo non e' un HTMLElement)
+    console.log(body.firstElementChild.outerHTML);
+    // <h1 id="h">Hello <em>DOM!</em></h1>
+  </script>
+</body>
+\end{lstlisting}
+
+La cosa interessante è che sono \textbf{scrivibili}: assegnando loro un nuovo
+valore si cambia il contenuto della pagina.
+
+\begin{lstlisting}[style=html, name=innerhtml-scrittura.html]
+<body>
+  <h1 id="h">Hello <em>DOM!</em></h1>
+  <script>
+    let elem = document.body.firstElementChild;
+
+    elem.innerHTML = "DOM: <em>Wow!</em>";
+    // cambiato il contenuto dell'elemento <h1>
+
+    elem.outerHTML = `<p>${elem.innerHTML}</p>`;
+    // ora l'<h1> e' diventato un <p>, con lo stesso contenuto
+  </script>
+</body>
+\end{lstlisting}
+
+\error{innerHTML e input dell'utente}{
+  Assegnare a \code{innerHTML} una stringa che contiene, anche solo in parte,
+  dati forniti dall'utente è il modo classico di aprire una vulnerabilità di
+  tipo \textit{Cross-Site Scripting} (XSS): il browser interpreta come markup
+  ciò che gli si passa, quindi anche eventuali tag \tg{script} o attributi
+  \code{onerror}. Quando serve inserire solo testo si usa \code{textContent} o
+  \code{innerText}, che non interpretano nulla. Torneremo sull'argomento nel
+  capitolo sulla sicurezza.}
+
+\section{Modificare la struttura del DOM}
+
+Non siamo limitati a modificare gli elementi esistenti: possiamo creare
+dinamicamente nuovi elementi, rimuoverne di esistenti e cambiare la struttura
+dell'albero. È la chiave per costruire pagine \guillemotleft vive\guillemotright\ e reattive.
+
+\begin{lstlisting}[style=html, name=crea.html]
+<body>
+  <script>
+    let heading = document.createElement("h1");   // crea un nuovo <h1>
+    // il nuovo <h1> non e' ancora nel DOM
+
+    let title = document.createTextNode("Wow!");  // crea un nodo di testo
+    // nemmeno il nodo di testo e' ancora nel DOM
+
+    heading.append(title);          // il testo diventa figlio dell'<h1>
+    document.body.prepend(heading); // l'<h1> viene messo a inizio <body>
+  </script>
+</body>
+\end{lstlisting}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+      c/.style={rounded corners=2pt, draw=neutral!50!white, line width=0.7pt,
+                fill=neutral!7!white, minimum width=2.0cm, minimum height=0.55cm},
+      cn/.style={c, draw=accent!60!black, fill=accent!14!white}]
+
+    \node[font=\Lato\scriptsize\itshape, text=neutral!35!black] at (-2.0,1.5)
+      {prima};
+    \node[font=\Lato\scriptsize\itshape, text=neutral!35!black] at (4.6,1.5)
+      {dopo};
+
+    % prima
+    \node[c] (b1) at (-2.0,0.9) {<body>};
+    \node[c] (s1) at (-2.0,-0.2) {<script>};
+    \draw[draw=neutral!50!black, line width=0.55pt] (b1.south) -- (s1.north);
+
+    % dopo
+    \node[c]  (b2) at (4.6,0.9) {<body>};
+    \node[cn] (h2) at (3.4,-0.2) {<h1>};
+    \node[c]  (s2) at (5.9,-0.2) {<script>};
+    \node[cn] (t2) at (3.4,-1.3) {\#text Wow!};
+    \draw[draw=neutral!50!black, line width=0.55pt] (b2.south) -- (h2.north);
+    \draw[draw=neutral!50!black, line width=0.55pt] (b2.south) -- (s2.north);
+    \draw[draw=neutral!50!black, line width=0.55pt] (h2.south) -- (t2.north);
+  \end{tikzpicture}
+  \caption{L'albero DOM prima e dopo l'esecuzione dello script.}
+  \label{fig:dom-modify}
+\end{figure}
+
+\subsection{Dove inserire i nodi}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\footnotesize,
+      li/.style={draw=primary!60!black, fill=primary!10!white, line width=0.7pt,
+                 minimum width=3.6cm, minimum height=0.5cm, anchor=north},
+      lab/.style={font=\FiraCodeNL\scriptsize, text=accent!70!black, anchor=west},
+      a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt,
+                draw=accent!70!black}]
+
+    \node[li] (l1) at (0,0)          {<li>1</li>};
+    \node[li, below=1pt of l1] (l2)  {<li>2</li>};
+    \node[li, below=1pt of l2] (l3)  {<li>3</li>};
+
+    \begin{scope}[on background layer]
+      \node[rounded corners=3pt, draw=neutral!50!black, line width=0.8pt,
+            fit=(l1)(l2)(l3), inner sep=7pt] (ul) {};
+    \end{scope}
+
+    \draw[a] (2.7,0.85) -- (0.9,0.85);   \node[lab] at (2.8,0.85) {ul.before(...)};
+    \draw[a] (2.7,0.15) -- (1.85,0.15);  \node[lab] at (2.8,0.15) {ul.prepend(...)};
+    \draw[a] (2.7,-1.55) -- (1.85,-1.55);\node[lab] at (2.8,-1.55) {ul.append(...)};
+    \draw[a] (2.7,-2.3) -- (0.9,-2.3);   \node[lab] at (2.8,-2.3) {ul.after(...)};
+  \end{tikzpicture}
+  \caption{I quattro punti di inserimento rispetto a un elemento.}
+  \label{fig:dom-insert}
+\end{figure}
+
+\begin{esempio}{Costruire una lista dinamicamente}
+\begin{lstlisting}[style=html, name=lista-dinamica.html]
+<body>
+  <ul>
+    <li class="kw">CSS</li>
+  </ul>
+</body>
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=lista-dinamica.js]
+let ul   = document.querySelector("ul");
+let html = ul.querySelector("li").cloneNode();
+let js   = document.createElement("li");
+
+html.innerHTML = "HTML";
+js.innerHTML   = "JavaScript";
+
+ul.before("Keywords:");
+ul.prepend(html);
+ul.append(js);
+ul.after("End of keyword list");
+\end{lstlisting}
+
+Il risultato:
+
+\begin{lstlisting}[style=html, name=risultato.html]
+<body>
+  Keywords:
+  <ul>
+    <li class="kw">HTML</li>
+    <li class="kw">CSS</li>
+    <li>JavaScript</li>
+  </ul>
+  End of keyword list
+</body>
+\end{lstlisting}
+\end{esempio}
+
+\begin{esempio}{Spostare e sostituire}
+\begin{lstlisting}[style=js, name=sostituisci.js]
+let ul = document.querySelector("ul");
+let ol = document.createElement("ol");
+
+ol.append(ul.firstElementChild);   // sposta il <li> dentro il nuovo <ol>
+ul.replaceWith(ol);                // sostituisce l'<ul> con l'<ol>
+\end{lstlisting}
+
+Da notare: \code{append} non copia il nodo, lo \textbf{sposta}. Un nodo può
+trovarsi in un solo punto dell'albero.
+\end{esempio}
+
+\subsection{Riepilogo dei metodi}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{0.9cm}}>{\raggedright\arraybackslash}p{7.4cm}@{}}
+  \textbf{Metodo} & \textbf{Descrizione} \\
+  \code{document.createElement(tag)}   & crea un elemento con il tag dato \\
+  \code{document.createTextNode(val)}  & crea un nodo di testo (usato di rado) \\
+  \code{elem.cloneNode(deep)}          & clona l'elemento; con \code{deep=true}
+                                         anche i discendenti \\
+  \code{node.append(...)}              & inserisce dentro \code{node}, in fondo \\
+  \code{node.prepend(...)}             & inserisce dentro \code{node}, all'inizio \\
+  \code{node.before(...)}              & inserisce subito prima di \code{node} \\
+  \code{node.after(...)}               & inserisce subito dopo \code{node} \\
+  \code{node.replaceWith(...)}         & sostituisce \code{node} \\
+  \code{node.remove()}                 & rimuove il nodo \\
+\end{tabular}
+\end{center}
+
+\section{Interagire con l'utente}
+
+\code{alert}, \code{prompt} e \code{confirm} sono modi semplici per interagire
+con l'utente in un browser.
+
+\begin{lstlisting}[style=html, name=interazione.html]
+<ul></ul>
+<script>
+  alert("This page will ask for your input");
+
+  if (confirm("Do you want to continue?") === true) {
+    let name = prompt("State your name:");
+    let num  = parseInt(prompt("Insert a number:"));
+
+    for (let i = 0; i < num; i++) {
+      let li = document.createElement("li");
+      li.innerHTML = name;
+      document.querySelector("ul").append(li);
+    }
+  } else {
+    console.log("user cancelled");
+  }
+</script>
+\end{lstlisting}
+
+\warning{Sono finestre bloccanti}{
+  \code{alert}, \code{prompt} e \code{confirm} \textbf{sospendono l'esecuzione}
+  dello script e bloccano l'interazione con la pagina finché l'utente non
+  risponde. Sono comodissime per imparare e per fare esperimenti, ma nelle
+  applicazioni reali si preferiscono finestre di dialogo costruite nel DOM, che
+  si possono impaginare, tradurre e rendere accessibili.}
+
+\section{Eventi}
+
+\dfn{Evento}{
+  Un \term{evento} è un segnale che qualcosa è accaduto.}
+
+Gli eventi possono riguardare:
+
+\begin{itemize}
+  \item il \textbf{comportamento dell'utente}: clic, pressioni di tasti,
+        movimenti del mouse;
+  \item i \textbf{form}: invio, acquisto o perdita del fuoco su un campo;
+  \item il \textbf{documento}: documento o elementi caricati, richieste di rete
+        completate.
+\end{itemize}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{7.6cm}@{}}
+  \textbf{Evento} & \textbf{Quando si verifica} \\[2pt]
+  \multicolumn{2}{@{}l}{\color{primary!80!black}\textbf{Mouse}} \\
+  \code{click}       & l'utente fa clic (o tocca) sull'elemento \\
+  \code{contextMenu} & clic con il tasto destro sull'elemento \\
+  \code{mouseover} / \code{mouseout} & il cursore entra o esce dall'elemento \\
+  \code{mousedown} / \code{mouseup}  & il tasto principale viene premuto o
+                                       rilasciato sull'elemento \\
+  \code{mousemove}   & il cursore si muove \\[4pt]
+  \multicolumn{2}{@{}l}{\color{primary!80!black}\textbf{Tastiera}} \\
+  \code{keydown} / \code{keyup} & un tasto viene premuto o rilasciato \\[4pt]
+  \multicolumn{2}{@{}l}{\color{primary!80!black}\textbf{Form}} \\
+  \code{submit}      & l'utente invia un form \\
+  \code{focus}       & l'utente dà il fuoco a un elemento (per esempio un
+                       \tg{input}) \\[4pt]
+  \multicolumn{2}{@{}l}{\color{primary!80!black}\textbf{Documento e finestra}} \\
+  \code{DOMContentLoaded} & l'HTML è stato analizzato, il DOM è completo \\
+  \code{load}        & la pagina è stata caricata e disegnata per intero \\
+\end{tabular}
+\end{center}
+
+\subsection{Gestori di eventi}
+
+Per reagire agli eventi si definiscono funzioni \term{gestore}
+(\textit{handler}), eseguite quando l'evento scatta.
+
+Il modo più semplice è usare gli attributi HTML \code{on<evento>}, il cui valore
+è il codice JavaScript da eseguire.
+
+\begin{lstlisting}[style=html, name=handler-attributo.html]
+<input type="button" value="Click me" onclick="handleClick();">
+<script>
+  function handleClick() {
+    console.log("Click handled");
+  }
+</script>
+\end{lstlisting}
+
+I gestori si possono anche definire dinamicamente da JavaScript, scrivendo la
+proprietà \code{on<evento>} sull'elemento oppure usando il metodo
+\code{addEventListener}.
+
+\begin{lstlisting}[style=html, name=handler-dinamico.html]
+<input type="button" value="Click me" onclick="handleClick();">
+<script>
+  function handleClick() { console.log("Click handled"); }
+
+  let input = document.querySelector("input");
+
+  input.onclick = () => { console.log("Tap"); };
+  // sovrascrive il gestore definito nell'attributo HTML
+
+  input.addEventListener("click", handleClick);
+  // AGGIUNGE un nuovo gestore, senza rimuovere il precedente
+</script>
+\end{lstlisting}
+
+\info{Perché addEventListener è preferibile}{
+  La proprietà \code{on<evento>} può contenere \textbf{un solo} gestore:
+  assegnarne un altro cancella il precedente.
+  \code{addEventListener} permette invece di registrare quanti gestori si
+  vogliono per lo stesso evento, e di rimuoverli selettivamente con
+  \code{removeEventListener}. In un'applicazione reale, dove parti diverse del
+  codice possono voler reagire allo stesso evento, è l'unica scelta sensata.}
+
+\subsection{Il valore di this in un gestore}
+
+Dentro un gestore, \code{this} vale l'elemento a cui il gestore è stato
+assegnato.
+
+\begin{lstlisting}[style=html, name=this-handler.html]
+<input type="button" value="Click me">
+<p>Hello Events!</p>
+<script>
+  function handleClick() {
+    console.log(this.outerHTML);
+  }
+
+  document.querySelector("input").addEventListener("click", handleClick);
+  // <input type="button" value="Click me">
+
+  document.querySelector("p").addEventListener("click", handleClick);
+  // <p>Hello Events!</p>
+</script>
+\end{lstlisting}
+
+\subsection{L'oggetto evento}
+
+Per gestire bene un evento servono spesso dettagli: in un \code{keydown}, quale
+tasto è stato premuto? In un \code{click}, a quali coordinate? L'utente teneva
+premuto \code{CTRL}?
+
+Tutti i dettagli sono forniti in un \term{oggetto evento}, passato
+automaticamente ai gestori. Tipi di evento diversi hanno proprietà diverse: per
+esempio gli eventi da tastiera hanno una proprietà \code{key} che rappresenta il
+tasto premuto.
+
+\begin{lstlisting}[style=html, name=oggetto-evento.html]
+<input type="text" placeholder="Write here" autofocus>
+<script>
+  function handler(event) {
+    console.log(`You pressed ${event.key}`);
+  }
+
+  document.querySelector("input").addEventListener("keyup", handler);
+</script>
+\end{lstlisting}
+
+\section{Propagazione degli eventi}
+
+\subsection{Bubbling}
+
+\dfn{Event bubbling}{
+  Quando un evento scatta su un elemento, vengono eseguiti prima tutti i gestori
+  registrati su quell'elemento, poi tutti quelli registrati sul suo genitore, e
+  così via risalendo fino alla radice del DOM. Questo meccanismo si chiama
+  \term{event bubbling} (\guillemotleft ribollimento\guillemotright).}
+
+Si applica alla maggior parte degli eventi, ma non a tutti: gli eventi di
+\code{focus}, per esempio, non fanno bubbling.
+
+\begin{esempio}{Il percorso di un clic}
+\begin{lstlisting}[style=html, name=bubbling.html]
+<body>
+  <section onclick="console.log('section');">
+    <article onclick="console.log('article');">
+      <p onclick="console.log('p');">Bubbling</p>
+    </article>
+  </section>
+  <script>
+    document.onclick = () => console.log("document");
+  </script>
+</body>
+\end{lstlisting}
+
+Facendo clic sul \tg{p}, la console mostra:
+
+\begin{console}
+p
+article
+section
+document
+\end{console}
+
+Un solo clic, quattro gestori eseguiti, dal più interno al più esterno.
+\end{esempio}
+
+\subsection{Delegazione degli eventi}
+
+La \term{delegazione degli eventi} è un pattern potente: se molti elementi
+possono generare eventi simili, invece di assegnare un gestore a ciascuno se ne
+usa \textbf{uno solo} sul loro antenato comune. Gli elementi
+\guillemotleft delegano\guillemotright\ la gestione all'antenato.
+
+La proprietà \code{target} dell'oggetto evento permette di sapere su quale
+elemento l'evento è stato effettivamente generato.
+
+\begin{esempio}{Un solo gestore per tutta la tabella}
+\begin{lstlisting}[style=html, name=delegazione.html]
+<table onclick="handler(event);">
+  <tr><th>Col</th><th>Col</th></tr>
+  <tr><td>1</td><td>2</td></tr>
+  <tr><td>3</td><td>4</td></tr>
+  <tr><td>5</td><td>6</td></tr>
+</table>
+<script>
+  function handler(event) {
+    if (event.target.nodeName === "TD") {
+      let oldValue = parseInt(event.target.innerHTML);
+      event.target.innerHTML = ++oldValue;
+    }
+  }
+</script>
+\end{lstlisting}
+
+Un solo gestore serve sei celle. Il vantaggio non è solo la brevità: se in
+seguito si aggiungessero righe alla tabella \textbf{dinamicamente}, queste
+funzionerebbero subito, senza bisogno di registrare nuovi gestori.
+\end{esempio}
+
+\subsection{Fermare il bubbling}
+
+Un gestore può decidere che l'evento è stato completamente elaborato e che non
+serve propagarlo oltre, invocando il metodo \code{stopPropagation()}
+sull'oggetto evento.
+
+\begin{lstlisting}[style=html, name=stop-propagation.html]
+<body>
+  <section onclick="console.log('section');">
+    <article>
+      <p onclick="console.log('p');">Bubbling</p>
+    </article>
+  </section>
+  <script>
+    let art = document.querySelector("article");
+    art.addEventListener("click", handler);
+
+    function handler(event) {
+      console.log(this.tagName);
+      event.stopPropagation();   // l'evento non arriva a <section>
+    }
+  </script>
+</body>
+\end{lstlisting}
+
+\warning{Fermare la propagazione con parsimonia}{
+  La regola pratica è di \textbf{non} fermare la propagazione a meno di avere
+  una buona ragione. Un antenato potrebbe aver bisogno di intercettare
+  quell'evento, oggi o in futuro: sistemi di analisi, chiusura automatica dei
+  menu a comparsa e molte librerie si basano proprio sul fatto che gli eventi
+  risalgano fino in cima.}
+
+\subsection{Generare eventi da JavaScript}
+
+Da JavaScript è anche possibile \textbf{generare} eventi. La proprietà
+\code{isTrusted} vale \code{false} per gli eventi artificiali.
+
+\begin{lstlisting}[style=html, name=dispatch.html]
+<input type="button" value="Click me">
+<script>
+  function handler(event) {
+    console.log(`${event.type} event. Trusted: ${event.isTrusted}`);
+  }
+
+  let input = document.querySelector("input");
+  input.onclick = handler;
+
+  let click = new Event("click");
+  input.dispatchEvent(click);   // isTrusted vale false
+</script>
+\end{lstlisting}
+
+\section{Ordine di esecuzione degli script}
+
+Man mano che i nostri script diventano più complessi, interagiscono con il DOM e
+registrano gestori, dobbiamo sapere \textbf{quando} il codice viene eseguito
+durante il caricamento di una pagina.
+
+\begin{itemize}
+  \item In generale, gli script vengono scaricati ed eseguiti \textbf{nell'ordine
+        in cui compaiono}, mentre l'analisi della pagina è \textbf{sospesa}.
+  \item Gli script esterni con l'attributo \attr{defer} vengono scaricati
+        \textbf{in parallelo} ed eseguiti \textbf{dopo} che la pagina è stata
+        completamente analizzata.
+  \item Gli script esterni con l'attributo \attr{async} vengono scaricati in
+        parallelo ed eseguiti \textbf{appena sono pronti}.
+  \item Gli script di tipo modulo si comportano come \attr{defer} per
+        impostazione predefinita, e possono essere dichiarati \attr{async}.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      bar/.style={minimum height=0.4cm, anchor=west, inner sep=0pt},
+      sp/.style={bar, fill=primary!22!white, draw=primary!55!black, line width=0.5pt},
+      sf/.style={bar, fill=yellow-gradient-3!60!white, draw=yellow-gradient-6,
+                 line width=0.5pt},
+      sx/.style={bar, fill=accent!25!white, draw=accent!60!black, line width=0.5pt},
+      lb/.style={font=\FiraCodeNL\scriptsize, anchor=east,
+                 text=neutral!25!black}]
+
+    % ─── legenda ───
+    \node[sp, minimum width=0.7cm] at (0,1.35) {};
+    \node[font=\Lato\scriptsize, anchor=west, text=neutral!30!black] at (0.8,1.35)
+      {analisi della pagina};
+    \node[sf, minimum width=0.7cm] at (3.5,1.35) {};
+    \node[font=\Lato\scriptsize, anchor=west, text=neutral!30!black] at (4.3,1.35)
+      {download dello script};
+    \node[sx, minimum width=0.7cm] at (7.3,1.35) {};
+    \node[font=\Lato\scriptsize, anchor=west, text=neutral!30!black] at (8.1,1.35)
+      {esecuzione};
+
+    % ─── momento in cui il tag viene incontrato ───
+    \draw[dashed, draw=neutral!45!white, line width=0.6pt] (1.2,0.65) -- (1.2,-5.0);
+    \node[font=\Lato\scriptsize, text=neutral!35!black, anchor=south] at (1.2,0.7)
+      {il tag \code{script} viene incontrato};
+
+    % ─── 1: script classico ───
+    \node[lb] at (-0.2,0.2) {<script>};
+    \node[sp, minimum width=1.2cm] at (0,0.2) {};
+    \node[sf, minimum width=1.6cm] at (1.2,0.2) {};
+    \node[sx, minimum width=1.0cm] at (2.8,0.2) {};
+    \node[sp, minimum width=2.2cm] at (3.8,0.2) {};
+
+    % ─── 2: defer ───
+    \node[lb] at (-0.2,-0.9) {defer};
+    \node[sp, minimum width=1.2cm] at (0,-0.9) {};
+    \node[sp, minimum width=3.4cm] at (1.2,-0.9) {};
+    \node[sf, minimum width=1.6cm] at (1.2,-1.35) {};
+    \node[sx, minimum width=1.0cm] at (4.6,-0.9) {};
+
+    % ─── 3: async ───
+    \node[lb] at (-0.2,-2.0) {async};
+    \node[sp, minimum width=1.2cm] at (0,-2.0) {};
+    \node[sp, minimum width=1.6cm] at (1.2,-2.0) {};
+    \node[sf, minimum width=1.6cm] at (1.2,-2.45) {};
+    \node[sx, minimum width=1.0cm] at (2.8,-2.0) {};
+    \node[sp, minimum width=2.2cm] at (3.8,-2.0) {};
+
+    % ─── 4: script di tipo modulo ───
+    \node[lb] at (-0.2,-3.1) {type="module"};
+    \node[sp, minimum width=1.2cm] at (0,-3.1) {};
+    \node[sp, minimum width=3.4cm] at (1.2,-3.1) {};
+    \node[sf, minimum width=1.6cm] at (1.2,-3.55) {};
+    \node[sx, minimum width=1.0cm] at (4.6,-3.1) {};
+
+    % ─── 5: modulo async ───
+    \node[lb] at (-0.2,-4.2) {type="module" async};
+    \node[sp, minimum width=1.2cm] at (0,-4.2) {};
+    \node[sp, minimum width=1.6cm] at (1.2,-4.2) {};
+    \node[sf, minimum width=1.6cm] at (1.2,-4.65) {};
+    \node[sx, minimum width=1.0cm] at (2.8,-4.2) {};
+    \node[sp, minimum width=2.2cm] at (3.8,-4.2) {};
+  \end{tikzpicture}
+  \caption{Quando viene scaricato ed eseguito uno script, a seconda degli
+           attributi.}
+  \label{fig:script-order}
+\end{figure}
+
+\begin{esempio}{Perché l'ordine conta}
+Consideriamo questo script, che cerca un \tg{h1} nel \tg{body}:
+
+\begin{lstlisting}[style=js, name=load.js]
+let h1 = document.body.querySelector("h1");
+console.log(h1.innerText);
+\end{lstlisting}
+
+E questa pagina, che lo include nell'\tg{head}:
+
+\begin{lstlisting}[style=html, name=pagina.html]
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Events</title>
+    <script src="load.js"></script>
+  </head>
+  <body>
+    <h1>JavaScript</h1>
+  </body>
+</html>
+\end{lstlisting}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.1cm}}>{\raggedright\arraybackslash}p{8.6cm}@{}}
+  \textbf{Variante} & \textbf{Esito} \\
+  \code{<script src="load.js">}
+    & \textbf{Errore.} Lo script viene eseguito subito, quando il \tg{body} non
+      è ancora stato analizzato: \code{h1} vale \code{null}. \\
+  \code{<script defer src="load.js">}
+    & \textbf{Funziona.} L'esecuzione avviene dopo l'analisi completa della
+      pagina. \\
+  \code{<script async src="load.js">}
+    & \textbf{Non si può sapere.} Dipende da quanto tempo serve a scaricare lo
+      script. \\
+\end{tabular}
+\end{center}
+
+L'alternativa che funziona sempre, indipendentemente da dove si trova il tag, è
+attendere l'evento \code{DOMContentLoaded}:
+
+\begin{lstlisting}[style=js, name=load-sicuro.js]
+document.addEventListener("DOMContentLoaded", () => {
+  let h1 = document.body.querySelector("h1");
+  console.log(h1.innerText);
+});
+\end{lstlisting}
+\end{esempio}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{The Modern JavaScript Tutorial} \\
+        \urlx{https://javascript.info/} \\
+        Parte 2: \textit{Document} (1.1--1.7), \textit{Introduction to events},
+        \textit{UI events}, \textit{Document and resource loading}.
+  \item \textbf{Eloquent JavaScript} (3\textsuperscript{a} edizione), Marijn
+        Haverbeke. \\
+        \urlx{https://eloquentjavascript.net/} \\
+        Capitoli da 13 a 15.
+  \item \textbf{JavaScript Reference} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference}
+\end{itemize}

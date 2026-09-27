@@ -1,0 +1,379 @@
+\chapter{Il lato server del Web}
+
+Finora abbiamo imparato molto sulle tecnologie web fondamentali: HTML, CSS e
+JavaScript. Sappiamo progettare pagine moderne, curate e responsive, e sappiamo
+renderle dinamiche con JavaScript: gestire eventi, modificare il DOM, effettuare
+richieste HTTP asincrone per recuperare i dati da mostrare.
+
+C'è però un limite di fondo che non abbiamo ancora superato.
+
+\section{I limiti delle web app statiche}
+
+Le nostre pagine hanno un certo dinamismo grazie a JavaScript, ma quel
+dinamismo avviene \textbf{dentro il browser}. In un certo senso restano
+intrinsecamente \term{statiche}: ogni volta che un browser richiede una delle
+nostre pagine, gli viene servito \textbf{sempre lo stesso identico documento}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      f/.style={wtnodeplain, font=\FiraCodeNL\scriptsize, minimum height=0.5cm}]
+
+    \node[font=\Lato\bfseries, text=primary!75!black] (t) at (0,1.5) {SERVER HTTP};
+    \node[font=\Lato\scriptsize, text=primary!45!black] (h) at (0,1.0)
+      {Host: \textbf{bookofprogramming.net} \quad Root: \code{/var/www/book}};
+
+    \node[f] (a) at (-3.5,0.3) {index.html};
+    \node[f, right=5pt of a] (b) {style.css};
+    \node[f, right=5pt of b] (c) {script.js};
+    \node[f, right=5pt of c] (d) {pics/fu-tzu.jpg};
+
+    \begin{scope}[on background layer]
+      \node[rounded corners=5pt, draw=primary!70!black, line width=1pt,
+            fill=primary!3!white, fit=(t)(h)(a)(d), inner sep=9pt] {};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Un server che serve solo file: la risposta è sempre la stessa.}
+  \label{fig:static-server}
+\end{figure}
+
+L'approccio \guillemotleft statico\guillemotright\ visto finora è semplice ed efficace, e funziona
+benissimo per applicazioni composte da un numero limitato di pagine che cambiano
+di rado. Presenta però alcune limitazioni evidenti:
+
+\begin{itemize}
+  \item come facciamo a \textbf{personalizzare} una pagina per uno specifico
+        utente?
+  \item che cosa succede se il contenuto di una pagina cambia molto
+        \textbf{frequentemente}?
+  \item che cosa succede se il nostro sito è composto da \textbf{milioni} di
+        pagine?
+  \item come facciamo ad \textbf{agire} in seguito a una richiesta, per esempio
+        registrando un ordine?
+\end{itemize}
+
+\begin{esempio}{Il caso Wikipedia}
+Wikipedia conta circa \textbf{60 milioni} di pagine web, tutte con la stessa
+struttura e lo stesso stile, ma con contenuti diversi.
+
+Supponiamo che la struttura di base di una pagina di Wikipedia occupi circa
+150\,000 caratteri: sono 150 kB di dati \textbf{ripetuti in ogni pagina}.
+Moltiplicando per 60 milioni di pagine si ottengono circa \textbf{9 TeraByte} di
+dati duplicati.
+
+E se dovessimo cambiare la barra di navigazione?
+
+Con un sito statico bisognerebbe rigenerare 60 milioni di file. È chiaro che
+serve un approccio diverso.
+\end{esempio}
+
+\section{La programmazione lato server}
+
+Fino a questo momento, per noi un server web si limitava a servire file
+prelevati dalla document root. Ma un server web può fare molto di più: tanto per
+cominciare, può \textbf{generare pagine al volo}, tipicamente in base ai
+parametri ricevuti nella richiesta HTTP.
+
+È questa l'idea alla base della \term{programmazione lato server}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      n/.style={wtnode, minimum width=3.2cm, minimum height=1.0cm},
+      a/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                draw=primary!70!black},
+      r/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                draw=accent!70!black}]
+
+    \node[n, draw=orange-gradient-6, fill=orange-gradient-1!40!white]
+      (as) at (0,0) {\textbf{Application}\\\textbf{Server}};
+
+    \node[font=\FiraCodeNL\scriptsize, anchor=east, text=neutral!25!black]
+      (r1) at (-2.4,0.8) {GET /dati-correnti/};
+    \node[font=\FiraCodeNL\scriptsize, anchor=east, text=neutral!25!black]
+      (r2) at (-2.4,-0.8) {GET /dati-correnti/};
+
+    \node[wtnodeplain, anchor=west] (p1) at (2.4,0.8) {Pagina A};
+    \node[wtnodeplain, anchor=west] (p2) at (2.4,-0.8) {Pagina B};
+
+    \draw[a] (r1.east) -- (as.west |- r1);
+    \draw[a] (r2.east) -- (as.west |- r2);
+    \draw[r] (as.east |- p1) -- (p1.west);
+    \draw[r] (as.east |- p2) -- (p2.west);
+
+    \node[font=\Lato\scriptsize\itshape, text=neutral!35!black] at (0,-1.6)
+      {stessa URL, risposte diverse};
+  \end{tikzpicture}
+  \caption{Con la generazione dinamica, la stessa richiesta può produrre
+           risposte diverse.}
+  \label{fig:dynamic-server}
+\end{figure}
+
+\section{CGI: Common Gateway Interface}
+
+Nei primi anni Novanta, prima ancora che JavaScript esistesse, le pagine
+dinamiche si ottenevano tramite la \term{Common Gateway Interface} (CGI).
+
+\dfn{CGI}{
+  \term{CGI} è una specifica di interfaccia che permette ai server web di
+  \textbf{eseguire programmi esterni} per elaborare una richiesta HTTP.}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      hdr/.style={wtnode, minimum width=2.7cm, minimum height=0.9cm},
+      life/.style={draw=neutral!45!white, line width=0.7pt, dashed},
+      msg/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=primary!70!black},
+      rsp/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=accent!70!black},
+      ml/.style={font=\Lato\scriptsize, midway, above, inner sep=2.5pt,
+                 fill=white, text=neutral!15!black},
+      num/.style={circle, fill=accent!75!black, text=white, inner sep=1.5pt,
+                  font=\Lato\bfseries\tiny}]
+
+    \def\xb{0} \def\xs{4.6} \def\xc{9.2}
+
+    \node[hdr] (B) at (\xb,0) {\textbf{Browser}};
+    \node[hdr] (S) at (\xs,0) {\textbf{Server HTTP}};
+    \node[hdr, draw=orange-gradient-6, fill=orange-gradient-1!40!white]
+      (C) at (\xc,0) {\textbf{Programma CGI}};
+
+    \draw[life] (B.south) -- (\xb,-3.6);
+    \draw[life] (S.south) -- (\xs,-3.6);
+    \draw[life] (C.south) -- (\xc,-3.6);
+
+    \draw[msg] (\xb,-0.9) -- (\xs,-0.9) node[ml]{richiesta HTTP};
+    \node[num] at (-0.5,-0.9) {1};
+
+    \draw[msg] (\xs,-1.7) -- (\xc,-1.7) node[ml]{invocazione del programma};
+    \node[num] at (-0.5,-1.7) {2};
+
+    \draw[rsp] (\xc,-2.5) -- (\xs,-2.5) node[ml]{output del programma};
+    \node[num] at (-0.5,-2.5) {3};
+
+    \draw[rsp] (\xs,-3.3) -- (\xb,-3.3) node[ml]{risposta HTTP};
+    \node[num] at (-0.5,-3.3) {4};
+  \end{tikzpicture}
+  \caption{Il flusso di una richiesta gestita tramite CGI.}
+  \label{fig:cgi-flow}
+\end{figure}
+
+La specifica CGI definisce con precisione come server web e programmi conformi
+devono comunicare.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{8.6cm}@{}}
+  \textbf{Elemento} & \textbf{Come viene trasmesso} \\
+  Header della richiesta, \textit{query string}
+    & tramite \textbf{variabili d'ambiente} \\
+  Corpo della richiesta
+    & sullo stream di \textbf{standard input} del programma \\
+  Corpo della risposta HTTP
+    & è ciò che il programma scrive sul \textbf{standard output} \\
+\end{tabular}
+\end{center}
+
+\begin{esempio}{Il nostro primo script CGI}
+\begin{lstlisting}[style=shell, name=hello.cgi]
+#!/bin/bash
+echo "Content-type: text/html; charset=utf-8"
+echo ""
+echo "<!DOCTYPE html>"
+echo "<html><head><title>Hello CGI!</title></head><body>"
+echo "<h1>Hello CGI!</h1>"
+echo "<p>Questa pagina e' stata caricata il "
+date +"%d/%m/%Y alle %H:%M:%S. </p></body>"
+\end{lstlisting}
+
+Si noti la struttura: prima gli header (qui solo \code{Content-type}), poi una
+\textbf{riga vuota}, poi il corpo. È esattamente la struttura di una risposta
+HTTP vista nel primo capitolo: il programma CGI la scrive a mano.
+
+Ogni volta che la pagina viene richiesta, la data stampata è quella corrente:
+la pagina è generata al momento.
+\end{esempio}
+
+\begin{esempio}{Una lista di cose da fare in CGI}
+Un'applicazione completa si costruisce combinando più script CGI, ciascuno
+responsabile di un'operazione:
+
+\begin{itemize}
+  \item \code{index.html} contiene un form e dei collegamenti;
+  \item l'invio del form richiama lo script \code{save-todo}, che aggiunge una
+        riga al file \code{todo.txt};
+  \item un collegamento richiama \code{list-todo}, che legge il file e ne
+        genera la pagina HTML;
+  \item un altro richiama \code{reset-todo}, che svuota il file.
+\end{itemize}
+
+L'esempio completo del corso è disponibile su
+\urlx{https://github.com/luistar/cgi-to-do-list-with-bash}.
+\end{esempio}
+
+\warning{Perché CGI oggi non si usa quasi più}{
+  Scrivere programmi CGI non è un'esperienza piacevole. Produrre interi
+  documenti HTML con delle \code{echo} è scomodo, analizzare a mano la query
+  string e il corpo della richiesta lo è ancora di più, e soprattutto il modello
+  è \textbf{inefficiente}: viene creato un \textbf{nuovo processo per ogni
+  richiesta}. Su un sito con traffico serio, il costo di avvio dei processi
+  supera di gran lunga il costo dell'elaborazione vera e propria.}
+
+\section{Lo scripting lato server}
+
+Per rispondere a questi problemi sono emersi linguaggi e framework
+specializzati:
+
+\begin{itemize}
+  \item \term{PHP} (acronimo ricorsivo di \textit{PHP Hypertext
+        Preprocessor}), nel 1995;
+  \item \term{ASP} (\textit{Active Server Pages}), il linguaggio di scripting
+        lato server di Microsoft, nel 1997;
+  \item \term{JSP} (\textit{Java Server Pages}), rilasciato originariamente da
+        Sun nel 1999.
+\end{itemize}
+
+L'idea comune è \guillemotleft mescolare\guillemotright\ codice lato server e HTML, con un
+interprete speciale che analizza il misto e produce HTML \guillemotleft puro\guillemotright.
+
+\subsection{PHP}
+
+In PHP si usano i delimitatori speciali \code{<?php ... ?>} per separare il
+codice dall'HTML.
+
+\begin{itemize}
+  \item il testo \textbf{fuori} dai delimitatori resta invariato nell'output;
+  \item il codice \textbf{dentro} i delimitatori viene interpretato, e il suo
+        output viene inserito nell'HTML;
+  \item \code{<?=} è un'abbreviazione per \code{<?php echo}.
+\end{itemize}
+
+\begin{esempio}{Una pagina PHP}
+\begin{lstlisting}[style=php, name=hello-world.php]
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><?php echo "Hello PHP" ?></title>
+  </head>
+  <body>
+    <h1>Hello PHP</h1>
+    <?php $array = ["Hello", "PHP"] ?>
+    <ul>
+      <?php foreach($array as $item): ?>
+        <li><?= $item ?></li>
+      <?php endforeach; ?>
+    </ul>
+  </body>
+</html>
+\end{lstlisting}
+
+\begin{browser}[hello-world.php]
+  {\Lora\bfseries\Huge Hello PHP}\\[6pt]
+  \begin{itemize}[leftmargin=1.8em, itemsep=0pt, topsep=2pt, parsep=0pt]
+    \item Hello
+    \item PHP
+  \end{itemize}
+\end{browser}
+
+Il ciclo \code{foreach} viene eseguito \textbf{sul server}: al browser arrivano
+soltanto i due \tg{li} già generati. Chi guarda il sorgente della pagina non
+vede alcuna traccia del codice PHP.
+\end{esempio}
+
+Le soluzioni di scripting lato server aiutano lo sviluppatore in molte delle
+operazioni noiose tipiche della gestione di una richiesta HTTP:
+
+\begin{itemize}
+  \item le richieste vengono \textbf{pre-elaborate} automaticamente;
+  \item in PHP i parametri della richiesta sono disponibili in array
+        associativi (\code{\$\_GET}, \code{\$\_POST}). Per esempio
+        \code{\$\_POST['todo']} accede al parametro \code{todo};
+  \item i cookie sono già analizzati nell'array \code{\$\_COOKIE};
+  \item non serve scrivere esplicitamente sullo standard output l'intera
+        risposta.
+\end{itemize}
+
+\info{PHP non è materia d'esame}{
+  Per il corso di Tecnologie Web non è richiesto di imparare il linguaggio PHP:
+  basta quello che si trova nelle slide, e quindi in questo capitolo. PHP compare
+  qui come \textbf{esempio storico} di scripting lato server, per capire da dove
+  vengono le idee che ritroveremo in Node.js ed Express.}
+
+\subsection{Un'architettura moderna: NGINX e PHP-FPM}
+
+L'esempio della lista di cose da fare, riscritto in PHP 8, viene reso più
+interessante e più realistico:
+
+\begin{itemize}
+  \item la persistenza è gestita con un vero database (SQLite);
+  \item si usa Bootstrap per rendere le pagine responsive e più gradevoli;
+  \item si introducono un'intestazione e un piè di pagina come \textit{parti di
+        template} riutilizzabili;
+  \item si adotta un'architettura moderna basata su NGINX e PHP-FPM.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      n/.style={wtnode, minimum width=3.0cm, minimum height=1.0cm},
+      w/.style={wtnodeplain, minimum width=2.9cm, minimum height=0.6cm},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                draw=neutral!45!black}]
+
+    \node[n] (srv) at (0,0) {\textbf{Web Server}\\\scriptsize NGINX};
+
+    \node[w] (q) at (4.4,0) {coda delle richieste};
+
+    \node[w] (w1) at (8.6,1.3) {Worker 1};
+    \node[w] (w2) at (8.6,0.3) {Worker \textit{i}};
+    \node[w] (w3) at (8.6,-1.0) {Worker \textit{n}};
+    \node[font=\Lato\small, text=neutral!45!black] at (8.6,-0.35) {\vdots};
+
+    \draw[a] (srv) -- node[wtlab, above]{\code{\textbackslash.php\$}} (q);
+    \draw[a] (q.east) -- (w1.west);
+    \draw[a] (q.east) -- (w2.west);
+    \draw[a] (q.east) -- (w3.west);
+
+    \begin{scope}[on background layer]
+      \node[rounded corners=5pt, draw=orange-gradient-6, line width=1pt,
+            fill=orange-gradient-1!20!white, fit=(w1)(w2)(w3),
+            inner sep=9pt, label={[font=\Lato\scriptsize,
+            text=orange-gradient-6!70!black]above:PHP-FPM: pool di processi}] {};
+    \end{scope}
+
+    \node[font=\Lato\scriptsize\itshape, text=neutral!35!black, align=center]
+      at (4.4,-1.3) {se tutti i worker sono occupati,\\ le richieste attendono};
+  \end{tikzpicture}
+  \caption{NGINX inoltra le richieste PHP a un pool di processi persistenti.}
+  \label{fig:php-fpm}
+\end{figure}
+
+\info{La differenza rispetto a CGI}{
+  Il salto qualitativo sta nel pool: i processi \textbf{esistono già} e restano
+  vivi fra una richiesta e l'altra, invece di essere creati e distrutti ogni
+  volta. NGINX si limita a inoltrare le richieste che finiscono in \code{.php} a
+  PHP-FPM tramite una connessione TCP, e continua a servire da sé i file statici
+  (immagini, CSS, JavaScript), per cui non serve alcuna elaborazione. È lo stesso
+  principio che ritroveremo con Node.js.
+
+  L'esempio completo è su \urlx{https://github.com/luistar/php-to-do-list}.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Server-side programming} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Learn/Server-side} \\
+        In particolare \textit{First steps}, \textit{Introduction} e
+        \textit{Client-Server overview}.
+  \item \textbf{CGI} --- IBM Docs. \\
+        \urlx{https://www.ibm.com/docs/en/i/7.5?topic=functionality-cgi}
+  \item \textbf{RFC 3875: The Common Gateway Interface (CGI) Version 1.1} (2004). \\
+        \urlx{https://datatracker.ietf.org/doc/html/rfc3875}
+  \item \textbf{Apache HTTPd documentation} --- come configurare un server web
+        per CGI. \\
+        \urlx{https://httpd.apache.org/docs/2.4/howto/cgi.html}
+  \item \textbf{PHP} --- sito ufficiale e manuale. \\
+        \urlx{https://www.php.net/} \\
+        \urlx{https://www.php.net/manual/en/getting-started.php}
+\end{itemize}

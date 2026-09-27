@@ -1,0 +1,684 @@
+\chapter{Il paradigma REST}
+
+Nel capitolo precedente abbiamo sviluppato un'applicazione web completa con
+Express. La nostra applicazione si occupava di \textbf{tutto} sul server: gestiva
+i dati (con Sequelize), la logica di business (rotte, controller, middleware,
+sessioni) e la presentazione (template Pug). Ai browser restava soltanto il
+compito di visualizzare le pagine HTML.
+
+\section{I limiti delle web app tradizionali}
+
+Questo approccio è noto come \term{web app tradizionale}. È nato quando i
+browser avevano capacità limitate e ai contenuti web si accedeva generalmente
+solo tramite browser.
+
+Oggi lo scenario è più complesso:
+
+\begin{itemize}
+  \item ai dati possono dover accedere \textbf{altri programmi}, per esempio le
+        app mobili;
+  \item la tendenza è sfruttare le capacità dei browser moderni per offrire
+        un'esperienza più reattiva, cioè le \textit{Single Page App}.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      b/.style={rounded corners=3pt, line width=0.8pt, align=center,
+                minimum width=2.4cm, minimum height=0.9cm},
+      s/.style={b, draw=primary!65!black, fill=primary!10!white},
+      c/.style={b, draw=accent!60!black, fill=accent!10!white},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                draw=neutral!45!black}]
+
+    \node[c] (br) at (0,0.6)  {Browser};
+    \node[c] (na) at (0,-0.9) {App native};
+
+    \node[s] (pr) at (4.4,0.6)  {Presentazione};
+    \node[s] (lg) at (7.0,0.6)  {Logica};
+    \node[s] (dt) at (9.6,0.6)  {Dati};
+
+    \draw[a] (br) -- (pr);
+    \draw[a] (na.east) to[out=0, in=-135] (pr.south west);
+    \draw[a] (pr) -- (lg);
+    \draw[a] (lg) -- (dt);
+
+    \begin{scope}[on background layer]
+      \node[rounded corners=5pt, draw=primary!35!white, line width=0.9pt,
+            fit=(pr)(lg)(dt), inner sep=9pt,
+            label={[font=\Lato\scriptsize, text=primary!60!black]above:
+            applicazione web (server)}] {};
+    \end{scope}
+
+    \node[font=\Lato\scriptsize\itshape, text=red-gradient-6!75!black,
+          align=center] at (4.7,-1.4)
+      {un'app nativa dovrebbe scaricare l'HTML\\ e analizzarlo per estrarre i dati};
+  \end{tikzpicture}
+  \caption{Nella web app tradizionale i dati sono accessibili solo dentro
+           l'HTML.}
+  \label{fig:traditional-webapp}
+\end{figure}
+
+Le web app tradizionali non sono abbastanza flessibili in questi scenari. Un
+altro programma che voglia accedere ai dati dovrebbe:
+
+\begin{enumerate}
+  \item scaricare le pagine HTML;
+  \item analizzarle per estrarre i dati rilevanti.
+\end{enumerate}
+
+Non è efficiente (si trasferiscono moltissimi dati inutili) e non è robusto:
+qualunque modifica alle pagine HTML può rompere l'estrazione.
+
+\section{La tendenza attuale}
+
+La tendenza è dividere le applicazioni web in due componenti:
+
+\begin{itemize}
+  \item il \term{backend}, responsabile dei dati e della logica di business, sul
+        server;
+  \item il \term{frontend}, responsabile dell'interfaccia utente, sul client.
+        Può essere un'app nativa mobile o desktop, oppure una pagina HTML
+        \guillemotleft più intelligente\guillemotright\ che costruisce un'interfaccia interattiva con
+        JavaScript, cioè una Single Page App.
+\end{itemize}
+
+I due componenti comunicano attraverso Internet. Non è un dettaglio marginale:
+secondo il rapporto Akamai sullo stato di Internet (2019), l'\textbf{83\%} del
+traffico web è costituito da chiamate ad API.
+
+\dfn{API}{
+  Le \term{API} (\textit{Application Programming Interface}) sono il modo in cui
+  i programmi comunicano fra loro.}
+
+Come gestire la comunicazione su Internet? Definire a mano un protocollo su
+TCP/UDP e aprire socket non è conveniente né interoperabile: se volessimo
+integrare $n$ API dovremmo imparare $n$ protocolli diversi. Sono esistite
+architetture dedicate (CORBA, Java RMI, SOAP), che in sostanza reinventavano
+un'alternativa al Web.
+
+La risposta moderna è più semplice: \textbf{usare i protocolli del Web}.
+
+\section{REST}
+
+\dfn{REST}{
+  \term{REST} non è uno standard né un protocollo: è uno \textbf{stile
+  architetturale}, cioè un insieme di principi e linee guida che definiscono
+  come gli standard web debbano essere usati nelle API. È basato su HTTP e sulle
+  URI, e fornisce un'interfaccia comune e coerente basata sull'uso
+  \guillemotleft corretto\guillemotright\ di HTTP.}
+
+È lo stile architetturale prevalente per le API web, con un tasso di adozione
+del 93,4\%.
+
+\subsection{I fondamenti}
+
+\begin{itemize}
+  \item Una API REST permette di interagire con \term{risorse} tramite HTTP.
+  \item Tutte le risorse sono associate a una \textbf{URI univoca}.
+        \guillemotleft Una risorsa è qualunque cosa sia abbastanza importante da essere
+        referenziata come cosa a sé\guillemotright.
+  \item Le risorse corrispondono tipicamente (ma non necessariamente) a oggetti
+        di dominio persistenti.
+  \item I \textbf{verbi HTTP} vanno usati per recuperare o manipolare le
+        risorse.
+  \item Una API REST dovrebbe essere \textbf{stateless}, cioè non usare sessioni
+        lato server.
+\end{itemize}
+
+\info{Perché la statelessness migliora la scalabilità}{
+  È la stessa ragione vista nel primo capitolo, a proposito di HTTP. Se il
+  server non conserva stato fra una richiesta e l'altra, due richieste dello
+  stesso client possono essere servite da \textbf{macchine diverse}: per reggere
+  più traffico basta aggiungere macchine. Con le sessioni in memoria, invece,
+  ogni client resta legato alla macchina che lo ha servito la prima volta.}
+
+\subsection{Representational State Transfer}
+
+Il nome per esteso descrive con precisione il meccanismo:
+
+\begin{itemize}
+  \item lo \term{stato dell'applicazione} vive sul \textbf{client};
+  \item lo \term{stato della risorsa} vive sul \textbf{server};
+  \item i due comunicano trasferendo \term{rappresentazioni} appropriate (JSON,
+        XML, \ldots).
+\end{itemize}
+
+\begin{lstlisting}[style=http, name=Scambio REST]
+GET /todos HTTP/1.1
+
+[{"todo": "A"}, {"todo": "B"}, ...]
+\end{lstlisting}
+
+\subsection{Formati di interscambio}
+
+I formati più usati sono \term{JSON} e \term{XML}.
+
+\begin{lstlisting}[style=json, name=todos.json]
+{
+  "todos": [
+    { "todo": "Learn REST",       "done": false },
+    { "todo": "Learn JavaScript", "done": true  }
+  ]
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=html, name=todos.xml]
+<?xml version="1.0" encoding="UTF-8" ?>
+<root>
+  <todos>
+    <todo><text>Learn REST</text><done>false</done></todo>
+    <todo><text>Learn JavaScript</text><done>true</done></todo>
+  </todos>
+</root>
+\end{lstlisting}
+
+JSON si è affermato perché è più compatto e, soprattutto, perché in JavaScript
+si trasforma in un oggetto con una sola chiamata.
+
+\subsection{Verbi e URI}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.45}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{8.4cm}@{}}
+  \textbf{Verbo e URI} & \textbf{Significato} \\
+  \code{GET /todos}           & recupera la lista di tutti gli elementi salvati \\
+  \code{GET /todos/<ID>}      & recupera solo l'elemento con quell'identificatore \\
+  \code{POST /todos}          & salva un nuovo elemento; i dati sono nel corpo
+                                della richiesta \\
+  \code{PUT /todos/<ID>}      & sostituisce (o crea) l'elemento con
+                                quell'identificatore, usando i dati nel corpo \\
+  \code{DELETE /todos/<ID>}   & elimina l'elemento con quell'identificatore \\
+\end{tabular}
+\end{center}
+
+Qui si vede perché nel primo capitolo insistevamo sulla semantica dei verbi:
+in REST è precisamente ciò che rende l'API prevedibile.
+
+\subsection{Risorse annidate}
+
+Talvolta esiste una \textbf{gerarchia} fra le risorse: un'azienda ha zero o più
+reparti, che hanno zero o più dipendenti. Progettando un'API è possibile
+definire risorse annidate, per esempio \code{GET /seller/\{id\}/reviews} per
+elencare tutte le recensioni di un dato venditore.
+
+Va però tenuto presente che ogni risorsa dovrebbe avere \textbf{una sola} URI.
+
+\section{Implementare una API REST}
+
+Le API REST sono concettualmente semplici: basta mettersi in ascolto di
+richieste HTTP, gestirle e inviare una risposta. È esattamente quello che
+facevamo con la web app tradizionale, con tre differenze:
+
+\begin{itemize}
+  \item invece di rispondere con una rappresentazione HTML da disegnare in un
+        browser, si usa una rappresentazione \textbf{adatta alle macchine},
+        tipicamente JSON;
+  \item invece di ricevere input dall'invio di form, li si riceve in una
+        rappresentazione adatta alle macchine;
+  \item non ci si deve appoggiare alle \textbf{sessioni}: servono altri schemi
+        di autenticazione.
+\end{itemize}
+
+\section{Autenticazione con token}
+
+Le API REST permettono agli utenti di manipolare risorse, e nella maggior parte
+dei casi non vogliamo che chiunque possa farlo.
+
+\begin{itemize}
+  \item \term{Autenticazione}: vogliamo che solo gli utenti legittimi accedano
+        alle risorse.
+  \item \term{Autorizzazione}: vogliamo anche che alcuni utenti accedano solo a
+        certe risorse (un dipendente non dovrebbe poter modificare il proprio
+        stipendio).
+\end{itemize}
+
+Uno schema molto diffuso è basato sui \term{token}:
+
+\begin{enumerate}
+  \item il client invia all'API una richiesta con nome utente e password;
+  \item l'API valida le credenziali e genera un token;
+  \item il token (una stringa) viene restituito al client;
+  \item il client deve rimandare il token all'API a \textbf{ogni} richiesta
+        successiva che richieda autenticazione, nell'header
+        \code{Authorization};
+  \item l'API verifica il token prima di rispondere.
+\end{enumerate}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      hdr/.style={wtnode, minimum width=2.8cm, minimum height=0.9cm},
+      life/.style={draw=neutral!45!white, line width=0.7pt, dashed},
+      msg/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=primary!70!black},
+      rsp/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=accent!70!black},
+      bad/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=red-gradient-6},
+      ml/.style={font=\FiraCodeNL\scriptsize, midway, above, inner sep=2.5pt,
+                 fill=white, text=neutral!15!black}]
+
+    \def\xb{0} \def\xs{9.0}
+    \node[hdr] (B) at (\xb,0) {\textbf{Client}};
+    \node[hdr] (S) at (\xs,0) {\textbf{API}};
+    \draw[life] (B.south) -- (\xb,-4.4);
+    \draw[life] (S.south) -- (\xs,-4.4);
+
+    \draw[bad] (\xb,-0.8) -- (\xs,-0.8) node[ml]{GET /todos (nessun token)};
+    \draw[bad] (\xs,-1.5) -- (\xb,-1.5) node[ml]{401 Unauthorized};
+
+    \draw[msg] (\xb,-2.3) -- (\xs,-2.3) node[ml]{POST /auth \{usr, pwd\}};
+    \draw[rsp] (\xs,-3.0) -- (\xb,-3.0) node[ml]{200 OK + token};
+
+    \draw[msg] (\xb,-3.7) -- (\xs,-3.7) node[ml]{GET /todos Authorization: Bearer ...};
+    \draw[rsp] (\xs,-4.3) -- (\xb,-4.3) node[ml]{200 OK + dati};
+  \end{tikzpicture}
+  \caption{Lo schema di autenticazione basato su token.}
+  \label{fig:token-auth}
+\end{figure}
+
+\subsection{JSON Web Token}
+
+\dfn{JWT}{
+  \term{JWT} (\textit{JSON Web Token}) è uno standard aperto molto diffuso
+  (RFC 7519) che permette di condividere in modo sicuro delle
+  \term{asserzioni} (\textit{claim}) fra due parti. Un token JWT è una stringa
+  composta da \textbf{tre parti} separate da un punto:
+  \code{Header.Payload.Signature}.}
+
+\begin{lstlisting}[style=plain, name=Un token JWT]
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+.eyJuYW1lIjoibHVpZ2kiLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE2NzAzOTg0MzJ9
+.fopBYrax8wcB7rnPjCcOMc62IT2lJdvyOdyixMWMZAQ
+\end{lstlisting}
+
+\textbf{Header.} Contiene informazioni sul tipo di token e sulla funzione di
+hash usata per firmarlo, in formato JSON, codificate in Base64Url.
+
+\begin{lstlisting}[style=json]
+{ "alg": "HS256", "typ": "JWT" }
+\end{lstlisting}
+
+\textbf{Payload.} È un oggetto JSON contenente le asserzioni. Alcune sono
+\textit{registrate} e raccomandate (per esempio \code{exp}, che indica la data
+di scadenza del token); altre sono liberamente personalizzabili. Anch'esso è
+codificato in Base64Url.
+
+\begin{lstlisting}[style=json]
+{ "name": "luigi", "role": "admin", "exp": 1670398432 }
+\end{lstlisting}
+
+\error{Base64Url è una codifica, non una cifratura}{
+  Header e payload di un JWT si decodificano banalmente: chiunque intercetti il
+  token può \textbf{leggerne il contenuto}. Nel payload non vanno quindi mai
+  messi dati riservati. Ciò che la firma garantisce è l'\textbf{integrità} (il
+  token non è stato alterato), non la riservatezza.}
+
+\textbf{Signature.} Per garantire che i token non siano manomessi o falsificati
+si include una firma, ottenuta applicando una funzione di hash crittografica
+alla concatenazione di:
+
+\begin{itemize}
+  \item l'header del token;
+  \item il payload del token;
+  \item una \textbf{chiave segreta} nota solo al server che emette il token.
+\end{itemize}
+
+\begin{lstlisting}[style=js]
+HMACSHA256(
+  base64UrlEncode(header) + "." + base64UrlEncode(payload),
+  secret_key
+)
+\end{lstlisting}
+
+\subsection{Funzioni di hash crittografiche}
+
+\dfn{Funzione di hash crittografica}{
+  Una funzione che associa a una stringa binaria di lunghezza arbitraria
+  (l'input) una stringa binaria di \textbf{lunghezza fissa} (il \textit{digest}
+  o \textit{hash}).}
+
+Le funzioni di hash crittografiche sicure hanno due proprietà interessanti:
+
+\begin{itemize}
+  \item sono \textbf{praticamente prive di collisioni}: è di fatto impossibile
+        trovare due input diversi che producano lo stesso digest;
+  \item sono \textbf{facili da calcolare ma non invertibili}: dato un input è
+        immediato calcolarne il digest, ma dato un digest è impraticabile
+        risalire all'input che lo ha generato.
+\end{itemize}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.0cm}@{\hspace{0.8cm}}>{\raggedright\arraybackslash}p{8.4cm}@{}}
+  \textbf{Input} & \textbf{Digest SHA2-256} \\
+  \code{Web Technologies}
+    & {\FiraCodeNL\scriptsize 72bdf1226df1010dfb47cffaed85f5b35ae15ec9b482388691fa7a662a114113} \\
+  \code{Web Technologies!}
+    & {\FiraCodeNL\scriptsize 1a6791a2eab52c7c71d3e1225632d866b48a3abad91df15b2d44ab6004877993} \\
+\end{tabular}
+\end{center}
+
+Un solo carattere di differenza produce un digest completamente diverso: è
+questa proprietà a rendere rilevabile qualunque manomissione.
+
+\section{Una API REST con Express}
+
+Riscriviamo la nostra applicazione come API REST, riusando gran parte del codice
+Express.
+
+\subsection{Configurazione}
+
+\begin{lstlisting}[style=js, name=index.js]
+const app = express();
+const PORT = 3000;
+
+app.use(morgan('dev'));    // log delle richieste
+app.use(cors());           // l'API sara' accessibile da qualunque origine
+app.use(express.json());   // analizza i corpi JSON
+\end{lstlisting}
+
+Si noti che sparisce \code{express.urlencoded} (non ci sono più form) e compare
+\code{express.json}. Su \code{cors()} torneremo nel capitolo sulla sicurezza.
+
+\subsection{Gestione degli errori}
+
+\begin{lstlisting}[style=js, name=index.js]
+app.use((err, req, res, next) => {
+  console.log(err.stack);
+  res.status(err.status || 500).json({
+    code: err.status || 500,
+    description: err.message || "Si e' verificato un errore"
+  });
+});
+\end{lstlisting}
+
+La differenza rispetto alla web app tradizionale è tutta nell'ultima riga:
+\code{res.json()} al posto di \code{res.render()}. Anche gli errori devono
+essere leggibili da un programma.
+
+\subsection{Autenticazione}
+
+\begin{lstlisting}[style=js, name=routes/authenticationRouter.js]
+authenticationRouter.post("/auth", async (req, res) => {
+  let isAuthenticated = await AuthController.checkCredentials(req, res);
+
+  if (isAuthenticated) {
+    res.json(AuthController.issueToken(req.body.usr));
+  } else {
+    res.status(401);
+    res.json({ error: "Credenziali non valide. Riprova." });
+  }
+});
+
+authenticationRouter.post("/signup", (req, res, next) => {
+  AuthController.saveUser(req, res).then((user) => {
+    res.json(user);
+  }).catch((err) => {
+    next({ status: 500, message: "Impossibile salvare l'utente" });
+  })
+});
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=controllers/AuthController.js]
+import Jwt from "jsonwebtoken";
+
+static issueToken(username) {
+  return Jwt.sign({ user: username }, process.env.TOKEN_SECRET, {
+    expiresIn: `${24 * 60 * 60}s`
+  });
+}
+
+static isTokenValid(token, callback) {
+  Jwt.verify(token, process.env.TOKEN_SECRET, callback);
+}
+\end{lstlisting}
+
+La chiave segreta viene letta da \code{process.env}, cioè dal file \code{.env}
+non versionato di cui abbiamo parlato nel capitolo precedente.
+
+\subsection{Middleware di autenticazione}
+
+\begin{lstlisting}[style=js, name=middleware/auth.js]
+export function enforceAuthentication(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader?.split(' ')[1];   // "Bearer <token>"
+
+  if (!token) {
+    next({ status: 401, message: "Unauthorized" });
+    return;
+  }
+
+  AuthController.isTokenValid(token, (err, decodedToken) => {
+    if (err) {
+      next({ status: 401, message: "Unauthorized" });
+    } else {
+      req.username = decodedToken.user;
+      next();
+    }
+  });
+}
+\end{lstlisting}
+
+\subsection{Autorizzazione}
+
+Nella nostra API vogliamo che gli utenti possano vedere e modificare
+\textbf{soltanto i propri} elementi. Che cosa succede se un utente invia una
+richiesta \code{DELETE} per un elemento che non gli appartiene?
+
+Non basta verificare \textit{chi} è l'utente: bisogna verificare anche che abbia
+il \textbf{permesso} di interagire con quella risorsa.
+
+\begin{lstlisting}[style=js, name=middleware/authz.js]
+export async function ensureUsersModifyOnlyOwnTodos(req, res, next) {
+  const user   = req.username;
+  const todoId = req.params.id;
+
+  const userHasPermission = await AuthController.canUserModifyTodo(user, todoId);
+
+  if (userHasPermission) {
+    next();
+  } else {
+    next({
+      status: 403,
+      message: "Non hai i permessi per vedere o modificare questa risorsa"
+    });
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=routes/todoRouter.js]
+todoRouter.get("/todos/:id", ensureUsersModifyOnlyOwnTodos, (req, res, next) => {
+  TodoController.findById(req).then((item) => {
+    if (item)
+      res.json(item);
+    else
+      next({ status: 404, message: "Todo non trovato" });
+  }).catch(err => {
+    next(err);
+  })
+});
+\end{lstlisting}
+
+\info{401 contro 403}{
+  Sono due cose diverse e vanno usate con precisione. \code{401 Unauthorized}
+  significa \guillemotleft non so chi sei\guillemotright: manca l'autenticazione, o il token non è
+  valido. \code{403 Forbidden} significa \guillemotleft so chi sei, ma non puoi\guillemotright:
+  l'autenticazione c'è, mancano i permessi.}
+
+\section{OpenAPI}
+
+\dfn{OpenAPI}{
+  \term{OpenAPI} (già noto come Swagger) è uno standard aperto e formale per
+  \textbf{descrivere} le API HTTP.}
+
+Perché serve?
+
+\begin{itemize}
+  \item \textbf{Standardizzazione}: garantisce pratiche di documentazione
+        coerenti.
+  \item \textbf{Documentazione}: si può usare per generare automaticamente
+        documentazione completa.
+  \item \textbf{Generazione di codice}: permette di generare automaticamente
+        librerie client e scheletri di server.
+  \item \textbf{Leggibile da macchine e da persone}: abilita la scoperta
+        automatica e altro ancora.
+\end{itemize}
+
+È lo standard industriale più adottato.
+
+\subsection{La specifica}
+
+Le descrizioni OpenAPI sono documenti di testo strutturato: ogni documento
+rappresenta un oggetto JSON, in formato JSON o YAML. Descrivono la versione
+della specifica (\code{openapi}), l'API (\code{info}) e gli endpoint
+(\code{paths}).
+
+\begin{lstlisting}[style=plain, name=openapi.yaml]
+openapi: 3.1.0
+info:
+  title: A minimal specification
+  version: 0.0.1
+paths: {}   # nessun endpoint definito
+\end{lstlisting}
+
+Gli endpoint si chiamano \term{path}. Per ciascuno si specificano i metodi
+supportati e, per ciascun metodo, i parametri di ingresso attesi, l'eventuale
+corpo della richiesta e le possibili risposte.
+
+\begin{lstlisting}[style=plain, name=openapi.yaml]
+/auth:
+  post:
+    description: Authenticate user
+    requestBody:
+      description: user to authenticate
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              usr:
+                type: string
+                example: Kyle
+              pwd:
+                type: string
+                example: p4ssw0rd
+    responses:
+      200:
+        description: User authenticated
+      401:
+        description: Invalid credentials
+\end{lstlisting}
+
+\subsection{A che cosa serve una specifica}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.2cm}}>{\raggedright\arraybackslash}p{8.6cm}@{}}
+  \textbf{Uso} & \textbf{Che cosa se ne ottiene} \\
+  Supporto alla progettazione & rilevare errori e incoerenze prima di scrivere
+                                codice \\
+  Generazione di codice       & scheletri di server, SDK per i client, test \\
+  Documentazione              & documentazione interattiva generata
+                                automaticamente \\
+\end{tabular}
+\end{center}
+
+OpenAPI è supportato da diversi strumenti open source maturi: \textbf{Swagger
+Editor}, \textbf{Swagger Codegen} e \textbf{Swagger UI}, provabili anche
+direttamente nel browser su \urlx{https://editor.swagger.io/}.
+
+La generazione di codice lato server può ovviamente produrre solo scheletri, ma
+supporta ASP.NET, Go, Java, JaxRS, Micronaut, Kotlin, Node.js, Python (Flask),
+Scala e Spring. Lato client permette di generare SDK in decine di linguaggi
+diversi.
+
+\info{Sviluppo guidato dalla specifica}{
+  Spesso si comincia a lavorare a una API \textbf{definendone la specifica}
+  prima di scrivere qualunque codice: è il cosiddetto \textit{OpenAPI-driven
+  development}. Oltre a sfruttare al massimo la generazione di codice, promuove
+  l'\textbf{indipendenza} fra i diversi gruppi coinvolti (front-end, back-end,
+  qualità): la definizione dell'API li tiene allineati e permette di lavorare in
+  parallelo.}
+
+\subsection{Generare la specifica dal codice}
+
+Nel corso si usano due pacchetti Node:
+
+\begin{itemize}
+  \item \code{swagger-jsdoc}, che genera automaticamente le specifiche OpenAPI a
+        partire da annotazioni nel codice sorgente;
+  \item \code{swagger-ui-express}, che serve da Express la documentazione
+        Swagger UI generata automaticamente.
+\end{itemize}
+
+\begin{lstlisting}[style=shell]
+npm install swagger-jsdoc
+npm install swagger-ui-express
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=index.js]
+const swaggerSpec = swaggerJSDoc({
+  definition: {
+    openapi: '3.1.0',
+    info: {
+      title: 'To-do List REST API',
+      version: '1.0.0',
+    },
+  },
+  apis: ['./routes/*Router.js'],   // file contenenti le annotazioni
+});
+
+// Swagger UI sara' disponibile su /api-docs
+app.use('/api-docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=routes/authenticationRouter.js]
+/**
+ * @swagger
+ * /auth:
+ *   post:
+ *     description: Authenticate user
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               usr:
+ *                 type: string
+ *               pwd:
+ *                 type: string
+ */
+authenticationRouter.post("/auth", async (req, res) => { /* ... */ });
+\end{lstlisting}
+
+\warning{Che cosa serve sapere all'esame}{
+  Per il corso è richiesto sapere \textbf{che cos'è} lo standard OpenAPI,
+  \textbf{perché} è stato introdotto e \textbf{a che cosa} può servire. Non è
+  richiesto saper scrivere file di specifica OpenAPI da zero.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{The Little Book on REST Services}, Kenneth Lange. \\
+        \urlx{https://www.kennethlange.com/books/The-Little-Book-on-REST-Services.pdf}
+  \item \textbf{API design guide} --- Google Cloud. \\
+        \urlx{https://cloud.google.com/apis/design} \\
+        Parti rilevanti: \textit{Resource-oriented design}, \textit{Resource
+        names}.
+  \item \textbf{REST API Checklist}, Kenneth Lange. \\
+        \urlx{https://kennethlange.com/rest-api-checklist/}
+  \item \textbf{OpenAPI} --- sito ufficiale. \\
+        \urlx{https://www.openapis.org/} \\
+        \urlx{https://learn.openapis.org/} \\
+        \urlx{https://spec.openapis.org/oas/v3.1.0}
+  \item \textbf{Esempi con altri framework}: \\
+        \urlx{https://github.com/luistar/jakartaee-rest-example} (JakartaEE) \\
+        \urlx{https://github.com/luistar/rest-service-pizzashop} (Spring) \\
+        \urlx{https://github.com/marciovrl/fastapi} (FastAPI, Python) \\
+        Non sono richiesti per il corso, ma è istruttivo vedere framework che
+        adottano un approccio basato su annotazioni.
+\end{itemize}

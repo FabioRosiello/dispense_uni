@@ -1,0 +1,636 @@
+\chapter{Esercizi sul collegamento e sulla sicurezza}
+
+% ══════════════════════════════════════════════════════════════
+\section{Controllo di parità}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Bit di parità}
+Calcolare il bit di parità, con schema pari e con schema dispari, per i messaggi
+(a) \texttt{10101100}, (b) \texttt{11010000}, (c) \texttt{01111110}. Verificare poi, sul messaggio (a) con parità pari, che un errore
+singolo venga rilevato e un errore doppio no.
+\end{esercizio}
+
+\svolgimento
+Si contano gli 1: con parità \textbf{pari} il bit rende pari il totale, con parità \textbf{dispari} lo rende dispari.
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Messaggio} & \textbf{Numero di 1} & \textbf{Parità pari} & \textbf{Parità dispari} \\
+\midrule
+\texttt{10101100} & 4 & 0 & 1 \\
+\texttt{11010000} & 3 & 1 & 0 \\
+\texttt{01111110} & 6 & 0 & 1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{lstlisting}[autogobble=false]
+trasmesso        1010 1100 | 0     4 uni: pari, corretto
+un bit invertito 1011 1100 | 0     5 uni: DISPARI -> errore rilevato
+due bit invertiti 1011 1000 | 0    4 uni: pari   -> errore NON rilevato
+\end{lstlisting}
+
+La parità singola rileva solo un numero \textbf{dispari} di errori. Poiché nelle reti gli errori arrivano spesso a
+\textbf{raffiche} (burst), la probabilità che un errore sfugga può avvicinarsi al 50\%.
+
+\begin{esercizio}{Parità bidimensionale}
+Si trasmette il blocco di quattro parole da 5 bit
+\texttt{10101}, \texttt{11110}, \texttt{01110}, \texttt{00101}, con parità pari per riga e per colonna.
+\begin{enumerate}[label=(\alph*)]
+    \item Calcolare i bit di parità.
+    \item Il bit in riga 2, colonna 3 si inverte. Mostrare come il ricevente lo individua e lo corregge.
+    \item Che cosa succede se si invertono due bit sulla stessa riga?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\begin{figure}[H]
+\centering
+\newcommand{\cella}[3]{\node[draw=black!40, minimum size=0.55cm, font=\small\ttfamily, fill=#3] at (#1) {#2};}
+\begin{tikzpicture}[x=0.55cm, y=0.55cm]
+  % (a)
+  \node[font=\footnotesize\bfseries\sffamily] at (3,1.2) {(a) trasmesso};
+  \foreach \r/\row in {0/{1,0,1,0,1,1}, 1/{1,1,1,1,0,0}, 2/{0,1,1,1,0,1}, 3/{0,0,1,0,1,0}, 4/{0,0,0,0,0,0}} {
+    \foreach \b [count=\c from 0] in \row {
+      \pgfmathsetmacro{\fc}{(\c==5 || \r==4) ? 1 : 0}
+      \ifdim\fc pt>0.5pt \cella{\c,-\r}{\b}{llink!70}\else \cella{\c,-\r}{\b}{white}\fi
+    }
+  }
+  % (b)
+  \begin{scope}[xshift=5.2cm]
+  \node[font=\footnotesize\bfseries\sffamily] at (3,1.2) {(b) ricevuto con un errore};
+  \foreach \r/\row in {0/{1,0,1,0,1,1}, 1/{1,1,0,1,0,0}, 2/{0,1,1,1,0,1}, 3/{0,0,1,0,1,0}, 4/{0,0,0,0,0,0}} {
+    \foreach \b [count=\c from 0] in \row {
+      \pgfmathsetmacro{\fc}{(\c==2 && \r==1) ? 2 : ((\c==5 || \r==4) ? 1 : 0)}
+      \ifdim\fc pt>1.5pt \cella{\c,-\r}{\b}{netred!40}\else\ifdim\fc pt>0.5pt \cella{\c,-\r}{\b}{llink!70}\else \cella{\c,-\r}{\b}{white}\fi\fi
+    }
+  }
+  \draw[netred, very thick, rounded corners] (-0.5,-0.55) rectangle (5.5,-1.45);
+  \draw[netred, very thick, rounded corners] (1.55,0.5) rectangle (2.45,-4.5);
+  \node[font=\scriptsize\sffamily, text=netred, anchor=west] at (5.7,-1) {riga 2 dispari};
+  \node[font=\scriptsize\sffamily, text=netred] at (2,-5.1) {colonna 3 dispari};
+  \end{scope}
+\end{tikzpicture}
+\caption{In giallo i bit di parità; l'incrocio della riga e della colonna sbagliate individua il bit errato.}
+\end{figure}
+
+\textbf{(a)} Righe: \texttt{10101} ha 3 uni $\rightarrow$ 1; \texttt{11110} ha 4 uni $\rightarrow$ 0; \texttt{01110} ha 3 uni
+$\rightarrow$ 1; \texttt{00101} ha 2 uni $\rightarrow$ 0. Colonne: ogni colonna ha un numero pari di 1, quindi i bit di parità di
+colonna sono tutti 0 (e anche l'angolo, parità della colonna delle parità, è 0).
+
+\textbf{(b)} Il ricevente ricalcola le parità: la riga 2 ha ora 3 uni (dispari) e la colonna 3 ha $1+0+1+1 = 3$ uni (dispari).
+L'\textbf{intersezione} identifica esattamente il bit sbagliato, che viene invertito: errore \textbf{corretto} senza ritrasmissione.
+
+\textbf{(c)} Se si invertono i bit in colonna 3 e 4 della riga 2, la riga torna pari (l'errore sfugge al controllo di riga), ma le
+colonne 3 e 4 risultano dispari: l'errore è \textbf{rilevato} ma \textbf{non correggibile}, perché non si sa in quale riga siano i bit
+sbagliati. La parità bidimensionale rileva qualunque combinazione di due errori e ne corregge uno.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il CRC}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Calcolo e verifica del CRC}
+Si consideri il messaggio $D = \texttt{1101011111}$ e il generatore $G = \texttt{10011}$ ($r = 4$).
+\begin{enumerate}[label=(\alph*)]
+    \item Calcolare il CRC e il messaggio trasmesso.
+    \item Verificare lato ricevente che il messaggio sia integro.
+    \item Verificare che l'inversione del sesto bit venga rilevata.
+    \item Scrivere $G$ e $D$ come polinomi.
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Si aggiungono $r = 4$ zeri a $D$ e si divide modulo 2 per $G$: a ogni passo si allinea $G$ sotto il primo 1 rimasto e si fa lo
+XOR (niente riporti né prestiti). Il resto, sugli ultimi $r$ bit, è il CRC.
+\begin{lstlisting}[autogobble=false, escapechar=|]
+11010111110000   D seguito da 4 zeri
+10011            XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+01001111110000
+ 10011           XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000011110000
+      10011      XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000001101000
+       10011     XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000000100100
+        10011    XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000000000010
+          ^^^^   resto = 0010
+\end{lstlisting}
+CRC $= \texttt{0010}$; si trasmette $M = D\,\|\,\text{CRC} = \texttt{1101011111\,0010}$.
+
+\textbf{(b)} Il ricevente divide per $G$ l'intero messaggio ricevuto:
+\begin{lstlisting}[autogobble=false, escapechar=|]
+11010111110010   ricevuto: D + CRC
+10011            XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+01001111110010
+ 10011           XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000011110010
+      10011      XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000001101010
+       10011     XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000000100110
+        10011    XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000000000000
+          ^^^^   resto = 0000
+\end{lstlisting}
+Il resto è zero: nessun errore rilevato.
+
+\textbf{(c)} Si riceve \texttt{11010\textcolor{netred}{0}1111\,0010}:
+\begin{lstlisting}[autogobble=false, escapechar=|]
+11010011110010   ricevuto con un bit invertito
+10011            XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+01001011110010
+ 10011           XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000111110010
+     10011       XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000011000010
+      10011      XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000001011010
+       10011     XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000000010110
+         10011   XOR G
+|\rule[0.55ex]{14\fontcharwd\font`0}{0.5pt}|
+00000000000101
+          ^^^^   resto = 0101
+\end{lstlisting}
+Il resto \texttt{0101} è diverso da zero: \textbf{errore rilevato}.
+
+\textbf{(d)} Ogni bit è il coefficiente di una potenza di $x$: $G(x) = x^4 + x + 1$ e $D(x) = x^9 + x^8 + x^6 + x^4 + x^3 + x^2 + x + 1$.
+Aggiungere $r$ zeri equivale a moltiplicare per $x^r$: si calcola $x^r D(x) = Q(x)G(x) + R(x)$ e si trasmette $M(x) = x^r D(x) + R(x)$,
+che è \textbf{divisibile per $G(x)$ per costruzione} (modulo 2 somma e sottrazione coincidono). Il ricevente controlla proprio la
+divisibilità.
+
+\warning{Gli errori tipici nel CRC}{
+    \begin{itemize}
+      \item Dimenticare di aggiungere gli $r$ zeri (sono tanti quanti il grado di $G$, cioè un bit in meno della sua lunghezza).
+      \item Allineare $G$ sotto un bit 0 invece che sotto il primo 1.
+      \item Fare la sottrazione con i prestiti invece dello XOR.
+      \item Prendere come CRC più (o meno) di $r$ bit.
+    \end{itemize}
+}
+
+\begin{esercizio}{Un CRC da provare}
+Calcolare il CRC di $D = \texttt{10011010}$ con $G = \texttt{1101}$.
+\end{esercizio}
+
+\svolgimento
+\begin{lstlisting}[autogobble=false, escapechar=|]
+10011010000   D seguito da 3 zeri
+1101          XOR G
+|\rule[0.55ex]{11\fontcharwd\font`0}{0.5pt}|
+01001010000
+ 1101         XOR G
+|\rule[0.55ex]{11\fontcharwd\font`0}{0.5pt}|
+00100010000
+  1101        XOR G
+|\rule[0.55ex]{11\fontcharwd\font`0}{0.5pt}|
+00010110000
+   1101       XOR G
+|\rule[0.55ex]{11\fontcharwd\font`0}{0.5pt}|
+00001100000
+    1101      XOR G
+|\rule[0.55ex]{11\fontcharwd\font`0}{0.5pt}|
+00000001000
+       1101   XOR G
+|\rule[0.55ex]{11\fontcharwd\font`0}{0.5pt}|
+00000000101
+        ^^^   resto = 101
+\end{lstlisting}
+Si trasmette \texttt{10011010\,101}.
+
+\begin{esercizio}{Che cosa rileva il CRC-32}
+Il CRC-32 di Ethernet ha un generatore di 33 bit ($r = 32$). Quali burst di errori rileva con certezza? Con quale probabilità rileva
+un burst più lungo?
+\end{esercizio}
+
+\svolgimento
+Un CRC con $r$ bit di controllo rileva \textbf{tutti} i burst di lunghezza $\le r$, quindi fino a \textbf{32 bit}. Per burst più lunghi,
+un errore sfugge solo se il resto risulta per caso zero, con probabilità circa $2^{-r}$:
+$$P(\text{rilevato}) \approx 1 - 0{,}5^{32} = 1 - \frac{1}{4\,294\,967\,296} \approx 0{,}99999999977$$
+Un errore non rilevato ogni 4 miliardi circa. Con soli 4 byte di ridondanza, calcolabili in hardware con un registro a scorrimento e
+qualche porta XOR: ecco perché il CRC è nel trailer dei frame Ethernet.
+
+% ══════════════════════════════════════════════════════════════
+\section{La distanza di Hamming}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Calcolare distanze}
+Calcolare la distanza di Hamming tra (a) \texttt{10110101} e \texttt{10011100}; (b) \texttt{1111000011110000} e
+\texttt{1010101010101010}.
+\end{esercizio}
+
+\svolgimento
+Il metodo veloce è contare gli 1 dello XOR:
+\begin{lstlisting}[autogobble=false]
+(a)      10110101          (b)      1111000011110000
+     XOR 10011100               XOR 1010101010101010
+         00101001  -> 3 uni             0101101001011010  -> 8 uni
+\end{lstlisting}
+Quindi $d = 3$ e $d = 8$.
+
+\begin{esercizio}{Un codice a correzione d'errore}
+Un codice ha le quattro parole valide \texttt{00000}, \texttt{01011}, \texttt{10101}, \texttt{11110}.
+\begin{enumerate}[label=(\alph*)]
+    \item Qual è la distanza di Hamming del codice? Quanti errori rileva e quanti ne corregge?
+    \item Decodificare le parole ricevute \texttt{01111}, \texttt{11111} e \texttt{01101}.
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Le distanze tra le coppie sono:
+\begin{center}
+\begin{tabular}{lc@{\qquad}lc@{\qquad}lc}
+\toprule
+\texttt{00000}--\texttt{01011} & 3 & \texttt{00000}--\texttt{10101} & 3 & \texttt{00000}--\texttt{11110} & 4 \\
+\texttt{01011}--\texttt{10101} & 4 & \texttt{01011}--\texttt{11110} & 3 & \texttt{10101}--\texttt{11110} & 3 \\
+\bottomrule
+\end{tabular}
+\end{center}
+La distanza del codice è la minima: $d = 3$. Rileva fino a $d - 1 = 2$ errori e ne corregge fino a $\lfloor (d-1)/2 \rfloor = 1$.
+
+\textbf{(b)} Si decodifica verso la parola valida \textbf{più vicina}:
+\begin{center}
+\small
+\begin{tabular}{ccccccl}
+\toprule
+\textbf{Ricevuta} & \texttt{00000} & \texttt{01011} & \texttt{10101} & \texttt{11110} & & \textbf{Decisione} \\
+\midrule
+\texttt{01111} & 4 & \textbf{1} & 3 & 2 & & \texttt{01011} (un errore, corretto) \\
+\texttt{11111} & 5 & 2 & 2 & \textbf{1} & & \texttt{11110} (un errore, corretto) \\
+\texttt{01101} & 3 & 2 & 2 & 3 & & pari merito: errore \textbf{rilevato}, non correggibile \\
+\bottomrule
+\end{tabular}
+\end{center}
+Nell'ultimo caso ci sono stati almeno 2 errori: il codice se ne accorge (nessuna parola valida a distanza 0) ma non sa quale correzione
+scegliere. Con 3 errori potrebbe addirittura ``correggere'' verso la parola sbagliata.
+
+\info{L'intuizione geometrica}{
+    Attorno a ogni parola valida c'è una ``sfera'' di raggio $\lfloor (d-1)/2 \rfloor$. Se le sfere non si toccano, una parola ricevuta
+    che cade in una sfera si riporta al suo centro senza ambiguità. Per \textbf{rilevare} $k$ errori serve $d \ge k + 1$; per
+    \textbf{correggerne} $k$ serve $d \ge 2k + 1$.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Framing}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Bit stuffing}
+Il flag dei frame è \texttt{01111110}. Applicare il bit stuffing ai dati (a) \texttt{0111111111111111110} e (b) \texttt{01111110}, e
+mostrare il de-stuffing lato ricevente.
+\end{esercizio}
+
+\svolgimento
+Regola: in trasmissione, dopo \textbf{cinque 1 consecutivi} si inserisce uno \textbf{0}; in ricezione, lo 0 che segue cinque 1 si elimina.
+\begin{lstlisting}[autogobble=false, escapechar=|]
+(a) dati       0 11111 11111 11111 11 0
+    trasmessi  0 11111|\textcolor{netred}{\textbf{0}}|11111|\textcolor{netred}{\textbf{0}}|11111|\textcolor{netred}{\textbf{0}}|11 0      (22 bit: 3 zeri inseriti)
+
+(b) dati       0 11111 1 0
+    trasmessi  0 11111|\textcolor{netred}{\textbf{0}}|1 0                   (il "flag" nei dati non e' piu' un flag)
+\end{lstlisting}
+Il ricevente, scorrendo i bit, elimina ogni 0 che segue cinque 1 e ritrova i dati originali. Grazie allo stuffing nei dati non
+compaiono mai sei 1 consecutivi, quindi \texttt{01111110} delimita i frame senza ambiguità. Nel caso peggiore (dati tutti a 1)
+l'overhead è di un bit ogni cinque, il 20\%.
+
+\begin{esercizio}{Byte stuffing}
+Con FLAG come delimitatore ed ESC come carattere di escape, come si trasmette il payload \texttt{A FLAG B ESC C}? Perché anche ESC va
+preceduto da un ESC?
+\end{esercizio}
+
+\svolgimento
+\begin{center}
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, b/.style={draw, minimum width=0.85cm, minimum height=0.55cm}]
+  \node[anchor=east] at (-0.55,0.8) {payload};
+  \foreach \t/\c [count=\i from 0] in {A/white, FLAG/llink, B/white, ESC/netorange!40, C/white} \node[b, fill=\c] at (\i*0.85,0.8) {\t};
+  \node[anchor=east] at (-0.55,-0.3) {frame};
+  \foreach \t/\c [count=\i from 0] in {FLAG/netblue!30, A/white, ESC/netred!30, FLAG/llink, B/white, ESC/netred!30, ESC/netorange!40, C/white, FLAG/netblue!30} \node[b, fill=\c] at (\i*0.85,-0.3) {\t};
+\end{tikzpicture}
+\end{center}
+Ogni FLAG ed ESC del payload viene preceduto da un ESC (in rosso), e il frame è racchiuso tra due FLAG (in blu). Il ricevente,
+quando incontra un ESC, lo scarta e prende il byte successivo \emph{così com'è}, anche se è un FLAG. Se un ESC del payload non fosse
+a sua volta protetto, la sequenza \texttt{ESC C} verrebbe interpretata come ``C letterale'' e l'ESC originale andrebbe perso; e un
+\texttt{ESC FLAG} originale nel payload sarebbe indistinguibile da un FLAG protetto.
+
+\begin{esercizio}{Perché il conteggio dei byte non si usa}
+Un flusso contiene quattro frame, delimitati dal conteggio dei byte (il primo byte di ogni frame ne indica la lunghezza, se stesso
+compreso): \texttt{5 1 2 3 4 | 5 6 7 8 9 | 8 0 1 2 3 4 5 6 | 8 7 8 9 0 1 2 3}. Che cosa succede se il secondo conteggio, 5, si
+corrompe in 7?
+\end{esercizio}
+
+\svolgimento
+Il ricevente legge correttamente il primo frame (5 byte). Poi legge 7 come lunghezza e prende \texttt{7 6 7 8 9 8 0} come secondo
+frame; il ``terzo frame'' inizia quindi dal byte \texttt{1}, che viene scambiato per un conteggio, e così via. Il checksum del frame
+segnalerà l'errore, ma il ricevente \textbf{non ha modo di sapere dove inizia il frame successivo}: non riesce più a
+\textbf{risincronizzarsi}, e un solo errore rovina tutti i frame seguenti. Per questo il conteggio dei byte da solo non si usa.
+
+% ══════════════════════════════════════════════════════════════
+\section{Accesso multiplo}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{La dimensione minima del frame}
+Un bus Ethernet è lungo al massimo $2500$ m, il segnale si propaga a $2 \cdot 10^8$ m/s e il rate è $10$ Mb/s.
+\begin{enumerate}[label=(\alph*)]
+    \item Calcolare il tempo di propagazione $\tau$ tra gli estremi.
+    \item Calcolare la dimensione minima del frame perché CSMA/CD rilevi tutte le collisioni.
+    \item Ripetere per un cavo di 1 km a 1 Gb/s. Che cosa se ne conclude?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} $\tau = 2500 / (2\cdot 10^8) = 12{,}5\ \mu$s.
+
+\textbf{(b)} Nel caso peggiore A inizia a trasmettere a $t = 0$, B inizia un istante prima che il segnale di A la raggiunga ($t \approx \tau$),
+e il ``rumore'' della collisione torna ad A a $t \approx 2\tau$. A deve essere \textbf{ancora in trasmissione} in quel momento:
+$$\frac{L_{\min}}{R} \ge 2\tau \quad\Rightarrow\quad L_{\min} \ge 2\tau R = 2 \cdot 12{,}5\cdot 10^{-6} \cdot 10^7 = 250 \text{ bit}$$
+Ethernet fissa il minimo a \textbf{512 bit (64 byte)}, con margine per ripetitori e ritardi; se il datagramma è più corto di 46 byte,
+il campo \textbf{pad} allunga il frame fino al minimo.
+
+\textbf{(c)} $\tau = 1000 / (2\cdot 10^8) = 5\ \mu$s; $L_{\min} = 2 \cdot 5\cdot 10^{-6} \cdot 10^9 = 10^4$ bit $= 1250$ byte.
+A velocità alte i frame corti finiscono prima che la collisione possa essere rilevata: il CSMA/CD scala male con la velocità. Per
+questo le Ethernet veloci funzionano in pratica solo \textbf{full-duplex su switch}, dove le collisioni non esistono.
+
+\begin{esercizio}{Throughput di ALOHA}
+Ricavare il throughput massimo di ALOHA puro ($S = G e^{-2G}$) e di slotted ALOHA ($S = G e^{-G}$), dove $G$ è il carico offerto
+per tempo di frame, e spiegare la differenza.
+\end{esercizio}
+
+\svolgimento
+\textbf{Slotted ALOHA}: $\dfrac{dS}{dG} = e^{-G} - G e^{-G} = e^{-G}(1 - G) = 0 \Rightarrow G = 1$, \quad
+$S_{\max} = e^{-1} \approx 0{,}368$ (36,8\%).
+
+\textbf{ALOHA puro}: $\dfrac{dS}{dG} = e^{-2G} - 2G e^{-2G} = e^{-2G}(1 - 2G) = 0 \Rightarrow G = \tfrac12$, \quad
+$S_{\max} = \tfrac12 e^{-1} = \dfrac{1}{2e} \approx 0{,}184$ (18,4\%).
+
+Nell'ALOHA puro un frame collide con qualunque frame iniziato nell'intervallo di un tempo di frame \emph{prima} o \emph{dopo} di
+lui: la finestra di vulnerabilità è di \textbf{2} tempi di frame. Negli slot le trasmissioni iniziano solo ai confini, e la finestra
+si riduce a \textbf{1}: dimezzare la vulnerabilità raddoppia il throughput massimo. Il CSMA fa molto meglio di entrambi, perché
+ascoltando il canale evita la maggior parte delle collisioni: resta solo la finestra dovuta al ritardo di propagazione.
+
+\begin{esercizio}{Binary exponential backoff}
+In Ethernet a 10 Mb/s l'unità di attesa è il tempo di 512 bit.
+\begin{enumerate}[label=(\alph*)]
+    \item Dopo la terza collisione di un frame, tra quali valori si sceglie $K$? Qual è l'attesa massima e quella media?
+    \item Qual è l'attesa massima dopo la decima collisione?
+    \item Due stazioni hanno appena subito la loro prima collisione. Con che probabilità collidono di nuovo? E dopo la seconda?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+L'unità di attesa è $512 / 10^7$ s $= 51{,}2\ \mu$s.
+\begin{enumerate}[label=(\alph*)]
+    \item $K \in \{0, \dots, 2^3 - 1\} = \{0, \dots, 7\}$. Attesa massima $7 \cdot 51{,}2 = 358{,}4\ \mu$s; media $3{,}5 \cdot 51{,}2 = 179{,}2\ \mu$s.
+    \item $K \le 2^{10} - 1 = 1023$: attesa massima $1023 \cdot 51{,}2\ \mu$s $\approx 52{,}4$ ms (oltre la decima collisione l'intervallo non cresce più).
+    \item Dopo la prima collisione ciascuna sceglie $K \in \{0, 1\}$: scelgono lo stesso valore con probabilità $1/2$. Dopo la seconda
+          $K \in \{0,1,2,3\}$: probabilità $1/4$. In generale $1/2^n$: con l'aumentare delle collisioni l'attesa si allarga e la
+          probabilità di riuscire cresce.
+\end{enumerate}
+
+\begin{esercizio}{Il difetto di TDMA}
+Un canale da 1 Mb/s è diviso con TDMA tra 100 stazioni. Qual è il rate di una stazione quando è l'unica ad avere dati da inviare?
+Come si comporterebbero un protocollo ad accesso casuale e un protocollo a rotazione ideale?
+\end{esercizio}
+
+\svolgimento
+Con TDMA la stazione usa solo il proprio slot: $1$ Mb/s $/ 100 = 10$ kb/s, anche se gli altri 99 slot restano vuoti. Viola il primo
+requisito di un buon protocollo MAC (``se trasmette un solo nodo, deve poter usare tutto $R$''). Un protocollo ad accesso casuale le
+lascerebbe usare tutto il canale (non ci sono collisioni con nessuno); uno a rotazione (polling, token) le darebbe quasi tutto il canale,
+salvo l'overhead del giro di polling o del token.
+
+% ══════════════════════════════════════════════════════════════
+\section{Switch e ARP}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Il self-learning passo per passo}
+Uno switch a 4 porte appena acceso (tabella vuota) ha collegati: sulla porta 1 un hub con gli host A ed E; sulle porte 2, 3, 4 gli host
+B, C, D. Transitano, nell'ordine, i frame: A$\rightarrow$D, D$\rightarrow$A, C$\rightarrow$A, B$\rightarrow$broadcast,
+E$\rightarrow$A, A$\rightarrow$C. Per ciascuno indicare come si aggiorna la tabella e che cosa fa lo switch.
+\end{esercizio}
+
+\svolgimento
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{clll}
+\toprule
+\textbf{\#} & \textbf{Frame} & \textbf{Tabella dopo il frame} & \textbf{Azione} \\
+\midrule
+1 & A $\rightarrow$ D & A:1 & D sconosciuto: \textbf{flooding} su 2, 3, 4 \\
+2 & D $\rightarrow$ A & A:1, D:4 & A è sulla porta 1: \textbf{inoltro} su 1 \\
+3 & C $\rightarrow$ A & A:1, D:4, C:3 & inoltro su 1 \\
+4 & B $\rightarrow$ FF:FF:FF:FF:FF:FF & A:1, D:4, C:3, B:2 & broadcast: flooding su 1, 3, 4 \\
+5 & E $\rightarrow$ A & \dots, E:1 & A è sulla stessa porta da cui arriva il frame: \textbf{filtraggio} (scartato) \\
+6 & A $\rightarrow$ C & invariata & inoltro su 3 \\
+\bottomrule
+\end{tabular}
+\caption{L'evoluzione della tabella di commutazione.}
+\end{table}
+Lo switch impara sempre dal \textbf{MAC sorgente} e decide in base al \textbf{MAC destinazione}: \emph{flooding} se non lo conosce (o è
+broadcast), \emph{inoltro} se è su un'altra porta, \emph{filtraggio} se è sulla stessa porta di arrivo (nel frame 5 A ha già ricevuto il
+frame dall'hub). Le righe hanno un TTL e scadono se un host resta silenzioso.
+
+\begin{esercizio}{Un frame verso una destinazione remota}
+L'host A, con indirizzo 192.168.1.10/24 e MAC \texttt{AA:AA:AA:AA:AA:AA}, invia un datagramma all'host B (10.0.0.5). Il gateway
+di A è 192.168.1.1, con MAC \texttt{BB:BB:BB:BB:BB:BB}; l'interfaccia del router verso la rete di B ha MAC
+\texttt{CC:CC:CC:CC:CC:CC}, e B ha MAC \texttt{DD:DD:DD:DD:DD:DD}. Descrivere i passi e gli indirizzi dei due frame.
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}
+    \item \textbf{A capisce che B è remoto}: $192.168.1.10 \wedge 255.255.255.0 = 192.168.1.0$, mentre $10.0.0.5 \wedge 255.255.255.0 = 10.0.0.0$.
+          Reti diverse: il frame va consegnato al \textbf{gateway}.
+    \item \textbf{A cerca il MAC del gateway} (non di B!) nella tabella ARP; se manca invia una \emph{ARP request} in broadcast
+          (``chi ha 192.168.1.1?'') e il router risponde in unicast con \texttt{BB:BB:\dots}.
+    \item \textbf{A invia il frame}; il router lo accetta (il MAC destinazione è il suo), estrae il datagramma, decrementa il TTL,
+          ricalcola il checksum, consulta la forwarding table e, con ARP sull'interfaccia d'uscita, trova il MAC di B.
+    \item \textbf{Il router crea un nuovo frame} verso B.
+\end{enumerate}
+\begin{center}
+\small
+\begin{tabular}{lllll}
+\toprule
+\textbf{Tratta} & \textbf{MAC sorgente} & \textbf{MAC destinazione} & \textbf{IP sorgente} & \textbf{IP destinazione} \\
+\midrule
+A $\rightarrow$ router & AA:AA:AA:AA:AA:AA & \textbf{BB:BB:BB:BB:BB:BB} & 192.168.1.10 & 10.0.0.5 \\
+router $\rightarrow$ B & CC:CC:CC:CC:CC:CC & \textbf{DD:DD:DD:DD:DD:DD} & 192.168.1.10 & 10.0.0.5 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\textbf{La regola}: i MAC cambiano a ogni salto (sono quelli del salto corrente), gli IP restano quelli degli estremi (salvo NAT).
+
+\begin{esercizio}{ARP poisoning}
+Spiegare come funziona l'ARP poisoning, perché è così efficace e come ci si difende.
+\end{esercizio}
+
+\svolgimento
+Un host malevolo M invia ad A risposte ARP \textbf{falsificate} (anche non richieste) che associano l'IP del gateway al \emph{proprio}
+MAC, e fa lo stesso con il gateway per l'IP di A. Da quel momento il traffico tra A e il gateway passa per M, che può leggerlo,
+modificarlo e inoltrarlo: un \textbf{man-in-the-middle} invisibile. Funziona perché ARP \textbf{non ha alcuna autenticazione}: chiunque
+può rispondere, e le tabelle accettano anche risposte non sollecitate (\emph{gratuitous ARP}). Le difese vengono da fuori del
+protocollo: voci ARP statiche per i nodi critici, \emph{Dynamic ARP Inspection} sugli switch gestiti e, soprattutto, cifratura
+end-to-end (TLS), che rende inutile l'intercettazione.
+
+% ══════════════════════════════════════════════════════════════
+\section{Crittografia}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Il cifrario di Cesare}
+Con uno spostamento di $k = 3$ lettere (alfabeto inglese di 26 lettere): (a) cifrare \texttt{RETI}; (b) decifrare \texttt{SURWRFROOR};
+(c) quante chiavi deve provare un attaccante? E con una sostituzione monoalfabetica qualsiasi?
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} R$\rightarrow$U, E$\rightarrow$H, T$\rightarrow$W, I$\rightarrow$L: \texttt{UHWL}.
+
+\textbf{(b)} Si sposta indietro di 3: \texttt{PROTOCOLLO}.
+
+\textbf{(c)} Le chiavi utili sono 25: una ricerca esaustiva è immediata. Con una sostituzione monoalfabetica qualsiasi le chiavi sono
+$26! \approx 4 \cdot 10^{26}$, troppe per la forza bruta; eppure il cifrario si rompe facilmente con l'\textbf{analisi delle frequenze}
+(in italiano E, A, I, O sono le lettere più frequenti), perché ogni lettera in chiaro diventa sempre la stessa lettera cifrata. Uno spazio
+delle chiavi grande è necessario, ma non sufficiente.
+
+\begin{esercizio}{One-time pad}
+Con $P = \texttt{10110010}$ e $K = \texttt{01101100}$: (a) cifrare; (b) decifrare; (c) mostrare perché lo stesso pad non va mai
+riusato.
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} $C = P \oplus K = \texttt{10110010} \oplus \texttt{01101100} = \texttt{11011110}$.
+
+\textbf{(b)} $C \oplus K = \texttt{11011110} \oplus \texttt{01101100} = \texttt{10110010} = P$: cifrare e decifrare sono la stessa
+operazione, perché $(P \oplus K) \oplus K = P$.
+
+\textbf{(c)} Se lo stesso $K$ cifra $P_1$ e $P_2$, l'attaccante calcola
+$C_1 \oplus C_2 = (P_1 \oplus K) \oplus (P_2 \oplus K) = P_1 \oplus P_2$: il pad \textbf{scompare}, e lo XOR di due testi in linguaggio
+naturale si attacca con metodi statistici. Il one-time pad è inviolabile solo se il pad è casuale, lungo quanto il messaggio e usato
+\textbf{una sola volta}: proprio per questo è poco pratico (va distribuito in modo sicuro un pad grande quanto tutti i messaggi).
+
+\begin{esercizio}{Hash e MAC}
+A invia a B la coppia $(m, H(m))$, dove $H$ è una funzione hash crittografica pubblica. Garantisce l'integrità? Come la garantisce il
+MAC?
+\end{esercizio}
+
+\svolgimento
+No. Un intruso intercetta il messaggio, lo sostituisce con $m'$ e calcola lui stesso $H(m')$, perché $H$ è pubblica: B riceve $(m', H(m'))$,
+la verifica ha successo e la falsificazione passa inosservata.
+
+Con il \textbf{MAC} A e B condividono un segreto $s$: A invia $(m, H(m \| s))$, senza trasmettere $s$. B ricalcola $H(m \| s)$ e confronta.
+L'intruso, non conoscendo $s$, non può produrre il valore corretto per un $m'$ diverso. (Il MAC crittografico, \emph{Message Authentication
+Code}, non ha nulla a che vedere con il MAC address del livello di collegamento.)
+
+\begin{esercizio}{Diffie-Hellman con numeri piccoli}
+Alice e Bob scelgono pubblicamente $n = 23$ e $g = 5$; Alice sceglie in segreto $x = 6$, Bob $y = 15$.
+\begin{enumerate}[label=(\alph*)]
+    \item Calcolare i valori scambiati e il segreto condiviso.
+    \item Perché un intercettatore passivo non può ricavarlo (con numeri grandi)?
+    \item Come può un attaccante attivo compromettere lo scambio?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Alice invia $A = 5^6 \bmod 23 = 15625 \bmod 23 = 8$; Bob invia $B = 5^{15} \bmod 23 = 19$.
+Alice calcola $B^x \bmod n = 19^6 \bmod 23 = 2$; Bob calcola $A^y \bmod n = 8^{15} \bmod 23 = 2$. Il segreto condiviso è
+$g^{xy} \bmod n = \mathbf{2}$, senza che $x$ o $y$ abbiano mai viaggiato sulla rete.
+
+\info{Calcolare le potenze modulari a mano}{
+    Si riduce modulo $n$ a ogni passo, per quadrati successivi. Per $5^{15} \bmod 23$: $5^2 = 25 \equiv 2$; $5^4 \equiv 4$;
+    $5^8 \equiv 16$; $15 = 8 + 4 + 2 + 1$, quindi $5^{15} \equiv 16 \cdot 4 \cdot 2 \cdot 5 = 640 \equiv 640 - 27\cdot 23 = 19$.
+}
+
+\textbf{(b)} L'intercettatore conosce $n = 23$, $g = 5$, $A = 8$ e $B = 19$. Per ottenere il segreto gli serve $x$ o $y$, cioè risolvere
+$5^x \equiv 8 \pmod{23}$: il \textbf{logaritmo discreto}, intrattabile quando $n$ ha migliaia di bit (con $n = 23$ basta provare).
+
+\textbf{(c)} Con un \textbf{man-in-the-middle}: Trudy intercetta $A$ e invia a Bob il proprio $g^z \bmod n$, e fa lo stesso verso Alice.
+Stabilisce così un segreto $g^{xz}$ con Alice e uno $g^{yz}$ con Bob, decifra e ricifra tutto, e nessuno dei due se ne accorge.
+Diffie-Hellman protegge dall'ascolto passivo ma \textbf{non autentica}: servono certificati e autorità di certificazione.
+
+\begin{esercizio}{RSA con numeri piccoli}
+Si scelgono $p = 5$ e $q = 7$, con esponente pubblico $e = 5$.
+\begin{enumerate}[label=(\alph*)]
+    \item Calcolare $n$, $z$ e un esponente privato $d$ valido diverso da $e$.
+    \item Cifrare il messaggio $m = 12$ e verificare la decifratura.
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} $n = 35$, $z = (p-1)(q-1) = 24$. Serve $e \cdot d \equiv 1 \pmod{24}$: $d = 5$ funzionerebbe ($25 \equiv 1$), ma renderebbe
+la chiave privata uguale a quella pubblica. Il valore successivo è $d = 29$: $5 \cdot 29 = 145 = 6 \cdot 24 + 1$. Chiave pubblica $(5, 35)$,
+privata $(29, 35)$.
+
+\textbf{(b)} Cifratura: $c = 12^5 \bmod 35$. $12^2 = 144 \equiv 4$; $12^4 \equiv 16$; $12^5 \equiv 16 \cdot 12 = 192 \equiv 17$. Quindi $c = 17$.
+
+Decifratura: $17^{29} \bmod 35$. $17^2 = 289 \equiv 9$; $17^4 \equiv 81 \equiv 11$; $17^8 \equiv 121 \equiv 16$; $17^{16} \equiv 256 \equiv 11$.
+Con $29 = 16 + 8 + 4 + 1$: $11 \cdot 16 \cdot 11 \cdot 17 \bmod 35$; $11 \cdot 16 = 176 \equiv 1$, poi $1 \cdot 11 = 11$, poi $11 \cdot 17 = 187 \equiv 12$.
+Si ritrova $m = 12$.
+
+Ovviamente con $n = 35$ chiunque fattorizza $n$ e ricava $d$: la sicurezza di RSA viene dall'usare primi di centinaia di cifre.
+
+\begin{esercizio}{Il nonce contro il replay}
+Perché inviare la password cifrata non basta ad autenticarsi? Come risolve il problema un nonce?
+\end{esercizio}
+
+\svolgimento
+Un attaccante che registra il messaggio con la password cifrata può \textbf{rigiocarlo} in una nuova sessione (\emph{playback attack}):
+non ha bisogno di capirlo, e B non ha modo di sapere se A è davvero ``presente''. Con il nonce, B sceglie un numero $R$ usato
+\textbf{una sola volta} e lo invia ad A; A risponde con $K_{AB}(R)$. Una risposta registrata in passato riguarda un nonce vecchio
+$R_1 \neq R_2$, e senza la chiave l'attaccante non può produrre $K_{AB}(R_2)$. È lo stesso principio degli ISN casuali di TCP: un valore
+imprevedibile e diverso a ogni sessione garantisce che l'interlocutore sia vivo.
+
+% ══════════════════════════════════════════════════════════════
+\section{Firewall}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Scrivere una ACL}
+Un'organizzazione ha la rete 222.22.0.0/16 e un mail server 222.22.1.25. Scrivere le regole di un filtro di pacchetti (tradizionale)
+che: permettano agli utenti interni di navigare sul Web (HTTP e HTTPS); permettano le query DNS verso l'esterno; permettano la posta in
+ingresso verso il mail server; blocchino tutto il resto.
+\end{esercizio}
+
+\svolgimento
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{llllllc}
+\toprule
+\textbf{Azione} & \textbf{Sorgente} & \textbf{Destinazione} & \textbf{Prot.} & \textbf{Porta sorg.} & \textbf{Porta dest.} & \textbf{ACK} \\
+\midrule
+allow & 222.22/16 & esterno & TCP & $> 1023$ & 80, 443 & qualsiasi \\
+allow & esterno & 222.22/16 & TCP & 80, 443 & $> 1023$ & 1 \\
+allow & 222.22/16 & esterno & UDP & $> 1023$ & 53 & -- \\
+allow & esterno & 222.22/16 & UDP & 53 & $> 1023$ & -- \\
+allow & esterno & 222.22.1.25 & TCP & $> 1023$ & 25 & qualsiasi \\
+allow & 222.22.1.25 & esterno & TCP & 25 & $> 1023$ & 1 \\
+deny & qualsiasi & qualsiasi & qualsiasi & qualsiasi & qualsiasi & qualsiasi \\
+\bottomrule
+\end{tabular}
+\caption{Una ACL per il filtro tradizionale (le regole si valutano dall'alto; l'ultima blocca tutto il resto).}
+\end{table}
+Il flag \textbf{ACK $= 1$} sulle regole in ingresso impedisce che dall'esterno si \emph{aprano} connessioni verso le porte alte: il primo
+segmento di una connessione (SYN) ha ACK $= 0$. Resta però il limite del filtro \textbf{stateless}: un attaccante può inviare segmenti
+con ACK $= 1$ e porta sorgente 80 che non appartengono a nessuna connessione, e il filtro li lascerebbe passare. Un filtro
+\textbf{stateful}, che tiene la tabella delle connessioni aperte, li scarterebbe.
+
+\gbox{\iinfo\ Formule da ricordare}{primary!80!black}{
+\begin{itemize}
+    \item Codice con distanza $d$: rileva $d - 1$ errori, ne corregge $\lfloor (d-1)/2 \rfloor$.
+    \item CRC: si aggiungono $r$ zeri, divisione modulo 2 (XOR), resto di $r$ bit; rileva tutti i burst $\le r$.
+    \item CSMA/CD: $L_{\min} = 2\tau R$; backoff $K \in \{0, \dots, 2^n - 1\}$ unità da 512 bit.
+    \item ALOHA: $S_{\max} = 1/(2e) \approx 18\%$; slotted: $1/e \approx 37\%$.
+    \item RSA: $n = pq$, $z = (p-1)(q-1)$, $ed \equiv 1 \pmod z$, $c = m^e \bmod n$, $m = c^d \bmod n$.
+    \item Diffie-Hellman: segreto $g^{xy} \bmod n$.
+\end{itemize}
+}

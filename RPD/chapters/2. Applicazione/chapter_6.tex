@@ -1,0 +1,766 @@
+\chapter{Programmazione di rete: i socket in C}
+
+Finora abbiamo visto applicazioni e protocolli esistenti. Ora vediamo come \textbf{creare} un'applicazione
+di rete. Quasi tutte sono fatte di un programma lato client e di un programma lato server: quando li
+eseguiamo nascono un processo client e un processo server, che comunicano \textbf{leggendo e scrivendo sui
+socket}.
+
+% ══════════════════════════════════════════════════════════════
+\section{Le scelte di progetto}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Protocolli aperti e proprietari}
+
+\begin{itemize}
+    \item \textbf{Protocolli aperti}: le regole sono pubbliche (per esempio in un RFC). Un client scritto da noi
+          può parlare con un server scritto da altri, purché entrambi rispettino lo standard (un nostro client HTTP
+          parla con Apache).
+    \item \textbf{Protocolli proprietari}: regole ``fatte in casa'', non pubblicate. Client e server li scrive lo
+          stesso sviluppatore, che ha pieno controllo ma deve fare tutto da sé.
+\end{itemize}
+
+\subsection{La scelta del protocollo di trasporto}
+
+\begin{itemize}
+    \item \textbf{TCP}: orientato alla connessione, offre un \textbf{canale affidabile a flusso di byte} tra i due end system.
+    \item \textbf{UDP}: senza connessione, invia \textbf{pacchetti indipendenti} da un end system all'altro, senza
+          alcuna garanzia di consegna.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Dove stanno i socket nella pila}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\small\sffamily}]
+  \node[lay app, minimum width=3.6cm, minimum height=0.9cm] (a) at (0,1.8) {Applicazione};
+  \node[lay tra, minimum width=3.6cm, minimum height=0.9cm] (t) at (0,0.9) {Trasporto (TCP/UDP)};
+  \node[lay net, minimum width=3.6cm, minimum height=0.9cm] (n) at (0,0) {Rete (IP)};
+  \node[lay link, minimum width=3.6cm, minimum height=0.9cm] (l) at (0,-0.9) {Accesso (link + fisico)};
+  \node[draw, fill=lapp!40, rounded corners, minimum width=3.4cm, minimum height=0.9cm] (my) at (6,1.8) {la vostra applicazione};
+  \node[draw, fill=white, very thick, draw=netred, rounded corners, minimum width=3.4cm, minimum height=0.5cm] (api) at (6,1.1) {\textbf{API dei socket}};
+  \node[draw, fill=lphy!50, rounded corners, minimum width=3.4cm, minimum height=1.8cm, align=center] (os) at (6,-0.2) {sistema operativo\\+ hardware};
+  \draw[dashed, netred, thick] (-2.4,1.35) -- (8.2,1.35);
+  \node[text=netred, anchor=west, font=\scriptsize\sffamily] at (8.3,1.35) {socket};
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (-2.1,1.3) -- (-2.1,-1.35) node[midway, left=6pt, align=center, font=\scriptsize\sffamily] {implementati\\dal sistema\\operativo};
+\end{tikzpicture}
+\caption{Dove sono implementati gli strati: l'applicazione è nostra, trasporto e rete stanno nel sistema operativo e si usano attraverso l'API dei socket.}
+\end{figure}
+
+I socket sono l'elemento centrale per creare applicazioni di rete: realizzano, come una scatola nera,
+le funzionalità di \textbf{trasporto} (TCP/UDP) e di \textbf{rete} (IP). Esistono librerie e
+\emph{middleware} che ``avvolgono'' i socket semplificandone l'uso e offrendo funzioni più complesse, ma le
+API di base sono ancora molto usate.
+
+Le API per socket TCP e UDP esistono in quasi tutti i linguaggi e sistemi operativi (C, C++, C\#, Java,
+Python, \dots). Nel mondo Unix si usano i \textbf{socket di Berkeley} (detti anche socket BSD o POSIX): API
+native in C, le stesse che useremo noi.
+
+\info{Tutto è un file}{
+    I socket seguono la filosofia Unix per cui ``\emph{tutto è un file}'': un socket è identificato da un
+    \textbf{file descriptor}, come un file aperto, e si può chiudere con \texttt{close()} o leggere con
+    \texttt{read()}.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{UDP e TCP: le due sequenze}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, st/.style={draw, rounded corners, fill=#1, minimum width=2.2cm, minimum height=0.6cm, align=center}]
+  \begin{scope}
+    \node[font=\small\bfseries\sffamily] at (1.4,1) {Senza connessione (UDP)};
+    \node[font=\bfseries\sffamily] at (0,0.4) {Client}; \node[font=\bfseries\sffamily] at (2.8,0.4) {Server};
+    \node[st=lapp!40] (c1) at (0,-0.2) {crea socket}; \node[st=lapp!40] (s1) at (2.8,-0.2) {crea socket};
+    \node[st=ltra!40] (c3) at (0,-1.8) {invia messaggio}; \node[st=ltra!40] (s3) at (2.8,-1.8) {legge messaggio};
+    \node[st=ltra!40] (c4) at (0,-2.6) {legge risposta}; \node[st=ltra!40] (s4) at (2.8,-2.6) {invia risposta};
+    \node[st=lnet!40] (c5) at (0,-3.4) {chiude socket};
+    \foreach \a/\b in {c1/c3, c3/c4, c4/c5, s1/s3, s3/s4} \draw[-{Stealth}] (\a) -- (\b);
+    \draw[msg, netblue] (c3) -- (s3); \draw[msg, netgreen] (s4) -- (c4);
+  \end{scope}
+  \begin{scope}[xshift=9cm]
+    \node[font=\small\bfseries\sffamily] at (1.4,1) {Orientata alla connessione (TCP)};
+    \node[font=\bfseries\sffamily] at (0,0.4) {Client}; \node[font=\bfseries\sffamily] at (2.8,0.4) {Server};
+    \node[st=lapp!40] (c1) at (0,-0.2) {crea socket}; \node[st=lapp!40] (s1) at (2.8,-0.2) {crea socket};
+    \node[st=netred!15] (c2) at (0,-1.0) {connetti}; \node[st=netred!15] (s2) at (2.8,-1.0) {attende\\connessioni};
+    \node[st=ltra!40] (c3) at (0,-1.8) {invia messaggio}; \node[st=ltra!40] (s3) at (2.8,-1.8) {legge messaggio};
+    \node[st=ltra!40] (c4) at (0,-2.6) {legge risposta}; \node[st=ltra!40] (s4) at (2.8,-2.6) {invia risposta};
+    \node[st=lnet!40] (c5) at (0,-3.4) {chiude socket}; \node[st=lnet!40] (s5) at (2.8,-3.4) {chiude socket\\del client};
+    \foreach \a/\b in {c1/c2, c2/c3, c3/c4, c4/c5, s1/s2, s2/s3, s3/s4, s4/s5} \draw[-{Stealth}] (\a) -- (\b);
+    \draw[msg, netred, {Stealth}-{Stealth}] (c2) -- (s2);
+    \draw[msg, netblue] (c3) -- (s3); \draw[msg, netgreen] (s4) -- (c4);
+  \end{scope}
+  \foreach \y/\t in {-0.2/creazione, -1.0/connessione, -2.2/messaggi, -3.4/distruzione} \node[font=\scriptsize\itshape\sffamily, text=black!60] at (6.2,\y) {\t};
+\end{tikzpicture}
+\caption{Le fasi di una comunicazione senza connessione e con connessione.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Le strutture dati}
+% ══════════════════════════════════════════════════════════════
+
+I socket del dominio Internet in C usano alcune strutture per descrivere indirizzi e porte degli host:
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <netinet/in.h>
+#include <arpa/inet.h>     // per inet_addr()
+#include <sys/types.h>     // alcuni tipi personalizzati
+
+struct sockaddr_in {
+    short          sin_family;  // famiglia dell'indirizzo, di solito AF_INET (IPv4)
+    unsigned short sin_port;    // numero di porta, per esempio htons(3490)
+    struct in_addr sin_addr;    // indirizzo IP (vedi sotto)
+    char           sin_zero[8]; // zeri: la struttura ha la stessa dimensione di sockaddr
+};
+
+struct in_addr {
+    unsigned long s_addr;       // indirizzo IP: inet_addr("...") oppure INADDR_ANY
+};
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{sin\_zero} serve solo a rendere la struttura grande quanto la generica \texttt{struct sockaddr}:
+          per questo alle funzioni si passa \texttt{(struct sockaddr *)\&indirizzo}.
+    \item \texttt{inet\_addr("192.168.1.10")} converte un indirizzo in notazione puntata nel formato binario;
+          \texttt{INADDR\_ANY} significa ``qualsiasi indirizzo di questa macchina''.
+\end{itemize}
+
+\warning{L'ordine dei byte: htons()}{
+    Macchine diverse memorizzano i numeri su più byte in ordine diverso (\emph{little endian} o \emph{big endian}).
+    In rete si usa per convenzione il \textbf{network byte order} (big endian). Per questo porte e indirizzi vanno
+    convertiti: \texttt{htons()} (\emph{host to network short}) per le porte a 16 bit, \texttt{htonl()} per i
+    valori a 32 bit, e \texttt{ntohs()}/\texttt{ntohl()} per il percorso inverso.
+    \begin{center}
+    \begin{tikzpicture}[every node/.style={font=\scriptsize\ttfamily}]
+      \node[anchor=east, font=\scriptsize\sffamily] at (-0.2,0) {porta 8080 = 0x1F90, su x86:};
+      \node[field, fill=lapp!50, minimum width=1cm] at (0.5,0) {90}; \node[field, fill=lnet!50, minimum width=1cm] at (1.5,0) {1F};
+      \node[anchor=east, font=\scriptsize\sffamily] at (-0.2,-0.8) {dopo htons(8080), in rete:};
+      \node[field, fill=lnet!50, minimum width=1cm] at (0.5,-0.8) {1F}; \node[field, fill=lapp!50, minimum width=1cm] at (1.5,-0.8) {90};
+    \end{tikzpicture}
+    \end{center}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Le funzioni di base}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Creazione del socket: socket()}
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <sys/socket.h>
+int sockfd = socket(int domain, int type, int protocol);
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{domain}: la famiglia di indirizzi, come nella struttura (\texttt{AF\_INET});
+    \item \texttt{type}: il tipo di socket: \texttt{SOCK\_STREAM} $\rightarrow$ \textbf{TCP}, \texttt{SOCK\_DGRAM}
+          $\rightarrow$ \textbf{UDP};
+    \item \texttt{protocol}: un protocollo specifico da usare nel socket; di solito \texttt{0} (quello di default);
+    \item \texttt{sockfd}: il \textbf{file descriptor} del nuovo socket (negativo in caso di errore).
+\end{itemize}
+
+\subsection{Associazione a indirizzo e porta: bind()}
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <sys/socket.h>
+int val = bind(int socket, const struct sockaddr *address, socklen_t address_len);
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{socket}: il file descriptor del socket da associare;
+    \item \texttt{address}: puntatore a una \texttt{sockaddr} con porta e indirizzo su cui mettersi in ascolto;
+          spesso \texttt{sin\_addr} è \texttt{INADDR\_ANY}, così si ascolta su tutti gli indirizzi della macchina;
+    \item \texttt{address\_len}: la dimensione della struttura (con \texttt{sizeof()});
+    \item \texttt{val}: 0 in caso di successo, $-1$ altrimenti.
+\end{itemize}
+
+\warning{bind() serve al server}{
+    Il server \textbf{deve} associare il socket a una porta precisa (i client devono sapere dove trovarlo).
+    Sul client \texttt{bind()} è \textbf{facoltativa}: se non la si chiama, il sistema operativo sceglie
+    automaticamente una porta libera.
+}
+
+\subsection{Invio e ricezione in UDP: sendto() e recvfrom()}
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <sys/socket.h>
+int ob = sendto(int osock, const void *obuf, size_t olen, int oflags,
+                const struct sockaddr *oaddr, socklen_t oaddr_len);
+int ib = recvfrom(int isock, void *ibuf, size_t ilen, int iflags,
+                  struct sockaddr *iaddr, socklen_t *iaddr_len);
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{osock}/\texttt{isock}: il socket su cui inviare/ricevere;
+    \item \texttt{obuf}/\texttt{ibuf}: il buffer con il messaggio da inviare / dove mettere quello ricevuto;
+    \item \texttt{olen}/\texttt{ilen}: la lunghezza in byte;
+    \item \texttt{oflags}/\texttt{iflags}: opzioni, di solito \texttt{0} (oppure \texttt{MSG\_WAITALL} per aspettare
+          tutti i byte richiesti);
+    \item \texttt{oaddr}: l'indirizzo del \textbf{destinatario}; \texttt{iaddr}: dove la funzione \textbf{scrive}
+          l'indirizzo del mittente;
+    \item \texttt{ob}/\texttt{ib}: il numero di byte effettivamente inviati/ricevuti.
+\end{itemize}
+
+\info{Perché in UDP serve l'indirizzo ogni volta}{
+    In UDP non c'è connessione: il socket non ``sa'' con chi sta parlando. Per questo \texttt{sendto()} vuole
+    l'indirizzo del destinatario a ogni invio, e \texttt{recvfrom()} restituisce l'indirizzo di chi ha mandato il
+    messaggio, così che il server possa rispondergli.
+}
+
+\subsection{Chiusura: close()}
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <unistd.h>
+int val = close(int socket);   // 0 in caso di successo, -1 altrimenti
+\end{lstlisting}
+
+% ══════════════════════════════════════════════════════════════
+\section{Esempio completo: client e server UDP}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.7, every node/.style={font=\scriptsize\ttfamily}]
+  \node[font=\footnotesize\bfseries\sffamily] at (0,0.6) {Client}; \node[font=\footnotesize\bfseries\sffamily] at (6,0.6) {Server};
+  \draw[thick, black!50] (0,0) -- (0,-7.3); \draw[thick, black!50] (6,0) -- (6,-7.3);
+  \node[fill=white, draw, rounded corners] at (0,-0.4) {socket()}; \node[fill=white, draw, rounded corners] at (6,-0.4) {socket()};
+  \node[fill=white, draw, rounded corners] at (6,-1.4) {bind()};
+  \node[fill=white, draw, rounded corners] (rf) at (6,-2.8) {recvfrom()};
+  \node[fill=white, draw, rounded corners] (st) at (0,-2.4) {sendto()};
+  \draw[msg, netblue] (st) -- node[above, sloped, font=\scriptsize\sffamily] {``Hello from client''} (rf);
+  \node[fill=white, draw, rounded corners] (st2) at (6,-4.2) {sendto()};
+  \node[fill=white, draw, rounded corners] (rf2) at (0,-4.8) {recvfrom()};
+  \draw[msg, netgreen] (st2) -- node[above, sloped, font=\scriptsize\sffamily] {``Hello from server''} (rf2);
+  \node[fill=white, draw, rounded corners] at (0,-6.5) {close()}; \node[fill=white, draw, rounded corners] at (6,-6.5) {close()};
+  \node[anchor=west, font=\scriptsize\sffamily, text width=6cm, align=left] at (7,-2.8) {\textbf{recvfrom} si blocca finché non arriva un messaggio e restituisce IP e porta del client};
+  \draw[{Stealth}-{Stealth}, dashed, black!50] (-0.8,-2.2) -- node[left, font=\scriptsize\sffamily, align=center] {si può\\ripetere} (-0.8,-5.0);
+\end{tikzpicture}
+\caption{La sequenza di chiamate per un semplice scambio UDP.}
+\end{figure}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={udp\_server.c}]
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#define PORT    8080
+#define MAXLINE 1024
+
+int main(void) {
+    int sockfd;
+    char buffer[MAXLINE];
+    const char *hello = "Hello from server";
+    struct sockaddr_in servaddr, cliaddr;
+
+    // 1. Creazione del socket UDP
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&servaddr, 0, sizeof(servaddr));
+    memset(&cliaddr, 0, sizeof(cliaddr));
+    servaddr.sin_family      = AF_INET;
+    servaddr.sin_addr.s_addr = INADDR_ANY;     // tutte le interfacce
+    servaddr.sin_port        = htons(PORT);
+
+    // 2. Associazione alla porta 8080
+    if (bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // 3. Ricezione: cliaddr viene riempita con indirizzo e porta del client
+    socklen_t len = sizeof(cliaddr);
+    int n = recvfrom(sockfd, buffer, MAXLINE - 1, 0,
+                     (struct sockaddr *)&cliaddr, &len);
+    buffer[n] = '\0';
+    printf("Ricevuto \"%s\"\n", buffer);
+
+    // 4. Risposta proprio a chi ci ha scritto
+    sendto(sockfd, hello, strlen(hello), 0, (const struct sockaddr *)&cliaddr, len);
+    printf("Hello message sent.\n");
+
+    close(sockfd);
+    return 0;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={udp\_client.c}]
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#define PORT    8080
+#define MAXLINE 1024
+
+int main(void) {
+    int sockfd;
+    char buffer[MAXLINE];
+    const char *hello = "Hello from client";
+    struct sockaddr_in servaddr;
+
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family      = AF_INET;
+    servaddr.sin_port        = htons(PORT);
+    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");  // server sulla stessa macchina
+
+    // Nessuna bind(): la porta del client la sceglie il sistema operativo
+    sendto(sockfd, hello, strlen(hello), 0, (const struct sockaddr *)&servaddr, sizeof(servaddr));
+    printf("Hello message sent.\n");
+
+    socklen_t len = sizeof(servaddr);
+    int n = recvfrom(sockfd, buffer, MAXLINE - 1, 0, (struct sockaddr *)&servaddr, &len);
+    buffer[n] = '\0';
+    printf("Ricevuto \"%s\"\n", buffer);
+
+    close(sockfd);
+    return 0;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash, title={Compilazione ed esecuzione, in due terminali}]
+$ gcc -o udp_server udp_server.c
+$ gcc -o udp_client udp_client.c
+$ ./udp_server        # terminale 1: resta in attesa
+$ ./udp_client        # terminale 2
+\end{lstlisting}
+
+\warning{Parlare con un altro computer}{
+    Nelle trasparenze il client usa \texttt{INADDR\_ANY} anche come indirizzo di destinazione, il che funziona
+    solo in locale. Per parlare con un'altra macchina si usa \texttt{inet\_addr()} con il suo indirizzo, per
+    esempio \texttt{inet\_addr("192.168.1.10")}. Attenzione anche a lasciare un byte libero nel buffer per il
+    terminatore \texttt{'\textbackslash 0'}: se si riceve esattamente \texttt{MAXLINE} byte,
+    \texttt{buffer[n]} andrebbe fuori dall'array.
+}
+
+\subsection{Riassunto della sequenza UDP}
+
+\begin{itemize}
+    \item Client e server aprono entrambi un socket.
+    \item Il server lo associa a una porta precisa con \texttt{bind()}.
+    \item Si scambiano messaggi con \texttt{sendto()} e \texttt{recvfrom()}; IP e porta del client si ricavano
+          da \texttt{recvfrom()}. Si può ciclare su \texttt{sendto}/\texttt{recvfrom} per proseguire la conversazione.
+    \item Alla fine entrambi chiudono il socket. Se chiude solo il client, il server può continuare ad accettare
+          messaggi da altri client.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Da UDP a TCP}
+% ══════════════════════════════════════════════════════════════
+
+A differenza di UDP, in TCP client e server devono fare l'\textbf{handshake} prima di scambiarsi messaggi.
+Sul server servono \textbf{due} socket:
+
+\begin{itemize}
+    \item un \textbf{socket di benvenuto} (\emph{welcoming socket}), sempre attivo, su cui i client fanno
+          l'handshake con il server;
+    \item un \textbf{socket dedicato al client}, creato dopo l'handshake, che client e server usano per comunicare.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (c1) at (0,1.5) {\icon[0.8cm]{pc}}; \node[left=0pt of c1] {client 1};
+  \node (c2) at (0,0) {\icon[0.9cm]{laptop}}; \node[left=0pt of c2] {client 2};
+  \node (c3) at (0,-1.5) {\icon[0.8cm]{pc}}; \node[left=0pt of c3] {client 3};
+  \node[draw, very thick, netred, fill=netred!10, rounded corners, minimum width=1.6cm, minimum height=0.8cm, align=center] (w) at (4.5,0) {socket di\\benvenuto};
+  \node[draw, fill=llink!60, minimum height=0.6cm, minimum width=1.8cm] (q) at (7,0) {coda: 3 2 1};
+  \node[draw=netblue, thick, rounded corners, minimum width=6.8cm, minimum height=4.3cm] (srv) at (7.6,0) {};
+  \node[anchor=north east] at (srv.north east) {\icon[0.5cm]{server}\ server};
+  \node[draw, fill=ltra!50, rounded corners, align=center] (a) at (9.6,0.9) {socket dedicato\\al client 1};
+  \node[anchor=west, font=\ttfamily\scriptsize] at (4.0,1.4) {listen()};
+  \node[anchor=west, font=\ttfamily\scriptsize] at (8.1,-0.9) {accept()};
+  \foreach \c in {c1,c2,c3} \draw[msg, netred] (\c) -- node[above, sloped, font=\ttfamily\scriptsize] {connect()} (w);
+  \draw[-{Stealth}, thick] (w) -- (q); \draw[-{Stealth}, thick] (q) -- (a);
+  \draw[msg, netgreen, {Stealth}-{Stealth}, very thick] (c1) to[bend left=25] node[above, font=\scriptsize\sffamily] {comunicazione} (a);
+\end{tikzpicture}
+\caption{\texttt{listen()} apre una coda in cui si accumulano le richieste di connessione; \texttt{accept()} ne estrae una e crea il socket dedicato a quel client.}
+\end{figure}
+
+Il three-way handshake avviene dentro il livello di trasporto ed è \textbf{del tutto invisibile} ai
+programmi client e server: una volta accettata la connessione, la comunicazione si sposta sul socket
+appena creato.
+
+\subsection{connect() lato client}
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <sys/socket.h>
+int val = connect(int socket, const struct sockaddr *address, socklen_t address_len);
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{socket}: il socket con cui connettersi;
+    \item \texttt{address}: l'indirizzo del \textbf{server};
+    \item \texttt{val}: 0 in caso di successo, $-1$ altrimenti (per esempio se nessuno è in ascolto).
+\end{itemize}
+
+\subsection{listen() e accept() lato server}
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <sys/socket.h>
+int val        = listen(int socket, int backlog);
+int new_sockfd = accept(int socket, struct sockaddr *address, socklen_t *address_len);
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{socket}: il socket su cui attendere le connessioni (deve essere già associato con \texttt{bind()});
+    \item \texttt{backlog}: la lunghezza massima della \textbf{coda} delle connessioni in attesa;
+    \item \texttt{address}: un puntatore nullo, oppure una \texttt{sockaddr} in cui \texttt{accept()} scrive
+          l'indirizzo del client che si è connesso;
+    \item \texttt{new\_sockfd}: il \textbf{nuovo socket} su cui client e server comunicheranno.
+\end{itemize}
+
+\texttt{accept()} è \textbf{bloccante}: il server resta fermo lì finché un client non si connette.
+
+\subsection{send() e read() in TCP}
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <sys/socket.h>
+int ob = send(int osock, const void *obuf, size_t olen, int flags);
+#include <unistd.h>
+int ib = read(int isock, void *ibuf, size_t ilen);
+\end{lstlisting}
+
+Sono più semplici delle versioni UDP: gli indirizzi di client e server sono già stati fissati durante la
+connessione, e non serve ripeterli. \texttt{flags} vale di solito 0; \texttt{ob} e \texttt{ib} sono i byte
+effettivamente inviati e ricevuti (\texttt{read()} restituisce 0 quando l'altro lato ha chiuso la connessione).
+
+\warning{TCP è un flusso di byte, non di messaggi}{
+    Con TCP non esistono ``messaggi'': una \texttt{send()} di 100 byte può arrivare all'altra parte in due
+    \texttt{read()} da 60 e 40 byte, e due \texttt{send()} possono arrivare in una sola \texttt{read()}. Un
+    protocollo applicativo su TCP deve quindi stabilire come delimitare i messaggi (una lunghezza in testa, un
+    carattere terminatore come \texttt{\textbackslash r\textbackslash n} in HTTP, \dots).
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Esempio completo: client e server TCP}
+% ══════════════════════════════════════════════════════════════
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={tcp\_server.c}]
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#define PORT 8080
+
+int main(void) {
+    int sockfd, new_socket;
+    char buffer[1024];
+    const char *hello = "Hello from server";
+    struct sockaddr_in servaddr, cliaddr;
+
+    // 1. Socket di benvenuto (TCP)
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+    memset(&servaddr, 0, sizeof(servaddr));
+    memset(&cliaddr, 0, sizeof(cliaddr));
+    servaddr.sin_family      = AF_INET;
+    servaddr.sin_addr.s_addr = INADDR_ANY;
+    servaddr.sin_port        = htons(PORT);
+
+    // 2. bind + listen: coda di al massimo 3 connessioni in attesa
+    if (bind(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+    if (listen(sockfd, 3) < 0) {
+        perror("listen");
+        exit(EXIT_FAILURE);
+    }
+
+    // 3. accept: si blocca fino alla connessione di un client
+    socklen_t addrlen = sizeof(cliaddr);
+    if ((new_socket = accept(sockfd, (struct sockaddr *)&cliaddr, &addrlen)) < 0) {
+        perror("accept");
+        exit(EXIT_FAILURE);
+    }
+
+    // 4. Dialogo sul socket dedicato
+    int n = read(new_socket, buffer, sizeof(buffer) - 1);
+    buffer[n > 0 ? n : 0] = '\0';
+    printf("Ricevuto \"%s\"\n", buffer);
+    send(new_socket, hello, strlen(hello), 0);
+    printf("Hello message sent.\n");
+
+    // 5. Chiusura: prima il socket del client, poi quello di benvenuto
+    close(new_socket);
+    close(sockfd);
+    return 0;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={tcp\_client.c}]
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#define PORT 8080
+
+int main(void) {
+    int sockfd;
+    char buffer[1024];
+    const char *hello = "Hello from client";
+    struct sockaddr_in servaddr;
+
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family      = AF_INET;
+    servaddr.sin_port        = htons(PORT);
+    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    // L'handshake a tre vie avviene qui dentro, invisibile al programma
+    if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
+        printf("\nConnection Failed\n");
+        return -1;
+    }
+
+    send(sockfd, hello, strlen(hello), 0);
+    printf("Hello message sent.\n");
+
+    int n = read(sockfd, buffer, sizeof(buffer) - 1);
+    buffer[n > 0 ? n : 0] = '\0';
+    printf("Ricevuto \"%s\"\n", buffer);
+
+    close(sockfd);
+    return 0;
+}
+\end{lstlisting}
+
+\subsection{Riassunto della sequenza TCP}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.66, every node/.style={font=\scriptsize\ttfamily}]
+  \node[font=\footnotesize\bfseries\sffamily] at (0,0.7) {Client}; \node[font=\footnotesize\bfseries\sffamily] at (6,0.7) {Server};
+  \draw[thick, black!50] (0,0) -- (0,-10.2); \draw[thick, black!50] (6,0) -- (6,-10.2);
+  \foreach \x/\y/\t in {0/-0.3/socket(), 6/-0.3/socket(), 6/-1.1/bind(), 6/-1.9/listen(), 6/-2.9/accept(), 0/-3.9/connect(), 0/-5.3/send(), 6/-5.9/read(), 6/-6.7/send(), 0/-7.3/read(), 0/-8.3/close(), 6/-8.9/read(), 6/-9.7/close()}
+    \node[fill=white, draw, rounded corners] (\t\y) at (\x,\y) {\t};
+  \draw[msg, netred, {Stealth}-{Stealth}] (0.7,-3.9) -- node[above, font=\scriptsize\sffamily] {handshake} (5.3,-3.4);
+  \node[anchor=west, font=\scriptsize\sffamily, text=netred] at (6.9,-2.9) {bloccata fino al nuovo client};
+  \draw[msg, netblue] (0.6,-5.3) -- (5.4,-5.9);
+  \draw[msg, netgreen] (5.4,-6.7) -- (0.6,-7.3);
+  \draw[msg, black!60, {Stealth}-{Stealth}] (0.7,-8.3) -- node[above, font=\scriptsize\sffamily] {rilascio} (5.3,-8.9);
+  \node[anchor=west, font=\scriptsize\sffamily, text width=5cm, align=left] at (6.9,-8.9) {la \texttt{read()} restituisce 0: il client ha chiuso};
+  \draw[-{Stealth}, dashed, netorange, thick] (7.0,-9.7) to[out=0, in=0] node[right, font=\scriptsize\sffamily, text width=3cm, align=left] {può tornare ad \texttt{accept()} per un nuovo client} (6.9,-2.9);
+\end{tikzpicture}
+\caption{La sequenza di chiamate TCP.}
+\end{figure}
+
+\begin{itemize}
+    \item Client e server aprono entrambi un socket.
+    \item Il server lo associa a una porta (\texttt{bind}), si mette in ascolto (\texttt{listen}) e accetta le connessioni
+          (\texttt{accept}); il client si connette (\texttt{connect}).
+    \item Si scambiano messaggi con \texttt{send} e \texttt{read}; IP e porta del client si ricavano dal socket
+          appena creato. Si può ciclare su \texttt{send}/\texttt{read}.
+    \item Alla fine entrambi chiudono il socket. Il server può tornare ad \texttt{accept()} per accogliere un altro client.
+\end{itemize}
+
+\warning{La read() prima della close() e i quattro minuti di attesa}{
+    Il server dovrebbe fare un'ulteriore \texttt{read()} prima di chiudere il socket del client, così da
+    completare il \textbf{rilascio} della connessione avviato dal client; altrimenti la porta resta occupata
+    (stato \texttt{TIME\_WAIT}) e bisogna aspettare circa \textbf{4 minuti} prima di poterla riusare. Durante le
+    prove si può evitare il problema impostando sul socket di benvenuto l'opzione \texttt{SO\_REUSEADDR}:
+    \texttt{int on = 1; setsockopt(sockfd, SOL\_SOCKET, SO\_REUSEADDR, \&on, sizeof(on));} prima di \texttt{bind()}.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{La traduzione DNS in C}
+% ══════════════════════════════════════════════════════════════
+
+Per creare un socket verso un server serve il suo \textbf{indirizzo IP}. Ma su Internet gli host si
+identificano con i \textbf{nomi}, e i socket di Berkeley lavorano \textbf{solo con indirizzi IP}. Non è
+strano: i socket lavorano al livello di trasporto, i nomi vivono al livello applicativo. Per connetterci a un
+host dato il nome dobbiamo quindi usare il DNS e ricavarne l'indirizzo.
+
+\subsection{La struttura hostent}
+
+La funzione \texttt{gethostbyname()} contatta i server DNS e restituisce una struttura \texttt{hostent} con
+alcune informazioni sull'host: nome canonico, eventuali alias, uno o più indirizzi.
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <netdb.h>
+struct hostent {
+    char  *h_name;       // nome originale (canonico) dell'host
+    char **h_aliases;    // lista di alias (terminata da NULL)
+    int    h_addrtype;   // famiglia dell'indirizzo (di solito AF_INET)
+    int    h_length;     // lunghezza dell'indirizzo (di solito 4 byte)
+    char **h_addr_list;  // lista di indirizzi (terminata da NULL)
+};
+#define h_addr h_addr_list[0]   // per compatibilita': il primo indirizzo
+\end{lstlisting}
+
+Il DNS può restituire più indirizzi (in ordine casuale, se si interroga un server round-robin); di solito si
+usa il primo, \texttt{h\_addr\_list[0]} (o \texttt{h\_addr}). Gli indirizzi restituiti si possono convertire in
+\texttt{struct in\_addr}, la stessa usata dai socket.
+
+\subsection{gethostbyname()}
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <netdb.h>
+struct hostent *host_info = gethostbyname(const char *name);   // NULL in caso di errore
+\end{lstlisting}
+
+Esiste anche \texttt{gethostbyaddr()}, che restituisce una \texttt{hostent} a partire da un indirizzo IP (ricerca inversa).
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={dns\_lookup.c}]
+#include <stdio.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        printf("No hostname specified\n");
+        return 1;
+    }
+
+    // Interroga il DNS
+    struct hostent *info = gethostbyname(argv[1]);
+    if (info == NULL) {
+        printf("Could not resolve hostname %s :(\n", argv[1]);
+        return 1;
+    }
+
+    printf("Canonical name:\n\t%s\n", info->h_name);
+
+    printf("Aliases:\n");
+    for (int i = 0; info->h_aliases[i] != NULL; i++)
+        printf("\t%s\n", info->h_aliases[i]);
+
+    printf("IPs:\n");
+    for (int i = 0; info->h_addr_list[i] != NULL; i++)
+        printf("\t%s\n", inet_ntoa(*(struct in_addr *)info->h_addr_list[i]));
+
+    return 0;
+}
+\end{lstlisting}
+
+\warning{Occhio agli errori nelle trasparenze}{
+    Il codice delle trasparenze (in C++) contiene alcune sviste da non copiare: controlla
+    \texttt{server\_name == NULL} invece del risultato di \texttt{gethostbyname()}, e nel ciclo degli alias
+    l'incremento \texttt{i++} è fuori dalle graffe, quindi il ciclo non terminerebbe mai. La versione qui sopra le
+    corregge. Notate anche che \texttt{gethostbyname()} è considerata obsoleta: i programmi moderni usano
+    \texttt{getaddrinfo()}, che supporta anche IPv6.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Una richiesta HTTP scritta a mano}
+% ══════════════════════════════════════════════════════════════
+
+Mettiamo insieme tutto: un programma che, da zero, invia una richiesta HTTP \texttt{HEAD} per la pagina
+``cenni storici'' del sito dell'Ateneo (\url{http://www.unina.it/chi-siamo/cenni-storici}). Servono tre
+elementi: il \textbf{nome del server}, la \textbf{porta} (80) e il \textbf{percorso} della risorsa.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={http\_head.c}]
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+int main(void) {
+    // 1. Socket TCP
+    int sd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sd < 0) { perror("socket"); return 1; }
+
+    // 2. DNS: dal nome all'indirizzo IP
+    struct hostent *server = gethostbyname("www.unina.it");
+    if (server == NULL) {
+        printf("Could not resolve hostname :(\n");
+        close(sd);
+        return 1;
+    }
+
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port   = htons(80);                       // porta di HTTP
+    memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length);
+
+    // 3. Connessione TCP al server Web
+    if (connect(sd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        perror("connect");
+        close(sd);
+        return 1;
+    }
+
+    // 4. La richiesta HTTP: testo, righe chiuse da \r\n, riga vuota finale
+    const char *request = "HEAD /chi-siamo/cenni-storici HTTP/1.1\r\n"
+                          "Host: www.unina.it\r\n"
+                          "Connection: close\r\n"
+                          "\r\n";
+    if (send(sd, request, strlen(request), 0) < 0) {
+        perror("send");
+        close(sd);
+        return 1;
+    }
+    printf("message sent:\n%s", request);
+
+    // 5. La risposta
+    char buffer[4096];
+    int n = recv(sd, buffer, sizeof(buffer) - 1, 0);
+    if (n > 0) {
+        buffer[n] = '\0';
+        printf("received %d bytes:\n%s", n, buffer);
+    }
+
+    close(sd);
+    return 0;
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{gethostbyname()} invoca il DNS e restituisce l'indirizzo del server nella \texttt{hostent}; lo si
+          copia nella \texttt{serv\_addr} per la \texttt{connect()}.
+    \item La richiesta è scritta nella stringa \texttt{request}; con \texttt{Connection: close} si chiede una
+          connessione \textbf{non persistente}, perché ci interessa una sola pagina.
+    \item Si notino i \texttt{\textbackslash r\textbackslash n} alla fine di ogni riga e la \textbf{riga vuota} finale che
+          chiude gli header: senza, il server resterebbe in attesa del resto della richiesta.
+\end{itemize}
+
+\info{L'incapsulamento, toccato con mano}{
+    Scrivendo una richiesta HTTP da zero si vede concretamente che un messaggio di livello applicativo viene
+    inviato come \textbf{payload} di un messaggio di trasporto: per TCP la stringa \texttt{request} è solo una
+    sequenza di byte, del tutto irrilevante nel contenuto.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item I socket (Berkeley/POSIX) sono l'API verso trasporto e rete, implementati dal sistema operativo; un
+          socket è un file descriptor.
+    \item Indirizzi in \texttt{struct sockaddr\_in}; porte e indirizzi in \textbf{network byte order} (\texttt{htons}).
+    \item \textbf{UDP}: \texttt{socket}, \texttt{bind} (server), \texttt{sendto}/\texttt{recvfrom}, \texttt{close}.
+    \item \textbf{TCP}: server \texttt{socket}, \texttt{bind}, \texttt{listen}, \texttt{accept} (nuovo socket dedicato);
+          client \texttt{socket}, \texttt{connect}; poi \texttt{send}/\texttt{read} e \texttt{close}.
+    \item Per passare da nome a indirizzo si usa il DNS: \texttt{gethostbyname()} e la struttura \texttt{hostent}.
+\end{itemize}
+}

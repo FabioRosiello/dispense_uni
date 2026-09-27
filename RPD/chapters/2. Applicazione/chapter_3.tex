@@ -1,0 +1,455 @@
+\chapter{HTTP: messaggi, cookie e caching}
+
+Nel capitolo precedente abbiamo visto \emph{come} HTTP usa le connessioni. Ricapitoliamo e passiamo
+a \emph{che cosa} si scambiano client e server.
+
+\gbox{Ripasso: HTTP in cinque punti}{primary!70!black}{
+\begin{itemize}
+    \item È uno dei protocolli più usati di Internet (applicazioni Web).
+    \item È \textbf{client-server} e definisce \textbf{il formato dei messaggi} e \textbf{come vengono
+          scambiati} (non come si implementano client e server).
+    \item Usa messaggi di \textbf{richiesta} e di \textbf{risposta}.
+    \item È \textbf{stateless}: client e server non ricordano le interazioni passate.
+    \item Si appoggia a un trasporto affidabile e orientato alla connessione (soprattutto TCP, di recente
+          anche UDP con QUIC), con connessioni persistenti o non persistenti.
+\end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il formato dei messaggi HTTP}
+% ══════════════════════════════════════════════════════════════
+
+HTTP ha due formati diversi per i due tipi di messaggio:
+
+\begin{itemize}
+    \item la \textbf{richiesta} specifica il \textbf{comando} (metodo) che il server deve eseguire: dammi
+          una pagina, compila questo modulo, \dots;
+    \item la \textbf{risposta} riporta l'\textbf{esito} del comando (successo, errore, \dots) ed eventuali
+          \textbf{dati} (per esempio il file richiesto).
+\end{itemize}
+
+Entrambi sono scritti in \textbf{testo ASCII} ordinario: si leggono facilmente anche a occhio.
+
+\subsection{Il formato della richiesta}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, f/.style={field, minimum height=0.6cm}]
+  % request line
+  \node[f, fill=lapp, minimum width=1.6cm] (m) at (0,0) {metodo};
+  \node[f, fill=white, minimum width=0.5cm, right=0pt of m] (s1) {sp};
+  \node[f, fill=lnet, minimum width=3cm, right=0pt of s1] (u) {URL};
+  \node[f, fill=white, minimum width=0.5cm, right=0pt of u] (s2) {sp};
+  \node[f, fill=ltra, minimum width=1.6cm, right=0pt of s2] (v) {versione};
+  \node[f, fill=white, minimum width=0.5cm, right=0pt of v] {cr}; \node[f, fill=white, minimum width=0.5cm] at ([xshift=0.75cm]v.east) {lf};
+  % header lines
+  \foreach \y in {-0.8,-1.9} {
+    \node[f, fill=llink, minimum width=3.1cm, anchor=west] (h) at (-0.8,\y) {nome campo header:};
+    \node[f, fill=white, minimum width=0.5cm, right=0pt of h] (sp) {sp};
+    \node[f, fill=llink!50, minimum width=2.2cm, right=0pt of sp] (val) {valore};
+    \node[f, fill=white, minimum width=0.5cm, right=0pt of val] (cr) {cr};
+    \node[f, fill=white, minimum width=0.5cm, right=0pt of cr] {lf};
+  }
+  \node at (1.5,-1.35) {$\vdots$};
+  \node[f, fill=white, minimum width=0.5cm, anchor=west] (bcr) at (-0.8,-2.7) {cr};
+  \node[f, fill=white, minimum width=0.5cm, right=0pt of bcr] {lf};
+  \node[f, fill=lphy!60, minimum width=8.8cm, minimum height=1cm, anchor=north west] at (-0.8,-3.1) {corpo (\emph{entity body}): dati, se il metodo li prevede};
+  % labels
+  \draw[decorate, decoration={brace, amplitude=5pt}] (-1.1,-0.3) -- (-1.1,0.3) node[midway, left=6pt] {riga di richiesta};
+  \draw[decorate, decoration={brace, amplitude=5pt}] (-1.1,-2.2) -- (-1.1,-0.5) node[midway, left=6pt] {righe di header};
+  \node[left] at (-1.3,-2.7) {riga vuota};
+  \node[left] at (-1.3,-3.6) {corpo};
+\end{tikzpicture}
+\caption{Formato generale di un messaggio di richiesta HTTP.}
+\end{figure}
+
+Il messaggio di richiesta contiene:
+
+\begin{itemize}
+    \item il \textbf{metodo}: il comando da far eseguire al server;
+    \item l'\textbf{URL}: l'oggetto su cui si vuole operare;
+    \item la \textbf{versione} di HTTP (per esempio \texttt{HTTP/1.1});
+    \item le \textbf{righe di header}: i parametri della richiesta, in numero e tipo non fissati; ogni riga ha
+          il nome e il valore del parametro. Qui si può per esempio chiedere una connessione persistente o
+          no; si possono usare anche header personalizzati;
+    \item il \textbf{corpo} (\emph{body}): dipende dal metodo e contiene gli eventuali dati associati al
+          comando (per esempio il testo con cui compilare un modulo).
+\end{itemize}
+
+\warning{I separatori}{
+    I campi sono separati da caratteri speciali: \texttt{sp} è lo \textbf{spazio}; \texttt{cr} è il
+    \emph{carriage return} (\texttt{\textbackslash r}); \texttt{lf} è il \emph{line feed}
+    (\texttt{\textbackslash n}). Ogni riga termina con \texttt{\textbackslash r\textbackslash n}, e una
+    \textbf{riga vuota} (\texttt{\textbackslash r\textbackslash n} da solo) separa gli header dal corpo.
+    Dimenticarla, quando si scrive una richiesta a mano, è l'errore più comune.
+}
+
+\subsection{I metodi HTTP}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lp{12cm}}
+\toprule
+\textbf{Metodo} & \textbf{Uso} \\
+\midrule
+\texttt{GET} & \textbf{recupera} un oggetto dal server. È il metodo più usato: ogni volta che si apre una pagina si
+fa una GET. Il corpo è \textbf{vuoto}. \\
+\texttt{POST} & \textbf{invia informazioni} al server, per esempio il contenuto di un modulo. Il corpo contiene
+i dati. \\
+\texttt{HEAD} & come GET, ma il server risponde \textbf{senza l'oggetto}, con i soli header. Utile per il
+debugging e per controllare se un oggetto esiste o è cambiato. \\
+\texttt{PUT} & \textbf{carica} un oggetto in un certo percorso del server (strumenti di pubblicazione Web,
+applicazioni che devono caricare file). \\
+\texttt{DELETE} & \textbf{cancella} un oggetto dal server. \\
+\bottomrule
+\end{tabular}
+\caption{I metodi HTTP principali.}
+\end{table}
+
+\warning{I moduli non usano per forza POST}{
+    Una richiesta generata da un modulo HTML non usa necessariamente POST: spesso i moduli usano GET e
+    inseriscono i dati dei campi \textbf{direttamente nell'URL}, come query (per esempio
+    \texttt{...search?q=reti\&lang=it}).
+}
+
+\subsection{Esempio di richiesta}
+
+\begin{lstlisting}[language=http, title={Richiesta HTTP}]
+GET /somedir/page.html HTTP/1.1
+Host: www.someschool.edu
+Connection: close
+User-agent: Mozilla/5.0
+Accept-language: fr
+\end{lstlisting}
+
+Un browser (Mozilla/5.0) che implementa HTTP/1.1 chiede l'oggetto \texttt{/somedir/page.html} al server
+\texttt{www.someschool.edu}. Ci sono cinque righe: la riga di richiesta (GET, risorsa, versione) e quattro
+righe di header; il corpo è vuoto.
+
+\begin{itemize}
+    \item \texttt{Host: www.someschool.edu} indica l'host su cui si trova l'oggetto. Sembra ridondante (ci siamo
+          già connessi a quell'host!), ma il destinatario della connessione non è sempre il server finale: il
+          messaggio può essere inoltrato da un \textbf{proxy}, e allora l'indirizzo della connessione TCP è
+          diverso da quello del server vero.
+    \item \texttt{Connection: close} chiede una connessione \textbf{non persistente}: chiudi quando hai finito.
+    \item \texttt{User-agent: Mozilla/5.0} indica il tipo di browser: il server può inviare versioni diverse
+          dello stesso oggetto (stesso URL) a seconda del client.
+    \item \texttt{Accept-language: fr} indica che l'utente preferisce, se esiste, la versione in francese.
+\end{itemize}
+
+\subsection{Il formato della risposta}
+
+La risposta ha un formato analogo, ma al posto della riga di richiesta c'è una \textbf{riga di stato}
+che riporta l'esito del comando:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, f/.style={field, minimum height=0.6cm}]
+  \node[f, fill=ltra, minimum width=1.6cm] (v) at (0,0) {versione};
+  \node[f, fill=white, minimum width=0.5cm, right=0pt of v] (s1) {sp};
+  \node[f, fill=lapp, minimum width=2cm, right=0pt of s1] (c) {codice di stato};
+  \node[f, fill=white, minimum width=0.5cm, right=0pt of c] (s2) {sp};
+  \node[f, fill=lnet, minimum width=1.8cm, right=0pt of s2] (p) {frase};
+  \node[f, fill=white, minimum width=0.5cm, right=0pt of p] (cr) {cr};
+  \node[f, fill=white, minimum width=0.5cm, right=0pt of cr] {lf};
+  \node[f, fill=llink, minimum width=7.4cm, anchor=west] at (-0.8,-0.8) {righe di header (come nella richiesta)};
+  \node[f, fill=white, minimum width=1cm, anchor=west] at (-0.8,-1.6) {cr lf};
+  \node[f, fill=lphy!60, minimum width=7.4cm, minimum height=1cm, anchor=north west] at (-0.8,-2.0) {corpo: l'oggetto richiesto};
+  \draw[decorate, decoration={brace, amplitude=5pt}] (-1.1,-0.3) -- (-1.1,0.3) node[midway, left=6pt] {riga di stato};
+\end{tikzpicture}
+\caption{Formato generale di un messaggio di risposta HTTP.}
+\end{figure}
+
+\begin{itemize}
+    \item la \textbf{versione} di HTTP usata dal server;
+    \item il \textbf{codice di stato}: un numero che indica l'esito;
+    \item la \textbf{frase}: una descrizione testuale dell'esito.
+\end{itemize}
+
+\subsection{I codici di stato}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llp{10cm}}
+\toprule
+\textbf{Classe} & \textbf{Significato} & \textbf{Esempi} \\
+\midrule
+\texttt{1xx} & informativo & informazioni sulla richiesta in corso \\
+\texttt{2xx} & successo & \texttt{200 OK}: richiesta riuscita, l'informazione è nella risposta \\
+\texttt{3xx} & redirezione & \texttt{301 Moved Permanently}: l'oggetto è stato spostato in modo permanente; il nuovo URL è
+nell'header \texttt{Location} \\
+\texttt{4xx} & errore del client & \texttt{400 Bad Request}: il server non ha capito la richiesta;
+\texttt{404 Not Found}: il documento non esiste su questo server \\
+\texttt{5xx} & errore del server & \texttt{505 HTTP Version Not Supported}: il server non supporta la versione di HTTP richiesta \\
+\bottomrule
+\end{tabular}
+\caption{Le classi dei codici di stato HTTP.}
+\end{table}
+
+\info{Come ricordarle}{
+    La prima cifra dice di chi è la ``colpa'': \textbf{2} tutto bene, \textbf{3} vai altrove, \textbf{4} hai
+    sbagliato tu (client), \textbf{5} ho sbagliato io (server).
+}
+
+\subsection{Esempio di risposta}
+
+\begin{lstlisting}[language=http, title={Risposta HTTP}]
+HTTP/1.1 200 OK
+Connection: close
+Date: Tue, 18 Aug 2015 15:44:04 GMT
+Server: Apache/2.2.3 (CentOS)
+Last-Modified: Tue, 18 Aug 2015 15:11:03 GMT
+Content-Length: 6821
+Content-Type: text/html
+
+(data data data data data ...)
+\end{lstlisting}
+
+La riga di stato dice che il server usa HTTP/1.1 e che è tutto a posto: ha trovato l'oggetto e lo sta
+inviando. Il corpo contiene l'oggetto (\texttt{data data \dots}). Gli header:
+
+\begin{itemize}
+    \item \texttt{Connection: close}: la connessione verrà chiusa dopo questo messaggio (non persistente);
+    \item \texttt{Date}: data e ora in cui la risposta è stata creata e inviata;
+    \item \texttt{Server}: il messaggio è stato generato da un server Apache (è l'analogo di \texttt{User-agent});
+    \item \texttt{Last-Modified}: data e ora in cui l'oggetto è stato creato o modificato l'ultima volta;
+          fondamentale per il caching, perché le copie in cache possono essere vecchie;
+    \item \texttt{Content-Length}: il numero di byte dell'oggetto;
+    \item \texttt{Content-Type}: il tipo dell'oggetto, qui testo HTML. Il tipo è indicato ufficialmente da
+          questo header, \textbf{non} dall'estensione del file.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{I cookie}
+% ══════════════════════════════════════════════════════════════
+
+Un server HTTP senza stato è semplice, consuma poche risorse e regge migliaia di connessioni TCP
+simultanee. Ma la mancanza di stato è anche un grosso limite: molte funzioni del Web dipendono
+dal client (il carrello di Amazon, i suggerimenti di Netflix, \dots).
+
+\dfn{Cookie}{
+    Un \textbf{cookie} è un gettone digitale (un identificativo alfanumerico) creato dal server e
+    consegnato al client, con cui il server \textbf{riconosce un client specifico} nelle richieste
+    successive. I cookie possono avere attributi, come una data di scadenza.
+}
+
+\subsection{Le quattro componenti}
+
+\begin{enumerate}
+    \item Una riga di header \texttt{Set-cookie} nel messaggio di \textbf{risposta} HTTP.
+    \item Una riga di header \texttt{Cookie} nel messaggio di \textbf{richiesta} HTTP.
+    \item Un \textbf{file} sul sistema del client, gestito dal browser.
+    \item Un \textbf{database} lato server (\emph{back-end}).
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.78, every node/.style={font=\footnotesize\sffamily}]
+  \node (cl) at (0,0.9) {\icon[0.9cm]{pc}};
+  \node (sv) at (8,0.9) {\icon[0.6cm]{server}};
+  \node[below=6pt of cl] {client}; \node[below=6pt of sv] {server Amazon};
+  \draw[thick] (0,0) -- (0,-11); \draw[thick] (8,0) -- (8,-11);
+  \node[draw, fill=llink!60, rounded corners, anchor=east, text width=2.4cm, align=left, font=\scriptsize\sffamily] at (-0.4,-1) {file dei cookie:\\ \texttt{ebay: 8734}};
+  \draw[msg, netblue] (0,-1.2) -- node[above, sloped] {richiesta HTTP normale} (8,-2.2);
+  \node[draw, fill=lphy!50, rounded corners, anchor=west, text width=3.1cm, align=left, font=\scriptsize\sffamily] (db) at (8.4,-2.7) {crea l'ID \texttt{1678}\\ e una voce nel database};
+  \node[cylinder, shape border rotate=90, aspect=0.25, draw, fill=lphy, minimum height=0.8cm, minimum width=0.7cm] at (12.4,-2.7) {DB};
+  \draw[msg, netgreen] (8,-3.2) -- node[above, sloped] {risposta + \texttt{Set-cookie: 1678}} (0,-4.2);
+  \node[draw, fill=llink!60, rounded corners, anchor=east, text width=2.4cm, align=left, font=\scriptsize\sffamily] at (-0.4,-4.4) {\texttt{ebay: 8734}\\ \texttt{amazon: 1678}};
+  \draw[msg, netblue] (0,-5.4) -- node[above, sloped] {richiesta + \texttt{Cookie: 1678}} (8,-6.4);
+  \node[anchor=west, text width=3.6cm, align=left, font=\scriptsize\sffamily] at (8.4,-6.6) {azione specifica per l'utente 1678 (carrello, suggerimenti)};
+  \draw[msg, netgreen] (8,-7.0) -- node[above, sloped] {risposta personalizzata} (0,-8.0);
+  \node[anchor=east, text=netred, font=\scriptsize\sffamily] at (-0.4,-8.8) {una settimana dopo\dots};
+  \draw[msg, netblue] (0,-9.0) -- node[above, sloped] {richiesta + \texttt{Cookie: 1678}} (8,-10.0);
+  \node[anchor=west, text width=3.6cm, align=left, font=\scriptsize\sffamily] at (8.4,-10.2) {il server riconosce ancora l'utente};
+\end{tikzpicture}
+\caption{Un client che usa già eBay contatta Amazon per la prima volta: nasce un cookie, che accompagnerà tutte le richieste successive.}
+\end{figure}
+
+\begin{esempio}{Il cookie di Amazon passo per passo}
+\begin{enumerate}
+    \item Un host, che usa abitualmente eBay (e ha già un cookie per eBay), contatta Amazon per la
+          \textbf{prima volta}: non ha alcun cookie per Amazon.
+    \item Il server di Amazon crea un \textbf{identificativo} (\texttt{1678}) e una voce corrispondente nel
+          proprio database, e risponde includendo l'header \texttt{Set-cookie: 1678}.
+    \item Il browser aggiunge al file dei cookie una riga con il nome del server e l'identificativo.
+    \item Da quel momento ogni richiesta verso Amazon contiene \texttt{Cookie: 1678}: il server può
+          tracciare l'attività dell'utente nel database, sapendo esattamente quali pagine ha visitato, in che
+          ordine e quando.
+    \item Se l'utente torna una settimana dopo, il browser continua a inserire \texttt{Cookie: 1678}.
+\end{enumerate}
+\end{esempio}
+
+\subsection{Usi e problemi dei cookie}
+
+I siti usano i cookie per:
+
+\begin{itemize}
+    \item il \textbf{carrello}: la lista degli acquisti in corso durante la navigazione;
+    \item la \textbf{registrazione}: associando al cookie nome, e-mail, indirizzo, carta di credito, così da
+          non doverli reinserire ogni volta;
+    \item i \textbf{suggerimenti}: prodotti consigliati in base alle pagine visitate.
+\end{itemize}
+
+\warning{Cookie e privacy}{
+    I cookie semplificano la vita, ma sono \textbf{controversi}: possono essere considerati un'invasione della
+    privacy. Combinando cookie e dati forniti dall'utente, un sito può sapere moltissimo di una persona e,
+    potenzialmente, vendere queste informazioni a terzi.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il caching Web}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Web cache e proxy}{
+    Una \textbf{Web cache} è un'entità di rete che soddisfa richieste HTTP \textbf{al posto} del server
+    di origine. Ha un proprio disco, su cui conserva copie degli oggetti richiesti di recente.
+    Le entità intermedie che lavorano per conto di altri si chiamano \textbf{proxy server}.
+}
+
+Un browser può essere configurato in modo che tutte le sue richieste passino prima dalla cache, per
+vedere se ha già una copia dell'oggetto.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (c1) at (0,1.2) {\icon[0.9cm]{pc}}; \node (c2) at (0,-1.2) {\icon[1cm]{laptop}};
+  \node[below=-2pt of c2] {client};
+  \node (px) at (4.5,0) {\icon[0.7cm]{server}}; \node[below=-1pt of px, align=center] {Web cache\\(proxy)};
+  \node (o1) at (9,1.2) {\icon[0.6cm]{server}}; \node (o2) at (9,-1.2) {\icon[0.6cm]{server}};
+  \node[below=-1pt of o2] {server di origine};
+  \draw[msg, netblue] (c1) -- node[above, sloped] {1. richiesta} (px);
+  \draw[msg, netgreen, dashed] (px) to[bend left=15] node[below, sloped] {4. risposta} (c1);
+  \draw[msg, netblue] (px) -- node[above, sloped] {2. richiesta (se manca)} (o1);
+  \draw[msg, netgreen, dashed] (o1) to[bend left=15] node[below, sloped] {3. risposta} (px);
+  \draw[msg, netblue, {Stealth}-{Stealth}] (c2) -- (px);
+  \draw[msg, netblue, {Stealth}-{Stealth}] (px) -- (o2);
+\end{tikzpicture}
+\caption{La cache sta tra i client e i server di origine: è server verso i client e client verso i server.}
+\end{figure}
+
+\subsection{Il funzionamento}
+
+Supponiamo che un browser chieda \url{http://www.someschool.edu/campus.gif} passando per una cache:
+
+\begin{enumerate}
+    \item Il browser apre una connessione TCP con la \textbf{cache} e le invia la richiesta HTTP.
+    \item La cache controlla se ha una copia locale dell'oggetto. Se sì, la restituisce subito al browser
+          in una risposta HTTP.
+    \item Se no, la cache apre una connessione TCP con il \textbf{server di origine}
+          (\texttt{www.someschool.edu}) e gli chiede l'oggetto.
+    \item Ricevuto l'oggetto, la cache ne \textbf{salva una copia} e ne invia un'altra al browser.
+\end{enumerate}
+
+\warning{La cache è client e server insieme}{
+    Una cache è contemporaneamente un \textbf{server} (quando fornisce oggetti ai browser) e un
+    \textbf{client} (quando li chiede ai server di origine).
+}
+
+\subsection{Perché usare le cache}
+
+\begin{enumerate}
+    \item Una cache può \textbf{ridurre molto il tempo di risposta}, soprattutto se tra il client e la cache
+          c'è un collegamento veloce e tra la cache e Internet uno lento.
+    \item Una cache può \textbf{ridurre molto il traffico} di un'azienda o di un ente verso Internet, e quindi
+          il costo della banda.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.34\linewidth}\centering
+  \includegraphics[width=0.9\linewidth]{cap05/cache_istituzionale.png}
+\end{minipage}\hfill
+\begin{minipage}{0.62\linewidth}
+Le cache vengono spesso installate nella rete locale di un'azienda o di un ente.
+\dfn{Hit, miss e hit rate}{
+    Si ha un \textbf{hit} quando la cache fornisce un oggetto \textbf{senza contattare} il server di
+    origine; un \textbf{miss} quando deve andarlo a prendere. La \textbf{hit rate} è la frazione di
+    richieste soddisfatte dalla cache: tipicamente \textbf{tra 0{,}2 e 0{,}7}, e cresce con il numero di
+    client che usano la cache.
+}
+Fino al 70\% delle richieste, quindi, può essere servito localmente.
+\end{minipage}
+\caption{Una cache istituzionale: il percorso rosso (miss) esce su Internet, quello verde (hit) resta nella rete locale.}
+\end{figure}
+
+\subsection{Il GET condizionale}
+
+Il caching introduce un problema nuovo: la copia in cache potrebbe essere \textbf{vecchia}, se nel
+frattempo l'oggetto è cambiato sul server.
+
+\dfn{GET condizionale}{
+    Un \textbf{GET condizionale} è una richiesta HTTP con metodo GET e header
+    \texttt{If-Modified-Since}. Il server invia l'oggetto \textbf{solo se} è stato modificato dopo la data
+    indicata; altrimenti risponde \texttt{304 Not Modified}, senza corpo.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.8, every node/.style={font=\scriptsize\sffamily}]
+  \timeline{a}{0}{Host A}{9}
+  \timeline{c}{5}{Cache}{9}
+  \timeline{s}{10}{Server}{9}
+  \draw[msg, netblue] (0,-0.4) -- node[above, sloped] {GET oggetto} (5,-1.0);
+  \draw[msg, netblue] (5,-1.1) -- node[above, sloped] {GET oggetto} (10,-1.7);
+  \draw[msg, netgreen] (10,-1.9) -- node[above, sloped] {200 OK, Last-Modified: X, oggetto} (5,-2.5);
+  \node[draw, fill=llink!60, rounded corners, font=\scriptsize\sffamily] at (5,-2.95) {salva l'oggetto con data X};
+  \draw[msg, netgreen] (5,-3.4) -- node[above, sloped] {200 OK, oggetto} (0,-4.0);
+  \node[anchor=east, text=netred] at (-0.2,-4.9) {più tardi, Host B:};
+  \draw[msg, netblue] (0,-5.0) -- node[above, sloped] {GET oggetto} (5,-5.6);
+  \draw[msg, netred] (5,-5.8) -- node[above, sloped] {GET oggetto, If-Modified-Since: X} (10,-6.4);
+  \draw[msg, netred] (10,-6.6) -- node[above, sloped] {304 Not Modified (nessun corpo)} (5,-7.2);
+  \draw[msg, netgreen] (5,-7.5) -- node[above, sloped] {200 OK, oggetto (dalla cache)} (0,-8.1);
+\end{tikzpicture}
+\caption{La cache verifica con un GET condizionale che la propria copia sia ancora valida: se lo è, l'oggetto non viaggia di nuovo.}
+\end{figure}
+
+Se l'oggetto è aggiornato, alla cache basta una piccola risposta del server (niente oggetto da
+ritrasmettere) e il client riceve la copia locale.
+
+\subsection{Il caching nel browser}
+
+Anche i \textbf{browser} fanno caching in locale, con lo stesso principio: conservano gli oggetti già
+scaricati per non doverli richiedere al server. È una tecnica comunissima che migliora drasticamente
+le prestazioni. La copia locale però può non essere aggiornata, e questo genera errori piuttosto
+frequenti (la classica pagina che ``non si aggiorna'' finché non si svuota la cache).
+
+\subsection{Oltre il caching: i proxy istituzionali}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (c) at (0,0) {\icon[1cm]{pc}}; \node[below=-2pt of c] {client};
+  \node[netcloud, minimum width=4.2cm, minimum height=2.2cm] (inst) at (4.6,0) {};
+  \node at (4.0,0.35) {rete istituzionale};
+  \node (px) at (5.3,-0.3) {\icon[0.55cm]{server}}; \node[font=\scriptsize\sffamily] at (5.3,-0.95) {proxy};
+  \node[netcloud, minimum width=2.6cm] (inet) at (9.2,0) {Internet};
+  \node (o) at (12.1,0) {\icon[0.7cm]{server}}; \node[below=-1pt of o] {server di origine};
+  \draw[msg, netblue] (c) -- (px);
+  \draw[msg, netblue] (px) -- (inet); \draw[msg, netblue] (inet) -- (o);
+  \node[text width=6cm, align=center, text=netred] at (8.2,-1.8) {per il server di origine la richiesta arriva dall'istituzione, non dal client};
+\end{tikzpicture}
+\caption{Un proxy istituzionale: le richieste escono a nome dell'ente.}
+\end{figure}
+
+Oltre alle prestazioni, i proxy servono ad \textbf{accedere a servizi istituzionali}. La rete
+dell'Ateneo, per esempio, offre un proxy Web (\texttt{proxy.unina.it}): poiché le richieste vengono
+inoltrate dal proxy, per il server di origine \textbf{arrivano tutte dall'istituzione}. Così, da casa, si
+possono consultare riviste scientifiche abbonate dall'Università. Esistono anche molti proxy
+commerciali o gratuiti su Internet.
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Richieste e risposte HTTP sono testo ASCII: \textbf{riga di richiesta/stato}, \textbf{header},
+          \textbf{riga vuota}, \textbf{corpo}.
+    \item Metodi principali: \textbf{GET}, \textbf{POST}, \textbf{HEAD}, \textbf{PUT}, \textbf{DELETE}.
+    \item Codici di stato: 1xx informativi, 2xx successo, 3xx redirezione, 4xx errore del client, 5xx errore del server.
+    \item I \textbf{cookie} (Set-cookie / Cookie + file sul client + database sul server) danno uno stato a un
+          protocollo stateless, con implicazioni sulla privacy.
+    \item Le \textbf{Web cache} (proxy) riducono tempi e traffico; il \textbf{GET condizionale}
+          (\texttt{If-Modified-Since} / \texttt{304 Not Modified}) evita copie vecchie.
+\end{itemize}
+}

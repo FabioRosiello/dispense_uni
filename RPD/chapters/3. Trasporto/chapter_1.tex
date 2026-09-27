@@ -1,0 +1,501 @@
+\chapter{Il livello di trasporto e UDP}
+
+\begin{center}
+\begin{tikzpicture}[node distance=0pt]
+  \node[lay app, minimum width=3.4cm] (a) {Applicazione};
+  \node[lay tra, minimum width=3.4cm, below=of a, line width=1.5pt, draw=netred] (t) {\bfseries Trasporto};
+  \node[lay net, minimum width=3.4cm, below=of t] (n) {Rete};
+  \node[lay link, minimum width=3.4cm, below=of n] (l) {Collegamento};
+  \node[lay phy, minimum width=3.4cm, below=of l] (p) {Fisico};
+  \draw[-{Stealth}, thick, netred] ([xshift=0.3cm]t.east) -- ++(1,0) node[right, lbl, text=netred] {siamo qui};
+\end{tikzpicture}
+\end{center}
+
+% ══════════════════════════════════════════════════════════════
+\section{Dall'applicazione al trasporto}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Livello di trasporto}{
+    Un protocollo di trasporto fornisce una \textbf{comunicazione logica tra processi applicativi}
+    in esecuzione su host diversi. Dal punto di vista dell'applicazione, gli host che eseguono i
+    processi sembrano \textbf{direttamente collegati}, come se fossero sulla stessa macchina, anche se
+    si trovano ai lati opposti del pianeta.
+}
+
+Il livello di trasporto trasforma i messaggi applicativi in uno o più pacchetti di trasporto, detti
+\textbf{segmenti} (o \textbf{datagrammi}, termine usato soprattutto per UDP):
+
+\begin{itemize}
+    \item se i messaggi vengono spezzati in pezzi più piccoli, a ciascun pezzo viene aggiunto un
+          \textbf{header di trasporto};
+    \item i segmenti vengono passati uno alla volta al livello di rete per essere trasmessi.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[field, fill=lapp, minimum width=7cm] (m) at (0,0) {messaggio dell'applicazione};
+  \foreach \x/\t in {-2.4/1, 0/2, 2.4/3} {
+    \node[field, fill=ltra, minimum width=0.55cm] (h\t) at (\x-0.8,-1.3) {$H_t$};
+    \node[field, fill=lapp, minimum width=1.5cm, right=0pt of h\t] {pezzo \t};
+  }
+  \draw[-{Stealth}, thick] (0,-0.35) -- (0,-0.95);
+  \node[anchor=west, lbl] at (4,0) {livello applicativo};
+  \node[anchor=west, lbl] at (4,-1.3) {segmenti: passati uno per uno al livello di rete};
+\end{tikzpicture}
+\caption{Il trasporto spezza il messaggio in segmenti, ciascuno con il proprio header.}
+\end{figure}
+
+\subsection{Trasporto e rete: processi contro host}
+
+\info{L'analogia delle due case}{
+    Immaginate due case, una a Napoli e una a Milano, ciascuna con una dozzina di cugini che si scrivono
+    lettere. In ogni casa c'è un cugino (Anna a Napoli, Bruno a Milano) che raccoglie la posta di tutti,
+    la consegna al servizio postale e distribuisce quella in arrivo ai destinatari.
+    \begin{itemize}
+      \item le \textbf{case} sono gli \emph{host}; i \textbf{cugini} sono i \emph{processi};
+      \item le \textbf{lettere} sono i \emph{messaggi applicativi};
+      \item il \textbf{servizio postale} è il \emph{livello di rete}: consegna da casa a casa;
+      \item \textbf{Anna e Bruno} sono il \emph{livello di trasporto}: consegnano da cugino a cugino, ma
+            lavorano solo \emph{dentro} le case.
+    \end{itemize}
+}
+
+\warning{La distinzione fondamentale}{
+    A livello di \textbf{trasporto} la comunicazione è tra \textbf{processi}; a livello di \textbf{rete} è
+    tra \textbf{host}. Il trasporto, dal punto di vista logico, è punto-punto e il suo software gira
+    \textbf{sugli host}; la rete deve instradare i pacchetti attraverso la topologia e il suo software gira
+    soprattutto \textbf{sui nodi della rete}. Per questo lo strato di rete non può occuparsi fino in fondo
+    dell'affidabilità: si preoccupa di attraversare il grafo.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Le quattro responsabilità del livello di trasporto}
+% ══════════════════════════════════════════════════════════════
+
+\begin{enumerate}
+    \item \textbf{Consegna processo-a-processo}: i messaggi vengono consegnati ai processi, ovunque essi si
+          trovino. È diversa dalla consegna \emph{host-a-host}, che è responsabilità del protocollo IP.
+    \item \textbf{Controllo di integrità}: campi per la rilevazione degli errori nell'header dei segmenti.
+    \item \textbf{Trasferimento dati affidabile}: i dati arrivano dal processo mittente al processo
+          destinatario \textbf{corretti} e \textbf{in ordine}.
+    \item \textbf{Controllo di congestione e di flusso}: evita che una connessione sommerga di traffico i
+          dispositivi di rete (collegamenti, router) o il destinatario. Migliora le prestazioni ed è molto
+          utile a tutta Internet.
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Servizio} & \textbf{UDP} & \textbf{TCP} \\
+\midrule
+Consegna processo-a-processo (porte, multiplexing) & \itick & \itick \\
+Controllo di integrità (checksum) & \itick & \itick \\
+Trasferimento affidabile & \icross & \itick \\
+Controllo di flusso e di congestione & \icross & \itick \\
+\bottomrule
+\end{tabular}
+\caption{UDP, più veloce e semplice, offre solo i primi due servizi; TCP li offre tutti e quattro.}
+\end{table}
+
+\warning{Cosa nessuno dei due garantisce}{
+    Né TCP né UDP garantiscono \textbf{ritardi massimi} o \textbf{banda minima}: il livello di rete di
+    Internet (IP) è \emph{best effort}, e il trasporto non può inventarsi garanzie che sotto non esistono.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{La consegna processo-a-processo}
+% ══════════════════════════════════════════════════════════════
+
+A livello applicativo molti processi possono usare la rete nello stesso momento (musica in streaming,
+un download, la navigazione), e un processo può essere collegato a più processi remoti
+contemporaneamente (un proxy, un mail server). Per gestire tutto questo si usano i \textbf{socket}:
+invece di consegnare il messaggio direttamente a un processo, lo si consegna a un socket, un punto di
+accesso da cui il processo lo preleva. Così il numero dei processi è in parte svincolato dal numero delle
+connessioni.
+
+Poiché sull'host ricevente ci sono molti socket, servono:
+
+\begin{itemize}
+    \item un \textbf{identificatore univoco} per ogni socket (la \textbf{porta}), da scrivere nei segmenti;
+    \item un meccanismo di \textbf{multiplexing} e \textbf{demultiplexing}.
+\end{itemize}
+
+\dfn{Multiplexing e demultiplexing}{
+    \begin{itemize}
+      \item \textbf{Multiplexing} (lato mittente): raccogliere i dati dai diversi socket, creare i segmenti e
+            assegnare a ciascuno l'identificatore giusto (le porte).
+      \item \textbf{Demultiplexing} (lato ricevente): consegnare ogni segmento ricevuto al \textbf{socket
+            giusto}, in base all'identificatore contenuto nell'header.
+    \end{itemize}
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, proc/.style={circle, draw, fill=lapp!60, minimum size=0.7cm}, sock/.style={field, fill=ltra, minimum width=0.4cm, minimum height=0.35cm}]
+  \begin{scope}
+    \node[draw=netblue, thick, rounded corners, minimum width=4.4cm, minimum height=3.4cm] (ha) at (0,0) {};
+    \node[above=1pt of ha, font=\footnotesize\bfseries\sffamily] {Host A};
+    \node[proc] (p1) at (-1.3,0.9) {P1}; \node[proc] (p2) at (0,0.9) {P2}; \node[proc] (p3) at (1.3,0.9) {P3};
+    \node[sock] (s1) at (-1.3,0.2) {}; \node[sock] (s2) at (0,0.2) {}; \node[sock] (s3) at (1.3,0.2) {};
+    \foreach \i in {1,2,3} \draw (p\i) -- (s\i);
+    \node[trapezium, draw, fill=ltra!40, minimum width=3.4cm, trapezium angle=65, shape border rotate=180] (mux) at (0,-0.9) {multiplexing};
+    \foreach \i in {1,2,3} \draw[-{Stealth}] (s\i) -- (mux);
+  \end{scope}
+  \begin{scope}[xshift=9cm]
+    \node[draw=netblue, thick, rounded corners, minimum width=4.4cm, minimum height=3.4cm] (hb) at (0,0) {};
+    \node[above=1pt of hb, font=\footnotesize\bfseries\sffamily] {Host B};
+    \node[proc] (q1) at (-1.3,0.9) {P4}; \node[proc] (q2) at (0,0.9) {P5}; \node[proc] (q3) at (1.3,0.9) {P6};
+    \node[sock] (t1) at (-1.3,0.2) {}; \node[sock] (t2) at (0,0.2) {}; \node[sock] (t3) at (1.3,0.2) {};
+    \foreach \i in {1,2,3} \draw (q\i) -- (t\i);
+    \node[trapezium, draw, fill=ltra!40, minimum width=3.4cm, trapezium angle=65] (dmx) at (0,-0.9) {demultiplexing};
+    \foreach \i in {1,2,3} \draw[{Stealth}-] (t\i) -- (dmx);
+  \end{scope}
+  \draw[msg, very thick, netblue] (mux.south) to[out=-40, in=-140] node[below, align=center] {segmento con\\porta sorgente e porta destinazione} (dmx.south);
+  \draw[netred, very thick, -{Stealth}] (7.6,-1.1) to[out=90, in=-90] (t2.south);
+\end{tikzpicture}
+\caption{Il mittente fonde i dati di più socket nel flusso verso la rete; il ricevente li smista al socket indicato dalla porta di destinazione.}
+\end{figure}
+
+Il problema di smistare messaggi verso più destinazioni è comunissimo: multiplexing e demultiplexing
+esistono anche in altri livelli.
+
+% ══════════════════════════════════════════════════════════════
+\section{Le porte}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Porta}{
+    Gli identificatori dei socket si chiamano \textbf{porta sorgente} e \textbf{porta di destinazione}
+    (o semplicemente \textbf{porte}). Una porta è un numero a \textbf{16 bit}, da 0 a 65535.
+}
+
+\begin{itemize}
+    \item Le porte da \textbf{0 a 1023} sono le \textbf{porte ben note} (\emph{well-known ports}): riservate ai
+          protocolli applicativi noti, e aprirle richiede di solito privilegi di amministratore.
+    \item Da 1024 a 49151 ci sono le porte \textbf{registrate} presso la IANA per applicazioni specifiche; da
+          49152 a 65535 le porte \textbf{dinamiche} (o effimere), che il sistema operativo assegna ai client.
+    \item L'elenco aggiornato è mantenuto dalla \textbf{IANA} (\url{http://www.iana.org}). Quando si sviluppa
+          una nuova applicazione, le porte vanno scelte di conseguenza.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{rl}
+\toprule
+\textbf{Porta} & \textbf{Uso} \\
+\midrule
+20, 21 & FTP: trasferimento dati e comandi di controllo \\
+22 & SSH (Secure Shell) \\
+23 & Telnet: login remoto, testo non cifrato \\
+25 & SMTP: invio della posta \\
+53 & DNS \\
+80 & HTTP \\
+110 & POP3: accesso alla posta \\
+119 & NNTP (news) \\
+123 & NTP (sincronizzazione dell'orologio) \\
+143 & IMAP: accesso alla posta \\
+161 & SNMP: gestione della rete \\
+443 & HTTPS (HTTP su TLS/SSL) \\
+\bottomrule
+\end{tabular}
+\caption{Alcune porte ben note.}
+\end{table}
+
+\subsection{nmap}
+
+Per controllare l'uso delle porte su una macchina Linux si può usare \textbf{nmap} (\emph{Network Mapper}),
+un programma nato per mappare host e servizi di una rete. Permette di sondare le porte di un host per
+scoprire quelle \textbf{aperte} (su cui un'applicazione è in ascolto) ed eventualmente il servizio associato.
+
+\begin{lstlisting}[language=bash]
+$ sudo nmap [indirizzo]              # scansione delle porte di un host
+$ sudo nmap -sV [indirizzo]          # prova a identificare i servizi in ascolto
+$ sudo nmap --top-ports N [indirizzo]  # solo le N porte piu' usate
+\end{lstlisting}
+
+Lo stato di una porta può essere \emph{open} o \emph{closed}, \emph{filtered} o \emph{unfiltered} (cioè
+impossibile da sondare).
+
+\warning{Solo sulle proprie macchine}{
+    Scansionare le porte di host altrui senza autorizzazione è considerato un comportamento ostile (è il
+    primo passo di molti attacchi, e i sistemi di rilevazione delle intrusioni lo segnalano). Usate nmap solo
+    sulle vostre macchine o in laboratorio.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Multiplexing e demultiplexing in azione}
+% ══════════════════════════════════════════════════════════════
+
+Un processo sull'host A, con porta 19157, vuole mandare un messaggio a un processo con porta 46428
+sull'host B.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (A) at (0,0) {\icon[1cm]{pc}}; \node[below=-2pt of A, font=\footnotesize\bfseries\sffamily] {Host A};
+  \node (B) at (10,0) {\icon[1.1cm]{laptop}}; \node[below=-2pt of B, font=\footnotesize\bfseries\sffamily] {Host B};
+  \node[field, fill=ltra!60, minimum width=2.4cm, align=left, text width=2.2cm] (s1) at (5,1.1) {sorg: 19157\\dest: 46428\\messaggio};
+  \node[field, fill=lnet!60, minimum width=2.4cm, align=left, text width=2.2cm] (s2) at (5,-1.1) {sorg: 46428\\dest: 19157\\risposta};
+  \draw[msg, very thick, netblue] (A) -- (s1) -- (B);
+  \draw[msg, very thick, netgreen] (B) -- (s2) -- (A);
+\end{tikzpicture}
+\caption{Nella risposta le porte si scambiano: la porta sorgente del segmento di andata diventa la porta di destinazione del segmento di ritorno.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Multiplexing}: il trasporto di A crea un segmento con i dati, la porta sorgente (19157) e la
+          porta di destinazione (46428), e lo passa al livello di rete, che lo incapsula in un datagramma IP e fa
+          del suo meglio (\emph{best effort}) per consegnarlo a B.
+    \item \textbf{Demultiplexing}: se il segmento arriva a B, il trasporto di B lo decapsula ed esamina la porta di
+          destinazione per consegnarlo al socket giusto.
+\end{itemize}
+
+\subsection{In UDP}
+
+\begin{itemize}
+    \item Il \textbf{client} crea il socket con \texttt{socket(AF\_INET, SOCK\_DGRAM, 0)}. Di solito non lo associa
+          a una porta: è il sistema operativo a sceglierne una libera (per esempio 46428).
+    \item La porta e l'indirizzo di \textbf{destinazione} si impostano nella \texttt{sockaddr\_in} passata a
+          \texttt{sendto()}: \texttt{servaddr.sin\_port = htons(19157)}.
+    \item Il \textbf{server} crea il socket e lo associa alla porta 19157 con \texttt{bind()}. Porta e indirizzo del
+          client li ricava da \texttt{recvfrom()}, e li usa per rispondere, chiunque sia il client.
+\end{itemize}
+
+\dfn{Identificazione di un socket UDP}{
+    Un socket UDP è identificato da \textbf{due} elementi: \textbf{indirizzo IP di destinazione} e
+    \textbf{porta di destinazione}. Segmenti con indirizzi o porte sorgente diversi, ma stessa destinazione,
+    finiscono nello \textbf{stesso socket}: lo stesso socket può rispondere a molti client diversi.
+}
+
+\subsection{In TCP}
+
+\begin{itemize}
+    \item Il server ha un \textbf{socket di benvenuto} che attende richieste di connessione su una porta
+          (19157).
+    \item Il client crea un socket e invia un segmento di \textbf{richiesta di connessione}: un segmento TCP con la
+          porta di destinazione 19157 e un bit speciale dell'header acceso (\textbf{SYN = 1}).
+    \item Il server riceve la richiesta, trova il processo in attesa sulla porta 19157, e \texttt{accept()} crea un
+          \textbf{nuovo socket}, riempiendo la struttura del client con porte e indirizzi del segmento arrivato.
+    \item Tutti i segmenti successivi con \textbf{quella} porta sorgente, \textbf{quell'}indirizzo sorgente,
+          \textbf{quella} porta di destinazione e \textbf{quell'}indirizzo di destinazione vengono consegnati al
+          nuovo socket.
+\end{itemize}
+
+\dfn{Identificazione di un socket TCP}{
+    Un socket TCP è identificato da \textbf{quattro} elementi: \textbf{indirizzo IP sorgente},
+    \textbf{porta sorgente}, \textbf{indirizzo IP di destinazione}, \textbf{porta di destinazione}.
+}
+
+Grazie all'handshake iniziale, la connessione TCP ``lega'' i processi ai due lati: il socket ha una sola
+sorgente e una sola destinazione, e se uno dei due lati si interrompe il socket viene chiuso da entrambe le
+parti (cosa che in UDP non succede).
+
+\subsection{Un esempio con HTTP}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth]{cap08/demux_http.png}
+    \caption{Due client (A e C) aprono tre connessioni HTTP verso il server B: i segmenti sono smistati usando la quaterna completa.}
+\end{figure}
+
+\begin{itemize}
+    \item L'host C apre \textbf{due} sessioni HTTP verso il server B e l'host A ne apre \textbf{una}. A, C e B hanno
+          indirizzi IP distinti.
+    \item C assegna alle sue due connessioni porte sorgente diverse (26145 e 7532).
+    \item A, che non sa nulla di C, potrebbe scegliere anch'esso la porta 26145: nessun problema, perché le due
+          connessioni hanno \textbf{indirizzi IP sorgente diversi}.
+    \item Il server apre un nuovo processo (o thread) per ogni connessione, con il suo socket dedicato. È
+          l'approccio tipico, ma aprire troppi processi o thread può peggiorare le prestazioni del server.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llllc}
+\toprule
+\textbf{IP sorgente} & \textbf{porta sorgente} & \textbf{IP destinazione} & \textbf{porta dest.} & \textbf{socket} \\
+\midrule
+C & 26145 & B & 80 & 1 \\
+C & 7532 & B & 80 & 2 \\
+A & 26145 & B & 80 & 3 \\
+\bottomrule
+\end{tabular}
+\caption{Tre connessioni verso la stessa porta 80 del server: le quaterne sono tutte diverse.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{UDP}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{UDP (User Datagram Protocol)}{
+    UDP è il protocollo di trasporto \textbf{minimale}: aggiunge a IP ``solo l'essenziale'', cioè
+    \begin{itemize}
+      \item la \textbf{consegna processo-a-processo} (porte, multiplexing e demultiplexing);
+      \item il \textbf{controllo degli errori} (checksum).
+    \end{itemize}
+    È \textbf{senza connessione} (nessun handshake prima di inviare), \textbf{non garantisce la consegna} e
+    \textbf{non ha controllo di flusso né di congestione}.
+}
+
+\subsection{Perché usare UDP invece di TCP}
+
+\begin{itemize}
+    \item \textbf{Controllo a livello applicativo}: UDP è più diretto, e l'applicazione controlla meglio
+          \emph{cosa} e \emph{quando} viene inviato. Utile nelle applicazioni in tempo reale, dove velocità di
+          invio e ritardi contano più di qualche dato perso.
+    \item \textbf{Nessun ritardo di connessione}: niente handshake, quindi niente attesa prima di trasmettere.
+          Ottimo per il DNS, che non deve aggiungere ritardi a ogni navigazione.
+    \item \textbf{Nessuno stato della connessione}: niente buffer, parametri di congestione, numeri di sequenza e di
+          ack da mantenere. Un server UDP può gestire molti più client attivi di uno TCP.
+    \item \textbf{Header piccolo}: TCP aggiunge 20 byte di header a ogni segmento, UDP solo \textbf{8}.
+\end{itemize}
+
+\begin{esempio}{Il DNS su UDP}
+\begin{itemize}
+    \item \textbf{Livello applicativo}: l'host che vuole interrogare un server DNS costruisce un messaggio di
+          richiesta e lo passa a UDP.
+    \item \textbf{Livello di trasporto}: senza alcun handshake, UDP aggiunge l'header e passa il segmento al
+          livello di rete.
+    \item \textbf{Livello di rete}: il segmento UDP viene incapsulato in un datagramma IP e inviato al server DNS.
+\end{itemize}
+Il client poi attende la risposta. Se non arriva (magari la rete ha perso la domanda o la risposta), può
+\textbf{rinviare} la richiesta, \textbf{chiedere a un altro} name server, oppure \textbf{avvisare} l'applicazione
+che la risposta non è arrivata. L'affidabilità, se serve, la gestisce l'applicazione.
+\end{esempio}
+
+\subsection{Chi usa cosa}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Servizio} & \textbf{Protocollo applicativo} & \textbf{Trasporto} \\
+\midrule
+Posta elettronica & SMTP & TCP \\
+Terminale remoto & Telnet, SSH & TCP \\
+Web & HTTP & TCP (o UDP con HTTP/3) \\
+Trasferimento file & FTP & TCP \\
+Traduzione dei nomi & DNS & UDP \\
+Gestione dei dispositivi di rete & SNMP & UDP \\
+Streaming multimediale & proprietario & UDP o TCP \\
+Telefonia su Internet & proprietario & UDP o TCP \\
+\bottomrule
+\end{tabular}
+\caption{Applicazioni e protocolli di trasporto.}
+\end{table}
+
+\begin{itemize}
+    \item Chi ha bisogno di \textbf{affidabilità} (posta, terminale remoto, Web) usa TCP, oppure protocolli
+          affidabili costruiti su UDP come QUIC: una mail non può arrivare a pezzi.
+    \item \textbf{SNMP} usa UDP perché le applicazioni di gestione devono funzionare proprio quando la rete è in
+          difficoltà, e il trasferimento affidabile con tutti i suoi controlli sarebbe difficile.
+    \item Le applicazioni \textbf{multimediali} (telefonia, videoconferenza, streaming) usano spesso UDP: tollerano
+          qualche perdita e reagiscono male al controllo di congestione di TCP.
+\end{itemize}
+
+\warning{Il lato oscuro di UDP}{
+    Usare UDP per le applicazioni multimediali è \textbf{controverso}, proprio perché non c'è controllo di
+    congestione. Se tutti inviassero egoisticamente video ad alta velocità senza alcun controllo, i router
+    traboccherebbero, facendo perdere ancora più pacchetti UDP. E le perdite elevate spingerebbero i
+    mittenti TCP, che invece si controllano, a ridurre drasticamente la loro velocità.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il formato del segmento UDP}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\small\sffamily}]
+  \node[field, fill=ltra, minimum width=4cm, minimum height=0.8cm] (sp) at (0,0) {porta sorgente};
+  \node[field, fill=ltra, minimum width=4cm, minimum height=0.8cm, right=0pt of sp] (dp) {porta destinazione};
+  \node[field, fill=ltra!60, minimum width=4cm, minimum height=0.8cm, below=0pt of sp] (ln) {lunghezza};
+  \node[field, fill=ltra!60, minimum width=4cm, minimum height=0.8cm, below=0pt of dp] (ck) {checksum};
+  \node[field, fill=lapp!60, minimum width=8cm, minimum height=1.6cm, anchor=north west] (d) at (ln.south west) {dati dell'applicazione (messaggio)};
+  \draw[{Stealth}-{Stealth}] ([yshift=0.3cm]sp.north west) -- node[above, font=\scriptsize\sffamily] {32 bit} ([yshift=0.3cm]dp.north east);
+  \draw[{Stealth}-{Stealth}] ([yshift=0.1cm]sp.north west) -- node[below, font=\scriptsize\sffamily, fill=white, inner sep=1pt] {16 bit} ([yshift=0.1cm]sp.north east);
+  \draw[decorate, decoration={brace, amplitude=5pt}] ([xshift=0.2cm]dp.north east) -- ([xshift=0.2cm]ck.south east) node[midway, right=6pt, font=\scriptsize\sffamily] {header: 8 byte};
+  \draw[decorate, decoration={brace, amplitude=5pt}] ([xshift=0.2cm]ck.south east) -- ([xshift=0.2cm]d.south east) node[midway, right=6pt, font=\scriptsize\sffamily] {dati: lunghezza variabile};
+\end{tikzpicture}
+\caption{Il segmento (datagramma) UDP.}
+\end{figure}
+
+L'header UDP è lungo \textbf{8 byte} (64 bit) e ha quattro campi da 16 bit:
+
+\begin{itemize}
+    \item \textbf{porta sorgente}: la porta del processo mittente;
+    \item \textbf{porta di destinazione}: la porta del processo destinatario;
+    \item \textbf{lunghezza}: la lunghezza, in byte, dell'intero datagramma (header + dati);
+    \item \textbf{checksum}: usata dal destinatario per controllare che il messaggio sia integro.
+\end{itemize}
+
+Seguono i \textbf{dati}, cioè il messaggio del livello applicativo.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il checksum UDP}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Checksum}{
+    Il \textbf{checksum} UDP è un campo di 16 bit per la rilevazione degli errori.
+    \begin{itemize}
+      \item \textbf{Mittente}: somma tutte le parole da 16 bit del datagramma, riportando ogni bit di overflow
+            (\emph{wraparound}) nella somma, e calcola il \textbf{complemento a 1} del risultato (inverte tutti i
+            bit). Il risultato va nel campo checksum.
+      \item \textbf{Destinatario}: somma tutte le parole da 16 bit ricevute, \textbf{checksum compresa}. Se non ci
+            sono errori il risultato è \texttt{1111111111111111} (sedici 1). Se anche un solo bit è 0, il
+            pacchetto contiene errori.
+    \end{itemize}
+}
+
+\begin{esempio}{Calcolo del checksum su tre parole}
+\begin{center}
+\begin{tabular}{rl}
+      & \texttt{0110011001100000} \quad (prima parola) \\
+$+$   & \texttt{0101010101010101} \quad (seconda parola) \\
+\midrule
+      & \texttt{1011101110110101} \quad (somma delle prime due) \\
+$+$   & \texttt{1000111100001100} \quad (terza parola) \\
+\midrule
+      & \texttt{\textcolor{netred}{1}0100101011000001} \quad (c'è un bit di overflow) \\
+$+$   & \texttt{0000000000000001} \quad (wraparound: si somma il riporto) \\
+\midrule
+      & \texttt{0100101011000010} \quad (somma) \\
+\midrule
+checksum $=$ & \texttt{\textbf{1011010100111101}} \quad (complemento a 1: si invertono i bit) \\
+\end{tabular}
+\end{center}
+Al destinatario: $\texttt{0100101011000010} + \texttt{1011010100111101} = \texttt{1111111111111111}$, quindi
+nessun errore rilevato.
+\end{esempio}
+
+\info{Perché il checksum, se c'è già il livello di collegamento?}{
+    Molti protocolli di collegamento controllano già gli errori, ma non è garantito che lo facciano
+    \textbf{tutti} i collegamenti del cammino, e un errore può anche nascere mentre un segmento è nella
+    memoria di un router. Poiché il trasporto deve funzionare da un estremo all'altro, controllare
+    l'integrità \textbf{end-to-end} è necessario (principio \emph{end-to-end}). Per rendere il controllo più
+    robusto, il checksum viene calcolato anche su alcuni campi dell'header IP (gli indirizzi, il cosiddetto
+    \emph{pseudo-header}).
+}
+
+\warning{Rilevare non è correggere}{
+    Il checksum \textbf{rileva} alcuni errori ma non li \textbf{corregge}, e non li rileva tutti: se due bit si
+    invertono in modo che le somme si compensino, l'errore passa inosservato. Cosa fare di un segmento
+    danneggiato UDP non lo dice: di solito lo scarta, oppure lo passa all'applicazione con un avviso.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Il trasporto offre comunicazione logica \textbf{tra processi}; la rete, \textbf{tra host}.
+    \item Quattro servizi: consegna processo-a-processo, integrità, affidabilità, controllo di flusso e congestione;
+          UDP fa i primi due, TCP tutti.
+    \item Le \textbf{porte} (16 bit) identificano i socket; multiplexing al mittente, demultiplexing al destinatario.
+    \item Socket UDP: identificato da (IP dest, porta dest). Socket TCP: dalla \textbf{quaterna} completa.
+    \item \textbf{UDP}: senza connessione, header di 8 byte (porte, lunghezza, checksum), nessuna garanzia; usato da
+          DNS, SNMP, applicazioni multimediali.
+    \item Il \textbf{checksum} è il complemento a 1 della somma a 16 bit con wraparound.
+\end{itemize}
+}

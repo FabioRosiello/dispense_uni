@@ -1,0 +1,655 @@
+\chapter{Esercizi sul livello di rete}
+
+% Stili per i grafi di questo capitolo
+\tikzset{
+  enode/.style={circle, draw=netblue!80!black, thick, fill=cloudbg, minimum size=0.75cm, font=\small\bfseries\sffamily},
+  eedge/.style={thick, black!70},
+  ecost/.style={font=\scriptsize\sffamily, fill=white, inner sep=1pt},
+}
+\newcommand{\grafoesercizio}[1]{%
+  \node[enode] (u) at (0,0) {u};
+  \node[enode] (v) at (1.8,1.4) {v};
+  \node[enode] (w) at (4.2,1.4) {w};
+  \node[enode] (x) at (1.8,-1.4) {x};
+  \node[enode] (y) at (4.2,-1.4) {y};
+  \node[enode] (z) at (6,0) {z};
+  \draw[eedge] (u) -- node[ecost] {2} (v);
+  \draw[eedge] (u) -- node[ecost] {1} (x);
+  \draw[eedge] (u) -- node[ecost, pos=0.35] {5} (w);
+  \draw[eedge] (v) -- node[ecost] {3} (w);
+  \draw[eedge] (v) -- node[ecost] {2} (x);
+  \draw[eedge] (x) -- node[ecost, pos=0.35] {3} (w);
+  \draw[eedge] (x) -- node[ecost] {1} (y);
+  \draw[eedge] (w) -- node[ecost] {1} (y);
+  \draw[eedge] (w) -- node[ecost] {5} (z);
+  \draw[eedge] (y) -- node[ecost] {2} (z);
+  #1
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Subnet mask e appartenenza alle subnet}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Maschere valide e non valide}
+Quali delle seguenti sono subnet mask valide? Per quelle valide indicare la lunghezza del prefisso.
+\begin{center}
+\texttt{255.255.255.192} \quad \texttt{255.255.254.0} \quad \texttt{255.255.0.255} \quad \texttt{255.128.255.0} \quad
+\texttt{255.255.255.252} \quad \texttt{255.254.0.0}
+\end{center}
+\end{esercizio}
+
+\svolgimento
+Una maschera identifica un \textbf{prefisso}: tutti gli 1 devono essere \textbf{contigui e a sinistra}, seguiti solo da 0.
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Maschera} & \textbf{Binario} & \textbf{Verdetto} \\
+\midrule
+255.255.255.192 & \texttt{11111111 11111111 11111111 11000000} & valida, /26 \\
+255.255.254.0 & \texttt{11111111 11111111 11111110 00000000} & valida, /23 \\
+255.255.0.255 & \texttt{11111111 11111111 \textcolor{netred}{00000000 11111111}} & \textbf{non valida}: 1 dopo gli 0 \\
+255.128.255.0 & \texttt{11111111 1\textcolor{netred}{0000000 11111111} 00000000} & \textbf{non valida}: 0 in mezzo agli 1 \\
+255.255.255.252 & \texttt{11111111 11111111 11111111 11111100} & valida, /30 \\
+255.254.0.0 & \texttt{11111111 11111110 00000000 00000000} & valida, /15 \\
+\bottomrule
+\end{tabular}
+\caption{Verifica delle maschere.}
+\end{table}
+
+\info{Il trucco veloce}{
+    In una maschera valida il byte ``di transizione'' può valere solo $256 - 2^k$, cioè
+    \texttt{0, 128, 192, 224, 240, 248, 252, 254, 255}; tutti i byte prima devono essere 255 e tutti quelli dopo 0.
+}
+
+\begin{esercizio}{Stessa subnet o no?}
+Per ciascuna coppia dire se i due indirizzi appartengono alla stessa subnet.
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{clll}
+\toprule
+& \textbf{Indirizzo 1} & \textbf{Indirizzo 2} & \textbf{Maschera} \\
+\midrule
+(a) & 192.168.10.130 & 192.168.10.100 & 255.255.255.128 \\
+(b) & 172.20.33.5 & 172.20.40.9 & 255.255.240.0 \\
+(c) & 10.1.1.1 & 10.2.1.1 & 255.255.0.0 \quad e poi 255.0.0.0 \\
+(d) & 200.100.50.77 & 200.100.50.94 & 255.255.255.224 \\
+(e) & 200.100.50.95 & 200.100.50.97 & 255.255.255.224 \\
+\bottomrule
+\end{tabular}
+\end{table}
+\end{esercizio}
+
+\svolgimento
+Si fa l'AND bit a bit di ciascun indirizzo con la maschera e si confrontano i risultati; basta guardare il byte in cui la
+maschera ``finisce''.
+\begin{enumerate}[label=(\alph*)]
+    \item /25: conta il primo bit dell'ultimo byte. $130 = \texttt{\textcolor{netred}{1}0000010}$, $100 = \texttt{\textcolor{netblue}{0}1100100}$:
+          \textbf{subnet diverse} (192.168.10.128/25 e 192.168.10.0/25).
+    \item /20: contano i primi 4 bit del terzo byte. $33 = \texttt{\textcolor{netblue}{0010}0001}$, $40 = \texttt{\textcolor{netblue}{0010}1000}$:
+          \textbf{stessa subnet} (172.20.32.0/20).
+    \item Con /16 i secondi byte sono diversi (1 e 2): \textbf{subnet diverse}. Con /8 conta solo il primo byte (10): \textbf{stessa subnet}.
+          La stessa coppia di indirizzi può stare o no nella stessa subnet: dipende dalla maschera.
+    \item /27: contano i primi 3 bit dell'ultimo byte. $77 = \texttt{\textcolor{netblue}{010}01101}$, $94 = \texttt{\textcolor{netblue}{010}11110}$:
+          \textbf{stessa subnet} (200.100.50.64/27).
+    \item $95 = \texttt{\textcolor{netblue}{010}11111}$, $97 = \texttt{\textcolor{netred}{011}00001}$: \textbf{subnet diverse}. Sono numericamente
+          vicinissimi, ma 95 è il broadcast di .64/27 e 97 è un host di .96/27.
+\end{enumerate}
+
+\begin{esercizio}{Rete, broadcast e host}
+Per ciascun indirizzo calcolare indirizzo di rete, indirizzo di broadcast, numero di host utilizzabili e intervallo degli host:
+(a) \texttt{172.16.45.14/20}; (b) \texttt{200.100.50.77/27}; (c) \texttt{10.0.0.1/30}.
+\end{esercizio}
+
+\svolgimento
+Rete: bit di host tutti a 0; broadcast: bit di host tutti a 1; host utilizzabili: $2^{32-n} - 2$.
+\begin{enumerate}[label=(\alph*)]
+    \item /20: restano 12 bit di host, 4 dei quali nel terzo byte. $45 = \texttt{0010\,1101}$:
+          \begin{itemize}
+            \item rete: \texttt{0010\,0000} $= 32$ $\Rightarrow$ \textbf{172.16.32.0};
+            \item broadcast: \texttt{0010\,1111}.\texttt{11111111} $\Rightarrow$ \textbf{172.16.47.255};
+            \item host: $2^{12} - 2 = 4094$, da 172.16.32.1 a 172.16.47.254.
+          \end{itemize}
+    \item /27: 5 bit di host nell'ultimo byte. $77 = \texttt{010\,01101}$: rete \texttt{010\,00000} $= 64$, broadcast
+          \texttt{010\,11111} $= 95$. Rete \textbf{200.100.50.64}, broadcast \textbf{200.100.50.95}, $2^5 - 2 = 30$ host
+          (da .65 a .94).
+    \item /30: 2 bit di host. Rete \textbf{10.0.0.0}, broadcast \textbf{10.0.0.3}, $2^2 - 2 = 2$ host (.1 e .2). È la dimensione
+          tipica di un collegamento \textbf{punto-punto tra due router}: servono esattamente due indirizzi.
+\end{enumerate}
+
+% ══════════════════════════════════════════════════════════════
+\section{CIDR e longest prefix matching}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Una tavola di routing CIDR (prova d'esame)}
+Un router che implementa CIDR ha la tavola seguente.
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Subnet} & \textbf{Next hop} \\
+\midrule
+147.142.168.0/21 & L1 \\
+147.142.172.0/23 & L2 \\
+default & R0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Arrivano due pacchetti con destinazione 147.142.203.165 e 147.142.173.85. Descrivere come sono gestiti e inoltrati.
+(In binario: $147 = \texttt{10010011}$, $142 = \texttt{10001110}$, $168 = \texttt{10101000}$, $172 = \texttt{10101100}$,
+$173 = \texttt{10101101}$, $203 = \texttt{11001011}$, $165 = \texttt{10100101}$, $85 = \texttt{01010101}$.)
+\end{esercizio}
+
+\svolgimento
+I primi due byte (147.142) coincidono ovunque: tutto si decide sul terzo byte.
+
+\begin{lstlisting}[autogobble=false]
+L1  147.142.168.0/21   10010011 10001110 10101|000 00000000    21 bit di prefisso
+L2  147.142.172.0/23   10010011 10001110 1010110|0 00000000    23 bit di prefisso
+
+P1  147.142.203.165    10010011 10001110 11001011 10100101
+                                          ^ gia' il secondo bit del terzo byte differisce
+P2  147.142.173.85     10010011 10001110 10101101 01010101
+                                         10101    = L1  (21 bit uguali)
+                                         1010110  = L2  (23 bit uguali)
+\end{lstlisting}
+
+\begin{itemize}
+    \item \textbf{147.142.203.165}: il terzo byte \texttt{11001011} differisce da quello di L1 (\texttt{10101000}) già al secondo bit,
+          quindi non c'è corrispondenza con L1 e, a maggior ragione, con L2 (prefisso più lungo). Il pacchetto va al next hop
+          di \textbf{default}, \textbf{R0}.
+    \item \textbf{147.142.173.85}: i primi 21 bit coincidono con L1 \emph{e} i primi 23 con L2. Ci sono due corrispondenze: per la
+          \textbf{longest prefix matching} vince quella più specifica, e il pacchetto va su \textbf{L2}.
+\end{itemize}
+
+\begin{esercizio}{Perché i router lavorano con le subnet}
+Spiegare perché i grandi router, per esempio quelli degli ISP, usano CIDR e trattano informazioni su subnet, come
+\texttt{189.103.176.0/20}, invece che su singoli indirizzi IP.
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}
+    \item \textbf{Dimensione delle tabelle.} Gli indirizzi IPv4 sono $2^{32} \approx 4$ miliardi: una riga per indirizzo sarebbe
+          impossibile da memorizzare. Aggregando, un ISP annuncia un solo prefisso al posto di centinaia di reti: le tabelle dei
+          router di backbone contengono qualche centinaio di migliaia di prefissi.
+    \item \textbf{Velocità.} Il forwarding avviene in hardware in nanosecondi; cercare in una tabella piccola con strutture
+          specializzate (trie, TCAM) è enormemente più rapido.
+    \item \textbf{Flessibilità senza ambiguità.} Con la longest prefix matching i blocchi possono sovrapporsi: un sottoblocco
+          (per esempio di un'organizzazione che cambia ISP) si instrada diversamente aggiungendo una sola riga più specifica, senza
+          rinumerare nulla.
+\end{enumerate}
+
+\begin{esercizio}{Lookup con prefissi annidati}
+Un router ha la tabella di inoltro seguente.
+\begin{center}
+\begin{tabular}{lc}
+\toprule
+\textbf{Prefisso} & \textbf{Interfaccia} \\
+\midrule
+10.20.0.0/16 & 0 \\
+10.20.128.0/17 & 1 \\
+10.20.192.0/18 & 2 \\
+10.20.200.0/21 & 3 \\
+default & 4 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{enumerate}[label=(\alph*)]
+    \item Quali intervalli di indirizzi copre ciascuna riga?
+    \item Su quale interfaccia vengono inoltrati 10.20.5.1, 10.20.130.7, 10.20.201.33, 10.20.210.1 e 10.21.0.1?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Tutto si gioca sul terzo byte (i primi due devono essere 10.20):
+\begin{center}
+\small
+\begin{tabular}{llll}
+\toprule
+\textbf{Prefisso} & \textbf{Bit fissati del terzo byte} & \textbf{Intervallo} & \textbf{Interfaccia} \\
+\midrule
+/16 & nessuno & 10.20.0.0 -- 10.20.255.255 & 0 \\
+/17 & \texttt{1xxxxxxx} & 10.20.128.0 -- 10.20.255.255 & 1 \\
+/18 & \texttt{11xxxxxx} & 10.20.192.0 -- 10.20.255.255 & 2 \\
+/21 & \texttt{11001xxx} & 10.20.200.0 -- 10.20.207.255 & 3 \\
+\bottomrule
+\end{tabular}
+\end{center}
+I blocchi sono \textbf{annidati}: ognuno è contenuto nel precedente, e la regola del prefisso più lungo ``scava'' i sottoblocchi.
+
+\textbf{(b)}
+\begin{itemize}
+    \item \textbf{10.20.5.1}: $5 = \texttt{00000101}$, corrisponde solo al /16 $\Rightarrow$ \textbf{0}.
+    \item \textbf{10.20.130.7}: $130 = \texttt{10000010}$: /16 e /17 sì, /18 no (serve \texttt{11}) $\Rightarrow$ \textbf{1}.
+    \item \textbf{10.20.201.33}: $201 = \texttt{11001001}$: /16, /17, /18 e anche /21 (\texttt{11001}) $\Rightarrow$ il più lungo, \textbf{3}.
+    \item \textbf{10.20.210.1}: $210 = \texttt{11010010}$: /16, /17, /18 sì; /21 no (\texttt{11010} $\neq$ \texttt{11001}) $\Rightarrow$ \textbf{2}.
+    \item \textbf{10.21.0.1}: il secondo byte non è 20, nessun prefisso corrisponde $\Rightarrow$ default, \textbf{4}.
+\end{itemize}
+
+\begin{esercizio}{Aggregare le rotte}
+Un ISP serve quattro clienti con i blocchi 192.168.64.0/24, 192.168.65.0/24, 192.168.66.0/24 e 192.168.67.0/24.
+\begin{enumerate}[label=(\alph*)]
+    \item Qual è il prefisso aggregato che l'ISP può annunciare?
+    \item Il cliente 192.168.66.0/24 passa a un altro ISP portandosi il blocco. Che cosa annunciano i due ISP, e come fa un router
+          esterno a instradare correttamente?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} I terzi byte sono $64 = \texttt{010000\,00}$, $65 = \texttt{010000\,01}$, $66 = \texttt{010000\,10}$,
+$67 = \texttt{010000\,11}$: i primi 6 bit sono comuni. Il prefisso comune è lungo $16 + 6 = 22$ bit: \textbf{192.168.64.0/22},
+che contiene esattamente i quattro blocchi.
+
+\textbf{(b)} Il primo ISP continua ad annunciare 192.168.64.0/22; il nuovo ISP annuncia \textbf{192.168.66.0/24}. Un indirizzo del
+cliente trasferito corrisponde a entrambi i prefissi, ma per la longest prefix matching vince il /24: i suoi pacchetti vanno al
+nuovo ISP, tutti gli altri del /22 al vecchio.
+
+% ══════════════════════════════════════════════════════════════
+\section{Progettare un piano di indirizzamento}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Suddividere un blocco CIDR (VLSM)}
+A un'organizzazione è assegnato il blocco 192.168.0.0/22. Quattro reparti hanno bisogno di 250, 120, 60 e 25 host.
+\begin{enumerate}[label=(\alph*)]
+    \item Quanti indirizzi contiene il blocco?
+    \item Assegnare a ogni reparto una subnet di dimensione adeguata.
+    \item Quanti indirizzi restano liberi?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} $32 - 22 = 10$ bit di host: $2^{10} = 1024$ indirizzi, da 192.168.0.0 a 192.168.3.255.
+
+\textbf{(b)} Si parte dal reparto \textbf{più grande} e si sceglie la più piccola potenza di 2 che, tolti 2 indirizzi (rete e
+broadcast), basta:
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{cclll}
+\toprule
+\textbf{Reparto} & \textbf{Host} & \textbf{Blocco} & \textbf{Subnet} & \textbf{Host utilizzabili} \\
+\midrule
+A & 250 & $2^8 = 256$ & 192.168.0.0/24 & .0.1 -- .0.254 \\
+B & 120 & $2^7 = 128$ & 192.168.1.0/25 & .1.1 -- .1.126 \\
+C & 60 & $2^6 = 64$ & 192.168.1.128/26 & .1.129 -- .1.190 \\
+D & 25 & $2^5 = 32$ & 192.168.1.192/27 & .1.193 -- .1.222 \\
+\bottomrule
+\end{tabular}
+\caption{Piano di indirizzamento a lunghezza variabile.}
+\end{table}
+
+Per A un /25 darebbe solo $128 - 2 = 126$ host: non basta, serve il /24 ($254$ host).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.0142cm, every node/.style={font=\scriptsize\sffamily}]
+  \draw[fill=netblue!45] (0,0) rectangle (256,0.7) node[midway] {A /24};
+  \draw[fill=netgreen!45] (256,0) rectangle (384,0.7) node[midway] {B /25};
+  \draw[fill=netorange!50] (384,0) rectangle (448,0.7) node[midway] {C /26};
+  \draw[fill=netred!35] (448,0) rectangle (480,0.7) node[midway] {D};
+  \draw[fill=black!8] (480,0) rectangle (1024,0.7) node[midway] {libero: 544 indirizzi};
+  \foreach \p/\l in {0/.0.0, 256/.1.0, 384/.1.128, 480/.1.224} \node[below] at (\p,0) {\l};
+  \node[below left, inner xsep=0pt] at (1024,0) {.3.255};
+\end{tikzpicture}
+\caption{Occupazione del blocco /22.}
+\end{figure}
+
+\textbf{(c)} Usati $256 + 128 + 64 + 32 = 480$; liberi $1024 - 480 = 544$, da 192.168.1.224 a 192.168.3.255.
+
+\info{Perché si parte dal più grande}{
+    Una subnet di $2^k$ indirizzi deve iniziare a un multiplo di $2^k$. Assegnando per prime le subnet grandi si evita di
+    ``frammentare'' lo spazio con blocchi piccoli sparsi, che impedirebbero poi di trovare un intervallo allineato abbastanza grande.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{DHCP e NAT}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{I quattro messaggi del DHCP}
+Un portatile si collega a una LAN in cui il server DHCP ha indirizzo 192.168.1.1 e offre l'indirizzo 192.168.1.57. Per ciascuno
+dei quattro messaggi indicare indirizzi IP e porte UDP di sorgente e destinazione, e spiegare perché anche la \emph{request}
+viaggia in broadcast.
+\end{esercizio}
+
+\svolgimento
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lllp{5.6cm}}
+\toprule
+\textbf{Messaggio} & \textbf{Sorgente} & \textbf{Destinazione} & \textbf{Contenuto} \\
+\midrule
+Discover & 0.0.0.0 : 68 & 255.255.255.255 : 67 & ``c'è un server DHCP?'', con un transaction ID \\
+Offer & 192.168.1.1 : 67 & 255.255.255.255 : 68 & \texttt{yiaddr} $=$ 192.168.1.57, maschera, durata del lease \\
+Request & 0.0.0.0 : 68 & 255.255.255.255 : 67 & ``accetto l'offerta di 192.168.1.1'' \\
+ACK & 192.168.1.1 : 67 & 255.255.255.255 : 68 & conferma: indirizzo, gateway, DNS, lease \\
+\bottomrule
+\end{tabular}
+\caption{Lo scambio DHCP.}
+\end{table}
+
+\begin{itemize}
+    \item Il client usa 0.0.0.0 come sorgente perché \textbf{non ha ancora un indirizzo}, e la destinazione broadcast perché non
+          sa chi sia il server.
+    \item La \emph{request} è in broadcast perché possono esserci \textbf{più server} che hanno fatto un'offerta: così tutti
+          sanno quale è stata accettata, e gli altri possono liberare l'indirizzo che avevano proposto.
+    \item Il client usa ancora 0.0.0.0 fino all'ACK: l'indirizzo è suo solo quando il server lo conferma.
+\end{itemize}
+
+\begin{esercizio}{Due host dietro lo stesso NAT}
+Un router NAT ha indirizzo WAN 138.76.29.7 e serve la LAN 10.0.0.0/24. Gli host 10.0.0.1 e 10.0.0.2 aprono entrambi, nello stesso
+momento, una connessione verso 128.119.40.186 porta 80, e \textbf{il caso vuole} che scelgano entrambi la porta sorgente 3345.
+\begin{enumerate}[label=(\alph*)]
+    \item Compilare la tabella di traduzione (il NAT assegna le porte a partire da 5001).
+    \item Scrivere sorgente e destinazione dei quattro pacchetti (andata e ritorno, lato LAN e lato WAN) per l'host 10.0.0.2.
+    \item Che cosa succede se il NAT non cambiasse la porta?
+    \item Che cosa succede a un pacchetto che arriva dall'esterno verso 138.76.29.7:6000?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)}
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Lato WAN} & \textbf{Lato LAN} \\
+\midrule
+138.76.29.7 : 5001 & 10.0.0.1 : 3345 \\
+138.76.29.7 : 5002 & 10.0.0.2 : 3345 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{(b)}
+\begin{lstlisting}[autogobble=false]
+(1) host -> NAT (LAN)       S = 10.0.0.2:3345      D = 128.119.40.186:80
+(2) NAT -> Internet (WAN)   S = 138.76.29.7:5002   D = 128.119.40.186:80     sorgente riscritta
+(3) Internet -> NAT (WAN)   S = 128.119.40.186:80  D = 138.76.29.7:5002
+(4) NAT -> host (LAN)       S = 128.119.40.186:80  D = 10.0.0.2:3345         destinazione riscritta
+\end{lstlisting}
+
+\textbf{(c)} Le due connessioni avrebbero lato WAN la stessa coppia 138.76.29.7:3345: le risposte del server sarebbero
+indistinguibili e il NAT non saprebbe a quale host consegnarle. Gli host non conoscono le porte scelte dagli altri, quindi è il
+NAT a garantire l'\textbf{unicità} lato WAN. Con 16 bit di porta può gestire oltre 60\,000 connessioni contemporanee.
+
+\textbf{(d)} Nella tabella non c'è nessuna riga con porta WAN 6000: il NAT non sa a quale host interno consegnarlo e lo
+\textbf{scarta}. Le connessioni iniziate dall'esterno richiedono meccanismi di \emph{NAT traversal}: port forwarding configurato a
+mano, UPnP, STUN/TURN, hole punching.
+
+% ══════════════════════════════════════════════════════════════
+\section{Frammentazione IP}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Frammentare un datagramma}
+Un datagramma IP di $5000$ byte totali (20 di header, senza opzioni, e $4980$ di dati), con identificativo 777, deve
+attraversare un collegamento con MTU di 1500 byte.
+\begin{enumerate}[label=(\alph*)]
+    \item In quanti frammenti viene diviso? Per ciascuno indicare lunghezza totale, flag MF, offset e identificativo.
+    \item Ripetere con MTU di 576 byte.
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Ogni frammento trasporta al più $1500 - 20 = 1480$ byte di dati. Poiché l'offset si esprime in \textbf{unità di 8
+byte}, i dati di ogni frammento tranne l'ultimo devono essere multipli di 8: $1480 / 8 = 185$, va bene.
+$\lceil 4980 / 1480 \rceil = 4$ frammenti.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{cccccc}
+\toprule
+\textbf{\#} & \textbf{Dati (byte)} & \textbf{Lunghezza totale} & \textbf{MF} & \textbf{Offset} & \textbf{ID} \\
+\midrule
+1 & 1480 & 1500 & 1 & 0 & 777 \\
+2 & 1480 & 1500 & 1 & $1480/8 = 185$ & 777 \\
+3 & 1480 & 1500 & 1 & $2960/8 = 370$ & 777 \\
+4 & 540 & 560 & 0 & $4440/8 = 555$ & 777 \\
+\bottomrule
+\end{tabular}
+\caption{Frammenti con MTU di 1500 byte ($1480 \cdot 3 + 540 = 4980$).}
+\end{table}
+
+\textbf{(b)} Con MTU 576 ci stanno $556$ byte di dati, ma 556 non è multiplo di 8: si arrotonda per difetto a $552$ ($= 69 \cdot 8$).
+$\lceil 4980 / 552 \rceil = 10$ frammenti: nove da 552 byte di dati (lunghezza totale 572, offset $0, 69, 138, \dots, 552$) e un
+ultimo da $4980 - 9 \cdot 552 = 12$ byte di dati (lunghezza totale 32, offset $4968/8 = 621$, MF $= 0$).
+
+\warning{Le tre regole della frammentazione}{
+    \begin{enumerate}
+      \item L'\textbf{identificativo} è copiato identico in tutti i frammenti.
+      \item L'\textbf{offset} è in unità di 8 byte: i dati di ogni frammento (tranne l'ultimo) devono essere multipli di 8.
+      \item Il flag \textbf{More Fragments} è 1 in tutti i frammenti tranne l'ultimo.
+    \end{enumerate}
+    Il riassemblaggio avviene solo nell'host di destinazione; se un frammento si perde, si perde l'intero datagramma.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{traceroute, ICMP e IP con Wireshark}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Elementi di IPv4}
+Avviare la cattura e lanciare \texttt{traceroute} verso un server (per esempio \texttt{traceroute italia.it} oppure
+\texttt{traceroute 8.8.8.8}). Selezionare il primo segmento UDP inviato ed espandere la sezione \emph{Internet Protocol}.
+\begin{enumerate}
+    \item Qual è l'indirizzo IP del proprio host?
+    \item Quanto vale il TTL?
+    \item Qual è il protocollo di livello superiore?
+    \item Quanti byte ci sono nell'header IP?
+    \item Quanti byte ci sono nel payload del datagramma? Come si ricava?
+    \item Il datagramma è stato frammentato? Come si stabilisce?
+\end{enumerate}
+Poi, con il filtro \texttt{ip.src==<mio\_IP> \&\& ip.dst==<IP\_server> \&\& udp}:
+\begin{enumerate}\setcounter{enumi}{6}
+    \item Quali campi restano costanti tra i pacchetti inviati? Perché?
+    \item Che andamento ha il campo \emph{Identification}?
+\end{enumerate}
+Infine, con il filtro \texttt{ip.dst==<mio\_IP> \&\& icmp}:
+\begin{enumerate}\setcounter{enumi}{8}
+    \item Qual è il protocollo superiore nei datagrammi inviati dai router?
+    \item I valori di \emph{Identification} dei messaggi ICMP somigliano a quelli dei pacchetti UDP?
+    \item I TTL dei messaggi ICMP sono simili tra loro?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}
+    \item Nel campo \emph{Source} (lo stesso mostrato da \texttt{ip addr}; da non confondere con 127.0.0.1, il loopback).
+    \item \textbf{1}: traceroute parte da TTL 1 per far scadere il pacchetto al primo router.
+    \item \textbf{UDP} (valore 17): traceroute usa datagrammi UDP come sonde.
+    \item \textbf{20 byte}: il campo \emph{Header Length} vale 5, in parole da 32 bit, cioè $5 \cdot 4 = 20$ byte (nessuna opzione).
+    \item $\text{payload} = \text{Total Length} - \text{Header Length}$. La dimensione di default dipende dalla versione di traceroute
+          (la prima riga dell'output la dichiara): con una sonda di 40 byte, come indicato nel testo dell'esercitazione, il payload è
+          $40 - 20 = 20$ byte (8 di header UDP e 12 di dati); con le versioni Linux recenti, che usano sonde di 60 byte, è
+          $60 - 20 = 40$ byte.
+    \item No: il flag \emph{More Fragments} è 0 \textbf{e} il \emph{Fragment Offset} è 0, cioè il datagramma è unico. (Spesso è
+          anche impostato \emph{Don't Fragment}.)
+    \item Restano costanti versione, lunghezza dell'header, indirizzi sorgente e destinazione, protocollo, lunghezza totale, flag
+          e offset: la sonda è sempre la stessa. Cambiano il \textbf{TTL} (cresce di 1 a ogni gruppo di sonde), l'\textbf{Identification},
+          la \textbf{porta di destinazione UDP} (cresce a ogni sonda) e di conseguenza il \textbf{checksum}.
+    \item Cresce di 1 a ogni datagramma: è il contatore che il sistema operativo usa per distinguere i datagrammi (e riassemblare
+          i frammenti).
+    \item \textbf{ICMP} (valore 1): i router rispondono con \emph{Time Exceeded} (type 11); la destinazione, alla fine, con
+          \emph{Destination Unreachable / Port Unreachable} (type 3, code 3).
+    \item No: ogni router genera i propri datagrammi con il \textbf{proprio} contatore, indipendente dal nostro.
+    \item No: ogni router invia con il proprio TTL iniziale (tipicamente 64, 128 o 255), e i messaggi arrivano dopo un numero diverso
+          di salti. $\text{TTL osservato} = \text{TTL iniziale} - \text{hop di ritorno}$: dal valore si possono stimare il sistema
+          operativo del router e la sua distanza.
+\end{enumerate}
+
+\begin{esercizio}{Frammentazione con traceroute}
+Ripetere con una sonda da 3000 byte (\texttt{traceroute 8.8.8.8 3000}) e il filtro
+\texttt{ip.src==<mio\_IP> \&\& ip.dst==<IP\_server> \&\& ip}.
+\begin{enumerate}[label=(\alph*)]
+    \item Il primo datagramma è stato frammentato?
+    \item Quali campi dell'header indicano la frammentazione?
+    \item Come si distingue il primo frammento dai successivi?
+    \item Quanti byte contiene ciascun datagramma?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Sì. Con MTU di 1500 byte, un datagramma da 3000 byte (2980 di dati) diventa \textbf{tre frammenti}: 1480, 1480 e 20 byte
+          di dati.
+    \item Il flag \textbf{More Fragments} (1 $=$ ``ci sono altri frammenti dopo di me'') e il \textbf{Fragment Offset} (diverso da 0
+          $=$ ``non sono il primo''). Tutti i frammenti condividono inoltre lo stesso \textbf{Identification} (per esempio 28264).
+    \item \begin{tabular}[t]{lcc}
+            \toprule
+            \textbf{Frammento} & \textbf{Offset} & \textbf{MF} \\
+            \midrule
+            primo & 0 & 1 \\
+            intermedio & $> 0$ & 1 \\
+            ultimo & $> 0$ & 0 \\
+            \bottomrule
+          \end{tabular}
+
+          Solo il primo frammento contiene l'header UDP (porte, lunghezza, checksum): gli altri contengono solo dati.
+    \item Campo \emph{Total Length}: 1500 per i primi due (20 $+$ 1480), 40 per l'ultimo (20 $+$ 20), che ha offset
+          $2960$ byte (370 nel campo).
+\end{enumerate}
+
+\info{traceroute e il livello di trasporto}{
+    Nella cattura tutti i frammenti hanno TTL 1 e lo stesso identificativo: ricomposti a destinazione, formerebbero il payload
+    ``artificiale'' preparato da traceroute. Pur essendo un'applicazione, traceroute non usa il trasporto nel modo consueto:
+    confeziona sonde e legge le risposte ICMP del livello di rete.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Routing}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Dijkstra a partire da z}
+Sul grafo in figura (lo stesso usato nel capitolo sul routing) eseguire l'algoritmo Link State a partire dal nodo
+\textbf{z}, riportare la tabella delle iterazioni, disegnare l'albero dei cammini minimi e scrivere la tabella di inoltro di z.
+\begin{center}
+\begin{tikzpicture}
+  \grafoesercizio{}
+\end{tikzpicture}
+\end{center}
+\end{esercizio}
+
+\svolgimento
+Per ogni nodo si tiene $D(\cdot)$ (costo corrente) e $p(\cdot)$ (predecessore); a ogni passo entra in $N'$ il nodo con $D$ minimo.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{clccccc}
+\toprule
+\textbf{Passo} & $N'$ & $D(y),p(y)$ & $D(w),p(w)$ & $D(x),p(x)$ & $D(v),p(v)$ & $D(u),p(u)$ \\
+\midrule
+0 & z & \textbf{2, z} & 5, z & $\infty$ & $\infty$ & $\infty$ \\
+1 & z, y & & \textbf{3, y} & 3, y & $\infty$ & $\infty$ \\
+2 & z, y, w & & & \textbf{3, y} & 6, w & 8, w \\
+3 & z, y, w, x & & & & 5, x & \textbf{4, x} \\
+4 & z, y, w, x, u & & & & \textbf{5, x} & \\
+5 & z, y, w, x, u, v & & & & & \\
+\bottomrule
+\end{tabular}
+\caption{Link State da z (in grassetto il nodo che entra in $N'$ al passo successivo).}
+\end{table}
+
+\begin{itemize}
+    \item \textbf{Passo 0}: i vicini di z sono y (2) e w (5).
+    \item \textbf{Passo 1}: entra y (2). $D(w) = \min\{5,\ 2 + 1\} = 3$ via y; $D(x) = 2 + 1 = 3$ via y.
+    \item \textbf{Passo 2}: w e x sono a pari merito (3); si sceglie w. $D(v) = 3 + 3 = 6$; $D(u) = 3 + 5 = 8$; $D(x) = \min\{3,\ 3+3\} = 3$ invariato.
+    \item \textbf{Passo 3}: entra x (3). $D(u) = \min\{8,\ 3 + 1\} = 4$ via x; $D(v) = \min\{6,\ 3 + 2\} = 5$ via x.
+    \item \textbf{Passo 4}: entra u (4). $D(v) = \min\{5,\ 4 + 2\} = 5$ invariato.
+    \item \textbf{Passo 5}: entra v (5). Fine.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \grafoesercizio{
+    \draw[pathhl, opacity=0.55] (z) -- (y) -- (w);
+    \draw[pathhl, opacity=0.55] (y) -- (x) -- (u);
+    \draw[pathhl, opacity=0.55] (x) -- (v);
+  }
+  \begin{scope}[xshift=8.2cm, every node/.style={font=\small\sffamily}]
+    \node at (1.1,1.6) {\textbf{Tabella di z}};
+    \node[anchor=west] at (0,0.9) {destinazione \quad next hop};
+    \foreach \d/\c [count=\i] in {u/4, v/5, w/3, x/3, y/2} \node[anchor=west] at (0,0.9-0.5*\i) {\hspace{1.4em}\d \hspace{4.3em} y \quad (costo \c)};
+  \end{scope}
+\end{tikzpicture}
+\caption{L'albero dei cammini minimi da z e la tabella di inoltro risultante: tutto passa per y.}
+\end{figure}
+
+I cammini si ricostruiscono all'indietro con i predecessori: per esempio $p(v) = x$, $p(x) = y$, $p(y) = z$, quindi il cammino è
+$z \rightarrow y \rightarrow x \rightarrow v$ di costo $2 + 1 + 2 = 5$.
+
+\begin{esercizio}{Verifica con l'equazione di Bellman-Ford}
+Sullo stesso grafo si sa che $d_v(z) = 5$, $d_w(z) = 3$ e $d_x(z) = 3$. Usare l'equazione di Bellman-Ford per calcolare
+$d_u(z)$ e il next hop di u verso z, e verificare che il risultato sia coerente con i cammini minimi.
+\end{esercizio}
+
+\svolgimento
+$$d_u(z) = \min_{v \in \text{vicini}(u)} \{ c(u,v) + d_v(z) \} = \min\{\underbrace{2 + 5}_{\text{via v}},\ \underbrace{5 + 3}_{\text{via w}},\ \underbrace{1 + 3}_{\text{via x}}\} = \min\{7, 8, 4\} = 4$$
+Il minimo si ottiene via \textbf{x}, che è il next hop di u verso z. È coerente con l'esercizio precedente: il cammino minimo tra u e
+z è $u \rightarrow x \rightarrow y \rightarrow z$, di costo 4 (in un grafo non orientato è lo stesso cammino, percorso al contrario).
+
+\begin{esercizio}{Distance Vector su tre nodi}
+Tre nodi con $c(x,y) = 2$, $c(y,z) = 1$, $c(x,z) = 7$ eseguono Distance Vector. Scrivere i vettori delle distanze all'avvio e
+dopo ogni scambio, fino alla convergenza.
+\end{esercizio}
+
+\svolgimento
+\begin{center}
+\begin{tikzpicture}
+  \node[enode] (x) at (0,0) {x};
+  \node[enode] (y) at (2,1.5) {y};
+  \node[enode] (z) at (4,0) {z};
+  \draw[eedge] (x) -- node[ecost] {2} (y);
+  \draw[eedge] (y) -- node[ecost] {1} (z);
+  \draw[eedge] (x) -- node[ecost] {7} (z);
+\end{tikzpicture}
+\end{center}
+
+\textbf{All'avvio} ogni nodo conosce solo i costi verso i vicini:
+$D_x = (0, 2, 7)$, \ $D_y = (2, 0, 1)$, \ $D_z = (7, 1, 0)$ (nell'ordine x, y, z).
+
+\textbf{Dopo il primo scambio} ogni nodo applica Bellman-Ford con i vettori ricevuti:
+\begin{align*}
+D_x(z) &= \min\{c(x,y) + D_y(z),\ c(x,z) + D_z(z)\} = \min\{2 + 1,\ 7 + 0\} = 3 \quad \text{(via y)}\\
+D_z(x) &= \min\{c(z,y) + D_y(x),\ c(z,x) + D_x(x)\} = \min\{1 + 2,\ 7 + 0\} = 3 \quad \text{(via y)}\\
+D_y &= (2, 0, 1) \quad \text{invariato}
+\end{align*}
+Quindi $D_x = (0, 2, 3)$, $D_y = (2, 0, 1)$, $D_z = (3, 1, 0)$. x e z, essendo cambiati, inviano i nuovi vettori; al
+\textbf{secondo scambio} nessun valore cambia e l'algoritmo \textbf{converge}: da quel momento nessuno invia più aggiornamenti.
+
+\begin{esercizio}{Poisoned reverse contro il count-to-infinity}
+Si riprenda lo scenario del capitolo sul routing: $c(x,y) = 4$, $c(y,z) = 1$, $c(x,z) = 50$, con z che raggiunge x passando per y.
+Il costo di x--y sale a 60 e solo y se ne accorge. Mostrare come evolvono $D_y(x)$ e $D_z(x)$ se si usa il \textbf{poisoned reverse}.
+\end{esercizio}
+
+\svolgimento
+Con il poisoned reverse, poiché z raggiunge x \emph{passando per y}, z annuncia a y $D_z(x) = \infty$.
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{clcc}
+\toprule
+\textbf{Passo} & \textbf{Calcolo} & $D_y(x)$ & $D_z(x)$ \\
+\midrule
+0 & situazione iniziale; z dice a y ``$D_z(x) = \infty$'' & 4 (diretto) & 5 (via y) \\
+1 & y: $\min\{60,\ 1 + \infty\} = 60$ & \textbf{60} (diretto) & 5 \\
+2 & z riceve 60: $\min\{50,\ 1 + 60\} = 50$ & 60 & \textbf{50} (diretto) \\
+3 & ora z non passa più per y: annuncia 50. y: $\min\{60,\ 1 + 50\} = 51$ & \textbf{51} (via z) & 50 \\
+4 & y passa per z, quindi annuncia a z $D_y(x) = \infty$; z: $\min\{50,\ \infty\} = 50$ & 51 & 50 \\
+\bottomrule
+\end{tabular}
+\caption{Con il poisoned reverse la convergenza richiede pochi scambi invece di oltre 40.}
+\end{table}
+Il ciclo tra y e z non si forma perché y non può più ``credere'' al vecchio cammino di z, che passava per y stesso. Il limite del
+poisoned reverse è che funziona per cicli tra \textbf{due} nodi: con cicli che coinvolgono tre o più nodi il problema può ripresentarsi.
+
+\gbox{\iinfo\ Formule da ricordare}{primary!80!black}{
+\begin{itemize}
+    \item Rete $=$ IP AND maschera; broadcast $=$ bit di host a 1; host utilizzabili $= 2^{32-n} - 2$.
+    \item Longest prefix matching: tra le righe che corrispondono vince il prefisso più lungo; nessuna $\Rightarrow$ default.
+    \item Frammentazione: dati per frammento $= \lfloor (\text{MTU} - 20)/8 \rfloor \cdot 8$; offset in unità da 8 byte; MF $= 0$ solo nell'ultimo.
+    \item Dijkstra: $D(v) = \min\{D(v),\ D(w) + c(w,v)\}$; Bellman-Ford: $d_x(y) = \min_v\{c(x,v) + d_v(y)\}$.
+\end{itemize}
+}

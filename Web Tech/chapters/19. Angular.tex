@@ -1,0 +1,560 @@
+\chapter{Angular}
+
+Abbiamo visto che una Single Page Application comporta una certa complessità:
+routing lato client, generazione delle viste, componenti e riuso del codice. Un
+\term{framework di front-end} è un insieme predefinito di componenti software,
+strumenti e buone pratiche che fa da fondamento per lo sviluppo di SPA.
+
+\section{Che cos'è Angular}
+
+\term{Angular} è uno dei framework di front-end più diffusi, in particolare in
+Italia e per le applicazioni aziendali. È sviluppato da Google; la versione 2.0
+è stata rilasciata nel 2016 e in questo corso si usa la \textbf{versione 17}.
+
+Le sue caratteristiche distintive:
+
+\begin{itemize}
+  \item forte attenzione agli \textbf{strumenti} per lo sviluppatore e alla
+        produttività;
+  \item \textbf{tutto incluso}: Angular è un framework completo e
+        \textit{opinionated} (include il meccanismo di iniezione delle
+        dipendenze, il routing e altro), il che riduce l'affaticamento
+        decisionale e garantisce coerenza fra progetti;
+  \item \textbf{supporto alla migrazione}: strumenti dedicati assistono nel
+        passaggio a versioni più recenti;
+  \item \textbf{buone pratiche fin dall'inizio}: impone l'uso di TypeScript.
+\end{itemize}
+
+\section{Primi passi}
+
+\begin{lstlisting}[style=shell]
+npm install -g @angular/cli
+ng version
+\end{lstlisting}
+
+Come ambiente si usa Visual Studio Code; è consigliata (ma facoltativa)
+l'estensione \textit{Angular Language Service}.
+
+\begin{lstlisting}[style=shell]
+ng new angular-app --create-application
+\end{lstlisting}
+
+Il comando chiede quale formato di foglio di stile usare (SCSS) e se abilitare
+il rendering lato server, poi genera lo scheletro del progetto. Per avviarlo:
+
+\begin{lstlisting}[style=shell]
+cd angular-app
+ng serve
+\end{lstlisting}
+
+\begin{console}[Terminale]
+Initial Chunk Files | Names     |  Raw Size
+polyfills.js        | polyfills |  82.71 kB
+main.js             | main      |  23.23 kB
+styles.css          | styles    |     96 bytes
+                    | Initial Total | 106.03 kB
+
+Application bundle generation complete. [1.176 seconds]
+Watch mode enabled. Watching for file changes...
+  ->  Local:   http://localhost:4200/
+\end{console}
+
+\section{I componenti}
+
+I \term{componenti} sono i mattoni delle applicazioni Angular. Ogni componente
+è responsabile di definire funzione e aspetto di un elemento:
+
+\begin{itemize}
+  \item il proprio codice (stato, logica di business, eventi);
+  \item il proprio layout HTML;
+  \item i propri stili CSS.
+\end{itemize}
+
+In Angular un componente può contenere altri componenti: si può pensare a
+un'applicazione Angular come a un \textbf{albero di componenti}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      level distance=1.1cm,
+      n/.style={rounded corners=3pt, draw=primary!60!black, line width=0.7pt,
+                fill=primary!10!white, inner sep=4pt, align=center},
+      edge from parent/.style={draw=neutral!50!black, line width=0.6pt,
+                               edge from parent path=
+                               {(\tikzparentnode.south) -- (\tikzchildnode.north)}},
+      level 1/.style={sibling distance=4.4cm},
+      level 2/.style={sibling distance=2.6cm}]
+    \node[n] {Pagina lista}
+      child { node[n] {Form nuovo\\ elemento} }
+      child { node[n] {Lista}
+        child { node[n] {Elemento} }
+        child { node[n] {Elemento} } };
+  \end{tikzpicture}
+  \caption{Un'applicazione Angular è un albero di componenti.}
+  \label{fig:angular-tree}
+\end{figure}
+
+\subsection{Anatomia di un componente}
+
+Un componente è sostanzialmente una \textbf{classe TypeScript}, annotata con
+metadati passati come oggetto al \term{decoratore} \code{@Component}. I metadati
+specificano, fra le altre cose, il layout HTML e gli stili.
+
+\begin{lstlisting}[style=ts, name=app.component.ts]
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  template: "<h1>Hello Angular!</h1>",
+  styles: "h1 { font-family: sans-serif; color: darkblue; }",
+})
+export class AppComponent {}
+\end{lstlisting}
+
+Il \code{selector} dice ad Angular \textbf{dove} disegnare il componente:
+Angular ne crea un'istanza per ogni elemento HTML corrispondente.
+
+\begin{lstlisting}[style=html, name=index.html]
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8">
+    <title>AngularApp</title>
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
+</html>
+\end{lstlisting}
+
+Template e stili si possono anche mettere in file separati, con percorsi
+relativi alla posizione della classe TypeScript:
+
+\begin{lstlisting}[style=ts, name=app.component.ts]
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.scss'
+})
+export class AppComponent {}
+\end{lstlisting}
+
+\subsection{Lo stato e l'interpolazione}
+
+\begin{lstlisting}[style=ts, name=app.component.ts]
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  template: "<h1>Hello {{name.toUpperCase()}}!</h1>",
+  styles: "h1 { font-family: sans-serif; color: darkblue; }",
+})
+export class AppComponent {
+  name = 'Web Technologies';
+}
+\end{lstlisting}
+
+Le espressioni fra \code{\{\{ \}\}} nei template Angular vengono valutate, e il
+risultato (convertito in stringa) viene inserito nel template. È lo stesso
+principio dei motori di template visti nel capitolo 11, ma applicato
+\textbf{lato client} e ricalcolato automaticamente a ogni cambiamento di stato.
+
+\subsection{Comporre componenti}
+
+\begin{lstlisting}[style=shell]
+ng generate component counter
+\end{lstlisting}
+
+\begin{console}[Terminale]
+CREATE src/app/counter/counter.component.html (22 bytes)
+CREATE src/app/counter/counter.component.spec.ts (603 bytes)
+CREATE src/app/counter/counter.component.ts (239 bytes)
+CREATE src/app/counter/counter.component.scss (0 bytes)
+\end{console}
+
+\begin{lstlisting}[style=ts, name=app.component.ts]
+import { Component } from '@angular/core';
+import { CounterComponent } from './counter/counter.component';
+
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [CounterComponent],
+  template: `
+    <h1>Hello {{name.toUpperCase()}}!</h1>
+    <app-counter />
+  `,
+  styles: "h1 { font-family: sans-serif; color: darkblue; }",
+})
+export class AppComponent {
+  name = 'Web Technologies';
+}
+\end{lstlisting}
+
+\info{Componenti standalone}{
+  I componenti \textit{standalone} hanno \code{standalone: true} nei metadati e
+  possono importare direttamente altri componenti, direttive e \textit{pipe}
+  usati nei propri template. Il codice Angular precedente alla versione 14
+  usava un meccanismo diverso, chiamato \code{NgModule}. In questo corso si
+  usano soltanto componenti standalone.}
+
+\section{Gestione degli eventi}
+
+In Angular gli eventi si legano ai gestori con la sintassi a \textbf{parentesi
+tonde}:
+
+\begin{lstlisting}[style=html]
+<button (click)="increment()">Click me</button>
+\end{lstlisting}
+
+dove \code{increment()} è un metodo del componente.
+
+\begin{lstlisting}[style=ts, name=counter.component.ts]
+@Component({
+  selector: 'app-counter',
+  standalone: true,
+  template: `
+    <button (click)="increment()">Click me</button>
+    <p>The button was clicked {{counter}} time(s).</p>
+  `,
+  styles: 'p, button { font-size: 1.25em; font-family: sans-serif; }'
+})
+export class CounterComponent {
+  counter: number = 0;
+
+  increment() {
+    this.counter = this.counter + 1;
+  }
+}
+\end{lstlisting}
+
+Si noti che non c'è alcun codice che aggiorna il DOM: modificando
+\code{this.counter}, Angular ridisegna da sé la parte di template che dipende da
+quel valore. È esattamente il lavoro manuale che nel capitolo 18 dovevamo
+scrivere a mano.
+
+\section{Controllo di flusso nei template}
+
+Spesso serve disegnare condizionalmente una parte di template, o iterare su più
+elementi. Angular supporta questi scenari con la sintassi \code{@if}/\code{@else}
+e \code{@for}. Prima di Angular 17 si usavano le direttive \code{ngIf} e
+\code{ngFor}.
+
+\begin{lstlisting}[style=html, name=counter.component.html]
+<button (click)="increment()">Click me</button>
+<p>
+  The button was clicked {{counter}}
+  @if (counter === 1) { time } @else { times }.
+</p>
+\end{lstlisting}
+
+\begin{esempio}{Iterare con \code{@for}}
+Aggiungiamo al contatore la registrazione dei momenti in cui il pulsante è
+stato premuto.
+
+\begin{lstlisting}[style=ts, name=counter.component.ts]
+export class CounterComponent {
+  counter: number = 0;
+  clickTimestamps: Date[] = [];
+
+  increment() {
+    this.counter = this.counter + 1;
+    this.clickTimestamps.push(new Date());
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=html, name=counter.component.html]
+<ul>
+  @for (ts of clickTimestamps; track ts) {
+    <li>{{ts}}</li>
+  } @empty {
+    <li>Il pulsante non e' mai stato premuto!</li>
+  }
+</ul>
+\end{lstlisting}
+
+La clausola \code{track} indica ad Angular come identificare univocamente gli
+elementi della collezione: serve a ridisegnare solo le voci effettivamente
+cambiate invece dell'intera lista. È la soluzione al problema del
+\guillemotleft rendering efficiente\guillemotright\ rimasto aperto nel capitolo 18.
+\end{esempio}
+
+\section{Comunicazione fra componenti}
+
+A volte i componenti devono scambiarsi dati: un componente padre passa
+informazioni ai figli (per configurarne il comportamento o per passare dati da
+visualizzare), oppure un figlio deve comunicare al padre che è accaduto
+qualcosa. In Angular questi schemi si realizzano con i decoratori
+\code{@Input()} e \code{@Output()}.
+
+\subsection{Dal padre al figlio: @Input}
+
+Nel componente figlio, le proprietà che il padre può impostare si decorano con
+\code{@Input()}. Può esserci un valore predefinito, usato quando il padre non ne
+fornisce uno.
+
+\begin{lstlisting}[style=ts, name=counter.component.ts]
+import { Component, Input } from '@angular/core';
+
+export class CounterComponent {
+  @Input() buttonText = "Click me";
+  counter: number = 0;
+  clickTimestamps: Date[] = [];
+
+  increment() {
+    this.counter = this.counter + 1;
+    this.clickTimestamps.push(new Date());
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=html, name=counter.component.html]
+<button (click)="increment()">
+  {{buttonText}}
+</button>
+\end{lstlisting}
+
+Il padre passa il dato impostando una proprietà sull'elemento:
+
+\begin{lstlisting}[style=ts, name=app.component.ts]
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [CounterComponent],
+  template: `
+    <h1>Hello {{name.toUpperCase()}}!</h1>
+    <app-counter buttonText="CLICK HERE"/>
+  `,
+})
+export class AppComponent {}
+\end{lstlisting}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      lab/.style={font=\Lato\scriptsize, align=center, inner sep=2pt}]
+    \node[font=\FiraCodeNL\normalsize] (c) at (0,0)
+      {<app-counter buttonText="CLICK HERE"/>};
+
+    \node[lab, text=accent!70!black, anchor=south east] (l1) at (-1.3,0.9)
+      {selettore del figlio,\\ nel template del padre};
+    \node[lab, text=codeattr, anchor=north] (l2) at (0.35,-0.65)
+      {proprietà \code{@Input()}\\ del figlio};
+    \node[lab, text=codestring, anchor=north west] (l3) at (2.0,-0.65)
+      {valore passato\\ dal padre};
+
+    \draw[wtdash] (l1.south east) -- (-1.5,0.25);
+    \draw[wtdash] (l2.north) -- (0.35,-0.25);
+    \draw[wtdash] (l3.north west) -- (2.2,-0.25);
+  \end{tikzpicture}
+  \caption{Anatomia del passaggio di dati dal padre al figlio.}
+  \label{fig:angular-input}
+\end{figure}
+
+Questo schema è molto diffuso nei framework di front-end: in React e Vue lo
+stesso meccanismo si chiama \term{props}.
+
+\subsection{Property binding}
+
+Angular permette di impostare \textbf{dinamicamente} i valori degli attributi di
+elementi HTML e componenti, legandoli a proprietà del componente corrente. Il
+nome dell'attributo da legare si scrive fra parentesi quadre, e il valore è il
+nome della proprietà.
+
+\begin{lstlisting}[style=html]
+<h1>Hello {{name.toUpperCase()}}!</h1>
+<app-counter [buttonText]="btnMsg"/>
+<img [src]="imageUrl"/>
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts]
+export class AppComponent {
+  name = 'Web Technologies';
+  btnMsg = "CLICK HERE";
+  imageUrl = "https://picsum.photos/300/150";
+}
+\end{lstlisting}
+
+\warning{Property binding contro interpolazione}{
+  Ci si potrebbe chiedere che differenza ci sia fra \code{<img [src]="imageUrl"/>}
+  e \code{<img src="\{\{imageUrl\}\}"/>}. In quell'esempio il risultato è lo
+  stesso, ma non è sempre così: l'\textbf{interpolazione} valuta l'espressione e
+  ne \textbf{converte il risultato in stringa}. Per passare un \textbf{oggetto}
+  o un \textbf{array} come proprietà di un elemento bisogna necessariamente
+  usare il property binding.}
+
+\subsection{Dal figlio al padre: @Output}
+
+Per creare un canale di comunicazione dal figlio al padre si usa il decoratore
+\code{@Output} su una proprietà di classe, assegnandole un valore di tipo
+\code{EventEmitter}. Per inviare un evento sul canale, il figlio invoca il
+metodo \code{emit()}.
+
+\begin{lstlisting}[style=ts, name=counter.component.ts]
+export class CounterComponent {
+  @Input() buttonText = "Click me";
+  @Output() counterClickedTenTimes = new EventEmitter<number>();
+
+  counter: number = 0;
+  clickTimestamps: Date[] = [];
+
+  increment() {
+    this.counter++;
+    this.clickTimestamps.push(new Date());
+
+    if (this.counter % 10 === 0)
+      this.counterClickedTenTimes.emit(this.counter);
+  }
+}
+\end{lstlisting}
+
+Il padre reagisce definendo un gestore, come per un evento qualunque:
+
+\begin{lstlisting}[style=html, name=app.component.html]
+<app-counter [buttonText]="btnMsg"
+             (counterClickedTenTimes)="addClicks($event)" />
+
+<ul>
+  @for (click of clicksList; track click) {
+    <li>Il pulsante e' stato premuto {{click}} volte.</li>
+  }
+</ul>
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts, name=app.component.ts]
+export class AppComponent {
+  name = 'Web Technologies';
+  btnMsg = "CLICK HERE";
+  clicksList: number[] = [];
+
+  addClicks(nClicks: number) {
+    this.clicksList.push(nClicks);
+  }
+}
+\end{lstlisting}
+
+Si noti la simmetria della sintassi: \textbf{parentesi quadre} per i dati che
+scendono dal padre al figlio, \textbf{parentesi tonde} per gli eventi che
+salgono dal figlio al padre.
+
+\section{Il Router}
+
+Le Single Page Application devono gestire il routing lato client. Angular
+include un \term{Router} che abilita la navigazione fra viste diverse,
+interpretando la URL come un'istruzione per cambiare vista. Le applicazioni
+create con \code{ng new} hanno già il routing configurato e pronto.
+
+\subsection{Il punto di ingresso}
+
+\begin{lstlisting}[style=ts, name=src/main.ts]
+import { bootstrapApplication } from '@angular/platform-browser';
+import { appConfig } from './app/app.config';
+import { AppComponent } from './app/app.component';
+
+bootstrapApplication(AppComponent, appConfig)
+  .catch((err) => console.error(err));
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts, name=src/app/app.config.ts]
+import { ApplicationConfig } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { routes } from './app.routes';
+
+export const appConfig: ApplicationConfig = {
+  providers: [provideRouter(routes)]
+};
+\end{lstlisting}
+
+\subsection{Le rotte}
+
+\begin{lstlisting}[style=ts, name=src/app/app.routes.ts]
+import { Routes } from '@angular/router';
+import { CounterPageComponent } from './counter-page/counter-page.component';
+import { HomePageComponent } from './home-page/home-page.component';
+
+export const routes: Routes = [
+  {
+    path: "",                        // la URL associata alla rotta
+    title: "Home Page",              // il titolo della pagina HTML
+    component: HomePageComponent     // il componente associato alla rotta
+  },
+  {
+    path: "counter",
+    title: "Counter",
+    component: CounterPageComponent
+  }
+];
+\end{lstlisting}
+
+\subsection{router-outlet e routerLink}
+
+Il componente \code{RouterOutlet} analizza la URL corrente e disegna il
+componente associato al percorso corrispondente.
+
+\begin{lstlisting}[style=ts, name=app.component.ts]
+import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterLink, RouterOutlet } from '@angular/router';
+
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [CommonModule, RouterOutlet, RouterLink],
+  template: `
+    <nav>
+      <a routerLink="/">Home</a> |
+      <a routerLink="/counter">Counter</a>
+    </nav>
+    <router-outlet></router-outlet>
+  `,
+})
+export class AppComponent {}
+\end{lstlisting}
+
+\error{Non usare \attr{href} nei collegamenti interni}{
+  Usando collegamenti tradizionali con l'attributo \attr{href}, il browser
+  effettua una nuova richiesta HTTP e \textbf{ricarica l'intera applicazione}.
+  Il Router analizzerebbe poi la URL e caricherebbe il componente giusto, quindi
+  il risultato finale sarebbe corretto --- ma vanificando completamente lo scopo
+  di una Single Page App.
+
+  Per navigare correttamente fra le viste si usa la direttiva
+  \code{routerLink}. Si noti che, se un utente inserisce a mano la URL
+  \code{localhost:4200/counter}, il caricamento completo avviene comunque e il
+  Router disegna correttamente il componente: è il comportamento desiderato.}
+
+\subsection{Evidenziare il collegamento attivo}
+
+La direttiva \code{RouterLinkActive} permette di indicare un elenco di classi
+CSS da applicare ai \code{routerLink} che corrispondono alla rotta corrente.
+
+\begin{lstlisting}[style=html, name=app.component.html]
+<nav>
+  <a routerLink="/" routerLinkActive="active"
+     [routerLinkActiveOptions]="{exact: true}">Home</a> |
+  <a routerLink="/counter" routerLinkActive="active">Counter</a>
+</nav>
+<router-outlet></router-outlet>
+\end{lstlisting}
+
+\begin{lstlisting}[style=css]
+nav .active {
+  font-weight: bold;
+}
+\end{lstlisting}
+
+L'opzione \code{exact: true} serve per la rotta radice: senza di essa,
+\code{/} risulterebbe attiva anche quando ci si trova su \code{/counter}, dato
+che ogni percorso comincia con una barra.
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Angular Docs}. \\
+        \urlx{https://angular.dev/overview} \\
+        Parti rilevanti: \textit{Introduction: Essentials}; \textit{In-depth
+        Guides: Components, Template Syntax, Routing}; \textit{Developer Tools:
+        Angular CLI}.
+\end{itemize}
