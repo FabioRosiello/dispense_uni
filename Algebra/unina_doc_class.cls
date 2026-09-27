@@ -1290,8 +1290,9 @@
   unina enunciato={red!80!black}{red!5}{red!75!black}}{def}
 
 % Teoremi, proposizioni, lemmi, corollari: box blu (colore primario)
+% Teoremi: box arancione, per distinguerli da proposizioni e lemmi
 \newtcbtheorem[use counter from=Definizione]{Teorema}{Teorema}{
-  unina enunciato={primary!80!black}{primary!5}{primary!75!black}}{teo}
+  unina enunciato={orange!90!black}{orange!6}{orange!95!white}}{teo}
 \newtcbtheorem[use counter from=Definizione]{Proposizione}{Proposizione}{
   unina enunciato={primary!80!black}{primary!5}{primary!75!black}}{prop}
 \newtcbtheorem[use counter from=Definizione]{Lemma}{Lemma}{
