@@ -637,7 +637,6 @@
 	attach boxed title to top left={xshift=-5mm},
 	boxrule=0pt,
 	before skip=1cm, after skip=1cm, right skip=0cm,
-	breakable,
 	toprule=0pt, bottomrule=0pt, rightrule=0pt, leftrule=4pt,
 	skin=enhancedlast jigsaw,colframe=green-gradient-6,colbacktitle=green-gradient-5,
 	boxed title style = {
@@ -660,7 +659,6 @@
 	attach boxed title to top left={xshift=-5mm},
 	boxrule=0pt,
 	before skip=1cm, after skip=1cm, right skip=0cm,
-	breakable,
 	toprule=0pt, bottomrule=0pt, rightrule=0pt, leftrule=4pt,
 	skin=enhancedlast jigsaw,colframe=yellow-gradient-6,colbacktitle=yellow-gradient-5,
 	boxed title style = {
@@ -682,7 +680,6 @@
 	attach boxed title to top left={xshift=-5mm},
 	boxrule=0pt,
 	before skip=1cm, after skip=1cm, right skip=0cm,
-	breakable,
 	toprule=0pt, bottomrule=0pt, rightrule=0pt, leftrule=4pt,
 	skin=enhancedlast jigsaw,colframe=red-gradient-6,colbacktitle=red-gradient-5,
 	boxed title style = {
@@ -826,9 +823,9 @@
 % Abbreviation for tcolorbox envs
 % \dfn è ridefinito in fondo al file (sezione AMBIENTI MATEMATICI) per essere numerato ed etichettabile
 
-\newcommand{\info}[2]{\begin{infobox}{#1}#2\end{infobox}} % Invoke with \info{title}{Content}
-\newcommand{\warning}[2]{\begin{warningbox}{#1}#2\end{warningbox}} % Invoke with \warning{title}{Content}
-\newcommand{\error}[2]{\begin{errorbox}{#1}#2\end{errorbox}} % Invoke with \error{title}{Content}
+\newcommand{\info}[2]{\begin{concetto}\begin{infobox}{#1}#2\end{infobox}\end{concetto}} % Invoke with \info{title}{Content}
+\newcommand{\warning}[2]{\begin{concetto}\begin{warningbox}{#1}#2\end{warningbox}\end{concetto}} % Invoke with \warning{title}{Content}
+\newcommand{\error}[2]{\begin{concetto}\begin{errorbox}{#1}#2\end{errorbox}\end{concetto}} % Invoke with \error{title}{Content}
 
 \newcommand{\infoalt}[2]{\begin{infoboxtag}{#1}#2\end{infoboxtag}} % Invoke with \infoalt{icon_name}{Content}
 \newcommand{\framedbox}[3]{\begin{halfframedbox}{#1}{#2}#3\end{halfframedbox}} % Invoke with \framedbox{color}{Title}{content}
@@ -1108,6 +1105,7 @@
 
 % ── Ambiente ESEMPIO ─────────────────────────────────────────
 \newenvironment{esempio}[1]{%
+  \begin{concetto}%
   \refstepcounter{esempio}%
   \vspace{0.8em}%
   \noindent\rule{\linewidth}{0.5pt}\par%
@@ -1121,6 +1119,7 @@
   \par\nopagebreak\vspace{0.3em}\nopagebreak%
   \noindent\rule{\linewidth}{0.5pt}%
   \vspace{0.8em}%
+  \end{concetto}%
 }
 
 % ── Ambiente ESERCIZIO ───────────────────────────────────────
@@ -1242,13 +1241,22 @@
 \RequirePackage{colortbl}
 \RequirePackage{array}
 
+% ── Ambiente CONCETTO: tutto ciò che contiene resta nella stessa pagina ──
+% (enunciato + prerequisiti + dimostrazione, definizioni, note, esempi)
+\newenvironment{concetto}{%
+  \par\addvspace{2mm}\noindent\begin{minipage}{\linewidth}%
+  \setlength{\parskip}{0.75em}\setlength{\parindent}{0pt}%
+}{%
+  \end{minipage}\par\addvspace{2mm}%
+}
+
 \makeatletter
 
 % Stile comune dei box "enunciato" (stessa forma del box Definition originale)
 % #1 = colore del bordo, #2 = colore dello sfondo, #3 = colore della targhetta del titolo
 \tcbset{
   unina enunciato/.style n args={3}{
-    enhanced,breakable,
+    enhanced,
     before skip=5mm,after skip=5mm,
     colback=#2,colframe=#1,boxrule=0.5mm,
     colbacktitle=#3,
@@ -1293,7 +1301,7 @@
 
 % \dfn[etichetta]{Titolo}{Contenuto}
 \NewDocumentCommand{\dfn}{O{} m +m}{%
-  \begin{Definizione}{#2}{#1}#3\end{Definizione}}
+  \begin{concetto}\begin{Definizione}{#2}{#1}#3\end{Definizione}\end{concetto}}
 
 % ── Box PREREQUISITI (da mettere all'inizio di ogni teorema) ──
 \newtcolorbox{prerequisitibox}{
@@ -1327,7 +1335,7 @@
 
 % ── Ambiente DIMOSTRAZIONE ─────────────────────────────────────
 \newtcolorbox{dimostrazionebox}{
-  enhanced, breakable,
+  enhanced,
   colback=white, colframe=primary!35!white,
   boxrule=0pt, leftrule=2pt, arc=0pt, outer arc=0pt,
   left=3mm, right=1mm, top=0.5mm, bottom=0.5mm,
