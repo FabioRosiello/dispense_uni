@@ -1,0 +1,1086 @@
+\chapter{Requisiti: elicitazione e analisi}
+
+Nel Capitolo 3 abbiamo incontrato la prima fase del modello a cascata, la \textbf{Requirements Engineering}, e abbiamo visto
+la regola d'oro: in questa fase si decide \textit{cosa} il sistema deve fare, non \textit{come} lo farà.
+Ora entriamo nel dettaglio: come si scoprono i requisiti, come si scrivono e come si evita che siano ambigui o inutilizzabili.
+
+\begin{center}
+\begin{tcolorbox}[enhanced, breakable=false, colback=primary!5, colframe=primary!70!black, boxrule=1pt, arc=3pt,
+  width=0.92\textwidth, drop fuzzy shadow, fontupper=\itshape]
+  \iquotel\ La parte più difficile nella costruzione di un sistema software è decidere con precisione cosa costruire.
+  Nessun'altra parte del lavoro concettuale è così difficile, nessun'altra danneggia tanto il sistema finale se fatta male,
+  nessun'altra è più difficile da correggere in seguito.\\[4pt]
+  \normalfont\hfill\textbf{--- Fred P. Brooks} (parafrasi)
+\end{tcolorbox}
+\end{center}
+
+\dfn{Requirements Engineering (RE)}{
+  Sotto-area dell'Ingegneria del Software che si occupa del processo di \textbf{definizione dei requisiti} per il software
+  da realizzare. Il suo scopo è fornire agli ingegneri \textbf{metodi, tecniche e strumenti} per capire e documentare
+  che cosa un sistema software deve fare.
+}
+
+% ============================================================
+\section{Cos'è un requisito}
+
+\dfn{Requisito}{
+  Un \textbf{requisito} è la descrizione di ciò che il sistema deve fare: i \textbf{servizi} che deve fornire ai suoi utenti
+  e i \textbf{vincoli operativi} entro cui deve funzionare.
+}
+
+Qualche esempio, riferito a una piattaforma per la gestione dei corsi universitari:
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.35}
+\begin{tabularx}{\textwidth}{L >{\centering\arraybackslash}p{3.6cm}}
+\toprule
+Requisito & Tipo \\
+\midrule
+Il sistema deve permettere agli studenti di cercare i corsi per parole chiave. & servizio \\
+Il sistema deve permettere agli studenti di iscriversi a un corso. & servizio \\
+Le interfacce utente devono essere realizzate come app native Android e iOS. & vincolo \\
+Il sistema deve gestire almeno 10.000 studenti collegati contemporaneamente. & vincolo \\
+Il sistema deve autenticare gli utenti anche tramite il sensore di impronte digitali del dispositivo. & servizio + vincolo \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Due livelli: requisiti utente e requisiti di sistema}
+
+Nell'industria il termine «requisito» viene usato in modo non uniforme: a volte indica una descrizione generale e astratta,
+altre volte una definizione molto dettagliata. Per questo si distinguono due \textbf{livelli}.
+
+\dfn{Requisiti utente (User Requirements)}{
+  Descrizione \textbf{astratta e di alto livello} di un servizio che il sistema deve fornire o di un vincolo che deve rispettare.
+  Il punto di vista è quello dell'\textbf{utente finale}, quindi sono scritti in modo comprensibile a chi non è tecnico.
+}
+
+\dfn{Requisiti di sistema (System Requirements)}{
+  Definizione \textbf{dettagliata e formale} di una funzione del sistema. Il punto di vista è quello del \textbf{sistema da costruire},
+  quindi sono precisi e non lasciano spazio a interpretazioni.
+}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{L L}
+\toprule
+\textcolor{ph1}{\textbf{Requisito utente}} & \textcolor{ph4}{\textbf{Requisiti di sistema corrispondenti}} \\
+\midrule
+\textbf{1.} Il sistema deve generare un report mensile delle iscrizioni ai corsi. &
+\textbf{1.1} I report delle iscrizioni devono essere generati l'ultimo giorno lavorativo di ogni mese.\newline
+\textbf{1.2} Deve essere generato un report per ogni corso, che mostri il numero totale di iscrizioni del mese corrente
+e l'età media degli studenti iscritti.\newline
+\textbf{1.3} L'accesso ai report deve essere riservato ai responsabili dei corsi.\newline
+\textbf{1.4} \ldots \\
+\bottomrule
+\end{tabularx}
+\caption{Un requisito utente si espande in molti requisiti di sistema.}
+\end{table}
+
+Perché mantenere due livelli invece di uno solo? Perché servono a due scopi diversi, entrambi di natura \textbf{contrattuale}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[card=ph1, text width=4.4cm, minimum height=2.5cm, align=left] (ur) {\textbf{Requisiti utente}\\[3pt]\scriptsize
+     Il cliente definisce, a grandi linee, ciò che gli serve.\\[3pt]
+     Base per il \textbf{bando di gara}: aziende diverse possono proporre soluzioni diverse.};
+  \node[card=swgray, text width=3.2cm, minimum height=2.5cm, align=center, right=0.8cm of ur] (bid) {\textbf{Gara}\\[3pt]\scriptsize Le aziende presentano le loro offerte.\\[3pt] Una vince il contratto.};
+  \node[card=ph4, text width=4.4cm, minimum height=2.5cm, align=left, right=0.8cm of bid] (sr) {\textbf{Requisiti di sistema}\\[3pt]\scriptsize
+     L'azienda scelta li formula in dettaglio, così il cliente capisce esattamente cosa riceverà e può validarli.};
+  \node[card=swred, text width=3.2cm, minimum height=2.5cm, align=center, right=0.8cm of sr] (ct) {\textbf{Contratto}\\[3pt]\scriptsize Una volta accettati, i requisiti di sistema diventano \textbf{vincolanti}.};
+  \draw[flow] (ur) -- (bid);
+  \draw[flow] (bid) -- (sr);
+  \draw[flow] (sr) -- (ct);
+\end{tikzpicture}
+\caption{I due livelli di requisiti hanno una doppia funzione contrattuale.}
+\end{figure}
+
+\warning{Perché i requisiti valgono tanto}{
+  Un errore nei requisiti è l'errore più costoso che si possa fare. Come abbiamo visto nel Capitolo 3 con la curva di Boehm,
+  un difetto individuato in fase di requisiti costa \textbf{1}; lo stesso difetto scoperto quando il sistema è già in esercizio
+  può costare \textbf{500 volte tanto}. In più, se i requisiti di sistema sono già nel contratto, ogni modifica diventa
+  anche una trattativa legale ed economica.
+}
+
+% ============================================================
+\section{Requisiti funzionali e non funzionali}
+
+La classificazione più usata divide i requisiti in due famiglie.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[card=ph1, text width=7.9cm, align=left, minimum height=3.6cm] (f) {%
+    \textbf{\large Requisiti funzionali}\\[4pt]\small
+    Descrivono i \textbf{servizi} che il sistema deve fornire, come deve \textbf{reagire a particolari input}
+    e come deve comportarsi in determinate situazioni.\\[4pt]
+    \scriptsize\textit{Es.}: «Un utente deve potersi iscrivere a un corso.»\\
+    \scriptsize\textit{Es.}: «Un utente deve poter annullare la propria iscrizione a un corso.»};
+  \node[card=ph3, text width=7.9cm, align=left, minimum height=3.6cm, right=0.4cm of f] (nf) {%
+    \textbf{\large Requisiti non funzionali}\\[4pt]\small
+    Sono \textbf{vincoli} sui servizi o sulle funzioni offerte: vincoli di tempo, vincoli sul processo di sviluppo,
+    vincoli imposti da standard. Spesso riguardano il sistema \textbf{nel suo insieme}, non la singola funzione.\\[4pt]
+    \scriptsize\textit{Es.}: «Il sistema deve essere conforme al GDPR.»\\
+    \scriptsize\textit{Es.}: «Il sistema deve gestire fino a 10.000 utenti contemporanei.»};
+\end{tikzpicture}
+\end{center}
+
+\begin{esercizio}{Funzionale o non funzionale?}
+Classifica i seguenti requisiti.
+\begin{enumerate}
+  \item Un utente deve potersi iscrivere a un corso.
+  \item Il sistema deve essere conforme al GDPR.
+  \item Il sistema deve gestire fino a 10.000 utenti contemporanei.
+  \item Un utente deve poter cercare i corsi che contengono certe parole chiave.
+  \item Un utente deve poter annullare la propria iscrizione a un corso.
+  \item Il sistema deve funzionare su una macchina con 8 GB di memoria.
+\end{enumerate}
+
+\textbf{Soluzione.} (1) F \quad (2) NF \quad (3) NF \quad (4) F \quad (5) F \quad (6) NF.
+\end{esercizio}
+
+\warning{La distinzione non è sempre netta}{
+  Consideriamo il requisito: «solo gli utenti autorizzati devono poter accedere al sistema». Sembra non funzionale
+  (è un vincolo di sicurezza sull'intero sistema), ma se lo sviluppiamo in dettaglio genera requisiti chiaramente \textbf{funzionali}:
+  «l'utente deve poter effettuare il login e autenticarsi», «il sistema deve mostrare un messaggio di errore dopo tre tentativi falliti»\ldots
+
+  Morale: i requisiti \textbf{non sono indipendenti}: un requisito spesso ne genera o ne vincola altri.
+}
+
+\subsection{Come si scrivono le due famiglie}
+
+\begin{itemize}
+  \item I requisiti \textbf{funzionali utente} si scrivono in \textbf{linguaggio naturale}, in modo che siano comprensibili anche
+        a persone non tecniche (utenti, dirigenti).
+  \item I requisiti \textbf{funzionali di sistema} devono essere \textbf{dettagliati}: descrivono con precisione input, output
+        ed eccezioni, così che gli sviluppatori sappiano esattamente cosa implementare.
+\end{itemize}
+
+I requisiti non funzionali, invece, non riguardano un servizio specifico: vincolano \textbf{come} il sistema deve essere realizzato
+(ad esempio «deve essere sviluppato in Java») o specificano proprietà globali (tempi di risposta, uso della memoria, \ldots).
+
+\error{I requisiti non funzionali sono spesso i più critici}{
+  Se un requisito funzionale è implementato male, gli utenti spesso trovano un modo per aggirare il problema.
+  Se invece \textbf{non} è soddisfatto un requisito non funzionale, il sistema può diventare \textbf{inutilizzabile}:
+  un sistema non conforme al GDPR non può proprio essere messo in esercizio in Europa, per quanto bene funzioni.
+}
+
+\subsection{Tipi di requisiti non funzionali}
+
+I requisiti non funzionali possono nascere da tre sorgenti diverse: dal \textbf{prodotto}, dall'\textbf{organizzazione}
+(del cliente o di chi sviluppa) o da \textbf{fonti esterne}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\scriptsize,
+  figlio/.style 2 args={subchip=#1, minimum width=3.9cm, minimum height=0.6cm, anchor=west, text width=3.5cm, align=center},
+  nipote/.style 2 args={subchip=#1, fill=#1!28, minimum width=2.6cm, minimum height=0.55cm, anchor=west}]
+
+  \node[chip=ph3, minimum width=4.6cm, minimum height=0.8cm, font=\small\bfseries] (root) at (0,0) {Requisiti non funzionali};
+
+  % --- le tre famiglie
+  \node[chip=q3, minimum width=4.4cm, minimum height=0.7cm, font=\scriptsize\bfseries] (prod) at (-5.8,-1.5) {Requisiti di prodotto};
+  \node[chip=q7, minimum width=4.4cm, minimum height=0.7cm, font=\scriptsize\bfseries] (org)  at (0,-1.5)    {Requisiti organizzativi};
+  \node[chip=q5, minimum width=4.4cm, minimum height=0.7cm, font=\scriptsize\bfseries] (ext)  at (5.8,-1.5)  {Requisiti esterni};
+  \foreach \n in {prod,org,ext}{ \draw[line width=0.9pt, swgray] (root.south) -- ++(0,-0.45) -| (\n.north); }
+
+  % --- colonna PRODOTTO (binario a x=-8.25, figli con anchor west a x=-7.95)
+  \node[figlio={q3}{}] (fu) at (-7.95,-2.35) {Usabilità};
+  \node[figlio={q3}{}] (fe) at (-7.95,-3.07) {Efficienza};
+  \node[figlio={q3}{}] (fa) at (-7.95,-5.09) {Affidabilità};
+  \node[figlio={q3}{}] (fs) at (-7.95,-5.81) {Sicurezza (security)};
+  \draw[line width=0.8pt, swgray] (-8.25,-1.85) -- (-8.25,-5.81);
+  \foreach \n in {fu,fe,fa,fs}{ \draw[line width=0.8pt, swgray] (-8.25,-1.85) |- (\n.west); }
+  % sotto-figli di Efficienza (binario indentato a x=-7.3)
+  \node[nipote={q3}{}] (np) at (-7.0,-3.75) {Prestazioni};
+  \node[nipote={q3}{}] (ns) at (-7.0,-4.37) {Spazio};
+  \draw[line width=0.7pt, swgray!80] (-7.3,-3.32) -- (-7.3,-4.37);
+  \foreach \n in {np,ns}{ \draw[line width=0.7pt, swgray!80] (-7.3,-3.37) |- (\n.west); }
+
+  % --- colonna ORGANIZZATIVI
+  \node[figlio={q7}{}] (oa) at (-2.15,-2.35) {Ambientali};
+  \node[figlio={q7}{}] (oo) at (-2.15,-3.07) {Operativi};
+  \node[figlio={q7}{}] (os) at (-2.15,-3.79) {Di sviluppo};
+  \draw[line width=0.8pt, swgray] (-2.45,-1.85) -- (-2.45,-3.79);
+  \foreach \n in {oa,oo,os}{ \draw[line width=0.8pt, swgray] (-2.45,-1.85) |- (\n.west); }
+
+  % --- colonna ESTERNI
+  \node[figlio={q5}{}] (er) at (3.65,-2.35) {Regolamentari};
+  \node[figlio={q5}{}] (ee) at (3.65,-3.07) {Etici};
+  \node[figlio={q5}{}] (el) at (3.65,-3.79) {Legislativi};
+  \draw[line width=0.8pt, swgray] (3.35,-1.85) -- (3.35,-3.79);
+  \foreach \n in {er,ee,el}{ \draw[line width=0.8pt, swgray] (3.35,-1.85) |- (\n.west); }
+  % sotto-figli di Legislativi
+  \node[nipote={q5}{}] (ec) at (4.6,-4.47) {Contabili};
+  \node[nipote={q5}{}] (es) at (4.6,-5.09) {Di sicurezza};
+  \draw[line width=0.7pt, swgray!80] (4.3,-4.04) -- (4.3,-5.09);
+  \foreach \n in {ec,es}{ \draw[line width=0.7pt, swgray!80] (4.3,-4.09) |- (\n.west); }
+\end{tikzpicture}
+\caption{Tassonomia dei requisiti non funzionali in base alla loro origine.}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{3.4cm} L L}
+\toprule
+Origine & Cosa riguardano & Esempi \\
+\midrule
+\textcolor{q3}{Di prodotto} & Caratteristiche richieste al prodotto stesso & Velocità del sistema, memoria occupata, usabilità, tasso di guasti accettabile \\
+\textcolor{q7}{Organizzativi} & Politiche e procedure dell'organizzazione del cliente o dello sviluppatore & Processi operativi con cui il sistema sarà usato, linguaggio di programmazione obbligatorio, ambiente operativo da rispettare \\
+\textcolor{q5}{Esterni} & Fattori esterni al sistema e al processo di sviluppo & Approvazione da parte di un ente regolatore, obblighi di legge, requisiti etici per l'accettabilità da parte di utenti e pubblico \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Requisiti di dominio}
+
+\dfn{Requisiti di dominio}{
+  Requisiti che derivano dallo \textbf{specifico settore o contesto industriale} in cui il software viene usato.
+  Possono essere sia funzionali sia non funzionali.
+}
+
+\begin{esempio}{Un requisito di dominio per un dispositivo medico}
+«La sicurezza del sistema deve essere garantita secondo lo standard IEC 60601-1: \textit{Medical Electrical Equipment --- Part 1:
+General Requirements for Basic Safety and Essential Performance}.»
+
+Questo requisito vincola sia la \textbf{progettazione} del sistema sia il \textbf{processo di sviluppo}: un software perfettamente
+funzionante ma non sviluppato secondo lo standard \textbf{non potrebbe essere usato} in pratica.
+\end{esempio}
+
+\info{Misurare i requisiti non funzionali}{
+  Per essere utile, un requisito non funzionale deve essere associato a una \textbf{metrica}:
+
+  \begin{center}
+  \renewcommand{\arraystretch}{1.25}
+  \begin{tabular}{>{\bfseries}l l}
+  \toprule
+  Proprietà & Metriche tipiche \\
+  \midrule
+  Prestazioni & Operazioni elaborate al secondo; tempo di risposta; tempo di aggiornamento dello schermo \\
+  Dimensione & Megabyte occupati \\
+  Facilità d'uso & Ore di formazione necessarie; tasso di errore degli utenti; richieste di assistenza \\
+  Affidabilità & Tempo medio tra due guasti; percentuale di disponibilità \\
+  Robustezza & Tempo di ripristino dopo un guasto; probabilità di perdita di dati \\
+  \bottomrule
+  \end{tabular}
+  \end{center}
+}
+
+% ============================================================
+\section{Le proprietà di un buon requisito}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.45}
+\begin{tabularx}{\textwidth}{>{\bfseries\leavevmode\color{ph1}}P{3.2cm} L}
+\toprule
+Proprietà & Significato \\
+\midrule
+Chiaro & Facile da capire, soprattutto per i requisiti utente. \\
+Non ambiguo & Una sola interpretazione possibile: l'ambiguità porta a \textbf{contenziosi} con il cliente. \\
+Completo & Non deve mancare nulla di ciò che serve. \\
+Coerente & I requisiti non devono contraddirsi tra loro. \\
+Testabile & Dato un requisito, deve essere possibile stabilire \textbf{senza dubbi} se il sistema lo soddisfa. \\
+Tracciabile & Deve essere collegabile «in avanti e all'indietro» alle altre parti della documentazione: progetto, codice, test. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{I demoni dell'ambiguità}
+
+Il linguaggio naturale è comodo ma insidioso. Consideriamo un cartello stradale che tutti capiamo al volo:
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[c]{0.24\textwidth}
+\centering
+\begin{tikzpicture}[scale=0.95]
+  % cartello "school" (pentagono giallo)
+  \fill[yellow-gradient-6!85!black] (-1.0,2.1) -- (1.0,2.1) -- (1.0,3.3) -- (0,3.95) -- (-1.0,3.3) -- cycle;
+  \draw[draw=black, line width=1pt] (-1.0,2.1) -- (1.0,2.1) -- (1.0,3.3) -- (0,3.95) -- (-1.0,3.3) -- cycle;
+  \node[font=\bfseries\scriptsize, text=black] at (0,2.85) {SCHOOL};
+  % cartello del limite di velocita'
+  \draw[draw=black, fill=white, line width=1pt] (-1.05,-0.75) rectangle (1.05,1.85);
+  \node[font=\tiny\bfseries, text=black, align=center] at (0,1.55) {SPEED\\LIMIT};
+  \node[font=\Huge\bfseries, text=black] at (0,0.75) {20};
+  \node[font=\tiny\bfseries, text=black, align=center] at (0,-0.3) {WHEN\\CHILDREN\\ARE PRESENT};
+  \draw[swgray, line width=2pt] (0,-0.75) -- (0,-1.35);
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.72\textwidth}
+Per un essere umano l'intento è chiaro: proteggere i bambini in una zona scolastica. Ma proviamo a spiegarlo a un computer:
+\begin{itemize}
+  \item perché il cartello dice «children» (plurale) e non «child»? La regola vale solo se c'è \textbf{più di un} bambino?
+  \item chi è considerato un «bambino»? Un ragazzo di 17 anni lo è?
+  \item cosa significa essere «presenti»? Dentro la scuola? Sul marciapiede? Visibili dalla strada?
+  \item la regola vale solo quando la scuola è aperta?
+\end{itemize}
+\end{minipage}
+\caption{Un cartello chiarissimo per una persona, pieno di ambiguità per una macchina (H. Robinson, \textit{The demons of ambiguity}).}
+\end{figure}
+
+\begin{esempio}{Le domande nascoste in un requisito}
+Requisito: \textit{«L'applicazione deve permettere agli utenti di avviare e arrestare un servizio su una macchina remota.»}
+
+Sembra chiaro, ma:
+\begin{itemize}
+  \item cosa succede se si avvia un servizio \textbf{già in esecuzione}? E se si arresta un servizio \textbf{non in esecuzione}?
+  \item se la macchina remota si \textbf{riavvia}, il servizio deve ripartire automaticamente?
+  \item se cade la \textbf{connessione}: l'applicazione mostra un messaggio d'errore? Riprova? Dopo quanto tempo?
+        Quanti tentativi al massimo?
+\end{itemize}
+Ognuna di queste domande, se non trova risposta nei requisiti, diventerà una discussione (o un contenzioso) con il cliente.
+\end{esempio}
+
+\subsection{Testabilità}
+
+Deve essere possibile stabilire \textbf{senza ambiguità} se il sistema soddisfa un requisito: altrimenti gli sviluppatori
+sosterranno che il requisito è soddisfatto e il cliente sosterrà il contrario. In pratica:
+
+\begin{itemize}
+  \item i requisiti \textbf{funzionali di sistema} devono essere il più dettagliati possibile e non lasciare spazio a interpretazioni;
+  \item i requisiti \textbf{non funzionali} devono includere, quando possibile, \textbf{indicatori quantitativi}.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.45}
+\begin{tabularx}{\textwidth}{L L}
+\toprule
+\textcolor{swred}{\textbf{\icross\ Poco testabile}} & \textcolor{swgreen}{\textbf{\itick\ Testabile}} \\
+\midrule
+Il sistema deve essere affidabile. & Il sistema deve avere una disponibilità mensile del 99,99\%. \\
+Il sistema deve essere facile da usare. & Dopo al più due ore di formazione, gli utenti devono saper usare tutte le funzioni del sistema; dopo la formazione, il numero medio di errori non deve superare i due per ora di utilizzo. \\
+Il sistema deve essere veloce e reattivo. & Il tempo medio di risposta del sistema non deve superare i 100 ms. \\
+\bottomrule
+\end{tabularx}
+\caption{Trasformare requisiti vaghi in requisiti verificabili.}
+\end{table}
+
+% ============================================================
+\section{Il processo di Requirements Engineering}
+
+Il processo di RE si articola in tre attività principali.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[phase=ph1, minimum width=4.2cm, minimum height=1.2cm, font=\small\bfseries, drop shadow] (el) at (0,0) {Elicitazione\\e analisi};
+  \node[phase=ph3, minimum width=4.2cm, minimum height=1.2cm, font=\small\bfseries, drop shadow] (sp) at (5.9,0) {Specifica};
+  \node[phase=ph5, minimum width=4.2cm, minimum height=1.2cm, font=\small\bfseries, drop shadow] (va) at (11.8,0) {Validazione};
+  \draw[flow] (el) -- (sp);
+  \draw[flow] (sp) -- (va);
+  \draw[feedback] (va.north) to[out=120, in=60] node[above, font=\scriptsize, text=swred]{i problemi trovati fanno tornare indietro} (el.north);
+  \node[card=ph1, text width=4.2cm, font=\scriptsize, align=left, below=0.5cm of el] (d1) {\textbf{Scopo}: scoprire i requisiti interagendo con gli stakeholder.\\[3pt]\textit{Output}: descrizione del sistema.};
+  \node[card=ph3, text width=4.2cm, font=\scriptsize, align=left, below=0.5cm of sp] (d2) {\textbf{Scopo}: convertire i requisiti in una forma standardizzata.\\[3pt]\textit{Output}: requisiti utente e di sistema.};
+  \node[card=ph5, text width=4.2cm, font=\scriptsize, align=left, below=0.5cm of va] (d3) {\textbf{Scopo}: controllare che i requisiti definiscano davvero il sistema voluto dal cliente.\\[3pt]\textit{Output}: documento dei requisiti.};
+\end{tikzpicture}
+\caption{Le tre attività del processo di Requirements Engineering.}
+\end{figure}
+
+\subsection{Un processo iterativo, non lineare}
+
+Nella pratica queste attività non si susseguono una sola volta: si \textbf{intrecciano} in un processo iterativo che lavora
+a \textbf{livelli di granularità} diversi.
+
+\begin{enumerate}
+  \item Nella prima iterazione ci si concentra sui \textbf{requisiti di business}: perché il progetto è necessario?
+        Chi ne beneficia? Quando e dove verrà usato?
+  \item Poi si definiscono i \textbf{requisiti utente}.
+  \item Infine si definiscono i \textbf{requisiti di sistema}.
+\end{enumerate}
+
+Ogni iterazione comprende elicitazione e analisi, specifica e validazione.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\scriptsize]
+  \foreach \c/\tit/\x in {0/{Elicitazione / Analisi}/0, 1/{Specifica}/5.3, 2/{Validazione}/10.6}{
+    \node[font=\small\bfseries, text=swgray] at (\x,1.1) {\tit};
+  }
+  \foreach \r/\liv/\col/\val/\y in {0/{Business}/q1/{Studio di fattibilità}/0,
+                                    1/{Utente}/q4/{Prototipazione}/-1.8,
+                                    2/{Sistema}/q2/{Revisione}/-3.6}{
+    \node[phase=\col, minimum width=4.4cm, minimum height=1.1cm, font=\scriptsize\bfseries] (a\r) at (0,\y) {Elicitazione e analisi\\dei requisiti \liv};
+    \node[phase=\col, minimum width=4.4cm, minimum height=1.1cm, font=\scriptsize\bfseries] (b\r) at (5.3,\y) {Specifica dei requisiti\\\liv};
+    \node[phase=\col, fill=\col!70, minimum width=4.4cm, minimum height=1.1cm, font=\scriptsize\bfseries] (c\r) at (10.6,\y) {\val};
+    \node[card=\col, minimum width=2.4cm, minimum height=1.1cm, font=\scriptsize\bfseries, anchor=west] (d\r) at (13.3,\y) {Requisiti\\\liv};
+    \draw[flow] (a\r) -- (b\r);
+    \draw[flow] (b\r) -- (c\r);
+    \draw[flow] (c\r) -- (d\r);
+  }
+  \foreach \r [evaluate=\r as \s using int(\r+1)] in {0,1}{
+    \draw[-{Stealth[length=2.5mm]}, line width=1pt, swgray] (d\r.south) -- ++(0,-0.35) -| ([xshift=-0.55cm]a\s.north west) -- ([xshift=-0.02cm]a\s.west);
+  }
+\end{tikzpicture}
+\caption{Il processo iterativo: ogni livello di requisiti attraversa le tre attività e alimenta il livello successivo.}
+\end{figure}
+
+% ============================================================
+\section{Elicitazione e analisi dei requisiti}
+
+\dfn{Elicitazione dei requisiti}{
+  Attività il cui obiettivo è \textbf{scoprire che cosa i clienti vogliono e di cosa hanno bisogno}, interagendo con gli
+  stakeholder. È considerata la parte \textbf{più critica} dell'intera ingegneria dei requisiti.
+}
+
+Detta così sembra banale; in realtà è la parte più difficile del mestiere, per un motivo semplice: le persone non sanno
+sempre cosa vogliono, e quasi mai lo sanno spiegare in termini utilizzabili da chi deve costruire il software.
+
+\subsection{Chi sono gli stakeholder}
+
+\dfn{Stakeholder}{
+  Le \textbf{persone o i gruppi} che sono in qualche modo interessati o influenzati dal progetto software.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[circle, fill=ph1!12, draw=ph1, line width=1.2pt, minimum size=2.6cm, align=center, font=\small\bfseries, text=ph1!80!black] (sys) at (0,0) {Sistema\\da costruire};
+  \foreach \ang/\tit/\desc/\col in {
+      120/{Utenti finali}/{gruppo \textbf{eterogeneo}: chi inserisce gli ordini (vendite), chi li evade (logistica), chi assiste i clienti}/q4,
+      60/{Chi usa gli output}/{non usa il sistema, ma lavora sui dati che produce (report, statistiche)}/q3,
+      -60/{Dirigenza del cliente}/{decide, paga e valuta i benefici per l'organizzazione}/q1,
+      -120/{Personale tecnico}/{dovrà installare, configurare e far funzionare il sistema ogni giorno}/q7}{
+    \node[card=\col, text width=4.6cm, font=\scriptsize, align=left] (n\ang) at (\ang:5.2) {\textbf{\iuser\ \tit}\\[2pt]\desc};
+    \draw[line width=1pt, \col] (sys) -- (n\ang);
+  }
+\end{tikzpicture}
+\caption{Gli stakeholder tipici di un sistema di gestione degli ordini.}
+\end{figure}
+
+\subsection{Perché è difficile}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \foreach \i/\tit/\txt/\col in {
+    0/{Non sanno cosa vogliono}/{Gli stakeholder hanno idee solo generali. Non sanno cosa è tecnicamente fattibile e possono fare richieste irrealistiche.}/swred,
+    1/{Parlano il loro gergo}/{Sono esperti del \textbf{loro} dominio ed esprimono i requisiti con i loro termini, dando per scontate conoscenze implicite.}/sworange,
+    2/{Dicono cose diverse}/{Stakeholder diversi esprimono requisiti diversi e in modi diversi: bisogna trovare i punti in comune e risolvere i conflitti.}/q1}{
+    \node[card=\col, text width=5.2cm, minimum height=3.0cm, align=left, font=\scriptsize, anchor=north west] at (\i*5.85,0) {\textbf{\normalsize\tit}\\[4pt]\txt};
+  }
+  \foreach \i/\tit/\txt/\col in {
+    0/{Ci sono fattori politici}/{Un dirigente può chiedere una funzionalità perché gli fa aumentare la propria influenza nell'organizzazione, non perché serva.}/q7,
+    1/{Le priorità sono in conflitto}/{Chi sente che le proprie esigenze non sono state considerate può arrivare a \textbf{ostacolare} il processo.}/q5,
+    2/{I requisiti cambiano}/{Durante l'elicitazione emergono nuovi requisiti, magari da stakeholder che all'inizio non erano stati considerati.}/q2}{
+    \node[card=\col, text width=5.2cm, minimum height=3.0cm, align=left, font=\scriptsize, anchor=north west] at (\i*5.85,-3.4) {\textbf{\normalsize\tit}\\[4pt]\txt};
+  }
+\end{tikzpicture}
+\caption{Le sei principali difficoltà dell'elicitazione dei requisiti.}
+\end{figure}
+
+\subsection{Il processo di elicitazione e analisi}
+
+L'attività si svolge come un \textbf{ciclo} che si ripete finché i requisiti non sono sufficientemente stabili.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[phase=ph1, minimum width=3.9cm, minimum height=1.1cm, font=\scriptsize\bfseries] (d1) at (0,2.3) {1. Scoperta e\\comprensione};
+  \node[phase=ph2, minimum width=3.9cm, minimum height=1.1cm, font=\scriptsize\bfseries] (d2) at (4.3,0) {2. Classificazione\\e organizzazione};
+  \node[phase=ph4, minimum width=3.9cm, minimum height=1.1cm, font=\scriptsize\bfseries] (d3) at (0,-2.3) {3. Prioritizzazione\\e negoziazione};
+  \node[phase=ph6, minimum width=3.9cm, minimum height=1.1cm, font=\scriptsize\bfseries] (d4) at (-4.3,0) {4. Documentazione};
+  \node[font=\scriptsize\itshape, text=swgray, align=center] at (0,0) {il ciclo si ripete\\finché i requisiti\\non sono stabili};
+  \draw[flow, line width=1.4pt] (d1) to[out=0, in=90] (d2);
+  \draw[flow, line width=1.4pt] (d2) to[out=270, in=0] (d3);
+  \draw[flow, line width=1.4pt] (d3) to[out=180, in=270] (d4);
+  \draw[flow, line width=1.4pt] (d4) to[out=90, in=180] (d1);
+\end{tikzpicture}
+\caption{Il ciclo di elicitazione e analisi dei requisiti.}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.35}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{5.0cm} L}
+\toprule
+\textcolor{ph1}{1. Scoperta e comprensione} & Si interagisce con gli stakeholder per \textbf{scoprire} i requisiti. \\
+\textcolor{ph2}{2. Classificazione e organizzazione} & I requisiti correlati vengono \textbf{raggruppati} e organizzati in categorie coerenti. \\
+\textcolor{ph4}{3. Prioritizzazione e negoziazione} & Si risolvono i \textbf{conflitti} che nascono dalle esigenze contrastanti dei diversi stakeholder. \\
+\textcolor{ph6}{4. Documentazione} & I requisiti trovati vengono \textbf{documentati}, come base per l'iterazione successiva. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ============================================================
+\section{Le tecniche di elicitazione}
+
+Non esiste una tecnica unica: si combinano approcci diversi.
+
+\begin{center}
+\begin{tikzpicture}
+  \foreach \i/\tit/\ico/\col in {0/{Interviste}/\iuser/ph1, 1/{Osservazione\\(etnografia)}/\ieye/ph2, 2/{Personas}/\ibadge/ph3,
+                                 3/{Storie e scenari}/\ibook/ph4, 4/{Mock-up e\\prototipi}/\iwindow/ph5}{
+    \node[card=\col, text width=2.9cm, minimum height=1.7cm, align=center, font=\small\bfseries] at (\i*3.4,0) {{\Large\ico}\\[3pt]\tit};
+  }
+\end{tikzpicture}
+\end{center}
+
+% ------------------------------------------------------------
+\subsection{Interviste con gli stakeholder}
+
+Le interviste, formali o informali, sono lo strumento fondamentale della RE: il team chiede agli stakeholder come lavorano,
+quale sistema usano oggi e cosa si aspettano dal sistema da sviluppare. I requisiti si ricavano dalle risposte.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{3.4cm} L}
+\toprule
+Intervista chiusa & Lo stakeholder risponde a una \textbf{lista di domande predefinita}. \\
+Intervista aperta & Non c'è un'agenda prestabilita: si lascia parlare l'intervistato. \\
+\midrule
+\textcolor{swgreen}{\textbf{In pratica}} & Si usa una \textbf{combinazione} delle due. Le interviste completamente aperte funzionano raramente: conviene partire da un insieme di domande preparate, che di solito portano ad altri temi da discutere in modo meno strutturato. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[card=swgreen, text width=7.7cm, minimum height=2.6cm, align=left, font=\small] (pro) {%
+    \textbf{\itick\ Il lato buono}\\[3pt]\scriptsize
+    Alle persone in genere piace parlare del proprio lavoro e partecipano alle interviste con un atteggiamento positivo.};
+  \node[card=swred, text width=7.7cm, minimum height=2.6cm, align=left, font=\small, right=0.4cm of pro] (con) {%
+    \textbf{\icross\ Le difficoltà}\\[3pt]\scriptsize
+    \textbullet\ usano \textbf{gergo} tecnico e danno per scontati molti requisiti;\\
+    \textbullet\ conoscono bene il \textbf{proprio} lavoro, ma hanno una visione parziale o distorta di quello dei colleghi di altri reparti;\\
+    \textbullet\ possono essere \textbf{reticenti} su vincoli organizzativi, per via di equilibri di potere interni.};
+\end{tikzpicture}
+\end{center}
+
+\warning{Rispettare il tempo degli stakeholder}{
+  Gli stakeholder hanno il loro lavoro da fare: le interviste vanno preparate bene, per non sprecare il loro tempo
+  (e il nostro) con riunioni inutili.
+}
+
+\begin{esempio}{Il gergo: una storia vera}
+Durante un tirocinio presso la direzione finanziaria di un grande Comune, un tributo minore veniva gestito quasi interamente
+con fogli di calcolo. Alla domanda «mi racconta come funziona la gestione di questo tributo?», la risposta è stata:
+
+\begin{center}
+\begin{tcolorbox}[enhanced, breakable=false, colback=swteal!8, colframe=swteal, boxrule=0.8pt, arc=3pt, width=0.95\linewidth, fontupper=\itshape\small]
+  «Certo! È molto semplice! Un operatore sul campo mi invia la \textbf{lettura} per un dato anno per un certo contribuente.
+  Quindi inserisco la lettura in una maschera che calcola l'\textbf{imponibile}. Successivamente faccio la stampa delle
+  \textbf{ingiunzioni di pagamento}, che vengono poi emesse. Una volta notificata l'ingiunzione, il contribuente ha 60 giorni
+  per pagare. Se non paga entro il termine, devo procedere all'\textbf{iscrizione al ruolo coattivo}: inserisco i dati in una
+  maschera che genera il \textbf{Tracciato 290} da trasmettere all'ente di riscossione.»
+\end{tcolorbox}
+\end{center}
+
+«È molto semplice» --- ma per capire davvero quella frase servono settimane di studio del dominio. Questo è esattamente il
+problema del gergo: per l'intervistato è ovvio, per l'ingegnere del software è una lingua straniera. Il lavoro consiste nel
+farsi spiegare ogni termine, finché la descrizione non diventa un insieme di requisiti precisi.
+\end{esempio}
+
+% ------------------------------------------------------------
+\subsection{Etnografia}
+
+\dfn{Etnografia}{
+  Tecnica \textbf{osservativa} in cui l'ingegnere dei requisiti si \textbf{immerge nell'ambiente di lavoro} degli utenti finali:
+  osserva il lavoro quotidiano e prende nota dei compiti realmente svolti e delle persone coinvolte.
+}
+
+Il software non vive isolato: è usato in un ambiente \textbf{sociale e organizzativo} che può generare o vincolare requisiti.
+E, molto spesso, il modo in cui si lavora davvero è \textbf{diverso} dal processo formale che si dovrebbe seguire.
+
+L'etnografia è particolarmente efficace per scoprire:
+\begin{itemize}
+  \item requisiti che derivano dal modo in cui le persone \textbf{lavorano realmente}, invece che dal modo in cui le procedure
+        aziendali dicono che dovrebbero lavorare;
+  \item requisiti che derivano dalla \textbf{cooperazione} e dalla consapevolezza delle attività altrui.
+\end{itemize}
+
+\begin{esempio}{Un requisito che nessuno avrebbe raccontato}
+Osservando l'ufficio, si nota che prima di inviare un questionario di soddisfazione al cliente, un addetto del servizio clienti
+telefona ogni volta a un collega della logistica per sapere se l'ordine è stato davvero consegnato.
+
+Nessuno lo avrebbe mai detto in un'intervista («si fa così e basta»), ma da lì nasce un requisito preciso:
+\textit{«Gli addetti al servizio clienti devono poter verificare se un cliente ha già ricevuto il proprio ordine.»}
+\end{esempio}
+
+% ------------------------------------------------------------
+\subsection{Personas}
+
+\dfn{Persona}{
+  Un \textbf{archetipo ipotetico} di utente reale. Le \textit{personas} non sono persone vere, ma le rappresentano:
+  sono immaginarie, eppure definite con \textbf{rigore e precisione}, e non sono inventate di sana pianta, ma \textbf{scoperte}
+  come sottoprodotto del processo di elicitazione.
+}
+
+Conoscere l'utente è fondamentale sia per scoprire i requisiti sia (lo vedremo più avanti) per progettare interfacce efficaci.
+A volte gli utenti li conosciamo bene (ad esempio se sviluppiamo uno strumento per altri ingegneri del software), ma in generale
+il software è fatto \textbf{per altre persone}, con esigenze diverse dalle nostre: la nostra esperienza personale non basta
+a immaginare come lavorano e cosa vogliono.
+
+Le personas servono anche quando \textbf{non abbiamo stakeholder da intervistare}: ad esempio quando sviluppiamo un prodotto
+generico per il grande pubblico, o quando parte degli utenti finali è il pubblico generico.
+
+Non esiste un formato standard; di solito una persona contiene:
+
+\begin{center}
+\begin{tikzpicture}
+  \foreach \i/\t/\d in {0/{Personalizzazione}/{nome, età, breve biografia},
+                        1/{Lavoro}/{che lavoro fa?},
+                        2/{Istruzione}/{studi ed esperienza},
+                        3/{Obiettivi}/{cosa si aspetta dal software?},
+                        4/{Frustrazioni}/{quali problemi il software può risolverle?}}{
+    \node[card=ph3, text width=2.8cm, minimum height=1.6cm, align=center, font=\scriptsize] at (\i*3.25,0) {\textbf{\t}\\[3pt]\d};
+  }
+\end{tikzpicture}
+\end{center}
+
+\begin{esempio}{Una persona per un gestionale di studio dentistico}
+Supponiamo di raccogliere i requisiti per un software di gestione degli appuntamenti di uno studio dentistico.
+Intervistando il personale abbiamo già ricavato alcuni requisiti:
+\begin{itemize}\itemsep1pt
+  \item i pazienti devono potersi registrare e autenticare nel sistema;
+  \item i pazienti devono poter prenotare un appuntamento in uno slot libero;
+  \item i medici devono poter vedere gli appuntamenti della settimana corrente;
+  \item i receptionist devono poter cancellare gli appuntamenti;
+  \item i pazienti devono ricevere un promemoria via e-mail il giorno prima dell'appuntamento;
+  \item i pazienti devono ricevere un'e-mail se il loro appuntamento viene annullato.
+\end{itemize}
+
+Costruiamo ora una persona:
+
+\begin{center}
+\begin{tcolorbox}[enhanced, breakable=false, colback=white, colframe=ph3, boxrule=1pt, arc=3pt, drop fuzzy shadow,
+   width=\linewidth, left=6pt, right=6pt]
+\begin{minipage}[t]{0.30\linewidth}
+  \centering
+  \begin{tikzpicture}
+    \fill[ph3!15, rounded corners=4pt] (-1.3,-1.5) rectangle (1.3,1.5);
+    \fill[ph3!55] (0,0.55) circle (0.45);
+    \fill[ph3!55] (-0.75,-1.2) .. controls (-0.75,0.05) and (0.75,0.05) .. (0.75,-1.2) -- cycle;
+  \end{tikzpicture}\\[4pt]
+  {\small\textbf{Concetta (Tina) Aiello}}\\[2pt]
+  {\scriptsize Età: 68 --- vedova\\ Pensionata (ex maestra elementare)\\ \textit{assertiva, impaziente}}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.66\linewidth}
+  \small\textbf{Bio.} Tina è un'insegnante di scuola primaria in pensione, con oltre 40 anni di esperienza. È dolce e paziente
+  con i bambini, ma diventa impaziente quando si trova fuori dalla sua zona di comfort. Ama la sua routine quotidiana e non
+  le piace cambiarla. La tecnologia non le piace: l'anno scorso i figli le hanno regalato il primo smartphone, che usa solo per
+  videochiamare le nipoti. È diffidente verso internet, che percepisce come un posto pericoloso.\\[3pt]
+  \textbf{Interessi.} Lavoro a maglia; comunità della parrocchia; tempo con le nipoti.\\[3pt]
+  \textbf{Obiettivi.} Prenotare i controlli periodici della protesi dentale; ricevere un promemoria per non dimenticare
+  l'appuntamento; spostare un appuntamento se coincide con un altro impegno.
+\end{minipage}
+\end{tcolorbox}
+\end{center}
+
+\textbf{Cosa abbiamo scoperto.} Tina non prenoterà mai da sola tramite l'app: telefonerà allo studio. E un promemoria via e-mail
+non lo leggerà. Nascono quindi \textbf{nuovi requisiti} che nessuno aveva pensato di dirci:
+\begin{itemize}\itemsep1pt
+  \item i receptionist devono poter creare appuntamenti per i pazienti che telefonano allo studio;
+  \item il giorno prima dell'appuntamento, i receptionist devono ricevere una notifica che ricordi loro di \textbf{telefonare}
+        ai pazienti che hanno prenotato per telefono.
+\end{itemize}
+\end{esempio}
+
+% ------------------------------------------------------------
+\subsection{Storie e scenari}
+
+\dfn{Storia (story)}{
+  Testo \textbf{narrativo} che presenta una descrizione ad alto livello dell'uso del sistema. È efficace per comunicare
+  gli obiettivi «di insieme» in modo comprensibile a chiunque.
+}
+
+\begin{center}
+\begin{tcolorbox}[enhanced, breakable=false, colback=ph4!5, colframe=ph4, boxrule=0.9pt, arc=3pt,
+  title={\textbf{Storia: prenotare un appuntamento con l'app}}, coltitle=white, colbacktitle=ph4, fontupper=\small]
+  Pamela ha bisogno di prenotare una visita odontoiatrica perché il dente del giudizio ha iniziato a farle male.
+  Accede al sistema e cerca gli slot disponibili per oggi o per domani. Il sistema mostra l'elenco degli slot liberi.
+  Pamela ne sceglie uno e conferma la prenotazione. Riceve un'e-mail di conferma con i dettagli dell'appuntamento.
+\end{tcolorbox}
+\end{center}
+
+\dfn{Scenario}{
+  Descrizione (tipicamente \textbf{strutturata}) di un esempio di interazione tra utente e sistema. Raffina una storia
+  aggiungendo informazioni precise: stato iniziale, flusso normale degli eventi, cosa può andare storto e come si gestisce,
+  altre attività in corso nello stesso momento, stato del sistema alla fine.
+}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{>{\bfseries\leavevmode\color{ph4}}P{3.4cm} L}
+\toprule
+\multicolumn{2}{l}{\textcolor{ph4}{\textbf{Scenario: prenotazione di un appuntamento}}} \\
+\midrule
+Assunzioni iniziali & L'utente ha un account sul sistema di gestione degli appuntamenti. \\
+Flusso normale & L'utente effettua il login e cerca gli slot disponibili per la data odierna o per il giorno successivo.
+Il sistema mostra l'elenco degli slot liberi nelle date scelte. L'utente seleziona uno degli slot proposti.
+Il sistema invia un'e-mail di conferma all'utente, al receptionist e al medico. \\
+Cosa può andare storto & \textbullet\ Non c'è nessuno slot disponibile nelle date considerate: il sistema mostra un messaggio
+di errore e chiede di scegliere date diverse.\newline
+\textbullet\ Lo slot scelto non è più disponibile al momento della conferma, perché un altro utente lo ha prenotato:
+il sistema mostra un messaggio di errore e torna alla schermata degli slot disponibili. \\
+Stato finale del sistema & Il sistema ha memorizzato il nuovo appuntamento. \\
+\bottomrule
+\end{tabularx}
+\caption{Uno scenario strutturato che raffina la storia precedente.}
+\end{table}
+
+% ------------------------------------------------------------
+\subsection{Mock-up a bassa fedeltà}
+
+\dfn{Mock-up a bassa fedeltà (wireframe)}{
+  \textbf{Schizzi semplificati} delle interfacce utente del sistema. Sono un modo rapido ed economico per visualizzare
+  la struttura e i flussi principali: l'attenzione è sulla \textbf{funzionalità e sul flusso}, non sull'estetica.
+}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[c]{0.46\textwidth}
+\centering
+\begin{tikzpicture}[line width=0.9pt]
+  % schermata 1
+  \draw[swgray, rounded corners=3pt] (0,0) rectangle (4.2,5.4);
+  \draw[swgray] (0,4.7) -- (4.2,4.7);
+  \node[font=\scriptsize\bfseries, text=swgray] at (2.1,5.05) {Prenota una visita};
+  \node[font=\tiny, text=swgray, anchor=west] at (0.25,4.25) {Data};
+  \draw[swgray!70] (0.25,3.5) rectangle (3.95,4.0);
+  \node[font=\tiny, text=swgray!80, anchor=west] at (0.35,3.75) {gg / mm / aaaa};
+  \node[font=\tiny, text=swgray, anchor=west] at (0.25,3.15) {Slot disponibili};
+  \foreach \k in {0,1,2}{
+    \draw[swgray!70] (0.25,2.25-\k*0.65) rectangle (3.95,2.8-\k*0.65);
+    \node[font=\tiny, text=swgray!90, anchor=west] at (0.4,2.52-\k*0.65) {0\the\numexpr9+\k\relax:00 --- Dott. Bianchi};
+    \draw[swgray!70] (3.35,2.35-\k*0.65) rectangle (3.85,2.7-\k*0.65);
+  }
+  \draw[fill=swgray!25, swgray, rounded corners=2pt] (1.1,0.35) rectangle (3.1,0.9);
+  \node[font=\tiny\bfseries, text=swgray] at (2.1,0.62) {CONFERMA};
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.50\textwidth}
+\textbf{Perché servono}
+\begin{itemize}\itemsep2pt
+  \item \textbf{Facilitano la comprensione}: aiutano gli stakeholder a cogliere le funzionalità di base e sono un punto di
+        partenza per la discussione.
+  \item \textbf{Fanno scoprire nuovi requisiti}: è molto più facile ragionare su un'interfaccia concreta che su frasi astratte.
+  \item \textbf{Coinvolgono e permettono di iterare}: si ottiene feedback rapido senza investire in grafica.
+  \item \textbf{Sono una base per lo sviluppo}: da qui si passa ai prototipi ad alta fedeltà e poi all'implementazione.
+\end{itemize}
+\end{minipage}
+\caption{Un wireframe non deve essere bello: deve far capire struttura e flusso.}
+\end{figure}
+
+\info{Strumenti}{
+  \textbf{Carta e matita}: rapidi e accessibili per i primi schizzi, ma diventano disordinati per sistemi complessi.\\
+  \textbf{Strumenti digitali}: software commerciali come \textit{Balsamiq} o \textit{Figma} permettono di creare e condividere
+  wireframe elettronicamente; esistono anche alternative open source come \textit{mydraft.cc}, \textit{draw.io} o \textit{Pencil Project}.
+}
+
+% ============================================================
+\section{La specifica dei requisiti}
+
+\dfn{Specifica dei requisiti}{
+  Il processo di \textbf{mettere per iscritto} i requisiti utente e di sistema in un \textbf{documento dei requisiti}.
+  I requisiti utente devono essere comprensibili a utenti e clienti senza background tecnico; i requisiti di sistema sono
+  più dettagliati e possono contenere informazioni tecniche.
+}
+
+Poiché il documento dei requisiti può diventare \textbf{parte del contratto} di sviluppo, è importante che sia il più
+completo e dettagliato possibile.
+
+\warning{Requisiti e progetto sono inseparabili}{
+  In linea di principio i requisiti dicono \textit{cosa} il sistema deve fare e il progetto dice \textit{come} lo fa.
+  In pratica i due aspetti si intrecciano:
+  \begin{itemize}
+    \item i requisiti possono essere \textbf{organizzati} seguendo un'architettura di sistema di alto livello;
+    \item il sistema può dover \textbf{interoperare} con altri sistemi, e questo genera requisiti di progetto;
+    \item l'uso di una specifica architettura per soddisfare requisiti non funzionali può essere esso stesso un requisito di dominio.
+  \end{itemize}
+}
+
+\subsection{Quattro approcci alla specifica}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \draw[-{Stealth[length=3mm]}, line width=1.2pt, swgray] (-0.4,-0.9) -- (15.6,-0.9) node[right, font=\scriptsize, align=left]{};
+  \node[font=\scriptsize, text=swgray] at (7.6,-1.35) {formalità e precisione crescenti $\longrightarrow$};
+  \foreach \i/\tit/\txt/\col in {
+    0/{Linguaggio naturale}/{Frasi numerate in linguaggio naturale: una frase, un requisito.}/q4,
+    1/{Linguaggio naturale strutturato}/{Si usa un \textbf{modulo standard} o un template per ogni requisito.}/q1,
+    2/{Notazioni semi-formali}/{Modelli UML (es.\ diagrammi dei casi d'uso) e modelli di dominio, con annotazioni testuali.}/q2,
+    3/{Specifica formale}/{Notazioni basate su concetti matematici: automi a stati finiti, logiche temporali.}/q7}{
+    \node[card=\col, text width=3.3cm, minimum height=2.7cm, align=left, font=\scriptsize, anchor=south west] at (\i*4.0,-0.7) {\textbf{\small\tit}\\[4pt]\txt};
+  }
+\end{tikzpicture}
+\caption{Dal testo libero alla matematica: quattro modi di specificare i requisiti.}
+\end{figure}
+
+Approcci diversi si adattano a domini diversi:
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{5.2cm} L}
+\toprule
+Contesto & Approccio tipico \\
+\midrule
+Sistemi critici per la sicurezza & Specifiche \textbf{formali} e linguaggio naturale strutturato \\
+Una semplice app per le liste di cose da fare & Linguaggio naturale non strutturato \\
+Un sistema informativo di media o grande dimensione & Notazioni \textbf{semi-formali} e modelli: un buon compromesso \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Specifica in linguaggio naturale}
+
+I requisiti sono scritti come frasi in linguaggio naturale, eventualmente accompagnate da diagrammi e tabelle.
+Si usa perché è \textbf{espressivo, intuitivo e universale}: i requisiti risultano comprensibili a utenti e clienti,
+e permette di esprimere sia requisiti funzionali sia non funzionali.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[card=swgreen, text width=7.7cm, minimum height=3.5cm, align=left, font=\scriptsize] (g) {%
+    \textbf{\normalsize\itick\ Linee guida}\\[4pt]
+    \textbullet\ definire un \textbf{formato standard} e usarlo per tutti i requisiti, ad esempio:\\
+    \hspace*{0.3cm}\textit{<parte del sistema> shall <requisito> (<motivazione>)};\\
+    \textbullet\ usare il linguaggio in modo \textbf{coerente}: \textit{shall} per i requisiti obbligatori,
+    \textit{should} per quelli desiderabili;\\
+    \textbullet\ \textbf{evidenziare} graficamente le parti chiave del requisito;\\
+    \textbullet\ evitare il \textbf{gergo informatico};\\
+    \textbullet\ includere sempre la \textbf{motivazione} (\textit{rationale}) del requisito.};
+  \node[card=swred, text width=7.7cm, minimum height=3.5cm, align=left, font=\scriptsize, right=0.4cm of g] (b) {%
+    \textbf{\normalsize\icross\ Problemi tipici}\\[4pt]
+    \textbullet\ \textbf{Mancanza di chiarezza}: è difficile essere precisi senza rendere il documento pesante da leggere;\\
+    \textbullet\ \textbf{confusione tra requisiti}: requisiti funzionali e non funzionali tendono a mescolarsi;\\
+    \textbullet\ \textbf{amalgama di requisiti}: più requisiti diversi finiscono espressi insieme in un'unica frase.};
+\end{tikzpicture}
+\end{center}
+
+\begin{esempio}{Un requisito con la sua motivazione}
+\textit{«Il report mensile complessivo delle iscrizioni \textbf{shall} includere statistiche sul genere degli studenti iscritti
+(necessarie per compilare il report sulla parità di genere).»}
+
+La motivazione tra parentesi è preziosa: se un domani quell'obbligo dovesse cadere, sapremo che quel requisito può essere rimosso.
+\end{esempio}
+
+\subsection{Specifica strutturata}
+
+\dfn{Specifica strutturata}{
+  Approccio in cui la \textbf{libertà} di chi scrive i requisiti viene limitata e si impone un \textbf{modo standardizzato}
+  di scriverli (un modulo con campi prestabiliti).
+}
+
+Funziona bene per alcuni tipi di requisiti (ad esempio nei sistemi di controllo embedded), mentre risulta troppo rigida per i
+requisiti dei sistemi gestionali.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.35}
+\begin{tabularx}{\textwidth}{>{\bfseries\leavevmode\color{ph2}}P{2.8cm} L}
+\toprule
+\multicolumn{2}{l}{\textcolor{ph2}{\textbf{Microinfusore di insulina / Software di controllo / SRS / 3.3.2}}} \\
+\midrule
+Funzione & Calcolo della dose di insulina con livello di zucchero nella norma. \\
+Descrizione & Calcola la dose di insulina da somministrare quando il livello di zucchero misurato è compreso tra 3 e 7 unità. \\
+Input & Lettura corrente dello zucchero ($r_2$); le due letture precedenti ($r_0$ e $r_1$). \\
+Sorgente & Lettura corrente dal sensore; le altre letture dalla memoria. \\
+Output & \texttt{CompDose}: la dose di insulina da somministrare. \\
+Azione & \texttt{CompDose} è zero se il livello è stabile o in calo, oppure se sta crescendo ma con velocità di crescita
+decrescente. Se il livello cresce e la velocità di crescita aumenta, \texttt{CompDose} si calcola dividendo per 4 la differenza
+tra il livello corrente e quello precedente e arrotondando. Se il risultato arrotondato è zero, \texttt{CompDose} è posta
+alla dose minima somministrabile. \\
+Richiede & Le due letture precedenti, per poter calcolare la velocità di variazione. \\
+Pre-condizione & Il serbatoio contiene almeno la dose singola massima ammessa. \\
+Post-condizione & In memoria, $r_0$ è sostituito da $r_1$ e poi $r_1$ è sostituito da $r_2$. \\
+Effetti collaterali & Nessuno. \\
+\bottomrule
+\end{tabularx}
+\caption{Esempio di specifica strutturata (da I. Sommerville).}
+\end{table}
+
+\subsection{Come si scrive una frase di requisito}
+
+Lo standard ISO/IEC/IEEE 29148 detta regole molto precise sul linguaggio da usare:
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{>{\bfseries\leavevmode\color{ph1}}P{2.6cm} L}
+\toprule
+shall & Introduce un \textbf{requisito obbligatorio e vincolante}. È la forma da usare per i requisiti veri e propri. \\
+will & Introduce \textbf{dichiarazioni di fatto}, di intenzione o di contesto: non è vincolante. \\
+should & Introduce \textbf{preferenze o obiettivi} desiderabili ma non obbligatori: non sono requisiti. \\
+may & Introduce \textbf{suggerimenti o concessioni}: non è vincolante. \\
+must & \textbf{Da evitare}: rischia di essere interpretato erroneamente come requisito. \\
+\midrule
+\multicolumn{2}{l}{\textbf{Altre regole di scrittura}} \\
+\midrule
+Forma positiva & Usare affermazioni positive ed evitare requisiti negativi come «\textit{shall not}». \\
+Forma attiva & Usare la forma attiva, evitando il passivo («\textit{it is required that\ldots}»). \\
+Verbi precisi & Evitare espressioni come «\textit{shall be able to}»: appesantiscono senza aggiungere precisione. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\error{Termini vaghi da evitare}{
+  Le parole vaghe generano requisiti impossibili da verificare o interpretabili in più modi. In particolare:
+  \begin{itemize}\itemsep1pt
+    \item \textbf{superlativi}: «il migliore», «il massimo»;
+    \item \textbf{linguaggio soggettivo}: «intuitivo», «facile da usare», «conveniente»;
+    \item \textbf{pronomi vaghi}: «esso», «questo», «quello»;
+    \item \textbf{avverbi e aggettivi ambigui}: «quasi sempre», «significativo», «minimo»; e congiunzioni ambigue come «e/o»;
+    \item \textbf{termini aperti e non verificabili}: «fornire supporto», «incluso ma non limitato a», «come minimo»;
+    \item \textbf{frasi comparative}: «migliore di», «di qualità superiore»;
+    \item \textbf{scappatoie}: «se possibile», «se appropriato», «ove applicabile»;
+    \item \textbf{termini assoluti}: «tutti», «sempre», «mai», «ogni» (difficilissimi da verificare);
+    \item \textbf{riferimenti incompleti}: citare un documento senza data, versione o sezione applicabile.
+  \end{itemize}
+}
+
+\subsection{Un modello per i requisiti funzionali}
+
+Un modo pratico per scrivere requisiti funzionali chiari è seguire un \textbf{pattern} fisso:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \foreach \i/\t/\col in {0/{[Condizione]}/q3, 1/{[Soggetto]}/q1, 2/{[Azione]}/ph1, 3/{[Oggetto]}/q7, 4/{[Vincolo dell'azione]}/q5}{
+    \node[chip=\col, minimum width=3.0cm, minimum height=0.85cm, font=\small\bfseries] at (\i*3.15,0) {\t};
+  }
+\end{tikzpicture}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.45}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{3.2cm} L}
+\toprule
+Forma completa & \textit{Quando viene ricevuto il segnale x} [Condizione], \textit{il sistema} [Soggetto] \textit{deve impostare}
+[Azione] \textit{il bit di ricezione del segnale x} [Oggetto] \textit{entro 2 secondi} [Vincolo]. \\
+Variante & \textit{Con stato del mare pari a 1} [Condizione], \textit{il sistema radar} [Soggetto] \textit{deve rilevare}
+[Azione] \textit{i bersagli} [Oggetto] \textit{fino a 100 miglia nautiche di distanza} [Vincolo]. \\
+Senza condizione & \textit{Il sistema di fatturazione} [Soggetto] \textit{deve mostrare le fatture dei clienti in sospeso}
+[Azione] \textit{in ordine crescente di data di scadenza} [Vincolo]. \\
+\bottomrule
+\end{tabularx}
+\caption{Lo stesso schema applicato a tre requisiti diversi.}
+\end{table}
+
+% ============================================================
+\section{I documenti dei requisiti}
+
+Esistono standard che definiscono la \textbf{struttura} del documento dei requisiti.
+
+\subsection{IEEE 830-1998}
+
+Definisce una struttura generica da adattare a ogni specifico sistema:
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{>{\bfseries\leavevmode\color{ph2}}P{4.2cm} L}
+\toprule
+1. Introduzione & Scopo del documento; ambito del prodotto; definizioni, acronimi e abbreviazioni; riferimenti; panoramica dell'organizzazione del documento. \\
+2. Descrizione generale & Prospettiva del prodotto (in quale contesto sarà usato? interagirà con sistemi esistenti?); funzioni del prodotto; caratteristiche degli utenti; vincoli generali (leggi, regolamenti); assunzioni e dipendenze (hardware o software esistenti). \\
+3. Requisiti specifici & Requisiti funzionali (per ciascuno: introduzione, input, elaborazione, output); requisiti di interfaccia esterna (utente, hardware, software, comunicazioni); requisiti di prestazione; vincoli di progetto (conformità a standard, limiti hardware); attributi del sistema software (sicurezza, manutenibilità); altri requisiti (database, operatività, adattamento al sito). \\
+4. Appendici & Materiale di supporto. \\
+5. Indice analitico & \\
+\bottomrule
+\end{tabularx}
+\caption{Struttura di un documento dei requisiti secondo lo standard IEEE 830-1998.}
+\end{table}
+
+\subsection{ISO/IEC/IEEE 29148:2018}
+
+Nel 2011 è stato pubblicato un nuovo standard, aggiornato nel 2018: \textit{Systems and software engineering --- Life cycle
+processes requirements engineering}. Non definisce un unico documento, ma \textbf{quattro documenti} corrispondenti ai diversi
+livelli visti all'inizio del capitolo.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \foreach \i/\sig/\nome/\desc/\col in {
+     0/{BRS}/{Business Requirements Specification}/{Perché il sistema viene sviluppato o modificato: processi, politiche e regole dell'organizzazione, requisiti di alto livello dal punto di vista degli stakeholder. È la base per la partecipazione attiva degli stakeholder al processo.}/q1,
+     1/{StRS}/{Stakeholder Requirements Specification}/{Nel contesto descritto dal BRS, descrive come l'organizzazione userà il sistema per contribuire al business, esprimendo le esigenze di utenti, operatori e manutentori derivate dal contesto d'uso.}/q4,
+     2/{SyRS}/{System Requirements Specification}/{Requisiti tecnici del sistema e usabilità dell'interazione uomo-sistema: obiettivi generali, ambiente di destinazione, vincoli, assunzioni e requisiti non funzionali. Descrive cosa il sistema deve fare in termini di interazioni con l'esterno.}/q2,
+     3/{SRS}/{Software Requirements Specification}/{Specifica di un particolare prodotto software: le funzioni che deve svolgere in uno specifico ambiente. Può essere scritta da rappresentanti del fornitore, del committente o di entrambi.}/q7}{
+    \node[chip=\col, minimum width=2.0cm, minimum height=0.9cm, font=\small\bfseries, anchor=north west] (s\i) at (0.6,-\i*2.3) {\sig};
+    \node[card=\col, text width=12.9cm, minimum height=1.7cm, align=left, font=\scriptsize, anchor=north west] (c\i) at (3.0,-\i*2.3+0.1) {\textbf{\small\nome}\\[3pt]\desc};
+    \draw[line width=0.8pt, swgray!70] (s\i.east) -- (c\i.west);
+  }
+  % freccia di livello, a sinistra dei riquadri
+  \draw[-{Stealth[length=3.5mm]}, line width=1.6pt, swgray] (0.0,-0.15) -- (0.0,-7.25);
+  \node[font=\scriptsize\bfseries, text=swgray, rotate=90, anchor=south] at (-0.15,-3.7) {dal business al software};
+\end{tikzpicture}
+\caption{I quattro documenti previsti dallo standard ISO/IEC/IEEE 29148:2018.}
+\end{figure}
+
+\info{Cosa deve specificare la parte «Functions»}{
+  Lo standard entra molto nel dettaglio. Per le funzioni del software richiede, ad esempio, di definire:
+  i controlli di validità sugli input; l'esatta sequenza delle operazioni; le risposte a situazioni anomale
+  (overflow, problemi di comunicazione, guasti hardware, gestione e recupero degli errori); l'effetto dei parametri;
+  la relazione tra output e input (sequenze di input/output e formule di conversione).
+}
+
+% ============================================================
+\section{Esercizi}
+
+\begin{esercizio}{Rendere testabili i requisiti}
+Riscrivi i seguenti requisiti in forma verificabile.
+\begin{enumerate}
+  \item «Il sistema deve avere un'interfaccia intuitiva.»
+  \item «Il sistema deve gestire un gran numero di utenti.»
+  \item «I dati devono essere salvati in modo sicuro.»
+\end{enumerate}
+
+\textbf{Soluzione (una delle possibili).}
+(1) «Un utente senza formazione precedente deve completare la prenotazione di un appuntamento in meno di 3 minuti, senza consultare
+il manuale, nell'80\% dei casi.»
+(2) «Il sistema deve servire almeno 5.000 utenti collegati contemporaneamente con un tempo medio di risposta inferiore a 500 ms.»
+(3) «Tutti i dati personali devono essere memorizzati cifrati con algoritmo AES-256 e accessibili solo agli utenti con ruolo
+\textit{amministratore}.»
+\end{esercizio}
+
+\begin{esercizio}{Trova l'ambiguità}
+Individua i problemi dei seguenti requisiti.
+\begin{enumerate}
+  \item «Il sistema deve inviare una notifica all'utente appena possibile dopo la registrazione e, se appropriato, anche al suo referente.»
+  \item «Il modulo di reportistica deve essere migliore di quello attuale e supportare tutti i formati.»
+\end{enumerate}
+
+\textbf{Soluzione.}
+(1) Contiene la scappatoia «se appropriato» (chi decide?), il termine aperto «appena possibile» (entro quanto?) e
+\textbf{amalgama} due requisiti distinti (notifica all'utente e notifica al referente) in un'unica frase.
+(2) Usa una \textbf{frase comparativa} non verificabile («migliore di») e un \textbf{termine assoluto} («tutti i formati»)
+che è impossibile da dimostrare: andrebbero elencati i formati richiesti.
+\end{esercizio}
+
+\begin{esercizio}{Quale tecnica di elicitazione?}
+Indica la tecnica più adatta a ciascuna situazione.
+\begin{enumerate}
+  \item Si sospetta che gli operatori del magazzino seguano una procedura diversa da quella ufficiale.
+  \item Si sviluppa un'app per il grande pubblico e non esiste un cliente specifico da intervistare.
+  \item Si vuole capire come il responsabile della segreteria gestisce oggi le iscrizioni.
+  \item Si vuole far discutere gli stakeholder su come sarà organizzata la schermata principale.
+\end{enumerate}
+
+\textbf{Soluzione.} (1) Etnografia (osservazione sul campo). (2) Personas. (3) Intervista (semi-strutturata).
+(4) Mock-up a bassa fedeltà.
+\end{esercizio}
+
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item Un \textbf{requisito} descrive un servizio che il sistema deve offrire o un vincolo che deve rispettare.
+        Si distinguono \textbf{requisiti utente} (astratti, per il cliente) e \textbf{requisiti di sistema} (dettagliati, vincolanti in contratto).
+  \item I requisiti si dividono in \textbf{funzionali} (cosa fa il sistema) e \textbf{non funzionali} (vincoli sul sistema nel suo insieme:
+        di prodotto, organizzativi, esterni). I requisiti \textbf{di dominio} derivano dal settore d'uso.
+  \item Un buon requisito è \textbf{chiaro, non ambiguo, completo, coerente, testabile e tracciabile};
+        i requisiti non funzionali vanno espressi con \textbf{indicatori quantitativi}.
+  \item Il processo di RE comprende \textbf{elicitazione e analisi}, \textbf{specifica} e \textbf{validazione}, ripetute in modo
+        \textbf{iterativo} sui livelli business, utente e sistema.
+  \item Le tecniche di elicitazione principali sono \textbf{interviste}, \textbf{etnografia}, \textbf{personas},
+        \textbf{storie e scenari}, \textbf{mock-up a bassa fedeltà}.
+  \item La specifica può essere in linguaggio naturale, in linguaggio naturale \textbf{strutturato}, con notazioni
+        \textbf{semi-formali} (UML) o \textbf{formali}. Lo standard ISO/IEC/IEEE 29148 regola persino l'uso di
+        \textit{shall}, \textit{should}, \textit{will} e \textit{may}.
+\end{itemize}
+}

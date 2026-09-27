@@ -1,0 +1,769 @@
+\chapter{Il modello a cascata}
+
+\section{Origini e caratteristiche}
+
+Il primo modello di processo che studiamo è anche il più semplice e il più «storico»: il \hi{modello a cascata}
+(\textit{Waterfall model}). Deriva dai modelli di processo usati nell'ingegneria dei grandi \textbf{sistemi militari}
+ed è stato descritto per il software da Winston W. Royce nel 1970.
+
+Le sue caratteristiche fondamentali sono quattro:
+
+\begin{enumerate}
+  \item il processo è composto da una serie di \textbf{fasi sequenziali}: ne finisce una e ne inizia un'altra;
+  \item è un processo \textbf{guidato dal piano} (\textit{plan-driven}): tutte le attività vengono pianificate all'inizio e
+        l'avanzamento si misura rispetto al piano;
+  \item il risultato di ogni fase è un \textbf{documento} che deve essere \textbf{approvato} formalmente (\textit{signed-off});
+  \item la fase successiva \textbf{non può iniziare} finché il risultato della fase precedente non è completo.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=2.9cm, y=1.2cm]
+  \foreach \i/\nome/\col in {1/{Requirements\\Engineering}/ph1,
+                             2/{System\\Design}/ph2,
+                             3/{Software e\\UI Design}/ph3,
+                             4/{Implemen-\\tation}/ph4,
+                             5/{Testing}/ph5,
+                             6/{Operation e\\Maintenance}/ph6}{
+    \node[phase=\col, drop shadow] (p\i) at (\i-1,-\i+1) {\nome};
+  }
+  \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,5}{
+    \draw[flow] (p\i.east) -| (p\j.north);
+  }
+  \foreach \j/\doc in {2/{Specifica dei requisiti (SRS)},
+                       3/{Architettura del sistema},
+                       4/{Specifiche di progetto (UML, mock-up)},
+                       5/{Codice sorgente e artefatti},
+                       6/{Sistema testato e report dei test}}{
+    \node[anchor=east, font=\scriptsize, text width=2.55cm, align=right, text=swgray!80!black] at ([xshift=-0.12cm]p\j.west) {\ifile\ \doc\ {\color{swgreen}\itick}};
+  }
+\end{tikzpicture}
+\caption{Il modello a cascata. A sinistra di ogni fase, il documento (approvato) prodotto dalla fase precedente.}
+\end{figure}
+
+\subsection{Perché «a cascata»?}
+
+Il nome deriva dalla forma del diagramma: ogni fase «riversa» il proprio risultato nella successiva, proprio come l'acqua
+di una cascata scende da un gradino all'altro. E come l'acqua, il flusso è pensato per andare \textbf{in una sola direzione}: verso il basso.
+
+\warning{Nome e difetto sono due cose diverse}{
+  Il nome viene dalla forma del diagramma, non dal fatto che «bisogna tornare indietro». Il ritorno all'indietro
+  (che vedremo più avanti) è invece la \textbf{conseguenza} più critica di questa struttura: poiché il modello non prevede
+  di risalire la cascata, correggere un errore scoperto tardi costa moltissimo.
+}
+
+\info{Curiosità: Royce non era un fan della cascata pura}{
+  Nel suo articolo del 1970 Royce presentava il modello sequenziale puro come \textbf{rischioso} e proponeva già dei correttivi:
+  tornare alle fasi precedenti, costruire un prototipo prima del sistema definitivo, coinvolgere il cliente durante il processo.
+  Ironia della sorte, è passata alla storia soprattutto la versione rigida che lui stesso criticava.
+}
+
+% ============================================================
+\section{Le sei fasi in sintesi}
+
+Prima di approfondire le singole fasi, ecco una visione d'insieme.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.45}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{3.0cm} >{\itshape}P{3.6cm} L P{3.3cm}}
+\toprule
+Fase & Domanda guida & Cosa si fa & Output principale \\
+\midrule
+\textcolor{ph1}{Requirements Engineering} & Cosa deve fare il sistema? & Raccolta e specifica dei requisiti insieme a clienti e utenti & Documento di specifica dei requisiti (SRS) \\
+\textcolor{ph2}{System Design} & Com'è organizzato il sistema, a grandi linee? & Architettura: moduli, responsabilità, allocazione su hardware & Documento di architettura \\
+\textcolor{ph3}{Software e UI Design} & Come si realizza ogni modulo? & Classi, design pattern, prototipi dell'interfaccia & Specifiche di progetto (UML, wireframe) \\
+\textcolor{ph4}{Implementation} & Come lo scrivo bene? & Traduzione del progetto in codice «pulito» & Codice sorgente e artefatti \\
+\textcolor{ph5}{Testing} & Funziona? È ciò che serviva? & Verifica e validazione: ispezioni e test & Report dei test, sistema pronto \\
+\textcolor{ph6}{Operation e Maintenance} & Come lo mantengo in vita? & Installazione, uso reale, correzioni e adattamenti & Nuove versioni del sistema \\
+\bottomrule
+\end{tabularx}
+\caption{Panoramica delle fasi del modello a cascata.}
+\end{table}
+
+Le sei fasi non sono altro che un modo più dettagliato di organizzare le \textbf{quattro attività fondamentali}
+viste nel capitolo precedente:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=3.12cm]
+  \foreach \i/\nome/\col in {1/{Requirements\\Engineering}/ph1, 2/{System\\Design}/ph2, 3/{Software e\\UI Design}/ph3,
+                             4/{Implemen-\\tation}/ph4, 5/{Testing}/ph5, 6/{Operation e\\Maintenance}/ph6}{
+    \node[phase=\col] (m\i) at (\i,0) {\nome};
+  }
+  \node[chip=swteal, minimum width=2.95cm, minimum height=0.75cm, font=\small\bfseries] (A1) at (1,1.6) {Specification};
+  \node[chip=swblue, minimum width=9.19cm, minimum height=0.75cm, font=\small\bfseries] (A2) at (3,1.6) {Implementation (progettazione + codifica)};
+  \node[chip=ph3!80!black, minimum width=2.95cm, minimum height=0.75cm, font=\small\bfseries] (A3) at (5,1.6) {Validation};
+  \node[chip=ph6!80!black, minimum width=2.95cm, minimum height=0.75cm, font=\small\bfseries] (A4) at (6,1.6) {Evolution};
+  \foreach \i/\a in {1/A1,2/A2,3/A2,4/A2,5/A3,6/A4}{
+    \draw[swgray, dashed] (\a.south -| m\i.north) -- (m\i.north);
+  }
+\end{tikzpicture}
+\caption{Corrispondenza tra le quattro attività fondamentali e le sei fasi del modello a cascata.}
+\end{figure}
+
+% ============================================================
+\section{Fase 1: Requirements Engineering}
+
+\waterfallbar{1}
+
+\dfn{Ingegneria dei requisiti}{
+  Fase in cui si cerca di capire \textbf{cosa} il software da realizzare (\textit{software-to-be}) deve fare,
+  \textbf{non come} implementarlo. Richiede un'analisi attenta dei bisogni degli utenti e del dominio del problema e coinvolge
+  clienti, utenti finali e ingegneri del software. L'output principale è il \textbf{documento di specifica dei requisiti}
+  (\textit{Software Requirements Specification}, SRS).
+}
+
+È una fase di \textbf{modellazione}: non si costruisce ancora la soluzione, ma un \textbf{modello di ciò che il sistema dovrà fare},
+sia in termini di \textbf{funzionalità} sia in termini di \textbf{qualità}. Per questo:
+\begin{itemize}
+  \item \textbf{non si scrive codice}: si producono documenti e diagrammi;
+  \item \textbf{non si fanno scelte tecnologiche} (linguaggi, database, framework) e non si parla di hardware, a meno che non si tratti
+        di un \textbf{vincolo} imposto dal cliente (ad esempio: «il sistema deve girare sui server già presenti in azienda»);
+  \item si guarda il sistema \textbf{dall'esterno}, come una scatola nera: cosa vede e cosa fa l'utente, come interagisce con il sistema,
+        non come il sistema è fatto dentro.
+\end{itemize}
+
+Questa fase è così importante da meritare un capitolo a parte: la riprenderemo in dettaglio nel Capitolo 5.
+
+\subsection{Cosa, non come}
+
+La distinzione tra \textit{cosa} e \textit{come} è la più importante di questa fase. Vediamola su un sistema per una biblioteca:
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{L >{\centering\arraybackslash}p{3.4cm}}
+\toprule
+Affermazione & È un requisito? \\
+\midrule
+L'utente deve poter cercare un libro per titolo, autore o ISBN. & {\color{swgreen}\itick} Sì (cosa) \\
+Il risultato della ricerca deve comparire entro 2 secondi. & {\color{swgreen}\itick} Sì (qualità) \\
+La ricerca usa un indice sulla tabella \texttt{LIBRI} di un database MySQL. & {\color{swred}\icross} No (come) \\
+La classe \texttt{RicercaService} espone il metodo \texttt{cerca(String)}. & {\color{swred}\icross} No (come) \\
+Il sistema deve funzionare sui computer Windows già presenti in biblioteca. & {\color{swgreen}\itick} Sì (vincolo) \\
+\bottomrule
+\end{tabularx}
+\caption{Requisiti (cosa) e decisioni di progetto (come).}
+\end{table}
+
+\subsection{Requisiti funzionali e non funzionali}
+
+Il modello del sistema descrive sia le funzionalità sia le qualità. Da qui la distinzione classica:
+
+\begin{center}
+\begin{tikzpicture}
+  \node[card=ph1, text width=7.8cm, align=left, minimum height=3.3cm] (f) {%
+    \textbf{Requisiti funzionali}\\[3pt]
+    \small Descrivono \textbf{cosa} il sistema deve fare: servizi offerti, reazioni agli input, comportamento in situazioni specifiche.\\[4pt]
+    \scriptsize\textit{Es.}: «Il bibliotecario può registrare la restituzione di un libro.»\\
+    \scriptsize\textit{Es.}: «L'utente riceve un'e-mail tre giorni prima della scadenza del prestito.»};
+  \node[card=ph3, text width=7.8cm, align=left, minimum height=3.3cm, right=0.5cm of f] (nf) {%
+    \textbf{Requisiti non funzionali (di qualità)}\\[3pt]
+    \small Descrivono \textbf{quanto bene} il sistema deve farlo e con quali vincoli: prestazioni, sicurezza, usabilità, affidabilità\ldots\\[4pt]
+    \scriptsize\textit{Es.}: «Il catalogo deve essere disponibile 24 ore su 24.»\\
+    \scriptsize\textit{Es.}: «Solo il personale autenticato può modificare i prestiti.»};
+\end{tikzpicture}
+\end{center}
+
+I requisiti non funzionali si collegano direttamente ai \textbf{modelli di qualità} che studieremo nel Capitolo 4.
+
+\subsection{Tecniche per raccogliere e specificare i requisiti}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{3.4cm} L}
+\toprule
+\multicolumn{2}{l}{\textcolor{ph1}{\textbf{Raccolta} (\textit{elicitation})}} \\
+\midrule
+Interviste & Colloqui con gli \textit{stakeholder} (clienti, utenti, esperti del dominio) per capire bisogni e problemi. \\
+Personas & Utenti «tipo» immaginari ma realistici (es.\ «Anna, 68 anni, poco pratica di tecnologia») usati per non perdere di vista chi userà davvero il sistema. \\
+Storie e scenari & Racconti concreti di come un utente usa il sistema per raggiungere un obiettivo. \\
+\midrule
+\multicolumn{2}{l}{\textcolor{ph1}{\textbf{Specifica}}} \\
+\midrule
+Casi d'uso & Descrivono le interazioni tra gli attori (utenti o altri sistemi) e il sistema per raggiungere un obiettivo. \\
+Linguaggio naturale & Requisiti scritti in frasi, possibilmente brevi, precise e verificabili. \\
+Modelli di dominio & Diagrammi dei concetti del mondo reale e delle loro relazioni (es.\ Libro, Prestito, Utente). \\
+Mock-up & Bozze dell'interfaccia che aiutano cliente e sviluppatori a capirsi. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\dfn{Stakeholder}{
+  Qualsiasi persona o organizzazione che ha un \textbf{interesse} nel sistema o ne è \textbf{influenzata}: il cliente che paga,
+  gli utenti finali, il personale che lo manterrà, ma anche, ad esempio, un ente regolatore.
+}
+
+\begin{esempio}{Un diagramma dei casi d'uso per la biblioteca}
+\begin{center}
+\begin{tikzpicture}
+  \draw[rounded corners=4pt, line width=0.9pt, swgray] (-3.3,-2.4) rectangle (3.3,2.4);
+  \node[font=\small\bfseries, text=swgray, anchor=north] at (0,2.35) {Sistema Biblioteca};
+  \stickman{(-5.4,0.2)}{Utente}
+  \stickman{(5.4,0.2)}{Bibliotecario}
+  \node[ellipse, draw=ph1, fill=ph1!8, line width=0.8pt, minimum width=3.6cm, minimum height=0.8cm, font=\scriptsize] (u1) at (0,1.35) {Cerca libro};
+  \node[ellipse, draw=ph1, fill=ph1!8, line width=0.8pt, minimum width=3.6cm, minimum height=0.8cm, font=\scriptsize] (u2) at (0,0.2) {Prenota libro};
+  \node[ellipse, draw=ph1, fill=ph1!8, line width=0.8pt, minimum width=3.6cm, minimum height=0.8cm, font=\scriptsize] (u3) at (0,-0.95) {Registra prestito};
+  \node[ellipse, draw=ph1, fill=ph1!8, line width=0.8pt, minimum width=3.6cm, minimum height=0.8cm, font=\scriptsize] (u4) at (0,-1.95) {Registra restituzione};
+  \draw (-5.1,0.45) -- (u1.west);
+  \draw (-5.1,0.45) -- (u2.west);
+  \draw (5.1,0.45) -- (u1.east);
+  \draw (5.1,0.45) -- (u3.east);
+  \draw (5.1,0.45) -- (u4.east);
+\end{tikzpicture}
+\end{center}
+Gli \textbf{attori} (omini) sono all'esterno del sistema; i \textbf{casi d'uso} (ellissi) sono gli obiettivi che gli attori
+raggiungono usando il sistema. Il diagramma dice \textit{cosa} si può fare, senza dire nulla su \textit{come} sarà realizzato.
+\end{esempio}
+
+\warning{Il cliente non sa sempre cosa vuole}{
+  I requisiti raccolti possono essere \textbf{incompleti}, \textbf{ambigui} o persino \textbf{contraddittori} (stakeholder diversi
+  vogliono cose diverse). Non a caso, nel progetto d'esame i docenti si comportano come clienti tipici e possono fornire requisiti
+  incoerenti: individuarli e chiarirli fa parte del lavoro.
+}
+
+% ============================================================
+\section{Fase 2: System Design}
+
+\waterfallbar{2}
+
+Una volta chiaro \textit{cosa} fare, si passa al \textit{come}. L'obiettivo delle due fasi di progettazione è definire una
+\textbf{struttura adeguata} (architettura) per il software. Si lavora su \textbf{due livelli}: prima quello di sistema (alto livello),
+poi quello del singolo modulo (basso livello).
+
+\dfn{System Design (progettazione di sistema)}{
+  Definisce l'\textbf{architettura complessiva} del sistema, cioè la sua vista «di massima»:
+  \begin{itemize}
+    \item la \textbf{decomposizione} in moduli e componenti (sottosistemi);
+    \item l'\textbf{allocazione} dei requisiti/funzionalità ai moduli e dei moduli alle risorse hardware;
+    \item le \textbf{relazioni e collaborazioni} tra i moduli.
+  \end{itemize}
+}
+
+Un'analogia: è come la \textbf{pianta di una casa} disegnata dall'architetto. Stabilisce quante stanze ci sono, a cosa servono e come
+sono collegate, ma non sceglie ancora il modello delle maniglie.
+
+In questa fase si ricorre spesso a \textbf{pattern architetturali}, cioè soluzioni collaudate per organizzare un sistema:
+ad esempio \textit{client-server}, architettura \textit{a livelli} (presentazione, logica, dati) o \textit{Model-View-Controller}.
+
+\begin{esempio}{Architettura di massima di un e-commerce}
+\begin{center}
+\begin{tikzpicture}[font=\scriptsize]
+  % Nodi hardware
+  \node[draw=swgray, fill=swlight, rounded corners=3pt, minimum width=3.6cm, minimum height=3.3cm, anchor=north] (hw1) at (0,0) {};
+  \node[font=\scriptsize\bfseries, text=swgray, anchor=north] at (hw1.north) {\iwindow\ Dispositivo utente};
+  \node[phase=ph2, minimum width=2.9cm, minimum height=0.7cm, font=\scriptsize\bfseries] (ui) at (0,-1.1) {Interfaccia web};
+  \node[phase=ph2, fill=ph2!75, minimum width=2.9cm, minimum height=0.7cm, font=\scriptsize\bfseries] (app) at (0,-2.2) {App mobile};
+
+  \node[draw=swgray, fill=swlight, rounded corners=3pt, minimum width=7.6cm, minimum height=3.3cm, anchor=north] (hw2) at (6.4,0) {};
+  \node[font=\scriptsize\bfseries, text=swgray, anchor=north] at (hw2.north) {\icpu\ Application server};
+  \node[phase=ph2, minimum width=2.1cm, minimum height=0.7cm, font=\scriptsize\bfseries] (m1) at (4.6,-1.1) {Catalogo};
+  \node[phase=ph2, minimum width=2.1cm, minimum height=0.7cm, font=\scriptsize\bfseries] (m2) at (6.9,-1.1) {Carrello};
+  \node[phase=ph2, minimum width=2.1cm, minimum height=0.7cm, font=\scriptsize\bfseries] (m3) at (4.6,-2.2) {Ordini};
+  \node[phase=ph2, minimum width=2.1cm, minimum height=0.7cm, font=\scriptsize\bfseries] (m4) at (6.9,-2.2) {Utenti};
+  \node[phase=sworange, minimum width=1.5cm, minimum height=1.8cm, font=\scriptsize\bfseries] (m5) at (9.2,-1.65) {Pagamenti};
+
+  \node[draw=swgray, fill=swlight, rounded corners=3pt, minimum width=3.2cm, minimum height=3.3cm, anchor=north] (hw3) at (12.6,0) {};
+  \node[font=\scriptsize\bfseries, text=swgray, anchor=north] at (hw3.north) {\icpu\ Database server};
+  \node[cylinder, shape border rotate=90, aspect=0.25, draw=ph2!70!black, fill=ph2!15, minimum width=1.8cm, minimum height=1.5cm, font=\scriptsize\bfseries] (db) at (12.6,-1.8) {Dati};
+
+  \node[draw=swgray, dashed, rounded corners=3pt, minimum width=2.6cm, minimum height=1cm, align=center] (ext) at (9.2,-4.3) {Servizio esterno\\di pagamento};
+
+  \draw[{Stealth}-{Stealth}, line width=0.9pt] (hw1.east |- 0,-1.65) -- node[above]{HTTPS} (hw2.west |- 0,-1.65);
+  \draw[{Stealth}-{Stealth}, line width=0.9pt] (hw2.east |- 0,-1.65) -- (hw3.west |- 0,-1.65);
+  \draw[{Stealth}-{Stealth}, line width=0.9pt, dashed] (m5.south) -- (ext.north);
+\end{tikzpicture}
+\end{center}
+Il sistema è scomposto in \textbf{moduli} con responsabilità precise (catalogo, carrello, ordini, utenti, pagamenti), i moduli
+sono \textbf{allocati} a nodi hardware diversi e sono definite le \textbf{collaborazioni} (chi comunica con chi).
+\end{esempio}
+
+\info{Perché progettare in modo modulare}{
+  Un sistema ben scomposto in moduli indipendenti è molto più \textbf{flessibile}: se domani cambia il fornitore dei pagamenti,
+  si interviene solo sul modulo \textit{Pagamenti} senza toccare il resto. Ricordando che la manutenzione vale circa due terzi
+  dei costi, la modularità decisa in questa fase è un investimento che ripaga per anni.
+}
+
+% ============================================================
+\section{Fase 3: Software e UI Design}
+
+\waterfallbar{3}
+
+\dfn{Software e UI Design (progettazione di dettaglio)}{
+  Scende nel \textbf{dettaglio di come implementare ciascun modulo}. Comprende la progettazione dell'architettura software
+  di basso livello (quali \textbf{classi e oggetti} servono per realizzare ogni sottosistema?) e la \textbf{prototipazione
+  dell'interfaccia utente}.
+}
+
+Le principali attività e tecniche sono:
+\begin{itemize}
+  \item definire gli \textbf{oggetti} (classi, attributi, metodi, relazioni) necessari a realizzare ogni sottosistema;
+  \item applicare i \textbf{design pattern}, cioè soluzioni riusabili a problemi di progettazione ricorrenti;
+  \item applicare l'\textbf{ingegneria dell'usabilità} per progettare interfacce facili da usare;
+  \item produrre \textbf{wireframe ad alta fedeltà}, cioè prototipi dell'interfaccia molto vicini al risultato finale.
+\end{itemize}
+
+L'output è un insieme di \textbf{specifiche di progetto}, spesso formalizzate con linguaggi di modellazione come \textbf{UML}.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[c]{0.56\textwidth}
+\centering
+\begin{tikzpicture}[
+  cls/.style={rectangle split, rectangle split parts=3, draw=ph3, line width=0.8pt,
+              rectangle split part fill={ph3!22,white,white}, font=\scriptsize, align=left,
+              text width=3.3cm, inner sep=3pt}]
+  \node[cls] (utente) at (0,0) {\centering\textbf{Utente}\nodepart{second}- nome: String\\- email: String\nodepart{third}+ prestitiAttivi(): List};
+  \node[cls] (prestito) at (4.4,0) {\centering\textbf{Prestito}\nodepart{second}- dataInizio: Date\\- dataFine: Date\nodepart{third}+ isScaduto(): boolean};
+  \node[cls] (libro) at (4.4,-3.1) {\centering\textbf{Libro}\nodepart{second}- isbn: String\\- titolo: String\nodepart{third}+ isDisponibile(): boolean};
+  \draw[line width=0.8pt] (utente.east) -- node[above, font=\tiny]{1} node[below, font=\tiny, pos=0.85]{0..*} (prestito.west);
+  \draw[line width=0.8pt] (prestito.south) -- node[right, font=\tiny, pos=0.15]{0..*} node[right, font=\tiny, pos=0.85]{1} (libro.north);
+\end{tikzpicture}\\[3pt]
+{\small (a) Diagramma delle classi UML}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.40\textwidth}
+\centering
+\begin{tikzpicture}
+  \draw[rounded corners=10pt, line width=1.2pt, swgray, fill=white] (0,0) rectangle (3.4,6);
+  \fill[ph3!85] (0.2,5.1) rectangle (3.2,5.7);
+  \node[text=white, font=\scriptsize\bfseries] at (1.7,5.4) {Biblioteca};
+  \draw[rounded corners=3pt, swgray] (0.3,4.4) rectangle (3.1,4.85);
+  \node[font=\tiny, text=swgray, anchor=west] at (0.4,4.62) {Cerca titolo, autore\ldots};
+  \foreach \k in {0,1,2}{
+    \draw[rounded corners=2pt, swgray!60, fill=swlight] (0.3,3.55-\k*1.0) rectangle (3.1,4.2-\k*1.0);
+    \fill[swgray!40] (0.4,3.62-\k*1.0) rectangle (0.85,4.13-\k*1.0);
+    \fill[swgray!70] (1.0,3.95-\k*1.0) rectangle (2.7,4.05-\k*1.0);
+    \fill[swgray!35] (1.0,3.72-\k*1.0) rectangle (2.2,3.8-\k*1.0);
+  }
+  \fill[rounded corners=3pt, ph3] (0.6,0.45) rectangle (2.8,0.95);
+  \node[text=white, font=\scriptsize\bfseries] at (1.7,0.7) {Prenota};
+\end{tikzpicture}\\[3pt]
+{\small (b) Wireframe di una schermata}
+\end{minipage}
+\caption{Due tipici prodotti della progettazione di dettaglio.}
+\end{figure}
+
+\subsection{Alto livello e basso livello a confronto}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{3.2cm} L L}
+\toprule
+ & \textcolor{ph2}{System Design} & \textcolor{ph3}{Software e UI Design} \\
+\midrule
+Livello & Alto: il sistema nel suo insieme & Basso: il singolo modulo \\
+Elementi & Sottosistemi, componenti, nodi hardware & Classi, oggetti, metodi, schermate \\
+Strumenti & Pattern architetturali & Design pattern, usabilità, wireframe \\
+Analogia & La pianta della casa & Il progetto esecutivo di ogni stanza (impianti, arredi) \\
+Domanda & Quali pezzi e come comunicano? & Come è fatto dentro ogni pezzo? \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\warning{Scelte tecnologiche e design pattern: due precisazioni}{
+  \begin{itemize}
+    \item \textbf{Il linguaggio}: le scelte tecnologiche (linguaggio, framework, database) si concretizzano durante la progettazione,
+          quando servono a definire la soluzione, a meno che non siano già un vincolo imposto nei requisiti. Il criterio non è solo
+          «il linguaggio migliore in assoluto»: contano l'adeguatezza al problema, le librerie disponibili e le \textbf{competenze del team}.
+    \item \textbf{I design pattern} sono in larga parte \textbf{indipendenti dal linguaggio}: descrivono un'idea di soluzione
+          (ad esempio «notifica automaticamente gli interessati quando un oggetto cambia stato»). È la loro \textit{implementazione}
+          che dipende dalle caratteristiche del linguaggio scelto.
+  \end{itemize}
+}
+
+% ============================================================
+\section{Fase 4: Implementation}
+
+\waterfallbar{4}
+
+\dfn{Implementazione}{
+  Fase in cui la specifica di progetto viene \textbf{tradotta} nel linguaggio di programmazione e nelle tecnologie scelte.
+  Ogni sottosistema viene implementato, producendo il codice sorgente e gli altri artefatti necessari.
+}
+
+Non una traduzione qualsiasi, però: deve essere una traduzione di \textbf{alta qualità}. Il codice risultante deve essere:
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{>{\bfseries\leavevmode\color{ph4}}P{4.4cm} L}
+\toprule
+Leggibile (\textit{readable}) & Un altro sviluppatore (o noi tra sei mesi) lo capisce senza fatica? \\
+Manutenibile (\textit{maintainable}) & È facile correggerlo o modificarlo senza rompere altro? \\
+Riusabile (\textit{reusable}) & Parti del codice possono essere usate in altri contesti? \\
+Estendibile (\textit{extendable}) & Si possono aggiungere funzionalità senza stravolgere l'esistente? \\
+Testabile (\textit{testable}) & È facile scrivere test automatici che ne verifichino il comportamento? \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\ldots o, in una sola parola, \hi{clean} (pulito). Oltre al codice, in questa fase si usano \textbf{framework} (strutture già pronte
+che forniscono le fondamenta dell'applicazione) e \textbf{ORM} (\textit{Object-Relational Mapping}: librerie che traducono
+automaticamente gli oggetti del programma in righe delle tabelle di un database relazionale e viceversa).
+
+\begin{esempio}{Stesso comportamento, qualità molto diversa}
+Entrambe le versioni calcolano il totale di un carrello applicando gli sconti. La prima «funziona», ma è illeggibile:
+\Needspace{14\baselineskip}\begin{lstlisting}[language=Java]
+public double c(List<double[]> l) {
+    double t = 0;
+    for (double[] x : l) t += x[0] * x[1] * (1 - x[2]);
+    return t;
+}
+\end{lstlisting}
+Cosa sono \texttt{x[0]}, \texttt{x[1]} e \texttt{x[2]}? Senza leggere il resto del programma è impossibile saperlo.
+La seconda versione dice esattamente cosa fa:
+\Needspace{14\baselineskip}\begin{lstlisting}[language=Java]
+public double calcolaTotaleCarrello(List<RigaCarrello> righe) {
+    double totale = 0;
+    for (RigaCarrello riga : righe) {
+        totale += riga.getPrezzoUnitario()
+                * riga.getQuantita()
+                * (1 - riga.getSconto());
+    }
+    return totale;
+}
+\end{lstlisting}
+Nomi espressivi e tipi dedicati rendono il codice leggibile, più facile da modificare (es.\ aggiungere l'IVA) e da testare.
+\end{esempio}
+
+% ============================================================
+\section{Fase 5: Testing}
+
+\waterfallbar{5}
+
+Abbiamo un'implementazione. Ma questa implementazione \textbf{soddisfa davvero i bisogni degli utenti}?
+Per rispondere si svolgono le attività di \hi{verifica e validazione} (V\&V). Sono due concetti diversi e spesso confusi.
+
+\dfn{Verifica (Verification)}{
+  Il sistema è \textbf{conforme alla sua specifica}? In altre parole: \textit{abbiamo costruito il prodotto nel modo giusto?}
+  Si fa tipicamente con il \textbf{testing del programma}: si esegue il software in un ambiente controllato e si controlla che
+  il suo comportamento sia corretto rispetto alle specifiche.
+}
+
+\dfn{Validazione (Validation)}{
+  Il sistema \textbf{soddisfa le aspettative del cliente}? In altre parole: \textit{abbiamo costruito il prodotto giusto?}
+  Si fa tipicamente definendo ed eseguendo \textbf{test di accettazione}, spesso insieme al cliente.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[card=swteal, minimum width=3.9cm, minimum height=1.3cm] (need) at (0,0) {\iuser\ \textbf{Esigenze reali}\\\scriptsize del cliente};
+  \node[card=ph1, minimum width=3.9cm, minimum height=1.3cm] (spec) at (6.2,0) {\ifile\ \textbf{Specifica}\\\scriptsize (requisiti scritti)};
+  \node[card=ph4, minimum width=3.9cm, minimum height=1.3cm] (sys) at (12.4,0) {\icpu\ \textbf{Sistema}\\\scriptsize realizzato};
+  \draw[flow] (need) -- node[above, font=\scriptsize]{analisi} (spec);
+  \draw[flow] (spec) -- node[above, font=\scriptsize]{sviluppo} (sys);
+  \draw[{Stealth[length=2.6mm]}-{Stealth[length=2.6mm]}, line width=1.3pt, ph5] (sys.south) to[out=-120, in=-60] node[below, font=\small\bfseries, text=ph5, align=center]{VERIFICA\\\scriptsize\normalfont «nel modo giusto?»} (spec.south);
+  \draw[{Stealth[length=2.6mm]}-{Stealth[length=2.6mm]}, line width=1.3pt, swred] (sys.north) to[out=140, in=40] node[above, font=\small\bfseries, text=swred, align=center]{\scriptsize\normalfont «il prodotto giusto?»\\VALIDAZIONE} (need.north);
+\end{tikzpicture}
+\caption{La verifica confronta il sistema con la specifica; la validazione lo confronta con le esigenze reali.}
+\end{figure}
+
+\begin{esempio}{Verificato ma non validato}
+La specifica dice: «il sistema deve esportare il report mensile delle vendite in PDF». Gli sviluppatori realizzano un'esportazione
+PDF perfetta: tutti i test passano, quindi il sistema è \textbf{verificato}. Alla consegna, però, il cliente scopre che il suo
+ufficio contabilità ha bisogno di \textit{rielaborare} quei dati in un foglio di calcolo: un PDF non gli serve a nulla.
+Il sistema \textbf{non è validato}. L'errore non è nel codice, ma nei requisiti.
+\end{esempio}
+
+\subsection{Le attività di testing}
+
+\begin{itemize}
+  \item \textbf{Ispezioni del codice} (\textit{code inspection}): il codice viene letto ed esaminato da altre persone \textit{senza eseguirlo},
+        alla ricerca di errori e cattive pratiche.
+  \item \textbf{Test funzionale}: si esegue il software e si confrontano i risultati con quelli attesi. Si svolge a più livelli:
+        \textit{unità}, \textit{integrazione}, \textit{sistema}.
+  \item \textbf{Test di usabilità}: si osservano utenti reali mentre usano il sistema per scoprire difficoltà dell'interfaccia.
+\end{itemize}
+
+I livelli del test funzionale procedono dal piccolo al grande: si controlla che \textbf{metodo per metodo} e \textbf{classe per classe}
+il codice faccia quello che deve, poi che i \textbf{moduli} funzionino insieme e infine che l'\textbf{intero sistema} rispetti i requisiti.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \draw[rounded corners=6pt, fill=ph5!8, draw=ph5, line width=1pt] (0,0) rectangle (10.4,5.4);
+  \node[anchor=north west, font=\small\bfseries, text=ph5] at (0.15,5.35) {Sistema};
+  \foreach \m/\x in {A/0.4, B/5.4}{
+    \draw[rounded corners=5pt, fill=ph5!15, draw=ph5!80, line width=0.8pt] (\x,0.35) rectangle (\x+4.6,4.6);
+    \node[anchor=north west, font=\scriptsize\bfseries, text=ph5!90!black] at (\x+0.1,4.55) {Modulo \m};
+    \foreach \c/\cx in {1/0.25, 2/2.4}{
+      \draw[rounded corners=3pt, fill=white, draw=ph4!70, line width=0.7pt] (\x+\cx,0.7) rectangle (\x+\cx+1.95,3.8);
+      \node[anchor=north west, font=\tiny\bfseries, text=ph4] at (\x+\cx+0.05,3.75) {Classe \m\c};
+      \foreach \k in {0,1,2}{
+        \draw[rounded corners=2pt, fill=ph4!12, draw=ph4!50] (\x+\cx+0.2,2.75-\k*0.65) rectangle (\x+\cx+1.75,3.2-\k*0.65);
+        \node[font=\tiny, text=ph4!80!black] at (\x+\cx+0.975,2.975-\k*0.65) {metodo()};
+      }
+    }
+  }
+  \draw[{Stealth}-{Stealth}, line width=0.9pt, sworange] (5.0,2.3) -- (5.4,2.3);
+  \node[card=ph4, anchor=west, text width=5.3cm, align=left, font=\scriptsize] at (11,4.4) {\textbf{Test di unità}: un metodo o una classe, isolati dal resto.};
+  \node[card=sworange, anchor=west, text width=5.3cm, align=left, font=\scriptsize] at (11,2.7) {\textbf{Test di integrazione}: più moduli (o classi) che collaborano.};
+  \node[card=ph5, anchor=west, text width=5.3cm, align=left, font=\scriptsize] at (11,1.0) {\textbf{Test di sistema}: l'intero sistema, confrontato con i requisiti.};
+\end{tikzpicture}
+\caption{I livelli del test funzionale, dal più piccolo al più grande.}
+\end{figure}
+
+\info{Per approfondire: il modello a V}{
+  Una variante molto diffusa del modello a cascata, il \textbf{modello a V}, rende esplicito che ogni fase di progettazione
+  ha una fase di test «gemella» che ne verifica il risultato:
+  \begin{center}
+  \begin{tikzpicture}[font=\scriptsize\bfseries]
+    \node[phase=ph1, minimum width=2.6cm, minimum height=0.7cm] (r) at (0,0) {Requisiti};
+    \node[phase=ph2, minimum width=2.6cm, minimum height=0.7cm] (s) at (1.3,-1.0) {System Design};
+    \node[phase=ph3, minimum width=2.6cm, minimum height=0.7cm] (d) at (2.6,-2.0) {Software Design};
+    \node[phase=ph4, minimum width=2.6cm, minimum height=0.7cm] (i) at (5.2,-3.0) {Implementazione};
+    \node[phase=ph5, minimum width=2.6cm, minimum height=0.7cm] (tu) at (7.8,-2.0) {Test di integrazione};
+    \node[phase=ph5, minimum width=2.6cm, minimum height=0.7cm] (ts) at (9.1,-1.0) {Test di sistema};
+    \node[phase=ph5, minimum width=2.6cm, minimum height=0.7cm] (ta) at (10.4,0) {Test di accettazione};
+    \draw[flow] (r) -- (s); \draw[flow] (s) -- (d); \draw[flow] (d) |- (i); \draw[flow] (i) -| (tu); \draw[flow] (tu) -- (ts); \draw[flow] (ts) -- (ta);
+    \draw[swred, dashed, {Stealth}-{Stealth}] (r) -- node[above, font=\tiny\normalfont, text=swred]{validazione} (ta);
+    \draw[ph5, dashed, {Stealth}-{Stealth}] (s) -- (ts);
+    \draw[ph5, dashed, {Stealth}-{Stealth}] (d) -- (tu);
+    \node[font=\tiny\normalfont, text=ph4, below=0.05cm of i] {+ test di unità};
+  \end{tikzpicture}
+  \end{center}
+  Il testing verrà ripreso durante il corso ed è l'argomento centrale del corso magistrale di \textit{Software Testing}.
+}
+
+% ============================================================
+\section{Fase 6: Operation e Maintenance}
+
+\waterfallbar{6}
+
+\dfn{Esercizio (Operation)}{
+  Il sistema viene \textbf{distribuito e installato} presso i clienti e messo in \textbf{uso reale}.
+}
+
+\dfn{Manutenzione (Maintenance)}{
+  Prima o poi il software \textbf{dovrà cambiare}. La manutenzione comprende tutte le modifiche apportate dopo il rilascio.
+}
+
+I motivi per cui il software cambia sono essenzialmente tre:
+\begin{itemize}
+  \item cambiano le \textbf{esigenze del cliente} (nuove funzionalità, processi aziendali diversi);
+  \item cambia il \textbf{contesto d'uso} (ad esempio entra in vigore una nuova legge che richiede procedure diverse,
+        oppure esce un nuovo sistema operativo);
+  \item emergono \textbf{bug} sfuggiti alla fase di verifica e validazione.
+\end{itemize}
+
+Questi motivi corrispondono alla classificazione tradizionale dei tipi di manutenzione:
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.45}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{2.6cm} L L}
+\toprule
+Tipo & Scopo & Esempio \\
+\midrule
+\textcolor{swred}{Correttiva} & Correggere errori non scoperti nelle fasi precedenti & Il calcolo degli interessi sbaglia l'arrotondamento negli anni bisestili \\
+\textcolor{sworange}{Adattiva} & Adattare il software a un ambiente che cambia & Aggiornare l'app per la nuova versione di Android; recepire una nuova normativa fiscale \\
+\textcolor{swblue}{Perfettiva} & Migliorare o aggiungere funzionalità su richiesta & Il cliente chiede di poter pagare anche con lo smartphone \\
+\textcolor{swgreen}{Preventiva} & Rendere il software più facile da mantenere in futuro & Ristrutturare (\textit{refactoring}) un modulo diventato troppo complicato \\
+\bottomrule
+\end{tabularx}
+\caption{I tipi di manutenzione.}
+\end{table}
+
+\info{Un problema specifico della cascata}{
+  Nel modello a cascata la manutenzione è l'ultima fase, ma una modifica importante (ad esempio un nuovo requisito) non si può
+  «fare e basta»: richiede di \textbf{ripercorrere le fasi} a partire da quella interessata, aggiornando e riapprovando requisiti,
+  progetto, codice e test. È qui che la rigidità del modello si fa sentire di più.
+  L'evoluzione del software è approfondita nel corso magistrale di \textit{Software Project Management and Evolution}.
+}
+
+% ============================================================
+\section{Il problema del ritorno all'indietro}
+
+Un approccio rigido e «a senso unico» (\textit{feed-forward}) ha senso nell'\textbf{ingegneria dell'hardware}, dove i costi di produzione sono
+altissimi: una volta prodotti migliaia di chip, o costruito un ponte, non si torna indietro. Per questo è essenziale aver completato
+e approvato ogni fase prima di passare alla successiva.
+
+Nello sviluppo software, invece, le fasi \textbf{si sovrappongono e si scambiano informazioni} di continuo:
+\begin{itemize}
+  \item durante il \textbf{System Design} si scoprono problemi nei \textbf{requisiti} (ambigui, incompleti, impossibili da realizzare);
+  \item durante l'\textbf{implementazione} si scoprono problemi nel \textbf{progetto};
+  \item e soprattutto i \textbf{requisiti possono cambiare} in qualsiasi momento.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=2.9cm, y=1.2cm]
+  \foreach \i/\nome/\col in {1/{Requirements\\Engineering}/ph1,
+                             2/{System\\Design}/ph2,
+                             3/{Software e\\UI Design}/ph3,
+                             4/{Implemen-\\tation}/ph4,
+                             5/{Testing}/ph5,
+                             6/{Operation e\\Maintenance}/ph6}{
+    \node[phase=\col, drop shadow] (f\i) at (\i-1,-\i+1) {\nome};
+  }
+  \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,5}{
+    \draw[flow] (f\i.east) -| (f\j.north);
+    \draw[feedback] (f\j.west) -| (f\i.south);
+  }
+  \draw[feedback, line width=1.1pt] (f6.south) -- ++(0,-0.45) -| node[pos=0.25, below, font=\scriptsize\bfseries, text=swred]{nuovi requisiti o errori scoperti in esercizio: si riparte dalla prima fase} ([xshift=-0.9cm]f1.south);
+\end{tikzpicture}
+\caption{Nella realtà ogni fase può rimandare a quelle precedenti (frecce tratteggiate).}
+\end{figure}
+
+Supponiamo di aver terminato il software e di accorgerci che una parte della specifica era sbagliata, oppure che il cliente vuole
+una nuova funzionalità. Nel modello a cascata bisogna \textbf{risalire} fino alla fase dei requisiti e poi ridiscendere tutte le fasi:
+aggiornare la specifica, rivedere l'architettura e il progetto, modificare il codice, ripetere i test, e riapprovare ogni documento.
+
+Il risultato è che \textbf{più tardi si scopre un errore, più costa correggerlo}: un requisito sbagliato corretto durante l'analisi
+richiede di modificare un paragrafo; lo stesso errore scoperto dopo il rilascio può richiedere di rifare progetto, codice e test.
+Questo andamento è stato quantificato da Barry Boehm: prendendo come unità il costo di correzione in fase di requisiti, l'ordine di
+grandezza cresce in modo esplosivo.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=12.5cm, height=6.4cm,
+  xmin=0.5, xmax=5.5, ymin=0, ymax=580,
+  xtick={1,...,5},
+  xticklabels={Requisiti, {System/Software Design}, Implementazione, Testing, {Esercizio e manutenzione}},
+  x tick label style={font=\scriptsize, align=center},
+  ytick={1,5,10,50,500},
+  yticklabels={1,5,10,50,500},
+  ylabel={Costo relativo di correzione}, ylabel style={font=\small},
+  xlabel={Fase in cui l'errore viene scoperto}, xlabel style={font=\small},
+  axis lines=left, axis line style={swgray, -{Stealth}},
+  ybar, bar width=26pt,
+  nodes near coords, point meta=explicit symbolic,
+  every node near coord/.append style={font=\scriptsize\bfseries, text=swred!80!black},
+]
+  \addplot[fill=swred!55, draw=swred] coordinates {(1,1) [1] (2,5) [5] (3,10) [10] (4,50) [50] (5,500) [500]};
+\end{axis}
+\end{tikzpicture}
+\caption{Costo relativo per correggere un errore, in funzione della fase in cui viene scoperto (B. W. Boehm, \textit{Software Engineering Economics}).}
+\end{figure}
+
+\warning{La criticità principale}{
+  Il difetto più grave del modello a cascata è la sua \textbf{scarsa flessibilità}: è costruito sull'ipotesi che i requisiti
+  siano stabili e noti fin dall'inizio, ipotesi che nel software è raramente vera.
+}
+
+% ============================================================
+\section{Pregi, difetti e quando usarlo}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.45}
+\begin{tabularx}{\textwidth}{L L}
+\toprule
+\textcolor{swgreen}{\textbf{\itick\ Pregi}} & \textcolor{swred}{\textbf{\icross\ Difetti}} \\
+\midrule
+Semplice da capire e da spiegare & Rigido: gestisce male i cambiamenti dei requisiti \\
+Facile da pianificare e da gestire: fasi, scadenze e responsabilità sono chiare & Il cliente vede il software funzionante solo alla fine \\
+Produce molta documentazione, utile per certificazioni e manutenzione & Gli errori nei requisiti emergono tardi, quando costano di più \\
+Adatto a contratti in cui tutto va definito a priori & Molto tempo speso a produrre e approvare documenti \\
+Il progresso è misurabile (fase completata = documento approvato) & I team di fasi diverse comunicano solo tramite documenti \\
+\bottomrule
+\end{tabularx}
+\caption{Pregi e difetti del modello a cascata.}
+\end{table}
+
+\subsection{Il problema dei team «a compartimenti stagni»}
+
+Il modello a cascata si sposa bene con un'organizzazione in cui esiste un \textbf{gruppo specializzato per ogni fase}: analisti,
+architetti, sviluppatori, tester. Sembra efficiente, ma introduce un problema serio: ogni gruppo riceve un documento dal gruppo
+precedente, lo interpreta e lo «passa oltre il muro» al successivo. Come nel gioco del \textbf{telefono senza fili},
+a ogni passaggio si perde o si distorce un po' di informazione.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \foreach \i/\team/\col/\msg in {0/{Analisti}/ph1/{«Il cliente vuole\\un'altalena per\\i bambini»},
+                                 1/{Architetti}/ph2/{«Serve una struttura\\con un sedile\\appeso»},
+                                 2/{Sviluppatori}/ph4/{«Sedile appeso a\\tre funi fissato\\a un albero»},
+                                 3/{Tester}/ph5/{«Il sedile regge\\100 kg: test\\superato!»}}{
+    \node[phase=\col, minimum width=3.0cm, minimum height=0.8cm, font=\small\bfseries] (t\i) at (\i*4.4,0) {\iuser\ \team};
+    \node[card=\col, text width=2.9cm, font=\scriptsize\itshape, below=0.3cm of t\i] (b\i) {\msg};
+  }
+  \foreach \i [evaluate=\i as \j using int(\i+1)] in {0,1,2}{
+    \fill[swgray!70] ($(t\i.east)!0.5!(t\j.west)+(-0.1,0.7)$) rectangle ($(t\i.east)!0.5!(t\j.west)+(0.1,-2.4)$);
+    \draw[-{Stealth}, line width=1pt, swgray] ($(t\i.east)+(0.05,0.2)$) to[out=60, in=120] node[above, font=\scriptsize]{\ifile} ($(t\j.west)+(-0.05,0.2)$);
+  }
+  \node[card=swred, font=\small, text width=15cm, align=center] at (6.6,-3.4) {Risultato: ogni team ha fatto bene il proprio lavoro rispetto al documento ricevuto,\\ma il prodotto finale può essere lontano da ciò che il cliente aveva in mente (e se ne accorgerà solo alla consegna).};
+\end{tikzpicture}
+\caption{Passaggi di consegne tra team specializzati: i «muri» tra le fasi filtrano l'informazione.}
+\end{figure}
+
+Per un'azienda di dimensioni medio-piccole, con requisiti che evolvono e la necessità di mostrare presto risultati al cliente,
+questa organizzazione è spesso inadatta: si preferiscono modelli \textbf{incrementali} o \textbf{agili}, con team che seguono
+il prodotto dall'inizio alla fine e ricevono feedback frequenti dal cliente.
+
+\subsection{Quando ha senso usarlo}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[card=swgreen, text width=7.9cm, align=left, minimum height=3.4cm] (si) {%
+    \textbf{\itick\ Adatto quando\ldots}\\[3pt]\small
+    \textbullet\ i requisiti sono \textbf{chiari, stabili} e ben compresi;\\
+    \textbullet\ il sistema è \textbf{critico per la sicurezza} e richiede documentazione e certificazioni;\\
+    \textbullet\ il progetto è grande e coinvolge \textbf{più aziende} che lavorano su parti diverse;\\
+    \textbullet\ il software è legato a \textbf{hardware} sviluppato in parallelo.};
+  \node[card=swred, text width=7.9cm, align=left, minimum height=3.4cm, right=0.4cm of si] (no) {%
+    \textbf{\icross\ Poco adatto quando\ldots}\\[3pt]\small
+    \textbullet\ i requisiti sono \textbf{incerti} o destinati a cambiare;\\
+    \textbullet\ il cliente vuole vedere presto \textbf{risultati concreti};\\
+    \textbullet\ il prodotto è \textbf{innovativo} e va scoperto strada facendo;\\
+    \textbullet\ il team è piccolo e deve reagire in fretta al mercato.};
+\end{tikzpicture}
+\end{center}
+
+% ============================================================
+\section{Esercizi}
+
+\begin{esercizio}{In quale fase?}
+Per ciascuna attività indica la fase del modello a cascata in cui viene svolta.
+\begin{enumerate}
+  \item Intervistare il personale della segreteria studenti per capire come gestisce le iscrizioni.
+  \item Decidere che il sistema sarà composto da un'app mobile, un server applicativo e un database.
+  \item Disegnare il diagramma delle classi del modulo \textit{Prenotazioni}.
+  \item Scrivere il codice del metodo \texttt{prenotaAppello()} con nomi espressivi.
+  \item Far provare il sistema a cinque studenti osservando dove si bloccano.
+  \item Aggiornare l'app perché la nuova versione di iOS non la fa più avviare.
+  \item Realizzare il wireframe ad alta fedeltà della schermata di login.
+  \item Scrivere la specifica «lo studente può cancellare una prenotazione fino a 48 ore prima dell'appello».
+\end{enumerate}
+
+\textbf{Soluzione.}
+(1) Requirements Engineering (raccolta tramite interviste).
+(2) System Design (decomposizione e allocazione su hardware).
+(3) Software e UI Design.
+(4) Implementation.
+(5) Testing (test di usabilità).
+(6) Operation e Maintenance (manutenzione adattiva).
+(7) Software e UI Design.
+(8) Requirements Engineering (specifica in linguaggio naturale).
+\end{esercizio}
+
+\begin{esercizio}{Verifica o validazione?}
+\begin{enumerate}
+  \item Un test automatico controlla che \texttt{calcolaMedia([18, 30])} restituisca \texttt{24}, come indicato nella specifica.
+  \item Il cliente prova il sistema per una settimana e conferma che risolve il problema del suo ufficio.
+  \item Un collega rilegge il codice per controllare che rispetti il documento di progetto.
+  \item Si scopre che gli utenti anziani, per cui l'app era pensata, non riescono a leggere i testi troppo piccoli.
+\end{enumerate}
+
+\textbf{Soluzione.}
+(1) Verifica: si confronta il comportamento con la specifica.
+(2) Validazione: si confronta il sistema con le esigenze reali.
+(3) Verifica (ispezione del codice rispetto alle specifiche di progetto).
+(4) Validazione: anche se la specifica fosse rispettata, il prodotto non soddisfa le esigenze dei suoi utenti.
+\end{esercizio}
+
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item Il \textbf{modello a cascata} è un processo \textbf{plan-driven} a fasi sequenziali: ogni fase produce un documento approvato e la successiva non inizia prima.
+  \item Le fasi sono: \textbf{Requirements Engineering} (cosa, non come), \textbf{System Design} (architettura di massima), \textbf{Software e UI Design} (dettaglio di moduli e interfaccia), \textbf{Implementation} (codice pulito), \textbf{Testing} (verifica e validazione), \textbf{Operation e Maintenance}.
+  \item \textbf{Verifica}: «abbiamo costruito il prodotto nel modo giusto?». \textbf{Validazione}: «abbiamo costruito il prodotto giusto?».
+  \item Il limite principale è la \textbf{rigidità}: tornare indietro è costoso, e il costo di correzione cresce di ordini di grandezza fase dopo fase.
+  \item È adatto a requisiti stabili e sistemi critici; per contesti dinamici si preferiscono modelli incrementali e agili.
+\end{itemize}
+}

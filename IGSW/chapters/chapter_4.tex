@@ -1,0 +1,709 @@
+\chapter{La qualità del software}
+
+Nei capitoli precedenti la parola \textit{qualità} è comparsa continuamente: l'Ingegneria del Software vuole produrre
+«software di alta qualità, nei tempi e nei costi previsti». Ma cosa significa, esattamente, che un software è di qualità?
+
+Sapere rispondere a questa domanda serve da due punti di vista opposti:
+\begin{itemize}
+  \item come \textbf{produttori}, per capire se ciò che stiamo costruendo è davvero di qualità (e per dimostrarlo al cliente);
+  \item come \textbf{committenti o finanziatori}, per capire se il software che stiamo pagando vale quello che costa.
+\end{itemize}
+
+Il problema è che la qualità è \textbf{difficile da quantificare}: non esiste un unico numero che la riassuma. Per questo servono
+più definizioni, organizzate in modelli condivisi.
+
+% ============================================================
+\section{Cos'è la qualità di un prodotto}
+
+La qualità di un prodotto è un concetto \textbf{complesso}. Proviamo a pensarci fuori dal software: cosa rende «di qualità»
+questi oggetti?
+
+\begin{center}
+\begin{tikzpicture}
+  \foreach \i/\titolo/\col/\items in {
+    0/{Automobile}/swblue/{Si guasta raramente?\\Consuma poco carburante?\\Costa poco mantenerla?},
+    1/{Orologio}/sworange/{È molto preciso?\\Resiste ad acqua e polvere?\\Resiste ai graffi?},
+    2/{Componenti meccanici}/swteal/{Hanno tolleranze ridotte?\\Rispettano le specifiche?\\Resistono all'usura?}}{
+    \node[chip=\col, minimum width=5.3cm, minimum height=0.75cm, font=\small\bfseries] (h\i) at (\i*5.8,0) {\titolo};
+    \node[card=\col, minimum width=5.3cm, text width=4.9cm, align=left, font=\small, below=0.1cm of h\i] {\items};
+  }
+\end{tikzpicture}
+\end{center}
+
+Già da questi esempi emergono due cose:
+\begin{itemize}
+  \item la qualità dipende dal \textbf{tipo di prodotto}: la precisione conta per un orologio, i consumi per un'auto;
+  \item la qualità dipende da \textbf{chi la giudica}: per il guidatore conta il consumo, per chi la ripara la facilità di manutenzione.
+\end{itemize}
+
+% ============================================================
+\section{Cos'è la qualità del software?}
+
+Con il software è ancora più difficile. Vediamo tre esempi famosi.
+
+\subsection{Esempio 1: efficiente, ma comprensibile?}
+
+Questa è l'implementazione della radice quadrata inversa ($1/\sqrt{x}$) contenuta nel videogioco \textit{Quake III Arena},
+attribuita a John Carmack. Il calcolo di $1/\sqrt{x}$ è usatissimo in computer grafica (ad esempio per calcolare angoli di
+incidenza e riflessione della luce).
+
+\Needspace{22\baselineskip}\begin{lstlisting}[language=C]
+float Q_rsqrt(float number) {
+    long i;
+    float x2, y;
+    const float threehalfs = 1.5F;
+
+    x2 = number * 0.5F;
+    y  = number;
+    i  = * ( long * ) &y;
+    i  = 0x5f3759df - ( i >> 1 );
+    y  = * ( float * ) &i;
+    y  = y * ( threehalfs - ( x2 * y * y ) );
+
+    return y;
+}
+\end{lstlisting}
+
+All'epoca questa approssimazione era circa \textbf{4 volte più veloce} di \texttt{(float)(1.0/sqrt(x))} e molti la considerano
+un esempio di programmazione geniale. Ma sapresti dire come funziona?
+
+\info{Come funziona (in breve) e perché è un problema}{
+  Il codice legge i bit del \texttt{float} come se fossero un intero, li combina con la «costante magica» \texttt{0x5f3759df}
+  per ottenere una prima stima del risultato, riconverte i bit in \texttt{float} e infine raffina la stima con un passo del
+  metodo di Newton. Il risultato è velocissimo, ma:
+  \begin{itemize}
+    \item è quasi \textbf{incomprensibile} senza una spiegazione matematica dettagliata (la costante non ha nome né commento);
+    \item è \textbf{fragile}: presuppone che \texttt{long} occupi 32 bit come il \texttt{float}; su molti sistemi a 64 bit
+          \texttt{long} occupa 64 bit e il codice non funziona più correttamente;
+    \item è difficile da \textbf{modificare} e da \textbf{testare} in modo affidabile.
+  \end{itemize}
+  Quindi: essere efficienti è sinonimo di alta qualità? \textbf{Dipende da quale qualità ci interessa.}
+}
+
+\subsection{Esempio 2 e 3: sicuro? facile da usare?}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[card=swred, text width=8cm, align=left, minimum height=3.6cm] (obsd) {%
+    \textbf{\large OpenBSD}\\[3pt]\small
+    Molti lo considerano un sistema operativo di altissima qualità: è molto stabile e difficile da violare.
+    Secondo il progetto stesso, nell'installazione predefinita sono state scoperte solo \textbf{due} vulnerabilità
+    sfruttabili da remoto in tutta la sua storia.\\[4pt]
+    \textit{Essere molto sicuri contro gli attacchi significa essere di alta qualità?}};
+  \node[card=swgreen, text width=8cm, align=left, minimum height=3.6cm, right=0.5cm of obsd] (vim) {%
+    \textbf{\large Vim}\\[3pt]\small
+    Molti lo considerano il miglior editor di testo in assoluto: gli utenti esperti lavorano a velocità impressionanti.
+    Altri lo trovano troppo difficile da imparare (è celebre la domanda «come si esce da Vim?») e quindi di bassa qualità.\\[4pt]
+    \textit{La qualità dipende da chi lo usa?}};
+\end{tikzpicture}
+\end{center}
+
+\subsection{La lezione: tanti punti di vista}
+
+Non esiste \textbf{una sola} qualità, ma molti approcci e punti di vista diversi. Ogni \textit{stakeholder} guarda aspetti differenti:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[circle, fill=primary!12, draw=primary, line width=1.2pt, minimum size=2.6cm, font=\large\bfseries, text=primary!80!black] (q) at (0,0) {Qualità};
+  \foreach \ang/\stake/\cosa/\col in {90/{Utente}/{«È facile da usare e veloce?»}/q4,
+                                  18/{Cliente}/{«Fa ciò che ho chiesto, al prezzo concordato?»}/q1,
+                                  -54/{Sviluppatore}/{«Il codice è leggibile e facile da modificare?»}/q7,
+                                  -126/{Amministratore di sistema}/{«Si installa e convive con gli altri sistemi?»}/q8,
+                                  162/{Società}/{«Protegge i dati? Può fare danni a persone?»}/q5}{
+    \node[card=\col, text width=3.7cm, font=\scriptsize, align=center] (n\ang) at (\ang:4.1) {\textbf{\iuser\ \stake}\\\cosa};
+    \draw[line width=1pt, \col] (q) -- (n\ang);
+  }
+\end{tikzpicture}
+\caption{La qualità del software vista da stakeholder diversi.}
+\end{figure}
+
+Serve quindi un \textbf{modello condiviso} che metta ordine tra tutti questi aspetti. È ciò che forniscono gli standard internazionali.
+
+% ============================================================
+\section{I modelli di qualità ISO/IEC}
+
+La famiglia di standard \textbf{ISO/IEC 25000} (detta \textit{SQuaRE}, \textit{Systems and software Quality Requirements and Evaluation})
+si occupa della qualità del software. Lo standard \hi{ISO/IEC 25002} descrive i \textbf{modelli di qualità} del software, che sono due:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[card=swblue, text width=7.6cm, align=left, minimum height=4.3cm] (pq) {%
+    \textbf{\large Product Quality Model}\\{\small\itshape Modello di qualità del prodotto}\\[4pt]\small
+    Composto da \textbf{9 caratteristiche}, suddivise in sotto-caratteristiche, che riguardano le \textbf{proprietà del prodotto}.
+    Fornisce un riferimento per \textbf{specificare, misurare e valutare} la qualità dei prodotti.\\[4pt]
+    \scriptsize\textit{Punto di vista}: il software in sé.};
+  \node[card=sworange, text width=7.6cm, align=left, minimum height=4.3cm, right=0.9cm of pq] (qu) {%
+    \textbf{\large Quality-in-use Model}\\{\small\itshape Modello di qualità in uso}\\[4pt]\small
+    Composto da \textbf{3 caratteristiche}, suddivise in sotto-caratteristiche, che descrivono l'effetto del prodotto sugli
+    \textbf{stakeholder} quando viene \textbf{usato in uno specifico contesto d'uso}.\\[4pt]
+    \scriptsize\textit{Punto di vista}: il software mentre qualcuno lo usa.};
+  \draw[-{Stealth[length=3mm]}, line width=1.5pt, swgray] (pq.east) -- node[above, font=\scriptsize, align=center]{influenza} (qu.west);
+\end{tikzpicture}
+\caption{I due modelli di qualità: il primo guarda il prodotto, il secondo il prodotto in uso.}
+\end{figure}
+
+Entrambi i modelli sono \textbf{gerarchici}: la qualità si scompone in \textbf{caratteristiche}, ogni caratteristica in
+\textbf{sotto-caratteristiche}, e queste ultime sono abbastanza concrete da poter essere \textbf{misurate}.
+
+\begin{center}
+\begin{tikzpicture}[font=\small]
+  \node[chip=primary, minimum width=3cm, minimum height=0.7cm] (a) at (0,0) {Qualità};
+  \node[chip=q2, minimum width=3cm, minimum height=0.7cm] (b) at (4.3,0) {Caratteristica};
+  \node[chip=q2!60!white, text=black, minimum width=3.4cm, minimum height=0.7cm] (c) at (8.9,0) {Sotto-caratteristica};
+  \node[chip=swgray, minimum width=3cm, minimum height=0.7cm] (d) at (13.4,0) {Misura};
+  \draw[flow] (a) -- (b); \draw[flow] (b) -- (c); \draw[flow] (c) -- (d);
+  \node[note, below=0.15cm of b, align=center] {es.\ Reliability};
+  \node[note, below=0.15cm of c, align=center] {es.\ Availability};
+  \node[note, below=0.15cm of d, align=center] {es.\ \% di tempo in cui\\il sistema è accessibile};
+\end{tikzpicture}
+\end{center}
+
+\warning{Nota sui nomi}{
+  Il modello del prodotto è descritto in dettaglio nello standard \textbf{ISO/IEC 25010}. Nella sua revisione più recente
+  alcune caratteristiche hanno nomi diversi da quelli usati a lezione: ad esempio \textit{Usability} è chiamata
+  \textit{Interaction Capability}. In questa dispensa manteniamo i nomi usati nelle slide del corso (in inglese, come nello standard).
+}
+
+% ============================================================
+\section{Il modello di qualità del prodotto}
+
+Il modello di qualità del prodotto è composto da nove caratteristiche:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[chip=primary, minimum width=6cm, minimum height=0.85cm, font=\small\bfseries] (root) at (0,0) {Software Product Quality};
+  \foreach \i/\nome/\col in {0/{Functional\\Suitability}/q1, 1/{Reliability}/q2, 2/{Performance\\Efficiency}/q3,
+                             3/{Usability}/q4, 4/{Security}/q5, 5/{Compat-\\ibility}/q6,
+                             6/{Maintain-\\ability}/q7, 7/{Flexibility}/q8, 8/{Safety}/q9}{
+    \node[chip=\col, minimum width=1.95cm, minimum height=1.0cm, font=\scriptsize\bfseries] (c\i) at ({(\i-4)*2.12},-1.9) {\nome};
+    \draw[line width=0.9pt, swgray] (root.south) -- ++(0,-0.4) -| (c\i.north);
+  }
+\end{tikzpicture}
+\caption{Le nove caratteristiche del modello di qualità del prodotto.}
+\end{figure}
+
+Vediamole una per una. Per ciascuna trovi una \textbf{domanda guida} che ne riassume il senso e una tabella delle sotto-caratteristiche
+con un esempio concreto.
+
+% ------------------------------------------------------------
+\Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Functional Suitability}
+
+\qualitybox{q1}{Functional Suitability}{Idoneità funzionale}{Fa quello che serve, e lo fa bene?}{
+  Grado in cui un componente o un sistema fornisce funzioni che soddisfano le esigenze \textbf{dichiarate e implicite}
+  quando viene usato nelle condizioni specificate.
+}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{P{3.6cm} L L}
+\rowcolor{q1!15}
+\textbf{Sotto-caratteristica} & \textbf{Significato} & \textbf{Esempio (app di home banking)} \\
+\textbf{Functional completeness}\newline\textit{\small completezza} & Le funzioni coprono \textbf{tutti} i compiti e gli obiettivi specificati. & L'app permette davvero di fare bonifici, vedere il saldo, pagare bollettini, come richiesto. \\
+\textbf{Functional correctness}\newline\textit{\small correttezza} & Il prodotto fornisce risultati \textbf{accurati}. & Il saldo mostrato è esatto al centesimo. \\
+\textbf{Functional appropriateness}\newline\textit{\small appropriatezza} & Le funzioni \textbf{facilitano} il raggiungimento dei compiti. & Per un bonifico a un contatto frequente bastano pochi passaggi, non dieci schermate. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ------------------------------------------------------------
+\Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Reliability}
+
+\qualitybox{q2}{Reliability}{Affidabilità}{Funziona senza interruzioni, anche quando qualcosa va storto?}{
+  Grado in cui il sistema svolge le sue funzioni nelle \textbf{condizioni specificate} per un \textbf{periodo di tempo specificato}.
+}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{P{3.6cm} L L}
+\rowcolor{q2!15}
+\textbf{Sotto-caratteristica} & \textbf{Significato} & \textbf{Esempio} \\
+\textbf{Faultlessness}\newline\textit{\small assenza di guasti} & Svolge le funzioni \textbf{senza guasti} durante il normale funzionamento. & L'app di messaggistica non si chiude inaspettatamente durante l'uso quotidiano. \\
+\textbf{Availability}\newline\textit{\small disponibilità} & È \textbf{operativo e accessibile} quando serve. & Il sito delle prenotazioni è raggiungibile anche alle 8:00 del giorno di apertura degli appelli. \\
+\textbf{Fault tolerance}\newline\textit{\small tolleranza ai guasti} & Funziona come previsto \textbf{nonostante} guasti hardware o software. & Se si rompe un disco del server, i dati restano accessibili grazie a una copia su un altro disco. \\
+\textbf{Recoverability}\newline\textit{\small recuperabilità} & Dopo un'interruzione o un guasto, riesce a \textbf{ripristinarsi}. & Dopo un crash, l'editor riapre il documento con le modifiche salvate automaticamente. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+La disponibilità si esprime spesso come \textbf{percentuale di tempo} in cui il sistema è accessibile. Le percentuali sembrano tutte
+altissime, ma la differenza in termini di interruzioni è enorme:
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{>{\bfseries}c c l}
+\toprule
+Disponibilità & Interruzione massima in un anno & In pratica\ldots \\
+\midrule
+99\%      & $\approx$ 3,65 giorni & Accettabile per un sito personale \\
+99,9\%    & $\approx$ 8 ore e 46 minuti & Tipico di molti servizi web \\
+99,99\%   & $\approx$ 52 minuti & Servizi importanti (e-commerce, banche) \\
+99,999\%  & $\approx$ 5 minuti & Sistemi critici (telecomunicazioni, emergenze) \\
+\bottomrule
+\end{tabular}
+\caption{Disponibilità e tempo di inattività annuo corrispondente (un anno = 8.760 ore).}
+\end{table}
+
+\info{{Guasto, errore, malfunzionamento}}{
+  Quando si parla di affidabilità è utile distinguere tre concetti che nel linguaggio comune si confondono:
+  \begin{center}
+  \begin{tikzpicture}
+    \node[card=q2, text width=3.9cm, font=\scriptsize, align=left, minimum height=1.9cm] (f) {\textbf{Difetto} (\textit{fault})\\Un errore nel codice o nel progetto.\\\textit{Es.}: un \texttt{<} scritto al posto di \texttt{<=}.};
+    \node[card=sworange, text width=3.9cm, font=\scriptsize, align=left, minimum height=1.9cm, right=1.7cm of f] (e) {\textbf{Errore} (\textit{error})\\Uno stato interno sbagliato causato dal difetto.\\\textit{Es.}: il ciclo salta l'ultimo elemento.};
+    \node[card=swred, text width=3.9cm, font=\scriptsize, align=left, minimum height=1.9cm, right=1.7cm of e] (m) {\textbf{Malfunzionamento} (\textit{failure})\\Comportamento sbagliato visibile all'esterno.\\\textit{Es.}: il totale della fattura è errato.};
+    \draw[flow] (f) -- node[above, font=\scriptsize, align=center]{se\\eseguito} (e);
+    \draw[flow] (e) -- node[above, font=\scriptsize, align=center]{se si\\propaga} (m);
+  \end{tikzpicture}
+  \end{center}
+  Un difetto non sempre produce un malfunzionamento (magari quel codice non viene mai eseguito). La \textit{fault tolerance}
+  consiste proprio nell'impedire che un difetto o un guasto diventi un malfunzionamento visibile.
+}
+
+% ------------------------------------------------------------
+\Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Performance Efficiency}
+
+\qualitybox{q3}{Performance Efficiency}{Efficienza prestazionale}{Risponde in fretta, senza sprecare risorse?}{
+  Grado in cui un prodotto svolge le sue funzioni entro i \textbf{vincoli di risorse} specificati ed è efficiente nell'uso delle
+  risorse (CPU, memoria, spazio di archiviazione, energia, \ldots).
+}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{P{3.6cm} L L}
+\rowcolor{q3!15}
+\textbf{Sotto-caratteristica} & \textbf{Significato} & \textbf{Esempio} \\
+\textbf{Time behaviour}\newline\textit{\small comportamento temporale} & Tempi di risposta e \textit{throughput} (lavoro svolto per unità di tempo) rispettano i requisiti. & La ricerca di un prodotto restituisce i risultati in meno di un secondo. \\
+\textbf{Resource utilization}\newline\textit{\small uso delle risorse} & Quantità e tipo di risorse usate rispettano i requisiti. & L'app di navigazione non scarica la batteria dello smartphone in un'ora. \\
+\textbf{Capacity}\newline\textit{\small capacità} & I \textbf{limiti massimi} di un parametro del sistema rispettano i requisiti. & Il sito di vendita dei biglietti regge 100.000 utenti connessi quando apre la vendita di un concerto. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ------------------------------------------------------------
+\Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Usability}
+
+\qualitybox{q4}{Usability}{Usabilità}{Gli utenti riescono a usarlo senza fatica e senza sbagliare?}{
+  Grado in cui un prodotto o sistema può essere \textbf{usato} dai suoi utenti, cioè quanto è facile interagire con esso.
+}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{P{3.6cm} L L}
+\rowcolor{q4!15}
+\textbf{Sotto-caratteristica} & \textbf{Significato} & \textbf{Esempio} \\
+\textbf{Recognizability}\newline\textit{\small riconoscibilità} & Gli utenti capiscono se il sistema è \textbf{adatto alle loro esigenze}. & La pagina iniziale spiega chiaramente a cosa serve il servizio. \\
+\textbf{Learnability}\newline\textit{\small apprendibilità} & Le funzioni si imparano a usare \textbf{in un tempo specificato}. & Un nuovo cassiere impara a usare il gestionale del negozio in una mattina. \\
+\textbf{Operability}\newline\textit{\small operabilità} & Il sistema è facile da \textbf{far funzionare e controllare}. & Le azioni più comuni sono raggiungibili con un clic. \\
+\textbf{User error protection}\newline\textit{\small protezione dagli errori} & Il sistema \textbf{previene gli errori} dell'utente. & Prima di eliminare un file chiede conferma; per le date propone un calendario invece di un campo di testo libero. \\
+\textbf{Inclusivity}\newline\textit{\small inclusività} & Può essere usato da persone con \textbf{background diversi} (età, abilità, culture, lingue, generi, situazioni economiche\ldots). & L'app è disponibile in più lingue, funziona con i lettori di schermo e resta usabile su smartphone economici. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+L'usabilità avrà un ruolo centrale in una parte importante del corso (Modulo B). Può fare la differenza tra \textbf{successo e fallimento}
+di un prodotto e, in alcuni contesti (dispositivi medici, cabine di pilotaggio, sale di controllo), perfino tra \textbf{la vita e la morte}.
+
+\info{Prova tu: User Inyerface}{
+  Il sito \url{https://userinyerface.com} è un «gioco» che simula un modulo di registrazione progettato apposta per essere
+  \textbf{il più frustrante possibile}: pulsanti ingannevoli, caselle pre-selezionate al contrario, testi di aiuto che ostacolano.
+  Provare a completarlo è il modo migliore per capire, per contrasto, cosa significa \textit{usabilità}.
+}
+
+% ------------------------------------------------------------
+\Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Security}
+
+\qualitybox{q5}{Security}{Sicurezza (protezione)}{I dati sono protetti da chi non dovrebbe accedervi o modificarli?}{
+  Grado in cui un sistema si \textbf{difende dagli attacchi} di soggetti malintenzionati e protegge informazioni e dati, applicando
+  adeguati meccanismi di \textbf{autorizzazione}.
+}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{P{3.6cm} L L}
+\rowcolor{q5!15}
+\textbf{Sotto-caratteristica} & \textbf{Significato} & \textbf{Esempio (fascicolo sanitario / banca)} \\
+\textbf{Confidentiality}\newline\textit{\small riservatezza} & I dati sono accessibili \textbf{solo a chi è autorizzato}. & Solo il paziente e i suoi medici possono leggere il referto. \\
+\textbf{Integrity}\newline\textit{\small integrità} & Stato e dati sono protetti da \textbf{modifiche o cancellazioni non autorizzate}. & Nessuno, tranne il medico che l'ha redatto, può alterare il referto. \\
+\textbf{Non-repudiation}\newline\textit{\small non ripudio} & Si può \textbf{dimostrare} che un'azione è avvenuta, così che non possa essere negata in seguito. & Un bonifico firmato digitalmente non può essere disconosciuto da chi l'ha disposto. \\
+\textbf{Accountability}\newline\textit{\small responsabilità} & Le azioni di un'entità sono \textbf{tracciabili} in modo univoco fino a essa. & Un registro (\textit{log}) memorizza quale operatore ha consultato quale cartella clinica. \\
+\textbf{Authenticity}\newline\textit{\small autenticità} & Si può \textbf{provare} che l'identità di un soggetto o di una risorsa è quella dichiarata. & L'accesso richiede credenziali più un codice inviato allo smartphone (autenticazione a due fattori). \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ------------------------------------------------------------
+\Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Compatibility}
+
+\qualitybox{q6}{Compatibility}{Compatibilità}{Convive e dialoga con gli altri sistemi?}{
+  Grado in cui un sistema può \textbf{scambiare informazioni} con altri prodotti, sistemi o componenti, e/o svolgere le proprie funzioni
+  \textbf{condividendo lo stesso ambiente} e le stesse risorse con altri sistemi.
+}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{P{3.6cm} L L}
+\rowcolor{q6!15}
+\textbf{Sotto-caratteristica} & \textbf{Significato} & \textbf{Esempio} \\
+\textbf{Co-existence}\newline\textit{\small coesistenza} & Funziona in modo efficiente condividendo ambiente e risorse con altri prodotti, \textbf{senza danneggiarli}. & L'antivirus non rallenta al punto da rendere inutilizzabili le altre applicazioni. \\
+\textbf{Interoperability}\newline\textit{\small interoperabilità} & Può \textbf{scambiare informazioni} con altri sistemi e \textbf{usare} quelle ricevute. & Gli eventi dell'app universitaria si esportano in un formato standard e compaiono nel calendario dello smartphone. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ------------------------------------------------------------
+\Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Maintainability}
+
+\qualitybox{q7}{Maintainability}{Manutenibilità}{Si può modificare facilmente, senza rompere nulla?}{
+  Grado di efficacia ed efficienza con cui un prodotto può essere \textbf{modificato} per migliorarlo, correggerlo o adattarlo
+  a cambiamenti dell'ambiente e dei requisiti.
+}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{P{3.6cm} L L}
+\rowcolor{q7!15}
+\textbf{Sotto-caratteristica} & \textbf{Significato} & \textbf{Esempio} \\
+\textbf{Modularity}\newline\textit{\small modularità} & Il software è composto da componenti distinti: una modifica a uno ha \textbf{impatto minimo} sugli altri. & Cambiare il fornitore dei pagamenti richiede di modificare solo il modulo \textit{Pagamenti}. \\
+\textbf{Reusability}\newline\textit{\small riusabilità} & Un modulo può essere usato come risorsa in \textbf{più sistemi}. & Il modulo di autenticazione è usato sia dal sito sia dall'app mobile. \\
+\textbf{Modifiability}\newline\textit{\small modificabilità} & Può essere modificato senza introdurre difetti o degradare la qualità. & Aggiungere l'IVA al calcolo del carrello richiede di toccare un solo metodo. \\
+\textbf{Testability}\newline\textit{\small testabilità} & Si possono stabilire criteri di test ed \textbf{eseguire test} per verificarli. & Ogni classe può essere testata in isolamento con test automatici. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\info{Il collegamento con i costi}{
+  Ricordando che la manutenzione rappresenta circa \textbf{due terzi} del costo di un software, la manutenibilità è una delle
+  caratteristiche con il maggiore impatto economico. È esattamente ciò che si ottiene con una buona progettazione modulare
+  (System Design) e con codice pulito (Implementation).
+}
+
+% ------------------------------------------------------------
+\Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Flexibility}
+
+\qualitybox{q8}{Flexibility}{Flessibilità}{Si adatta a nuovi ambienti, carichi e contesti?}{
+  Grado in cui un prodotto può essere \textbf{adattato} a cambiamenti nei requisiti, nei contesti d'uso o nell'ambiente operativo.
+}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{P{3.6cm} L L}
+\rowcolor{q8!15}
+\textbf{Sotto-caratteristica} & \textbf{Significato} & \textbf{Esempio} \\
+\textbf{Adaptability}\newline\textit{\small adattabilità} & Può essere adattato o trasferito a \textbf{hardware, software o ambienti} diversi. & L'applicazione desktop funziona su Windows, macOS e Linux. \\
+\textbf{Scalability}\newline\textit{\small scalabilità} & Gestisce carichi di lavoro \textbf{crescenti o decrescenti}, adattando la propria capacità. & Durante il Black Friday l'e-commerce aggiunge server automaticamente, e li rilascia a fine giornata. \\
+\textbf{Installability}\newline\textit{\small installabilità} & Può essere \textbf{installato e disinstallato} con successo, in modo efficace ed efficiente. & L'installazione richiede pochi clic e la disinstallazione non lascia file sparsi nel sistema. \\
+\textbf{Replaceability}\newline\textit{\small sostituibilità} & Può \textbf{sostituire} un altro prodotto con lo stesso scopo nello stesso ambiente. & Il nuovo gestionale importa i dati del vecchio, così l'azienda può passare da uno all'altro. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ------------------------------------------------------------
+\Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Safety}
+
+\qualitybox{q9}{Safety}{Sicurezza (incolumità)}{Può fare del male a persone, beni o ambiente?}{
+  Grado in cui un prodotto \textbf{evita} di trovarsi in uno stato in cui la vita umana, la salute, i beni o l'ambiente sono messi in pericolo.
+}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{P{3.6cm} L L}
+\rowcolor{q9!15}
+\textbf{Sotto-caratteristica} & \textbf{Significato} & \textbf{Esempio} \\
+\textbf{Fail safe}\newline\textit{\small sicurezza in caso di guasto} & In caso di guasto si porta \textbf{automaticamente} in una modalità operativa sicura. & Se il treno perde il segnale di controllo, frena automaticamente. \\
+\textbf{Risk identification}\newline\textit{\small identificazione dei rischi} & Riconosce una sequenza di eventi o operazioni che può portare a un \textbf{rischio inaccettabile}. & Il microinfusore di insulina rileva che la dose richiesta è anomala rispetto allo storico. \\
+\textbf{Hazard warning}\newline\textit{\small avviso di pericolo} & Avvisa dei rischi \textbf{in tempo utile} per poter reagire. & L'auto segnala il rischio di collisione con qualche secondo di anticipo. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\warning{Security e Safety: in italiano sono entrambe «sicurezza»}{
+  In italiano usiamo una sola parola per due concetti ben distinti, e confonderli è un errore frequente:
+  \begin{center}
+  \begin{tikzpicture}
+    % Security
+    \node[chip=q5, minimum width=7.4cm, minimum height=0.7cm, font=\small\bfseries] (sh) at (0,0) {SECURITY: proteggere il sistema dal mondo};
+    \node[card=swred, minimum width=1.9cm, font=\scriptsize] (att) at (-2.6,-1.35) {\iuser\\attaccante};
+    \node[card=q5, minimum width=2.1cm, minimum height=1.1cm, font=\scriptsize\bfseries] (sys1) at (2.4,-1.35) {\icpu\\Sistema e dati};
+    \draw[-{Stealth[length=3mm]}, line width=1.4pt, swred, decorate, decoration={zigzag, amplitude=1.5pt, segment length=6pt, post length=3mm}] (att) -- node[above=2pt, font=\tiny, text=black]{attacco} (sys1);
+    % Safety
+    \node[chip=q9, minimum width=7.4cm, minimum height=0.7cm, font=\small\bfseries] (sa) at (8.3,0) {SAFETY: proteggere il mondo dal sistema};
+    \node[card=q9, minimum width=2.1cm, minimum height=1.1cm, font=\scriptsize\bfseries] (sys2) at (5.9,-1.35) {\icog\\Sistema};
+    \node[card=swgreen, minimum width=2.4cm, font=\scriptsize] (ppl) at (10.8,-1.35) {\iuser\ \iuser\\persone, ambiente};
+    \draw[-{Stealth[length=3mm]}, line width=1.4pt, q9, decorate, decoration={zigzag, amplitude=1.5pt, segment length=6pt, post length=3mm}] (sys2) -- node[above=2pt, font=\tiny, text=black]{danno} (ppl);
+  \end{tikzpicture}
+  \end{center}
+  \textbf{Security} riguarda attacchi \textit{intenzionali} contro il sistema e i suoi dati (furto di password, accessi non autorizzati).
+  \textbf{Safety} riguarda i \textit{danni} che il sistema può causare a persone, beni o ambiente, anche senza alcun attaccante
+  (un difetto nel software di frenata di un'auto).
+}
+
+% ------------------------------------------------------------
+\subsection{Il quadro completo}
+
+\begin{tcbraster}[raster columns=3, raster equal height=rows, raster column skip=3mm, raster row skip=3mm]
+  \begin{tcolorbox}[colback=q1!5, colframe=q1, title=\textbf{Functional Suitability}, fontupper=\small]
+    \textbullet\ Functional Completeness\\\textbullet\ Functional Correctness\\\textbullet\ Functional Appropriateness
+  \end{tcolorbox}
+  \begin{tcolorbox}[colback=q2!5, colframe=q2, title=\textbf{Reliability}, fontupper=\small]
+    \textbullet\ Faultlessness\\\textbullet\ Availability\\\textbullet\ Fault Tolerance\\\textbullet\ Recoverability
+  \end{tcolorbox}
+  \begin{tcolorbox}[colback=q3!5, colframe=q3, title=\textbf{Performance Efficiency}, fontupper=\small]
+    \textbullet\ Time Behaviour\\\textbullet\ Resource Utilization\\\textbullet\ Capacity
+  \end{tcolorbox}
+  \begin{tcolorbox}[colback=q4!5, colframe=q4, title=\textbf{Usability}, fontupper=\small]
+    \textbullet\ Recognizability\\\textbullet\ Learnability\\\textbullet\ Operability\\\textbullet\ User Error Protection\\\textbullet\ Inclusivity
+  \end{tcolorbox}
+  \begin{tcolorbox}[colback=q5!5, colframe=q5, title=\textbf{Security}, fontupper=\small]
+    \textbullet\ Confidentiality\\\textbullet\ Integrity\\\textbullet\ Non-repudiation\\\textbullet\ Accountability\\\textbullet\ Authenticity
+  \end{tcolorbox}
+  \begin{tcolorbox}[colback=q6!5, colframe=q6, title=\textbf{Compatibility}, fontupper=\small]
+    \textbullet\ Co-existence\\\textbullet\ Interoperability
+  \end{tcolorbox}
+  \begin{tcolorbox}[colback=q7!5, colframe=q7, title=\textbf{Maintainability}, fontupper=\small]
+    \textbullet\ Modularity\\\textbullet\ Reusability\\\textbullet\ Modifiability\\\textbullet\ Testability
+  \end{tcolorbox}
+  \begin{tcolorbox}[colback=q8!5, colframe=q8, title=\textbf{Flexibility}, fontupper=\small]
+    \textbullet\ Adaptability\\\textbullet\ Scalability\\\textbullet\ Installability\\\textbullet\ Replaceability
+  \end{tcolorbox}
+  \begin{tcolorbox}[colback=q9!5, colframe=q9, title=\textbf{Safety}, fontupper=\small]
+    \textbullet\ Fail Safe\\\textbullet\ Risk Identification\\\textbullet\ Hazard Warning
+  \end{tcolorbox}
+\end{tcbraster}
+
+% ============================================================
+\section{Qualità, modularità e lavoro di squadra}
+
+C'è un aspetto della qualità che si vede solo quando si passa dal «programma» al «prodotto software»: un software di qualità
+deve essere \textbf{flessibile}, e per essere flessibile deve essere \textbf{modulare}. È il vecchio principio del
+\hi{divide et impera}: dividere un problema grande in parti più piccole e gestibili.
+
+La modularità non serve solo alla manutenzione: è ciò che rende possibile il \textbf{lavoro in gruppo}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[card=swred, text width=6.4cm, minimum height=3.4cm, align=left] (mono) {%
+    \textbf{Software monolitico}\\[4pt]\small
+    Tutto è intrecciato: chi tocca una parte rischia di rompere le altre.\\[3pt]
+    \textbullet\ difficile dividere il lavoro;\\
+    \textbullet\ tutti devono conoscere tutto;\\
+    \textbullet\ le modifiche si bloccano a vicenda.};
+  \node[card=swgreen, text width=6.4cm, minimum height=3.4cm, align=left, right=3.2cm of mono] (modu) {%
+    \textbf{Software modulare}\\[4pt]\small
+    Il sistema è diviso in parti con responsabilità chiare.\\[3pt]
+    \textbullet\ il lavoro si può \textbf{parallelizzare};\\
+    \textbullet\ ogni gruppo lavora sul proprio modulo;\\
+    \textbullet\ si sfruttano \textbf{competenze diverse}.};
+  \draw[-{Stealth[length=3mm]}, line width=1.5pt, swgray] (mono) -- node[above, font=\scriptsize\bfseries, align=center]{divide\\et impera} (modu);
+\end{tikzpicture}
+\end{figure}
+
+\begin{esempio}{Venti persone su un progetto}
+Immaginiamo un progetto da realizzare con venti sviluppatori. Se il software è un unico blocco indistinto, venti persone
+si ostacolano a vicenda: modificano gli stessi file, si sovrappongono, passano il tempo a coordinarsi.
+
+Se invece il sistema è ben diviso in moduli, il lavoro si può distribuire e svolgere \textbf{in parallelo}: chi si occupa
+dell'interfaccia grafica lavora sulle schermate, chi è esperto di basi di dati lavora sulla persistenza, chi conosce il dominio
+implementa la logica applicativa. Ognuno lavora sul pezzo più adatto alle proprie competenze, e i moduli si integrano
+attraverso interfacce concordate.
+\end{esempio}
+
+\info{Il legame con le caratteristiche ISO}{
+  Questa proprietà non è un'opinione, ma è codificata nel modello di qualità: è la sotto-caratteristica \textbf{Modularity}
+  (dentro \textit{Maintainability}), che a sua volta abilita \textbf{Reusability}, \textbf{Modifiability} e \textbf{Testability}.
+  Ed è decisa molto presto, nella fase di \textbf{System Design}.
+}
+
+% ============================================================
+\section{Il modello di qualità in uso}
+
+Il secondo modello cambia prospettiva: non guarda il software «sul banco di prova», ma il software \textbf{mentre viene usato}.
+
+\dfn{Qualità in uso}{
+  Grado in cui un prodotto o sistema può essere usato da \textbf{specifici utenti} per soddisfare le loro esigenze e raggiungere
+  \textbf{specifici obiettivi} con \textbf{efficacia}, \textbf{efficienza}, \textbf{assenza di rischi} e \textbf{soddisfazione},
+  in \textbf{specifici contesti d'uso}.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[chip=primary, minimum width=5cm, minimum height=0.85cm, font=\small\bfseries] (root) at (0,0) {Quality-in-use};
+  \foreach \k/\nome/\col/\subs/\x in {
+      0/Usability/q4/{Effectiveness,Efficiency,Satisfaction}/-5.6,
+      1/Safety/q9/{Commercial Damage,Operator Health and Safety,Public Health and Safety,Environmental Harm}/0,
+      2/Flexibility/q8/{Context Conformity,Context Extensibility,Accessibility}/5.6}{
+    \node[chip=\col, minimum width=4.2cm, minimum height=0.8cm, font=\small\bfseries] (c\k) at (\x,-1.6) {\nome};
+    \draw[line width=0.9pt, swgray] (root.south) -- ++(0,-0.35) -| (c\k.north);
+    \foreach \s [count=\n] in \subs {
+      \node[subchip=\col, minimum width=3.6cm, minimum height=0.62cm, anchor=west] (s\k\n) at (\x-1.55,-1.6-\n*0.9) {\s};
+      \draw[swgray, line width=0.7pt] (\x-1.85,-2.0) |- (s\k\n.west);
+    }
+  }
+\end{tikzpicture}
+\caption{Il modello di qualità in uso: 3 caratteristiche e le loro sotto-caratteristiche.}
+\end{figure}
+
+\subsection{Usability (in uso)}
+
+Misura quanto gli utenti riescono a raggiungere i propri obiettivi usando il sistema in modo efficiente e soddisfacente.
+\begin{itemize}
+  \item \textbf{Effectiveness} (efficacia): quanto bene gli utenti \textbf{completano} i compiti che volevano svolgere.
+  \item \textbf{Efficiency} (efficienza): quante \textbf{risorse} (tempo, fatica) servono per completarli.
+  \item \textbf{Satisfaction} (soddisfazione): il \textbf{comfort} e l'esperienza positiva dell'utente durante l'uso.
+\end{itemize}
+
+\warning{Usability compare due volte: perché?}{
+  \begin{itemize}
+    \item Nel \textbf{modello del prodotto}, l'usabilità è misurata sulle \textbf{caratteristiche del prodotto}
+          (l'interfaccia protegge dagli errori? è coerente? è accessibile?).
+    \item Nel \textbf{modello in uso}, l'usabilità è misurata dal \textbf{punto di vista degli utenti} che lo usano davvero
+          (sono riusciti a fare quello che volevano? in quanto tempo? erano soddisfatti?).
+  \end{itemize}
+  Esempio: un navigatore può avere pulsanti grandi e menu ben organizzati (usabilità del prodotto), ma se un automobilista
+  di notte, sotto la pioggia, non riesce a impostare la destinazione, l'usabilità in uso in quel contesto è scarsa.
+}
+
+\subsection{Safety (in uso)}
+
+Valuta la capacità del sistema di \textbf{prevenire danni} a persone, ambiente e interessi commerciali durante l'uso.
+\begin{itemize}
+  \item \textbf{Commercial damage}: quanto il sistema evita perdite economiche o danni all'attività (es.\ un errore nei prezzi dell'e-commerce).
+  \item \textbf{Operator health and safety}: quanto protegge \textbf{chi lo usa} da rischi per la salute o la sicurezza.
+  \item \textbf{Public health and safety}: quanto evita rischi o danni per il \textbf{pubblico} in generale.
+  \item \textbf{Environmental harm}: quanto evita o riduce gli impatti negativi sull'\textbf{ambiente}.
+\end{itemize}
+
+\subsection{Flexibility (in uso)}
+
+Indica la capacità del sistema di adattarsi e operare efficacemente in \textbf{contesti o ambienti diversi}.
+\begin{itemize}
+  \item \textbf{Context conformity}: capacità di adattarsi ai requisiti e ai vincoli specifici di contesti diversi.
+  \item \textbf{Context extensibility}: potenzialità di estendersi o adattarsi a contesti nuovi o in cambiamento senza modifiche significative.
+  \item \textbf{Accessibility}: quanto efficacemente il sistema può essere usato da \textbf{tutte le persone}, incluse quelle con disabilità, in ambienti diversi.
+\end{itemize}
+
+\subsection{Il legame tra i due modelli}
+
+I due modelli non sono indipendenti: le proprietà del prodotto \textbf{influenzano} la qualità percepita durante l'uso,
+ma quest'ultima dipende anche dal \textbf{contesto} (chi usa il sistema, per fare cosa, in quale ambiente).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[card=swblue, text width=4.8cm, minimum height=2.3cm, align=center] (p) {\textbf{Qualità del prodotto}\\[3pt]\small proprietà del software\\(misurabili sul prodotto)};
+  \node[card=swgray, text width=3.6cm, minimum height=2.3cm, align=center, right=1.4cm of p] (ctx) {\textbf{Contesto d'uso}\\[3pt]\small utenti, obiettivi,\\ambiente fisico e sociale};
+  \node[card=sworange, text width=4.8cm, minimum height=2.3cm, align=center, right=1.4cm of ctx] (u) {\textbf{Qualità in uso}\\[3pt]\small effetti su chi usa il sistema\\(efficacia, rischi, soddisfazione)};
+  \draw[-{Stealth[length=3mm]}, line width=1.5pt, swblue] (p.north) to[out=30, in=150] node[above, font=\scriptsize]{influenza} (u.north);
+  \draw[flow] (ctx) -- (u);
+  \draw[-{Stealth[length=2.5mm]}, line width=1pt, dashed, swgray] (u.south) to[out=-150, in=-30] node[below, font=\scriptsize]{il feedback degli utenti guida i miglioramenti del prodotto} (p.south);
+\end{tikzpicture}
+\caption{Qualità del prodotto e qualità in uso: la seconda dipende dalla prima e dal contesto.}
+\end{figure}
+
+% ============================================================
+\section{Qualità e compromessi}
+
+Un'ultima osservazione fondamentale: le caratteristiche di qualità \textbf{non si possono massimizzare tutte insieme}.
+Spesso migliorarne una ne peggiora un'altra.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.45}
+\begin{tabularx}{\textwidth}{P{2.9cm} >{\centering\arraybackslash}p{0.6cm} P{2.9cm} L}
+\toprule
+\multicolumn{3}{c}{\textbf{Caratteristiche in conflitto}} & \textbf{Perché} \\
+\midrule
+\textcolor{q5}{\textbf{Security}} & $\leftrightarrow$ & \textcolor{q4}{\textbf{Usability}} & Password complesse e autenticazione a due fattori proteggono meglio, ma rendono l'accesso più scomodo. \\
+\textcolor{q3}{\textbf{Performance}} & $\leftrightarrow$ & \textcolor{q7}{\textbf{Maintainability}} & Il codice di Quake III è velocissimo ma quasi impossibile da capire e modificare. \\
+\textcolor{q9}{\textbf{Safety}} & $\leftrightarrow$ & \textcolor{q2}{\textbf{Reliability}} (availability) & Un treno che frena a ogni anomalia è sicuro, ma il servizio si interrompe spesso. \\
+\textcolor{q8}{\textbf{Flexibility}} & $\leftrightarrow$ & \textcolor{q3}{\textbf{Performance}} & Un'applicazione che gira su ogni piattaforma rinuncia spesso alle ottimizzazioni specifiche di ciascuna. \\
+\bottomrule
+\end{tabularx}
+\caption{Alcuni compromessi tipici tra caratteristiche di qualità.}
+\end{table}
+
+\info{Il ruolo dell'ingegnere}{
+  Per questo i requisiti di qualità vanno \textbf{esplicitati e ordinati per priorità} già in fase di Requirements Engineering:
+  per il software di un pacemaker la \textit{safety} viene prima di tutto, per un videogioco contano soprattutto prestazioni e soddisfazione.
+  Trovare il giusto equilibrio, dati il problema e i vincoli, è esattamente il lavoro dell'ingegnere del software.
+}
+
+% ============================================================
+\section{Esercizi}
+
+\begin{esercizio}{Quale caratteristica di qualità?}
+Per ciascun requisito indica la caratteristica e la sotto-caratteristica del modello di qualità del prodotto a cui si riferisce.
+\begin{enumerate}
+  \item «Il portale deve essere raggiungibile almeno il 99,9\% del tempo.»
+  \item «La pagina dei risultati di ricerca deve essere visualizzata entro 2 secondi.»
+  \item «Solo il medico curante può leggere la cartella clinica del paziente.»
+  \item «In caso di perdita del segnale, il drone deve atterrare automaticamente.»
+  \item «Un nuovo utente deve riuscire a effettuare un ordine senza consultare il manuale entro 10 minuti dal primo accesso.»
+  \item «L'app deve importare i contatti esportati da altre applicazioni in formato standard.»
+  \item «Il sistema deve reggere un traffico dieci volte superiore durante i saldi, riducendo le risorse quando il picco finisce.»
+  \item «Ogni operazione sul conto deve essere registrata insieme all'identità dell'operatore che l'ha eseguita.»
+  \item «Il modulo di spedizione deve poter essere sostituito senza modificare gli altri moduli.»
+\end{enumerate}
+
+\Needspace{14\baselineskip}
+\textbf{Soluzione.}
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{c l l}
+\toprule
+\textbf{n.} & \textbf{Caratteristica} & \textbf{Sotto-caratteristica} \\
+\midrule
+1 & Reliability & Availability \\
+2 & Performance Efficiency & Time behaviour \\
+3 & Security & Confidentiality \\
+4 & Safety & Fail safe \\
+5 & Usability & Learnability \\
+6 & Compatibility & Interoperability \\
+7 & Flexibility & Scalability \\
+8 & Security & Accountability \\
+9 & Maintainability & Modularity \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{esercizio}
+
+\begin{esercizio}{Security o Safety?}
+\begin{enumerate}
+  \item Un malintenzionato prova migliaia di password per entrare nell'account di un utente.
+  \item Il software di un robot industriale lo ferma se un operatore entra nella sua area di lavoro.
+  \item I voti degli studenti non devono poter essere modificati da chi non è docente.
+  \item Il sistema di controllo di una diga deve avvisare in tempo in caso di livello dell'acqua pericoloso.
+\end{enumerate}
+
+\textbf{Soluzione.}
+(1) Security (authenticity: il sistema deve verificare l'identità).
+(2) Safety (fail safe / operator health and safety).
+(3) Security (integrity).
+(4) Safety (hazard warning).
+\end{esercizio}
+
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item La qualità del software \textbf{non è una sola}: dipende dal prodotto e dal punto di vista degli stakeholder, ed è difficile da quantificare.
+  \item Gli standard \textbf{ISO/IEC 25000} (SQuaRE) definiscono due modelli gerarchici: \textbf{qualità del prodotto} e \textbf{qualità in uso}.
+  \item Il modello del prodotto ha \textbf{9 caratteristiche}: Functional Suitability, Reliability, Performance Efficiency, Usability,
+        Security, Compatibility, Maintainability, Flexibility, Safety.
+  \item Il modello in uso ha \textbf{3 caratteristiche}: Usability (efficacia, efficienza, soddisfazione), Safety e Flexibility.
+  \item \textbf{Security} protegge il sistema dagli attacchi; \textbf{Safety} protegge persone e ambiente dal sistema.
+  \item La \textbf{modularità} (divide et impera) è ciò che rende il software flessibile e permette di dividere il lavoro in un team.
+  \item Le caratteristiche sono spesso in \textbf{conflitto}: vanno prioritizzate in base al contesto.
+\end{itemize}
+}
