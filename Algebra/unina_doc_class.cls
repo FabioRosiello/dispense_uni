@@ -1299,6 +1299,13 @@
 \newtcbtheorem[use counter from=Definizione]{Corollario}{Corollario}{
   unina enunciato={seagreen!70!black}{seagreen!5}{seagreen!65!black}}{cor}
 
+% Assiomi: box viola (colore accent)
+\newtcbtheorem[use counter from=Definizione]{Assioma}{Assioma}{
+  unina enunciato={accent!80!black}{accent!4}{accent!75!black}}{ass}
+% \ass[etichetta]{Titolo}{Contenuto}
+\NewDocumentCommand{\ass}{O{} m +m}{%
+  \begin{concetto}\begin{Assioma}{#2}{#1}#3\end{Assioma}\end{concetto}}
+
 % \dfn[etichetta]{Titolo}{Contenuto}
 \NewDocumentCommand{\dfn}{O{} m +m}{%
   \begin{concetto}\begin{Definizione}{#2}{#1}#3\end{Definizione}\end{concetto}}
