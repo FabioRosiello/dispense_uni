@@ -1290,8 +1290,9 @@
   unina enunciato={red!80!black}{red!5}{red!75!black}}{def}
 
 % Teoremi, proposizioni, lemmi, corollari: box blu (colore primario)
+% Teoremi: box arancione, per distinguerli da proposizioni e lemmi
 \newtcbtheorem[use counter from=Definizione]{Teorema}{Teorema}{
-  unina enunciato={primary!80!black}{primary!5}{primary!75!black}}{teo}
+  unina enunciato={orange!90!black}{orange!6}{orange!95!white}}{teo}
 \newtcbtheorem[use counter from=Definizione]{Proposizione}{Proposizione}{
   unina enunciato={primary!80!black}{primary!5}{primary!75!black}}{prop}
 \newtcbtheorem[use counter from=Definizione]{Lemma}{Lemma}{
@@ -1355,6 +1356,19 @@
   \ifhmode\unskip\else\leavevmode\fi\nobreak\hfil\penalty50\hskip1em\null\nobreak\hfill
   {\color{primary!80!black}$\blacksquare$}\parfillskip=0pt\finalhyphendemerits=0\par
   \end{dimostrazionebox}%
+}
+
+% ── Ambiente CASO: una direzione / un caso / un punto di una dimostrazione ──
+%   \begin{caso}{$(\Rightarrow)$ Se ... allora ...} ... \end{caso}
+\newtcolorbox{caso}[1]{
+  enhanced,
+  colback=primary!3!white, colframe=primary!30!white,
+  boxrule=0.4pt, arc=1mm, outer arc=1mm,
+  left=2.5mm, right=2mm, top=1mm, bottom=1mm,
+  before skip=2mm, after skip=2mm,
+  title={#1}, fonttitle=\small\bfseries, coltitle=primary!85!black,
+  colbacktitle=primary!12!white, toptitle=0.6mm, bottomtitle=0.6mm,
+  titlerule=0.4pt,
 }
 
 % ── Tavole di verità ──────────────────────────────────────────
