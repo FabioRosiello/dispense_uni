@@ -1,0 +1,601 @@
+\chapter{Testing di applicazioni web}
+
+Abbiamo imparato a progettare e realizzare applicazioni web moderne e sicure.
+Manca un ultimo tassello prima di poter consegnare applicazioni di
+\textbf{qualità}: il testing. Testare è fondamentale per intercettare quanti più
+difetti possibile \textbf{prima} che raggiungano la produzione, dove possono
+costare molto cari.
+
+\section{Richiami}
+
+\dfn{Verifica del software}{
+  L'insieme delle pratiche volte ad accertare che un software soddisfi una
+  specifica. Si distingue in \term{verifica dinamica}, che comporta
+  l'esecuzione del programma (il \textbf{testing}), e \term{verifica statica},
+  che non la comporta (revisione del codice, analisi statica, verifica
+  automatica).}
+
+Un \term{test} è una sequenza di azioni progettate per valutare un particolare
+aspetto o funzionalità di un software; il software sotto test si indica
+comunemente con \term{SUT} (\textit{Software Under Test}). Un test consiste
+generalmente in tre fasi:
+
+\begin{itemize}
+  \item \term{Arrange}: assicurarsi che le precondizioni richieste siano
+        soddisfatte;
+  \item \term{Act}: eseguire una o più azioni;
+  \item \term{Assert}: verificare che il SUT si sia comportato come previsto.
+\end{itemize}
+
+\subsection{I livelli di testing}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.2cm}}>{\raggedright\arraybackslash}p{8.6cm}@{}}
+  \textbf{Livello} & \textbf{Bersaglio} \\
+  \term{Unit testing}        & una singola unità (una classe, un metodo) \\
+  \term{Integration testing} & la collaborazione fra unità diverse \\
+  \term{System testing}      & il sistema nel suo complesso, rispetto alla
+                               specifica \\
+  \term{End-to-End testing}  & il sistema dal punto di vista dei suoi utenti
+                               finali \\
+\end{tabular}
+\end{center}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      lvl/.style={line width=0.8pt, align=center}]
+
+    \fill[red-gradient-1!50!white, draw=red-gradient-6, line width=0.8pt]
+      (-1.0,3.2) -- (1.0,3.2) -- (0.7,2.4) -- (-0.7,2.4) -- cycle;
+    \node at (0,2.85) {Manuale};
+
+    \fill[orange-gradient-1!50!white, draw=orange-gradient-6, line width=0.8pt]
+      (-1.6,2.35) -- (1.6,2.35) -- (1.3,1.55) -- (-1.3,1.55) -- cycle;
+    \node at (0,1.98) {E2E};
+
+    \fill[yellow-gradient-2!50!white, draw=yellow-gradient-6, line width=0.8pt]
+      (-2.4,1.5) -- (2.4,1.5) -- (2.1,0.7) -- (-2.1,0.7) -- cycle;
+    \node at (0,1.13) {Test di sistema};
+
+    \fill[azure-gradient-1!60!white, draw=azure-gradient-6, line width=0.8pt]
+      (-3.3,0.65) -- (3.3,0.65) -- (3.0,-0.15) -- (-3.0,-0.15) -- cycle;
+    \node at (0,0.28) {Test di integrazione};
+
+    \fill[green-gradient-1!60!white, draw=green-gradient-6, line width=0.8pt]
+      (-4.3,-0.2) -- (4.3,-0.2) -- (4.0,-1.1) -- (-4.0,-1.1) -- cycle;
+    \node at (0,-0.62) {Test di unità};
+
+    \draw[-{Stealth[length=6pt]}, line width=0.9pt, draw=neutral!45!black]
+      (-5.2,-1.1) -- (-5.2,3.2);
+    \node[font=\Lato\scriptsize, text=neutral!35!black, rotate=90, anchor=south]
+      at (-5.4,1.0) {più lenti e costosi, più vicini all'utente};
+
+    \draw[-{Stealth[length=6pt]}, line width=0.9pt, draw=neutral!45!black]
+      (5.2,3.2) -- (5.2,-1.1);
+    \node[font=\Lato\scriptsize, text=neutral!35!black, rotate=-90, anchor=south]
+      at (5.4,1.0) {più numerosi, più veloci ed economici};
+  \end{tikzpicture}
+  \caption{La piramide del testing.}
+  \label{fig:testing-pyramid}
+\end{figure}
+
+\subsection{Le difficoltà specifiche del Web}
+
+Le applicazioni web, come ogni software, vanno testate. Emergono però alcune
+difficoltà peculiari:
+
+\begin{itemize}
+  \item nel \textbf{unit testing} bisogna fare i conti con il codice
+        \textbf{asincrono} e con le dipendenze da \textbf{servizi esterni};
+  \item nel \textbf{testing end-to-end} bisogna fare i conti con
+        \textbf{fragilità} e \textbf{flakiness}.
+\end{itemize}
+
+\section{Unit testing con Angular}
+
+Angular fornisce tutto il necessario per testare le applicazioni usando
+\term{Jasmine}. Per impostazione predefinita il codice di test si scrive in file
+\term{spec} (specification), e la CLI ne genera degli scheletri: si collocano
+nella stessa directory del componente o servizio che testano, con la convenzione
+di aggiungere \code{.spec} al nome.
+
+\begin{lstlisting}[style=ts, name=calculator.service.spec.ts]
+import { TestBed } from '@angular/core/testing';
+import { CalculatorService } from './calculator.service';
+
+describe('CalculatorService', () => {
+  let service: CalculatorService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({});
+    service = TestBed.inject(CalculatorService);
+  });
+
+  it('should be created', () => {
+    expect(service).toBeTruthy();
+  });
+
+  it('should sum two positive numbers correctly', () => {
+    expect(service.sum(42, 58)).toEqual(100);
+  });
+});
+\end{lstlisting}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.2cm}}>{\raggedright\arraybackslash}p{8.6cm}@{}}
+  \textbf{Elemento} & \textbf{Ruolo} \\
+  \code{describe()} & crea una \textbf{suite} di specifiche, raggruppando test
+                      correlati. È l'equivalente di una classe di test JUnit. \\
+  \code{it()}       & definisce una singola specifica: l'equivalente di un
+                      metodo annotato \code{@Test}. \\
+  \code{TestBed}    & la principale utilità di testing di Angular: fornisce i
+                      metodi per creare componenti e servizi nei test di
+                      unità. \\
+\end{tabular}
+\end{center}
+
+Il comando \code{ng test} compila l'applicazione e lancia il test runner
+\term{Karma}, che raccoglie tutti i file spec, li esegue e produce un rapporto.
+
+\section{Dipendenze e test double}
+
+Tipicamente i servizi e i componenti che testiamo dipendono da altri servizi o
+componenti: il servizio \code{RestBackend} dipende da \code{HttpClient}, il
+componente \code{TodoPage} dipende da \code{RestBackend}.
+
+In questi scenari il unit testing diventa più delicato. Se il componente
+\code{TodoPage} non mostra gli elementi attesi, dipende da un bug nel
+componente? Nel servizio? Nel backend REST esterno? O da una combinazione?
+
+Il problema va oltre la localizzazione del difetto. In molti casi non
+\textbf{vogliamo} usare il codice di produzione reale durante i test. Si pensi
+a un \code{TemperatureService} che restituisce la temperatura attuale a Napoli
+interrogando una API esterna: come si testa che cosa accade quando la
+temperatura scende sotto zero? Aspettando qualche anno una giornata
+eccezionalmente fredda?
+
+\dfn{Test double}{
+  Un buon test di unità dovrebbe testare l'unità \textbf{in isolamento}: il suo
+  esito non dovrebbe dipendere da altre unità. I \term{test double} sono
+  sostituti degli oggetti di produzione, usati nei test al posto di questi.}
+
+Invece del \code{TemperatureService} reale si usa un doppio che restituisce
+sempre $-42$\,°C.
+
+\subsection{Iniezione delle dipendenze e double}
+
+Il meccanismo di iniezione delle dipendenze è un supporto prezioso: durante i
+test si può configurare l'iniettore perché risolva le dipendenze usando i test
+double invece degli oggetti reali. È il motivo per cui, nel capitolo su Angular,
+insistevamo sul fatto che un componente non dovrebbe mai costruire da sé i
+propri servizi.
+
+Scrivere i double a mano richiede però molto codice ripetitivo. I framework di
+testing vengono in aiuto: Jasmine supporta il concetto di \term{spy}, un test
+double che può simulare qualunque funzione.
+
+\begin{lstlisting}[style=ts, name=spy.ts]
+let todos = [{ id: 1, todo: "foo" }, { id: 2, todo: "bar" }];
+
+restBackendSpy = jasmine.createSpyObj('RestBackendService', ['getTodos']);
+restBackendSpy.getTodos.and.returnValue(of(todos));
+\end{lstlisting}
+
+Il codice crea uno spy del \code{RestBackendService} simulandone il metodo
+\code{getTodos()}, e lo configura perché restituisca sempre un Observable con
+una data lista di due elementi. Usando lo spy al posto del servizio reale, il
+test non dipende né dal servizio né dalla API REST esterna.
+
+\begin{esempio}{Testare un componente}
+\begin{lstlisting}[style=ts, name=todo-page.component.spec.ts]
+it('should properly fetch to-do items', () => {
+  let todos = [{ id: 1, todo: "foo" }, { id: 2, todo: "bar" }];
+
+  restBackendSpy = jasmine.createSpyObj('RestBackendService', ['getTodos']);
+  restBackendSpy.getTodos.and.returnValue(of(todos));
+  component.restService = restBackendSpy;
+
+  component.fetchTodos();
+  fixture.detectChanges();
+
+  expect(component.todos.length).toEqual(2);
+
+  const element: DebugElement = fixture.debugElement;
+  const list = element.query(By.css('ul'));
+  const content = list.nativeElement.textContent;
+
+  expect(content).toContain('foo');
+  expect(content).toContain('bar');
+});
+\end{lstlisting}
+
+Si noti \code{fixture.detectChanges()}: forza il ciclo di change detection
+descritto nel capitolo 20, senza il quale il template non sarebbe ancora
+aggiornato al momento delle asserzioni.
+\end{esempio}
+
+\subsection{Copertura del codice}
+
+\begin{lstlisting}[style=shell]
+ng test --no-watch --code-coverage
+\end{lstlisting}
+
+\begin{console}[Terminale]
+Chrome 121.0.0.0 (Windows 10): Executed 18 of 18 SUCCESS
+TOTAL: 18 SUCCESS
+
+=========================== Coverage summary ===========================
+Statements   : 45.45% ( 75/165 )
+Branches     : 21.21% ( 7/33 )
+Functions    : 43.39% ( 23/53 )
+Lines        : 42.58% ( 66/155 )
+========================================================================
+\end{console}
+
+Viene generato anche un rapporto HTML nella directory \code{/coverage}, dove si
+può ispezionare ciascun file e vedere quali righe sono state coperte dai test.
+
+\warning{La copertura non è la qualità}{
+  La copertura è un \textbf{possibile indicatore} di quanto bene si è testata
+  un'applicazione, non una misura della qualità dei test. Il 100\% di copertura
+  si può ottenere anche con test che non verificano nulla: eseguono il codice
+  senza mai controllarne il risultato. È utile soprattutto al contrario, per
+  individuare le parti \textbf{mai} eseguite.}
+
+\section{Testing end-to-end}
+
+\dfn{Testing end-to-end}{
+  Il \term{testing end-to-end} (E2E) mira a testare il sistema nel suo
+  complesso, dal punto di vista dei suoi utenti finali. Ogni test replica un
+  flusso d'uso realistico, interagendo con le interfacce \textbf{esterne} del
+  sistema, come farebbero gli utenti.}
+
+\subsection{E2E per una API REST}
+
+Quando l'applicazione è una API REST, gli \textbf{endpoint} sono l'interfaccia
+esterna e gli utenti finali sono \textbf{altri programmi} che inviano richieste
+HTTP. I test E2E devono quindi inviare richieste HTTP e verificare che le
+risposte siano corrette rispetto alla specifica.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}c@{\hspace{0.6cm}}>{\raggedright\arraybackslash}p{10.4cm}@{}}
+  \multicolumn{2}{@{}l}{\color{primary!80!black}\textbf{Scenario: login riuscito}} \\
+  1 & inviare una \code{POST} a \code{/auth} con corpo
+      \code{\{usr: "gerry", pwd: "sussman"\}} \\
+  2 & verificare che la risposta abbia stato \code{200 OK} \\
+  3 & verificare che il valore restituito sia un JSON di tipo
+      \code{\{token: string\}} \\
+  4 & verificare che \code{response.token} sia un token JWT valido \\
+\end{tabular}
+\end{center}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}c@{\hspace{0.6cm}}>{\raggedright\arraybackslash}p{10.4cm}@{}}
+  \multicolumn{2}{@{}l}{\color{primary!80!black}\textbf{Scenario: inserimento di
+    un nuovo elemento}} \\
+  1 & inviare una \code{POST} a \code{/auth} con le credenziali \\
+  2 & verificare lo stato \code{200 OK}, estrarre e salvare il token \\
+  3 & inviare una \code{POST} a \code{/todos} con corpo
+      \code{\{todo: "foobar", done: false\}} e header
+      \code{Authorization: Bearer <TOKEN>} \\
+  4 & verificare che la risposta abbia stato \code{200 OK} \\
+  5 & verificare che il corpo contenga
+      \code{\{todo: "foobar", done: false\}} \\
+\end{tabular}
+\end{center}
+
+\subsection{E2E per un'applicazione web}
+
+Quando l'applicazione è tradizionale o è una SPA, le \textbf{pagine} sono
+l'interfaccia esterna e gli utenti finali sono \textbf{persone} che usano un
+browser. I test devono quindi interagire con le pagine e verificare che
+cambino correttamente in conseguenza delle interazioni.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}c@{\hspace{0.6cm}}>{\raggedright\arraybackslash}p{10.4cm}@{}}
+  \multicolumn{2}{@{}l}{\color{primary!80!black}\textbf{Scenario: login riuscito}} \\
+  1 & visitare la pagina di login \\
+  2 & inserire \guillemotleft gerry\guillemotright\ nel campo del nome utente \\
+  3 & inserire \guillemotleft sussman\guillemotright\ nel campo della password \\
+  4 & fare clic sul pulsante \guillemotleft Login\guillemotright \\
+  5 & verificare che l'utente venga reindirizzato alla homepage \\
+  6 & verificare che la barra di navigazione contenga \guillemotleft Hi, Gerry\guillemotright \\
+\end{tabular}
+\end{center}
+
+Che sia manuale o automatizzato, il testing E2E segue sempre lo stesso schema:
+
+\begin{lstlisting}[style=plain, name=pseudocodice]
+esegui(suite di test):
+  per ogni scenario nella suite:
+    per ogni passo dello scenario:
+      seleziona l'elemento con cui interagire (pulsante, campo, ...)
+      interagisci con esso (clic, riempi, verifica una proprieta', ...)
+\end{lstlisting}
+
+\subsection{Manuale o automatizzato}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.3cm}@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{6.3cm}@{}}
+  \textbf{Manuale} & \textbf{Automatizzato} \\
+  A persone viene dato un copione con l'elenco dettagliato dei passi; lo
+  seguono e replicano segnalando ogni problema.
+  & Si sviluppa software di test che simula automaticamente gli scenari
+    d'uso. \\
+  Non richiede competenze di programmazione.
+  & Richiede competenze di programmazione e di testing. \\
+  Attività lenta, noiosa e soggetta a errori. Non scala: va ripetuta a ogni
+  nuova versione, su tutti i browser principali, su dispositivi diversi.
+  & Costi iniziali più alti, ma le suite si possono rieseguire molte volte con
+    sforzo aggiuntivo minimo. \\
+  & Il codice di test va \textbf{mantenuto} man mano che l'applicazione evolve, e
+    i test possono essere fragili o \textit{flaky}. \\
+\end{tabular}
+\end{center}
+
+I test E2E automatizzati sono in sostanza codice che usa librerie dedicate per
+\textbf{controllare da remoto un browser}: navigare verso URL, individuare
+elementi e interagirci. Queste librerie sono utili anche oltre il testing, per
+esempio per lo \textit{scraping} e il \textit{crawling}.
+
+\section{Individuare gli elementi}
+
+Selezionare gli elementi con cui interagire è una parte cruciale del testing E2E.
+Esistono tre \term{strategie di localizzazione}.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.45}
+\begin{tabular}{@{}l@{\hspace{0.9cm}}>{\raggedright\arraybackslash}p{8.8cm}@{}}
+  \textbf{Strategia} & \textbf{Come funziona} \\
+  \textbf{Coordinate assolute}
+    & identifica gli elementi in base alla posizione sullo schermo:
+      \code{click(200, 300)} \\
+  \textbf{Localizzatori visuali}
+    & identifica gli elementi in base al loro \textbf{aspetto}, con algoritmi di
+      confronto fra immagini \\
+  \textbf{Localizzatori di layout}
+    & identifica gli elementi in base a proprietà strutturali, per esempio con i
+      \textbf{selettori CSS}: \code{click(".item button.buy")} \\
+\end{tabular}
+\end{center}
+
+Torna qui utile tutto quello che abbiamo studiato sui selettori CSS nel capitolo
+3: sono di gran lunga la strategia più usata nella pratica.
+
+\section{Fragilità e flakiness}
+
+\subsection{Fragilità}
+
+\dfn{Fragilità}{
+  I test E2E sono spesso \term{fragili} rispetto all'evoluzione
+  dell'applicazione: anche modifiche minime possono rompere i localizzatori,
+  rendendo i test incapaci di interagire con gli elementi corretti e richiedendo
+  una manutenzione onerosa.}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.45}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{5.0cm}@{\hspace{0.9cm}}>{\raggedright\arraybackslash}p{7.6cm}@{}}
+  \textbf{Localizzatore} & \textbf{Perché si rompe} \\
+  \code{click(100, 200)}
+    & basta spostare il pulsante di qualche pixel e le coordinate non
+      corrispondono più. \\
+  Immagine del pulsante
+    & basta cambiare il colore o il carattere e l'immagine non corrisponde
+      più. \\
+  \code{click(".form button:first-of-type")}
+    & se si aggiunge un pulsante \guillemotleft Sign up\guillemotright\ \textbf{prima} di quello di
+      login, il test farà clic su quello sbagliato --- e fallirà in modo
+      silenzioso e fuorviante. \\
+\end{tabular}
+\end{center}
+
+\info{Come si scrivono buoni localizzatori}{
+  Un buon localizzatore non deve essere né troppo generico né troppo specifico:
+  se è troppo generico rischia di selezionare un elemento diverso da quello
+  voluto, se è troppo specifico anche modifiche minime lo rompono.
+
+  I localizzatori a coordinate sono i più fragili in assoluto. Quelli visuali
+  sono robusti rispetto ai cambiamenti di disposizione ma fragili rispetto
+  all'aspetto; quelli di layout sono robusti rispetto ai cambiamenti puramente
+  visivi ma più fragili rispetto ai cambiamenti di struttura. Nella pratica
+  l'esperienza conta molto.}
+
+\subsection{Flakiness}
+
+\dfn{Flakiness}{
+  I test E2E tendono a essere \term{flaky}, cioè a comportarsi in modo
+  incoerente: lo stesso test può passare o fallire in modo intermittente
+  \textbf{a parità di condizioni}, senza alcuna modifica all'applicazione o al
+  test.}
+
+Questa imprevedibilità è spesso causata dal \textbf{non determinismo} legato ai
+tempi di caricamento o al recupero dei dati: talvolta una risorsa esterna
+impiega più tempo del solito, e il test prova ad accedere a elementi non ancora
+disegnati, ottenendo un errore di \guillemotleft elemento non trovato\guillemotright.
+
+La flakiness si mitiga con opportune \textbf{strategie di attesa}: non attese a
+tempo fisso, ma attese su una condizione (\guillemotleft finché quell'elemento non è
+visibile\guillemotright).
+
+\subsection{Isolamento}
+
+I test E2E dovrebbero essere eseguiti in \textbf{isolamento}:
+
+\begin{itemize}
+  \item nessuna propagazione dei fallimenti: un test che fallisce non deve
+        influenzare quelli successivi;
+  \item l'ordine di esecuzione non deve contare, così che i test possano girare
+        in parallelo;
+  \item ogni test deve poter essere eseguito da solo, il che rende molto più
+        facile il debug.
+\end{itemize}
+
+Si ottiene in due modi: \textbf{ripartire da zero}, eseguendo ogni test in un
+ambiente nuovo e pulito, oppure fare \textbf{pulizia fra un test e l'altro}.
+
+\section{Playwright}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{5.2cm}@{}}
+  \textbf{Strumento} & \textbf{Dal} & \textbf{Note} \\
+  \term{Selenium}   & 2009 & multi-browser \\
+  \term{Cypress}    & 2014 & multi-browser \\
+  \term{Puppeteer}  & 2017 & di Google, orientato a Chrome \\
+  \term{Playwright} & 2020 & di Microsoft, multi-browser \\
+\end{tabular}
+\end{center}
+
+\term{Playwright} è un framework open source di automazione e testing dei
+browser, sviluppato da Microsoft. È multi-browser e multi-piattaforma, adotta un
+approccio asincrono guidato dagli eventi, è scritto in TypeScript e ha API in
+TypeScript, JavaScript, C\#, Java e Python.
+
+\begin{lstlisting}[style=shell]
+npm init playwright@latest
+\end{lstlisting}
+
+\subsection{Il primo test}
+
+I test si definiscono con la funzione \code{test()}, che riceve un titolo e una
+funzione asincrona contenente il codice.
+
+\begin{lstlisting}[style=ts, name=example.spec.ts]
+import { test, expect } from '@playwright/test';
+
+test('has title', async ({ page }) => {
+  await page.goto('https://playwright.dev/');
+  await expect(page).toHaveTitle(/Playwright/);
+});
+
+test('get started link', async ({ page }) => {
+  await page.goto('https://playwright.dev/');
+
+  await page.getByRole('link', { name: 'Get started' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Installation' }))
+    .toBeVisible();
+});
+\end{lstlisting}
+
+\begin{console}[Terminale]
+$ npx playwright test
+Running 6 tests using 6 workers
+  6 passed (7.1s)
+
+$ npx playwright show-report
+Serving HTML report at http://localhost:9323.
+\end{console}
+
+Per impostazione predefinita i test vengono eseguiti su \code{chromium} (motore
+Blink), \code{firefox} (Gecko) e \code{webkit} (il motore di Safari e dei
+dispositivi Apple). Playwright può anche emulare browser per tablet e telefoni,
+e le piattaforme si configurano nel file \code{playwright.config.ts}.
+
+\subsection{Isolamento e fixture}
+
+Playwright ottiene l'isolamento \textbf{ripartendo da zero}: ogni test gira in un
+ambiente pulito, non influenzato dai precedenti, con il proprio
+\code{localStorage}, \code{sessionStorage} e i propri cookie. Questo si ottiene
+usando un nuovo \code{BrowserContext} per ciascun test --- si può pensarlo come
+un profilo in incognito.
+
+L'ambiente di ciascun test è definito tramite \term{fixture}. L'argomento
+\code{\{page\}} passato alla funzione di test dice a Playwright di preparare la
+fixture \code{Page}, cioè di creare un nuovo contesto e una pagina al suo
+interno --- l'astrazione di una scheda in un browser nuovo di zecca.
+
+\subsection{Individuare, agire, verificare}
+
+Tre parti sono cruciali nella scrittura di un test E2E automatizzato:
+\textbf{individuare} gli elementi, \textbf{compiere} azioni e
+\textbf{verificare} lo stato rispetto alle aspettative.
+
+\begin{lstlisting}[style=ts, name=localizzatori.ts]
+page.getByText();         // per contenuto testuale
+page.getByLabel();        // un controllo di form, tramite la sua etichetta
+page.getByPlaceholder();  // un input, tramite il suo placeholder
+page.getByAltText();      // un elemento (di solito immagine), tramite alt
+page.getByTitle();        // tramite l'attributo title
+page.getByTestId();       // tramite l'attributo data-testid
+
+// e' possibile usare anche selettori CSS e XPath
+page.locator("#foo ul [data-foo]");
+page.locator("//[@id='foo']//ul//*[@data-foo]");
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts, name=azioni.ts]
+page.locator("#input").clear();
+page.locator("#input").fill("Foo");
+page.locator("#input").press("Tab");
+page.locator("#checkbox").check();
+page.locator("#select-course").selectOption("web technologies");
+page.locator("#button").click();
+page.locator("#button").dblclick();
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts, name=asserzioni.ts]
+expect(page.locator("#foo")).toBeDefined();
+expect(page.locator("#foo")).toBeDisabled();
+expect(page.locator("#foo")).toBeEmpty();
+expect(page.locator("#foo")).toContainText("foo");
+expect(page.locator("#foo")).toHaveClass("bar");
+expect(page.locator("#foo")).toBeVisible();
+expect(page.locator("#foo")).toBeInViewport();
+\end{lstlisting}
+
+\info{Perché i localizzatori \guillemotleft semantici\guillemotright\ sono preferibili}{
+  \code{getByRole}, \code{getByLabel} e \code{getByPlaceholder} individuano gli
+  elementi per il loro \textbf{ruolo} nell'interfaccia, non per la loro
+  posizione nell'albero. Sono quindi molto meno fragili di un selettore CSS
+  legato alla struttura, e hanno un effetto collaterale utile: un test che non
+  riesce a trovare un pulsante \guillemotleft per ruolo\guillemotright\ segnala spesso un problema
+  reale di accessibilità.}
+
+\section{Capture and Replay}
+
+Scrivere i test a mano richiede tempo. Gli approcci \term{Capture and Replay}
+(C\&R) permettono di generare automaticamente il codice dei test
+\guillemotleft registrando\guillemotright\ le interazioni dell'utente: basta interagire con
+l'applicazione per creare test rieseguibili.
+
+Essendo generato automaticamente, il codice C\&R può essere subottimale rispetto
+a fragilità e flakiness, ma resta un buon punto di partenza.
+
+Playwright supporta il C\&R attraverso il \textit{Test Generator}. Il modo più
+semplice è usare l'estensione Playwright per VS Code: nella scheda
+\textit{Testing} si sceglie \guillemotleft Record new\guillemotright, si interagisce con il browser
+che compare, e Playwright genera il codice necessario a replicare le azioni,
+usando euristiche interne per scegliere i localizzatori migliori.
+
+\begin{lstlisting}[style=ts, name=login.spec.ts (generato)]
+test('should login with correct credentials', async ({ page }) => {
+  await page.goto('http://localhost:4200/home');
+  await page.getByRole('link', { name: 'Login' }).click();
+  await page.getByPlaceholder('Your username').fill('luigi');
+  await page.getByPlaceholder('********').fill('luigi');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('#navbar-default')).toContainText('Welcome, luigi');
+});
+\end{lstlisting}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Angular Testing}. \\
+        \urlx{https://angular.dev/guide/testing} \\
+        Parti rilevanti: \textit{Overview}, \textit{Basics of testing
+        components}, \textit{Component Testing Scenarios}, \textit{Testing
+        services}, \textit{Code coverage}.
+  \item \textbf{Playwright Docs}. \\
+        \urlx{https://playwright.dev/docs/intro} \\
+        Parti rilevanti: \textit{Getting started}, \textit{Guides > Best
+        practices}.
+\end{itemize}

@@ -1,0 +1,574 @@
+\chapter{Il DNS}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il problema: nomi e indirizzi}
+% ══════════════════════════════════════════════════════════════
+
+Un host si può identificare in due modi: con un \textbf{nome} (\emph{hostname}) o con un
+\textbf{indirizzo IP}. Le persone preferiscono i nomi, facili da ricordare; i dispositivi di rete
+preferiscono gli indirizzi IP, di lunghezza fissa e strutturati gerarchicamente.
+
+\begin{center}
+\begin{tikzpicture}[every node/.style={font=\sffamily}]
+  \node[draw, rounded corners, fill=lapp!40, minimum width=3.2cm, minimum height=0.9cm] (n) at (0,0) {\texttt{www.unina.it}};
+  \node[draw, rounded corners, fill=lnet!40, minimum width=3.2cm, minimum height=0.9cm] (i) at (8,0) {\texttt{143.225.15.50}};
+  \draw[msg, very thick, primary] (n) -- node[above, font=\small\bfseries\sffamily] {DNS} node[below, font=\scriptsize\sffamily] {traduzione} (i);
+  \node[below=2pt of n, font=\scriptsize\sffamily] {comodo per le persone};
+  \node[below=2pt of i, font=\scriptsize\sffamily] {comodo per i router};
+\end{tikzpicture}
+\end{center}
+
+\dfn{Domain Name System (DNS)}{
+    Il \textbf{DNS} è un protocollo di livello applicativo che gestisce la \textbf{traduzione dei nomi
+    degli host in indirizzi IP}. È un protocollo \textbf{client-server}: un client DNS chiede a un server DNS
+    la traduzione di un certo nome. I server DNS sono spesso macchine UNIX con il software \textbf{BIND}
+    (\emph{Berkeley Internet Name Domain}) e usano tipicamente \textbf{UDP} sulla \textbf{porta 53}.
+}
+
+Il DNS è anche un esempio perfetto di \textbf{database distribuito}: nessun server contiene tutte le
+associazioni, ma l'insieme dei server sì.
+
+\info{Un'applicazione al servizio di altre applicazioni}{
+    Il DNS non è quasi mai usato direttamente dagli utenti: lo usano le altre applicazioni. Quando il browser
+    deve aprire \texttt{http://www.unina.it/index.html}, prima chiede al DNS l'indirizzo di
+    \texttt{www.unina.it}, poi apre la connessione TCP verso quell'indirizzo. Il ritardo introdotto dal DNS
+    si somma quindi a quello di ogni navigazione, ed è uno dei motivi per cui usa UDP e fa largo uso di cache.
+}
+
+\subsection{Perché non un repository centralizzato}
+
+La soluzione più semplice sarebbe un unico server con una grande tabella nome--indirizzo. Non funziona:
+
+\begin{itemize}
+    \item \textbf{troppi host}: un'unica tabella con i nomi di tutta Internet sarebbe enorme e sempre da aggiornare;
+    \item \textbf{distanza e ritardi}: un server unico sarebbe lontano dalla maggior parte degli utenti;
+    \item \textbf{volume di traffico}: dovrebbe rispondere a tutte le interrogazioni del mondo;
+    \item \textbf{single point of failure}: se si guasta, si ferma Internet.
+\end{itemize}
+
+Il DNS è quindi un sistema \textbf{distribuito} e \textbf{decentralizzato}:
+
+\begin{itemize}
+    \item \textbf{gerarchico};
+    \item \textbf{basato sui domini};
+    \item realizzato tramite un \textbf{database distribuito} su molti server.
+\end{itemize}
+
+\dfn{Resolver}{
+    Il \textbf{resolver} è il programma (di solito una funzione di libreria) che restituisce l'indirizzo IP
+    associato a un nome. Interroga un \textbf{server DNS locale}, e tutti i messaggi sono pacchetti
+    \textbf{UDP}.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Lo spazio dei nomi DNS}
+% ══════════════════════════════════════════════════════════════
+
+\begin{itemize}
+    \item La gerarchia dei nomi è organizzata dall'\textbf{ICANN} (\emph{Internet Corporation for Assigned
+          Names and Numbers}).
+    \item Sotto la radice ci sono i \textbf{domini di primo livello} (\emph{top-level domain}, TLD), alcune
+          centinaia.
+    \item Ogni dominio è diviso in \textbf{sottodomini}, e così via.
+\end{itemize}
+
+I domini di primo livello sono di due tipi, tutti gestiti da \emph{registrar} nominati dall'ICANN:
+
+\begin{itemize}
+    \item \textbf{generici}: \texttt{com}, \texttt{edu}, \texttt{org}, \texttt{net}, \texttt{aero}, \dots;
+    \item \textbf{nazionali} (\emph{country code}): \texttt{it}, \texttt{uk}, \texttt{jp}, \texttt{tv}, \dots
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\linewidth]{cap07/albero_dns.png}
+    \caption{Lo spazio dei nomi è un albero, dalla radice verso il basso; parti diverse sono delegate a organizzazioni diverse. In rosso il computer \texttt{robot.cs.washington.edu}.}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llcc}
+\toprule
+\textbf{Dominio} & \textbf{Uso previsto} & \textbf{Dal} & \textbf{Riservato?} \\
+\midrule
+com & commerciale & 1985 & no \\
+edu & istituzioni educative & 1985 & sì \\
+gov & governo & 1985 & sì \\
+int & organizzazioni internazionali & 1988 & sì \\
+mil & militare & 1985 & sì \\
+net & fornitori di rete & 1985 & no \\
+org & organizzazioni non profit & 1985 & no \\
+aero, biz, info, name, pro, \dots & settori specifici & 2001--2010 & vari \\
+\bottomrule
+\end{tabular}
+\caption{Alcuni domini generici di primo livello, controllati dall'ICANN.}
+\end{table}
+
+\subsection{I nomi di dominio}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}, dn/.style={draw, ellipse, fill=cloudbg, inner sep=2pt}]
+  \node[dn, fill=lphy] (r) at (0,0) {radice};
+  \node[dn] (edu) at (-3,-1.2) {edu}; \node[dn] (it) at (3,-1.2) {it};
+  \node[dn] (mit) at (-3,-2.4) {mit}; \node[dn] (unina) at (3,-2.4) {unina};
+  \node[dn] (eng) at (-3,-3.6) {eng}; \node[dn] (www) at (3,-3.6) {www};
+  \draw (r) -- (edu) -- (mit) -- (eng); \draw (r) -- (it) -- (unina) -- (www);
+  \draw[-{Stealth}, very thick, netred] (-2.2,-3.6) -- (-2.2,-1.2) -- (-0.7,-0.2);
+  \node[anchor=west, text=netred, text width=4cm, align=left] at (-2,-2.7) {si legge \textbf{risalendo}\\ verso la radice:\\ \texttt{eng.mit.edu}};
+  \node[anchor=west, text width=4cm, align=left] at (4,-3.6) {\texttt{www.unina.it.}\\\scriptsize (con il punto finale: nome assoluto)};
+\end{tikzpicture}
+\caption{Un nome di dominio è il percorso dal nodo verso la radice.}
+\end{figure}
+
+\begin{itemize}
+    \item I nomi sono \textbf{percorsi verso l'alto}, dal dominio alla radice: \texttt{eng.mit.edu}.
+    \item I percorsi \textbf{assoluti} terminano con un punto (\texttt{eng.mit.edu.}); quelli
+          \textbf{relativi} vanno interpretati rispetto a un dominio di partenza.
+    \item Si può registrare lo stesso nome sotto più TLD (\texttt{ibm.com}, \texttt{ibm.us}).
+    \item Il \textbf{cyber-squatting} è la pratica di comprare domini solo per rivenderli poi alle aziende interessate.
+    \item Ogni dominio \textbf{controlla l'assegnazione} dei domini sotto di lui; creare un nuovo dominio richiede
+          il \textbf{permesso del dominio padre}.
+    \item La struttura dei nomi \textbf{non} segue confini fisici o geografici (\texttt{cs.washington.edu} e un
+          server in un altro continente possono stare nello stesso dominio).
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{I resource record}
+% ══════════════════════════════════════════════════════════════
+
+Il database distribuito del DNS è fatto di \textbf{resource record} (RR). Ogni record ha cinque campi:
+
+\begin{center}
+\begin{tikzpicture}[every node/.style={font=\small\sffamily}]
+  \foreach \t/\c [count=\i] in {NAME/lapp, TTL/ltra, CLASS/lnet, TYPE/llink, VALUE (RDATA)/lphy}
+    \node[field, fill=\c, minimum width=2.6cm, minimum height=0.8cm] at (\i*2.6,0) {\t};
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+    \item \textbf{NAME} (nome di dominio): il dominio a cui si riferisce il record. È la \textbf{chiave di
+          ricerca} principale delle interrogazioni; di solito per ogni dominio esistono più record, su server diversi.
+    \item \textbf{TTL} (\emph{time to live}): la durata di validità del record, in secondi. Lunga per host stabili
+          (86\,400 = un giorno), breve per quelli volatili (60 = un minuto); il valore massimo è $2^{31}-1$ secondi,
+          circa 68 anni.
+    \item \textbf{CLASS}: per i record di Internet è sempre \textbf{IN}; gli altri codici sono usati raramente.
+    \item \textbf{TYPE}: il tipo di record (tabella seguente).
+    \item \textbf{VALUE} (RDATA): il valore, che dipende dal tipo: un dominio, un numero o una stringa ASCII.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Tipo} & \textbf{Significato} & \textbf{Valore} \\
+\midrule
+SOA & \emph{Start Of Authority} & parametri della zona: server principale, contatto dell'amministratore, \dots \\
+A & \emph{Address} & indirizzo IPv4 (32 bit) di un'interfaccia dell'host \\
+AAAA & indirizzo IPv6 & indirizzo IPv6 (128 bit) \\
+MX & \emph{Mail eXchange} & nome dell'host che accetta la posta per il dominio (con priorità) \\
+NS & \emph{Name Server} & nome di un server DNS per il dominio \\
+CNAME & \emph{Canonical NAME} & nome canonico di cui questo nome è un alias \\
+PTR & \emph{Pointer} & nome associato a un indirizzo (ricerca inversa) \\
+SPF & \emph{Sender Policy Framework} & regole su chi può inviare posta per il dominio \\
+SRV & \emph{Service} & host che offre un certo servizio \\
+TXT & \emph{Text} & testo ASCII descrittivo \\
+\bottomrule
+\end{tabular}
+\caption{I tipi principali di resource record.}
+\end{table}
+
+\warning{Come ``leggere'' i record}{
+    \begin{itemize}
+      \item \texttt{(unina.it, dns.unina.it, IN, NS)}: \texttt{dns.unina.it} è un name server per il dominio \texttt{unina.it};
+            la ricerca prosegue interrogando lui.
+      \item \texttt{(www.unina.it, 143.225.15.50, IN, A)}: l'indirizzo IPv4 di \texttt{www.unina.it}.
+      \item \texttt{(www.ibm.com, servereast.backup2.ibm.com, IN, CNAME)}: \texttt{www.ibm.com} è un alias;
+            la ricerca \textbf{prosegue} con il nome canonico.
+      \item \texttt{(ibm.com, mail.bar.ibm.com, IN, MX)}: la posta per \texttt{@ibm.com} va consegnata a \texttt{mail.bar.ibm.com}.
+      \item Con PTR, invece, la ricerca \textbf{non prosegue}: si restituisce semplicemente il nome.
+    \end{itemize}
+    Un host può avere \textbf{più interfacce}, e quindi più record A.
+}
+
+\begin{esempio}{I record di un dominio: \texttt{cs.vu.nl}}
+\begin{center}
+\includegraphics[width=0.62\linewidth]{cap07/rr_esempio.png}
+\end{center}
+Nel database autorevole per \texttt{cs.vu.nl} si trovano: il record \textbf{SOA} della zona, i record
+\textbf{MX} (i server di posta, con la loro priorità: si prova prima quello con numero più basso), il record
+\textbf{NS} (il name server \texttt{star}), i record \textbf{A} con gli indirizzi dei computer
+(\texttt{star}, \texttt{zephyr}, \texttt{top}, \dots) e i \textbf{CNAME} che definiscono alias come
+\texttt{www} e \texttt{ftp}.
+\end{esempio}
+
+% ══════════════════════════════════════════════════════════════
+\section{I name server e le zone}
+% ══════════════════════════════════════════════════════════════
+
+Un unico server DNS centralizzato non avrebbe senso. Lo spazio dei nomi è quindi diviso in
+\textbf{zone}.
+
+\dfn{Zona}{
+    Una \textbf{zona} è una porzione dello spazio dei nomi DNS, \textbf{senza sovrapposizioni} con le altre,
+    i cui dati sono gestiti da uno o più \textbf{name server} (un \emph{primario} e uno o più
+    \emph{secondari}). Come dividere il proprio dominio in zone lo decide l'amministratore.
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\linewidth]{cap07/zone_dns.png}
+    \caption{Le zone (cerchiate) sono porzioni dello spazio dei nomi gestite da name server diversi.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \draw[thick, netblue, fill=cloudbg] (0,0) ellipse (4.2cm and 1.9cm);
+  \node[text=netblue] at (3.6,1.6) {\texttt{jp}};
+  \draw[thick, netgreen!70!black, fill=netgreen!10] (-0.4,-0.2) ellipse (3.2cm and 1.4cm);
+  \node[text=netgreen!50!black] at (2.2,0.9) {\texttt{ac.jp}};
+  \draw[thick, netorange, fill=netorange!15] (-0.9,-0.4) ellipse (2.2cm and 1cm);
+  \node[text=netorange] at (0.6,0.35) {\texttt{kyushu-u.ac.jp}};
+  \draw[thick, netorange, fill=netorange!45] (-1.6,-0.6) ellipse (1.1cm and 0.55cm);
+  \node at (-1.6,-0.45) {\texttt{ofc}};
+  \node at (-1.6,-0.8) {\scriptsize\texttt{hyoka}};
+  \node[text width=6cm, align=left, anchor=west] at (4.6,0) {Può darsi che un server per \texttt{kyushu-u.ac.jp} abbia anche i record A, con autorità, per i nodi della sotto-zona (in arancione scuro), oppure che la sotto-zona \texttt{ofc} sia delegata a un altro server, come nell'esempio con \texttt{nslookup} alla fine del capitolo.};
+\end{tikzpicture}
+\caption{Domini annidati: ogni livello può gestire direttamente i nomi sottostanti o delegarli a una zona separata.}
+\end{figure}
+
+\dfn{Server autorevole}{
+    Un name server è \textbf{autorevole} (\emph{authoritative}) per una zona se contiene i record originali di
+    quella zona. Le risposte che fornisce su quella zona sono \textbf{risposte autorevoli}; quelle ottenute da
+    una cache sono \textbf{non autorevoli}.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{La risoluzione dei nomi}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{La gerarchia dei server}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}, srv/.style={draw, rounded corners, minimum width=2.2cm, minimum height=0.75cm, align=center, fill=#1}]
+  \node[srv=lphy] (root) at (0,0) {root server};
+  \node[srv=lnet!60] (com) at (-4.5,-1.5) {server \texttt{.com}};
+  \node[srv=lnet!60] (org) at (0,-1.5) {server \texttt{.org}};
+  \node[srv=lnet!60] (edu) at (4.5,-1.5) {server \texttt{.edu}};
+  \node[srv=ltra!60] (y) at (-6,-3) {yahoo.com}; \node[srv=ltra!60] (a) at (-3,-3) {amazon.com};
+  \node[srv=ltra!60] (p) at (0,-3) {pbs.org};
+  \node[srv=ltra!60] (n) at (3,-3) {nyu.edu}; \node[srv=ltra!60] (u) at (6,-3) {umass.edu};
+  \foreach \x/\y in {root/com, root/org, root/edu, com/y, com/a, org/p, edu/n, edu/u} \draw[thick] (\x) -- (\y);
+  \node[anchor=west] at (7.4,0) {1. radice};
+  \node[anchor=west] at (7.4,-1.5) {2. top-level domain (TLD)};
+  \node[anchor=west] at (7.4,-3) {3. server autorevoli};
+\end{tikzpicture}
+\caption{Una parte della gerarchia dei server DNS.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Root server}: sono il punto di partenza quando non si ha nessuna informazione. Ci sono
+          \textbf{13} ``root server'' logici, da \texttt{a.root-servers.net} a \texttt{m.root-servers.net},
+          ciascuno \textbf{altamente replicato} in centinaia di copie nel mondo. Sono molto carichi, quindi di solito
+          restituiscono informazioni sulle zone inferiori (i server dei TLD), non sui singoli record.
+    \item \textbf{Server TLD}: responsabili dei domini di primo livello (\texttt{com}, \texttt{it}, \texttt{jp}, \dots).
+    \item \textbf{Server autorevoli}: quelli delle organizzazioni, che contengono i record dei loro host.
+\end{itemize}
+
+\subsection{Il server DNS locale (resolver)}
+
+\dfn{Server DNS locale}{
+    Il \textbf{server DNS locale} (o \textbf{DNS resolver}) non appartiene strettamente alla gerarchia: è
+    gestito tipicamente dall'ISP. Quando un host si collega a un ISP, riceve gli indirizzi di uno o più server
+    DNS locali, di solito ``vicini''. Le interrogazioni dell'host vanno al server locale, che fa da
+    \textbf{proxy} e le inoltra alla gerarchia.
+}
+
+Anche Google offre server di questo tipo in tutto il mondo (\emph{Google Public DNS}, agli indirizzi
+\texttt{8.8.8.8} e \texttt{8.8.4.4}). Su molti sistemi Linux il resolver locale risponde all'indirizzo
+\texttt{127.0.0.53}, porta 53: è un processo sulla macchina stessa che inoltra le richieste al server
+indicato dal router.
+
+\subsection{Query ricorsive e iterative}
+
+La risoluzione procede così:
+
+\begin{enumerate}
+    \item l'host interroga il \textbf{server DNS locale};
+    \item se il nome ricade nella zona di competenza del server locale, questo restituisce un record autorevole;
+    \item altrimenti il server locale gestisce la richiesta ed effettua interrogazioni remote:
+    \begin{itemize}
+      \item se il server interrogato ha l'indirizzo, lo restituisce;
+      \item altrimenti restituisce il \textbf{name server di una zona inferiore} a cui chiedere;
+      \item il processo prosegue \textbf{iterativamente} finché l'indirizzo non viene trovato.
+    \end{itemize}
+\end{enumerate}
+
+\dfn{Query ricorsiva e iterativa}{
+    \begin{itemize}
+      \item In una \textbf{query ricorsiva} chi riceve la domanda si fa carico di \textbf{tutta} la risoluzione e
+            restituisce la risposta completa (o un errore).
+      \item In una \textbf{query iterativa} chi riceve la domanda risponde con ciò che sa: la risposta, oppure
+            \textbf{il nome del prossimo server} da interrogare.
+    \end{itemize}
+    Tipicamente l'host fa una query \textbf{ricorsiva} al server locale, e il server locale fa query
+    \textbf{iterative} verso la gerarchia. I server più carichi, come quelli vicini alla radice, \textbf{non}
+    accettano query ricorsive.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \begin{scope}
+    \node[font=\footnotesize\bfseries\sffamily] at (2.3,3.6) {Iterativa (il server locale chiede a tutti)};
+    \node (h) at (0,-1.6) {\icon[0.9cm]{pc}}; \node[below=-2pt of h] {host};
+    \node (l) at (2.3,0) {\icon[0.6cm]{server}}; \node[below=-1pt of l] {server locale};
+    \node (r) at (5,2.6) {\icon[0.5cm]{server}}; \node[right=0pt of r] {root};
+    \node (t) at (5.6,0.6) {\icon[0.5cm]{server}}; \node[right=0pt of t] {TLD};
+    \node (a) at (5,-1.6) {\icon[0.5cm]{server}}; \node[right=0pt of a] {autorevole};
+    \draw[msg, netred] (h) -- node[left] {1} (l);
+    \draw[msg, netblue] ([xshift=-2pt]l.north east) -- node[above left] {2} (r);
+    \draw[msg, netgreen] (r) -- node[right] {3} ([xshift=6pt]l.north east);
+    \draw[msg, netblue] (l) -- node[above] {4} (t);
+    \draw[msg, netgreen] ([yshift=-6pt]t.west) -- node[below] {5} ([yshift=-6pt]l.east);
+    \draw[msg, netblue] (l.south east) -- node[above right] {6} (a);
+    \draw[msg, netgreen] ([xshift=-8pt]a.west) -- node[below] {7} ([xshift=4pt, yshift=-8pt]l.south east);
+    \draw[msg, netred] ([xshift=-6pt]l.south) -- node[right] {8} ([xshift=8pt]h.north);
+  \end{scope}
+  \begin{scope}[xshift=8.6cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (2.3,3.6) {Ricorsiva (ognuno chiede al successivo)};
+    \node (h) at (0,-1.6) {\icon[0.9cm]{pc}}; \node[below=-2pt of h] {host};
+    \node (l) at (2.3,0) {\icon[0.6cm]{server}}; \node[below=-1pt of l] {server locale};
+    \node (r) at (5,2.6) {\icon[0.5cm]{server}}; \node[right=0pt of r] {root};
+    \node (t) at (5.6,0.6) {\icon[0.5cm]{server}}; \node[right=0pt of t] {TLD};
+    \node (a) at (5,-1.6) {\icon[0.5cm]{server}}; \node[right=0pt of a] {autorevole};
+    \draw[msg, netred] (h) -- node[left] {1} (l);
+    \draw[msg, netblue] (l) -- node[above left] {2} (r);
+    \draw[msg, netblue] ([xshift=-4pt]r.south) -- node[left] {3} ([xshift=-4pt]t.north);
+    \draw[msg, netblue] ([xshift=-4pt]t.south) -- node[left] {4} ([xshift=-4pt]a.north);
+    \draw[msg, netgreen] ([xshift=4pt]a.north) -- node[right] {5} ([xshift=4pt]t.south);
+    \draw[msg, netgreen] ([xshift=4pt]t.north) -- node[right] {6} ([xshift=4pt]r.south);
+    \draw[msg, netgreen] ([yshift=-5pt]r.west) -- node[below right] {7} ([xshift=8pt]l.north east);
+    \draw[msg, netred] ([xshift=-6pt]l.south) -- node[right] {8} ([xshift=8pt]h.north);
+  \end{scope}
+\end{tikzpicture}
+\caption{Query iterativa e ricorsiva a confronto: nel primo caso il server locale conduce la ricerca, nel secondo il carico ricade sui server della gerarchia.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\linewidth]{cap07/risoluzione_esempio.png}
+    \caption{L'host \texttt{flits.cs.vu.nl} risolve \texttt{robot.cs.washington.edu}: query ricorsiva (1, 10) verso il server locale, query iterative (2--9) verso root, \texttt{edu}, \texttt{washington.edu} e \texttt{cs.washington.edu}.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il caching DNS}
+% ══════════════════════════════════════════════════════════════
+
+\begin{itemize}
+    \item I record possono essere \textbf{autorevoli} o \textbf{in cache} (\emph{cached}).
+    \item I record in cache \textbf{scadono}: è a questo che serve il TTL.
+    \item Il caching migliora molto le prestazioni: \textbf{tutte le risposte} vengono memorizzate.
+    \item Se il nome richiesto è in cache, il server locale risponde \textbf{subito}.
+    \item Se arriva una richiesta per \texttt{cs.mit.edu} e il server conosce già l'indirizzo del server DNS di
+          \texttt{mit.edu}, può interrogare direttamente quello, saltando root e TLD.
+    \item I root server vengono interrogati solo quando non si ha \textbf{nessuna informazione} su un certo dominio.
+\end{itemize}
+
+\warning{Cache e TTL}{
+    Se un sito cambia indirizzo IP, per un po' alcuni utenti continueranno a raggiungere quello vecchio: i
+    resolver hanno ancora in cache il record, finché il suo TTL non scade. Per questo prima di un trasloco si
+    abbassa il TTL dei record interessati.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{I messaggi DNS}
+% ══════════════════════════════════════════════════════════════
+
+Richieste e risposte DNS hanno lo stesso formato (utile per leggere le catture con Wireshark):
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[field, fill=lapp!60, minimum width=4.5cm] (id) at (0,0) {identificativo (16 bit)};
+  \node[field, fill=lapp!60, minimum width=4.5cm, right=0pt of id] (fl) {flag (16 bit)};
+  \node[field, fill=ltra!50, minimum width=4.5cm, below=0pt of id] (q) {n.\ domande};
+  \node[field, fill=ltra!50, minimum width=4.5cm, right=0pt of q] (an) {n.\ RR risposta};
+  \node[field, fill=ltra!50, minimum width=4.5cm, below=0pt of q] (au) {n.\ RR autorevoli};
+  \node[field, fill=ltra!50, minimum width=4.5cm, right=0pt of au] (ad) {n.\ RR aggiuntivi};
+  \node[field, fill=lnet!40, minimum width=9cm, anchor=north west] (s1) at (au.south west) {domande (nome e tipo richiesti)};
+  \node[field, fill=lnet!40, minimum width=9cm, below=0pt of s1] (s2) {risposte (RR)};
+  \node[field, fill=lnet!40, minimum width=9cm, below=0pt of s2] (s3) {autorità (RR dei server autorevoli)};
+  \node[field, fill=lnet!40, minimum width=9cm, below=0pt of s3] (s4) {informazioni aggiuntive (per esempio i record A dei server)};
+  \draw[decorate, decoration={brace, amplitude=5pt}] (6.9,0.3) -- (6.9,-1.6) node[midway, right=6pt] {header: 12 byte};
+  \node[anchor=west, text width=5cm, align=left] at (9.4,-3.3) {flag: domanda o risposta, ricorsione desiderata, ricorsione disponibile, risposta autorevole};
+\end{tikzpicture}
+\caption{Formato dei messaggi DNS: l'identificativo permette di associare la risposta alla domanda.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Altri servizi del DNS}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Aliasing}
+
+Il DNS offre un servizio di \textbf{alias}: a nomi complicati e lunghi (\textbf{canonici}) si associano nomi
+più semplici (\textbf{alias}).
+
+\begin{itemize}
+    \item \textbf{Alias di host}: \texttt{relay1.west-coast.enterprise.com} può essere raggiunto come
+          \texttt{www.enterprise.com} (record CNAME).
+    \item \textbf{Alias di server di posta}: grazie ai record MX, l'indirizzo \texttt{bob@yahoo.com} funziona
+          anche se il server di posta vero ha un nome complicato; e un'azienda può usare lo stesso nome per il
+          sito Web e per la posta.
+    \item Un'applicazione può comunque chiedere al DNS il \textbf{nome canonico} di un alias, oltre all'indirizzo IP.
+\end{itemize}
+
+\subsection{Distribuzione del carico}
+
+\dfn{Round-robin DNS}{
+    I siti molto frequentati (Google, Amazon, CNN, \dots) sono replicati su più server, ciascuno con un
+    indirizzo IP diverso: al nome canonico è associato un \textbf{insieme di indirizzi}. Quando un client
+    chiede quel nome, il server DNS restituisce tutti gli indirizzi ma \textbf{ne ruota l'ordine} a ogni
+    risposta; poiché i client usano di solito il primo, il carico si distribuisce tra le repliche.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{nslookup: interrogare il DNS a mano}
+% ══════════════════════════════════════════════════════════════
+
+Con \texttt{nslookup} si possono fare a mano le interrogazioni che fa un server DNS, e anche la
+\textbf{ricerca inversa} (dal nome all'indirizzo). La sintassi è
+\texttt{nslookup [-type=TIPO] nome [server]}.
+
+\begin{esempio}{Record A: l'indirizzo di un nome}
+\begin{lstlisting}
+$ nslookup vatican.va
+Server:    127.0.0.53
+Address:   127.0.0.53#53
+
+Non-authoritative answer:
+Name:    vatican.va
+Address: 185.152.70.106
+\end{lstlisting}
+Si recupera il record \textbf{A} di \texttt{vatican.va}. Il server interrogato è \texttt{127.0.0.53}, cioè il
+resolver locale sulla porta 53. La risposta è \textbf{non autorevole}: viene da una cache, non dal server che
+gestisce la zona. Il resolver locale ha condotto l'intera risoluzione con query iterative, mentre l'host gli ha
+fatto una query ricorsiva.
+\end{esempio}
+
+\begin{esempio}{Record NS e SOA}
+\begin{lstlisting}
+$ nslookup -type=NS vatican.va
+Non-authoritative answer:
+vatican.va  nameserver = a.nic.va.
+vatican.va  nameserver = b.nic.va.
+vatican.va  nameserver = c.nic.va.
+vatican.va  nameserver = osiris.namex.it.
+vatican.va  nameserver = seth.namex.it.
+
+$ nslookup -type=SOA vatican.va
+Non-authoritative answer:
+vatican.va
+    origin = a.nic.va
+    mail addr = dnsop.net.va
+    serial = 2025062401
+    refresh = 14400
+    retry = 3600
+    expire = 1209600
+    minimum = 3600
+\end{lstlisting}
+La prima query elenca i \textbf{name server} del dominio. La seconda chiede il record \textbf{SOA}, che indica il
+server principale autorevole (\texttt{origin = a.nic.va}) e i parametri della zona. La riga
+``\emph{Authoritative answers can be found from:}'' senza elenco è normale con i resolver intermedi, che
+spesso non includono i record dei server autorevoli.
+\end{esempio}
+
+\begin{esempio}{Interrogare direttamente il server autorevole}
+\begin{lstlisting}
+$ nslookup -type=A a.nic.va
+Name:    a.nic.va
+Address: 212.77.0.110
+
+$ nslookup -type=A vatican.va 212.77.0.110
+Server:  212.77.0.110
+Address: 212.77.0.110#53
+Non-authoritative answer:
+Name:    vatican.va
+Address: 185.152.70.106
+\end{lstlisting}
+Prima si trova l'indirizzo del server principale, poi lo si interroga direttamente (secondo argomento). In
+teoria la risposta dovrebbe essere autorevole, ma alcuni server non impostano il flag \emph{Authoritative
+Answer} (per configurazione, inoltro o motivi di sicurezza).
+\end{esempio}
+
+\subsection{La risoluzione iterativa fatta a mano}
+
+Proviamo a risolvere \texttt{hyoka.ofc.kyushu-u.ac.jp} \textbf{ignorando il server locale}, come farebbe un
+server DNS senza nulla in cache: si parte da un root server e si scende.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, st/.style={draw, rounded corners, fill=#1, minimum width=3.1cm, minimum height=0.8cm, align=center}]
+  \node[st=lphy] (s1) at (0,0) {\texttt{c.root-servers.net}};
+  \node[st=lnet!50] (s2) at (5.2,0) {\texttt{b.dns.jp}};
+  \node[st=ltra!50] (s3) at (10.4,0) {\texttt{ns2.kyushu-u.ac.jp}};
+  \node[st=lapp!50] (s4) at (15.6,0) {\texttt{ns.jimu.kyushu-u.ac.jp}};
+  \draw[msg, very thick] (s1) -- node[above, text width=2.6cm, align=center] {``chiedi ai server di \texttt{jp}''} (s2);
+  \draw[msg, very thick] (s2) -- node[above, text width=2.6cm, align=center] {``chiedi ai server di \texttt{kyushu-u.ac.jp}''} (s3);
+  \draw[msg, very thick] (s3) -- node[above, text width=2.6cm, align=center] {``chiedi a quelli di \texttt{ofc.kyushu-u.ac.jp}''} (s4);
+  \node[below=4pt of s4, text=netgreen!60!black, font=\scriptsize\bfseries\sffamily] {133.5.40.197};
+\end{tikzpicture}
+\caption{Ogni server non conosce la risposta, ma sa a chi chiedere un livello più in basso.}
+\end{figure}
+
+\begin{lstlisting}
+$ nslookup -type=A hyoka.ofc.kyushu-u.ac.jp c.root-servers.net
+*** Can't find hyoka.ofc.kyushu-u.ac.jp: No answer        # il root non sa nulla
+
+$ nslookup -type=NS hyoka.ofc.kyushu-u.ac.jp c.root-servers.net
+Authoritative answers can be found from:
+jp  nameserver = a.dns.jp.   (... b.dns.jp ... h.dns.jp)  # ma conosce i server di jp
+b.dns.jp  internet address = 202.12.30.131
+
+$ nslookup -type=NS hyoka.ofc.kyushu-u.ac.jp b.dns.jp
+Authoritative answers can be found from:
+kyushu-u.ac.jp  nameserver = ns1.kyushu-u.ac.jp.          # jp conosce i server di kyushu-u
+kyushu-u.ac.jp  nameserver = ns2.kyushu-u.ac.jp.
+ns2.kyushu-u.ac.jp  internet address = 133.5.1.9
+
+$ nslookup -type=NS hyoka.ofc.kyushu-u.ac.jp ns2.kyushu-u.ac.jp
+Authoritative answers can be found from:
+ofc.kyushu-u.ac.jp  nameserver = ns.jimu.kyushu-u.ac.jp.  # sotto-zona ofc
+ns.jimu.kyushu-u.ac.jp  internet address = 133.5.40.1
+
+$ nslookup -type=A hyoka.ofc.kyushu-u.ac.jp ns.jimu.kyushu-u.ac.jp
+Name:    hyoka.ofc.kyushu-u.ac.jp
+Address: 133.5.40.197                                     # finalmente il server autorevole
+\end{lstlisting}
+
+\info{Da provare}{
+    Si possono interrogare i server in alto nella gerarchia (compresi i root server) con l'opzione
+    \texttt{-norecurse}, e poi senza, confrontando i risultati. Altri esempi utili: \texttt{nslookup -type=MX
+    mit.edu} (i server di posta) e \texttt{nslookup -type=NS mit.edu} (i server DNS con autorità).
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Il \textbf{DNS} traduce nomi in indirizzi IP: è un protocollo applicativo client-server su \textbf{UDP,
+          porta 53}, realizzato come database \textbf{distribuito} e \textbf{gerarchico}.
+    \item Lo spazio dei nomi è un albero (radice, TLD, sottodomini) diviso in \textbf{zone}, ciascuna con i propri
+          name server \textbf{autorevoli}.
+    \item I dati sono \textbf{resource record} (NAME, TTL, CLASS, TYPE, VALUE): A, AAAA, NS, CNAME, MX, SOA, PTR, \dots
+    \item L'host fa una query \textbf{ricorsiva} al server locale; il server locale fa query \textbf{iterative} a
+          root, TLD e server autorevoli.
+    \item Il \textbf{caching} (con scadenza data dal TTL) rende il DNS veloce; il DNS offre anche \textbf{alias} e
+          \textbf{distribuzione del carico}.
+\end{itemize}
+}

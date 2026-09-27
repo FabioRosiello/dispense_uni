@@ -1,0 +1,437 @@
+\chapter{Il Web e il protocollo HTTP}
+
+% ══════════════════════════════════════════════════════════════
+\section{Dal Web a HTTP}
+% ══════════════════════════════════════════════════════════════
+
+Fino ai primi anni '90 Internet era usata soprattutto da ricercatori, docenti e studenti
+universitari: per collegarsi a host remoti (Telnet), trasferire file (FTP), leggere e inviare
+news e posta elettronica. Applicazioni utilissime, ma che lasciavano Internet sconosciuta fuori
+dal mondo accademico. Nei primi anni '90 arrivò il \textbf{World Wide Web}, la prima applicazione
+Internet a conquistare il grande pubblico.
+
+\dfn{World Wide Web}{
+    Il \textbf{World Wide Web} (WWW, o semplicemente Web) è una collezione di informazioni
+    (documenti, immagini, video, audio, \dots) accessibili attraverso Internet secondo uno specifico
+    protocollo, l'\textbf{HTTP} (\emph{HyperText Transfer Protocol}).
+}
+
+La comunicazione HTTP è tipicamente \textbf{client-server}:
+
+\begin{itemize}
+    \item un \textbf{programma client} traduce le richieste dell'utente in messaggi HTTP: è implementato
+          nei \textbf{browser} (Chrome, Firefox, Edge, Safari, \dots);
+    \item un \textbf{programma server} esegue la richiesta HTTP e restituisce una risposta HTTP.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (srv) at (0,0) {\icon[0.9cm]{server}};
+  \node[below=-1pt of srv, align=center] {server Web\\(per esempio Apache)};
+  \node (c1) at (-5,1.3) {\icon[1.1cm]{pc}}; \node[below=-2pt of c1] {PC con Firefox};
+  \node (c2) at (5,1.3) {\icon[1.2cm]{laptop}}; \node[below=-2pt of c2] {laptop con Safari};
+  \node (c3) at (4.2,-1.6) {\icon[0.8cm]{smartphone}}; \node[below=-2pt of c3] {smartphone con Chrome};
+  \foreach \c/\sx in {c1/-0.5, c2/0.5, c3/0.4} {
+    \draw[msg, netblue, shorten <=14pt, shorten >=14pt] ([yshift=4pt]\c.center) -- ([yshift=4pt, xshift=\sx cm]srv.center);
+    \draw[msg, netgreen, shorten <=14pt, shorten >=14pt] ([yshift=-4pt, xshift=\sx cm]srv.center) -- ([yshift=-4pt]\c.center);
+  }
+  \draw[msg, netblue] (-6.2,-2.2) -- ++(0.8,0) node[right, text=netblue] {richiesta HTTP};
+  \draw[msg, netgreen] (-6.2,-2.7) -- ++(0.8,0) node[right, text=netgreen] {risposta HTTP};
+\end{tikzpicture}
+\caption{Client diversi, con browser diversi, parlano con lo stesso server perché condividono il protocollo HTTP.}
+\end{figure}
+
+HTTP definisce principalmente due cose: la \textbf{struttura dei messaggi} e \textbf{come client e
+server se li scambiano}.
+
+\warning{Cosa HTTP non definisce}{
+    HTTP non stabilisce come vadano implementati client e server, né come i contenuti vadano
+    \textbf{visualizzati}. Il modo in cui una pagina appare dipende dal browser: due browser possono
+    mostrare la stessa pagina in modi un po' diversi (uno aspetta che sia tutta caricata, l'altro la
+    mostra pezzo per pezzo).
+}
+
+Il Web e i suoi protocolli sono la piattaforma di applicazioni come YouTube, la posta via Web
+(Gmail) e gran parte delle app per dispositivi mobili, social network compresi.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (c) at (0,0) {\icon[1cm]{laptop}};
+  \node[lay app, minimum width=2.4cm] (ca) at (0,-1.1) {browser};
+  \node[lay tra, minimum width=2.4cm] (ct) at (0,-1.72) {};
+  \node[lbl] at (0,-2.3) {[\dots] resto della pila};
+  \node (s) at (7,0) {\icon[0.7cm]{server}};
+  \node[lay app, minimum width=2.4cm] (sa) at (7,-1.1) {server Web};
+  \node[lay tra, minimum width=2.4cm] (st) at (7,-1.72) {};
+  \node[lbl] at (7,-2.3) {[\dots] resto della pila};
+  \draw[{Stealth}-{Stealth}, thick, netred] (ca) -- node[above, text=netred] {HTTP} (sa);
+  \draw[{Stealth}-{Stealth}, thick, netred] (ct) -- node[below, text=netred] {TCP (o UDP)} (st);
+  \node[anchor=west] at (9,-1.1) {livello applicativo};
+  \node[anchor=west] at (9,-1.72) {livello di trasporto};
+\end{tikzpicture}
+\caption{HTTP è il protocollo tra browser e server Web; sotto, il trasporto è affidato a TCP (o, con HTTP/3, a UDP).}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Le URL}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Risorsa e URL}{
+    Le informazioni sul Web si chiamano \textbf{risorse} (o \textbf{oggetti}) e sono identificate da un
+    \textbf{URL} (\emph{Uniform Resource Locator}), una stringa con la forma generale:
+    \begin{center}
+    \texttt{[protocollo]://[userinfo@][host][:porta][/percorso][?query][\#frammento]}
+    \end{center}
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\ttfamily\large, inner sep=2pt}]
+  \node[fill=lapp!60] (p) at (0,0) {https};
+  \node[right=0pt of p] (s1) {://};
+  \node[fill=lnet!60, right=0pt of s1] (h) {en.wikipedia.org};
+  \node[fill=ltra!60, right=0pt of h] (pt) {:443};
+  \node[fill=llink!80, right=0pt of pt] (pa) {/w/index.php};
+  \node[fill=netred!20, right=0pt of pa] (q) {?title=SSC\_Napoli};
+  \node[fill=lphy, right=0pt of q] (f) {\#Storia};
+  \foreach \n/\t/\d in {p/protocollo/0.5, h/{host (nome o indirizzo IP)}/0.5, pt/porta/1.2, pa/percorso/0.5, q/query/1.2, f/frammento/0.5}
+     \draw[{Stealth}-, thin] (\n.south) -- ++(0,-\d) node[below, font=\small\sffamily] {\t};
+\end{tikzpicture}
+\caption{Anatomia di un URL.}
+\end{figure}
+
+\begin{itemize}
+    \item \texttt{[protocollo]}: il protocollo con cui accedere alla risorsa (HTTP, HTTPS, FTP, \dots).
+    \item \texttt{[userinfo]} (opzionale): informazioni sull'utente, come \texttt{nome:password@}. È
+          \textbf{deprecato} per ovvi motivi di sicurezza.
+    \item \texttt{[host]}: il nome o l'indirizzo IP del server.
+    \item \texttt{[porta]} (opzionale): la porta da usare; di solito si ricava dal protocollo (80 per HTTP,
+          443 per HTTPS).
+    \item \texttt{[percorso]}: dove si trova la risorsa dentro il server (\texttt{/percorso/della/risorsa}).
+    \item \texttt{[query]}: preceduta da \texttt{?}, specifica eventuali richieste (parametri).
+    \item \texttt{[frammento]}: preceduto da \texttt{\#}, identifica un elemento dentro la risorsa (una
+          sezione, un modulo).
+\end{itemize}
+
+\begin{esempio}{Due URL scomposti}
+\texttt{http://www.someSchool.edu/someDepartment/picture1.gif}
+\begin{itemize}
+    \item protocollo: \texttt{http}; host: \texttt{www.someSchool.edu}; percorso: \texttt{/someDepartment/picture1.gif}.
+\end{itemize}
+\texttt{https://en.wikipedia.org/w/index.php?title=SSC\_Napoli}
+\begin{itemize}
+    \item protocollo: \texttt{https}; host: \texttt{en.wikipedia.org}; percorso: \texttt{/w/index.php};
+          query: \texttt{?title=SSC\_Napoli}.
+\end{itemize}
+In questo caso la query produce la stessa pagina di \texttt{https://en.wikipedia.org/wiki/SSC\_Napoli}.
+\end{esempio}
+
+\subsection{Pagine e oggetti}
+
+La maggior parte delle pagine Web è formata da un \textbf{file HTML di base} (\emph{HyperText Markup
+Language}) e da vari \textbf{riferimenti} ad altri oggetti (immagini, video, script, fogli di stile),
+ciascuno con il proprio URL.
+
+\begin{esempio}{Quanti oggetti ha una pagina}
+Una pagina con un testo HTML e cinque immagini JPEG ha \textbf{sei oggetti}: il file HTML di base più le
+cinque immagini. Il browser riceve prima l'HTML, vi trova i riferimenti alle immagini e le chiede una a una.
+\end{esempio}
+
+% ══════════════════════════════════════════════════════════════
+\section{Come funziona HTTP}
+% ══════════════════════════════════════════════════════════════
+
+HTTP definisce come i client Web chiedono oggetti ai server Web e come i server li trasferiscono.
+Quando l'utente chiede un oggetto (per esempio cliccando un link), il browser invia messaggi di
+\textbf{richiesta HTTP} per gli oggetti della pagina; il server risponde con messaggi di
+\textbf{risposta HTTP} che contengono gli oggetti.
+
+HTTP evolve continuamente per bilanciare affidabilità e prestazioni:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \foreach \x/\v/\y/\c in {0/{HTTP/1.0}/1996/lnet, 3.3/{HTTP/1.1}/1997/lnet, 6.6/{HTTP/2}/2015/ltra, 9.9/{HTTP/3}/2022/lapp} {
+    \node[signal, signal to=east, fill=\c, draw=black!50, minimum width=3.1cm, minimum height=0.9cm, align=center] at (\x,0) {\bfseries \v\\\y};
+  }
+  \node[lbl, text width=3cm] at (0,-0.9) {connessioni non persistenti};
+  \node[lbl, text width=3cm] at (3.3,-0.9) {connessioni persistenti};
+  \node[lbl, text width=3cm] at (6.6,-0.9) {richieste intercalate e priorità};
+  \node[lbl, text width=3cm] at (9.9,-0.9) {su UDP con QUIC};
+\end{tikzpicture}
+\caption{Le versioni di HTTP.}
+\end{figure}
+
+\subsection{Il protocollo di trasporto sottostante}
+
+HTTP usa principalmente \textbf{TCP} come protocollo di trasporto; dal 2022, con \textbf{HTTP/3}, può
+usare anche \textbf{UDP} (circa il 30\% del traffico HTTP viaggia oggi su UDP).
+
+\begin{enumerate}
+    \item Il client HTTP \textbf{apre una connessione} TCP con il server.
+    \item Stabilita la connessione, browser e server comunicano attraverso i loro \textbf{socket}: il client
+          scrive richieste nel proprio socket e legge risposte dal proprio socket; il server fa il contrario.
+\end{enumerate}
+
+Perché storicamente TCP? Perché offre servizi utilissimi, soprattutto il \textbf{trasferimento
+affidabile}: garantisce che richieste e risposte arrivino integre a destinazione (se possibile). Ma i
+servizi di TCP rallentano la comunicazione: per questo HTTP/3 usa UDP con sopra il protocollo
+\textbf{QUIC} (\emph{Quick UDP Internet Connections}), che reimplementa l'affidabilità sopra UDP ed è
+stimato essere circa il 30\% più veloce.
+
+\info{Il vantaggio della stratificazione, visto da HTTP}{
+    Qui si vede uno dei grandi vantaggi dell'architettura a strati: le applicazioni HTTP non devono
+    preoccuparsi di raggiungibilità, perdite di dati, ritrasmissioni. Possono essere più semplici, sia
+    logicamente sia computazionalmente, delegando gran parte del lavoro agli strati sottostanti.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{HTTP è stateless}
+% ══════════════════════════════════════════════════════════════
+
+La semplicità è fondamentale per un server che riceve moltissime richieste al secondo (in media
+un server gestisce circa 1000 richieste HTTP al secondo, e l'infrastruttura di un grande motore di
+ricerca centinaia di migliaia di interrogazioni al secondo).
+
+\dfn{Protocollo stateless}{
+    HTTP è \textbf{senza stato} (\emph{stateless}): il server \textbf{non conserva alcuna informazione}
+    sulle interazioni passate con un certo client.
+}
+
+\begin{esempio}{La stessa richiesta due volte}
+Se un client chiede lo stesso oggetto due volte di seguito, il server non considera la seconda
+richiesta ridondante: rimanda semplicemente l'oggetto, perché ha completamente dimenticato la prima.
+\end{esempio}
+
+Non tutte le applicazioni sono stateless: molte sono \textbf{stateful} (con stato). Vedremo come HTTP
+riesca comunque a ``ricordarsi'' degli utenti usando i \textbf{cookie}.
+
+% ══════════════════════════════════════════════════════════════
+\section{Connessioni persistenti e non persistenti}
+% ══════════════════════════════════════════════════════════════
+
+Client e server possono comunicare a lungo, scambiandosi molte coppie richiesta--risposta (una di
+seguito all'altra, a intervalli regolari o in modo intermittente). Con un trasporto orientato alla
+connessione (TCP o QUIC) ci sono due possibilità.
+
+\dfn{Connessioni persistenti e non persistenti}{
+    \begin{itemize}
+      \item \textbf{Connessione non persistente}: per \textbf{ogni} coppia richiesta--risposta si apre una
+            \textbf{nuova} connessione, che viene chiusa subito dopo.
+      \item \textbf{Connessione persistente}: tutte le richieste e le risposte viaggiano sulla
+            \textbf{stessa} connessione.
+    \end{itemize}
+}
+
+Le prime versioni di HTTP (HTTP/1.0) usavano per default connessioni non persistenti; oggi il default
+sono le connessioni persistenti, ma client e server possono essere configurati per usare quelle non
+persistenti.
+
+\subsection{Esempio di connessione non persistente}
+
+Chiediamo una pagina fatta di un file HTML di base e \textbf{10 immagini JPEG}, tutte sullo stesso
+server, all'URL \url{http://www.someschool.edu/someDepartment/home.index}.
+
+\begin{enumerate}
+    \item Il client HTTP \textbf{apre una connessione TCP} verso \texttt{www.someschool.edu} sulla porta
+          \textbf{80}: ci sono ora due socket, uno sul client e uno sul server.
+    \item Il client invia nel proprio socket una \textbf{richiesta HTTP} che contiene il percorso
+          \texttt{/someDepartment/home.index}.
+    \item Il server riceve la richiesta, recupera l'oggetto (da RAM o disco), lo incapsula in una
+          \textbf{risposta HTTP} e la invia nel proprio socket.
+    \item Il server dice a TCP di \textbf{chiudere} la connessione; TCP la chiuderà davvero quando sarà
+          sicuro che il client ha ricevuto la risposta integra.
+    \item Il client riceve la risposta e la connessione termina. Il messaggio dice che l'oggetto è un file
+          HTML: il client lo estrae, lo esamina e trova i riferimenti ai 10 JPEG.
+    \item I passi 1--4 vengono ripetuti \textbf{per ciascuna delle 10 immagini}.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (c) at (0,0) {\icon[1.1cm]{pc}}; \node[below=-2pt of c] {client};
+  \node (s) at (8,0) {\icon[0.8cm]{server}}; \node[below=-2pt of s] {server};
+  \foreach \i/\y/\t in {1/1.5/HTML, 2/0.9/JPEG 1, 3/0.3/JPEG 2, 11/-1.2/JPEG 10} {
+    \draw[{Stealth}-{Stealth}, thick, netblue] (1,\y) -- node[above=-1pt, fill=white, inner sep=1pt] {connessione TCP n.~\i: \t} (7,\y);
+  }
+  \node at (4,-0.45) {$\vdots$};
+\end{tikzpicture}
+\caption{Con connessioni non persistenti servono 11 connessioni TCP (e 11 coppie di socket) per una pagina di 11 oggetti.}
+\end{figure}
+
+Poiché la connessione non sopravvive tra un oggetto e l'altro, servono \textbf{11 connessioni TCP} per
+trasferire la pagina, e gli elementi possono arrivare in momenti diversi.
+
+\subsection{Connessioni in sequenza e in parallelo}
+
+Le connessioni possono essere aperte \textbf{in sequenza} o \textbf{in parallelo}. Nell'esempio, una volta
+ricevuto l'HTML e scoperto che servono 10 immagini, il browser può scaricarle tutte
+contemporaneamente.
+
+\begin{itemize}
+    \item I browser moderni permettono di configurare il grado di parallelismo: di solito aprono \textbf{da 5
+          a 10 connessioni TCP parallele}, ciascuna con una sola transazione richiesta--risposta.
+    \item Le connessioni parallele \textbf{accorciano il tempo di risposta} ma \textbf{aumentano il costo
+          computazionale}.
+    \item Anche con il parallelismo, aprire tante connessioni TCP ha un costo in tempo non trascurabile.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il costo in RTT}
+% ══════════════════════════════════════════════════════════════
+
+È difficile stimare con precisione i tempi su Internet. Si può però misurare il costo di una richiesta
+in \textbf{RTT}.
+
+\dfn{Round-Trip Time (RTT)}{
+    L'\textbf{RTT} è il tempo impiegato da un \textbf{piccolo pacchetto} per andare dal client al server e
+    \textbf{tornare} al client.
+}
+
+\subsection{Il three-way handshake}
+
+Con un trasporto orientato alla connessione come TCP, prima di scambiare dati si esegue il
+\textbf{three-way handshake} (stretta di mano a tre vie):
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.85, every node/.style={font=\footnotesize\sffamily}]
+  \timeline{c}{0}{Client}{5.2}
+  \timeline{s}{6}{Server}{5.2}
+  \draw[msg, netblue] (0,-0.4) -- node[above, sloped] {1. ``vorrei aprire una connessione'' (SYN)} (6,-1.4);
+  \draw[msg, netblue] (6,-1.6) -- node[above, sloped] {2. ``ricevuto, sono pronto'' (SYN-ACK)} (0,-2.6);
+  \draw[msg, netgreen] (0,-2.8) -- node[above, sloped] {3. ``ricevuto'' + richiesta HTTP (ACK)} (6,-3.8);
+  \draw[msg, netgreen, very thick] (6,-4.0) -- node[above, sloped] {risposta: il file HTML} (0,-5.0);
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (-0.2,-0.4) -- (-0.2,-2.6) node[midway, left=6pt] {1 RTT};
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (-0.2,-2.8) -- (-0.2,-5.0) node[midway, left=6pt] {1 RTT};
+  \draw[decorate, decoration={brace, amplitude=5pt}] (6.2,-4.0) -- (6.2,-4.4) node[midway, right=6pt, text width=2.6cm, align=left] {tempo di trasmissione del file};
+  \node[right, text=netgreen!60!black] at (6.3,-3.1) {connessione stabilita};
+\end{tikzpicture}
+\caption{Richiesta di un file HTML con connessione non persistente: circa 2 RTT più il tempo di trasmissione del file.}
+\end{figure}
+
+\begin{enumerate}
+    \item Il client invia un piccolo segmento TCP per segnalare che vuole aprire una connessione.
+    \item Il server conferma e risponde con un piccolo segmento TCP.
+    \item Il client conferma a sua volta.
+\end{enumerate}
+
+Dal punto di vista degli RTT, i primi due passi dell'handshake richiedono \textbf{1 RTT}. Un
+handshake analogo avviene anche quando la connessione viene chiusa.
+
+\subsection{Il conto totale}
+
+\begin{itemize}
+    \item In HTTP il client invia la \textbf{richiesta} insieme al terzo passo dell'handshake (la conferma).
+    \item Quando la richiesta arriva, il server invia il file HTML: la coppia richiesta--risposta costa
+          \textbf{un altro RTT}.
+\end{itemize}
+
+\dfn{Tempo di risposta con connessione non persistente}{
+    $$T_{\text{risposta}} \approx \underbrace{1\ \text{RTT}}_{\text{apertura TCP}} + \underbrace{1\ \text{RTT}}_{\text{richiesta e risposta}} + t_{\text{trasmissione del file}} = 2\ \text{RTT} + t_{\text{trasmissione}}$$
+}
+
+\begin{esempio}{Una pagina con 10 immagini}
+Con RTT $= 50$ ms e tempi di trasmissione trascurabili, una pagina con HTML e 10 immagini, scaricate
+\textbf{in sequenza} con connessioni non persistenti, richiede circa $11 \times 2\ \text{RTT} = 22$ RTT
+$= 1{,}1$ s. Con 10 connessioni \textbf{parallele} per le immagini si scende a $2 + 2 = 4$ RTT
+$= 0{,}2$ s. Con una connessione \textbf{persistente} senza pipelining: $2 + 10 \times 1 = 12$ RTT
+$= 0{,}6$ s; con pipelining circa $2 + 1 = 3$ RTT $= 0{,}15$ s.
+\end{esempio}
+
+% ══════════════════════════════════════════════════════════════
+\section{Connessioni persistenti e pipelining}
+% ══════════════════════════════════════════════════════════════
+
+Nelle connessioni \textbf{persistenti} il server \textbf{lascia aperta} la connessione TCP dopo aver
+inviato una risposta.
+
+\begin{itemize}
+    \item Richieste e risposte successive tra lo stesso client e lo stesso server viaggiano sulla stessa
+          connessione: l'intera pagina dell'esempio (HTML + 10 immagini) passa su \textbf{una sola}
+          connessione TCP.
+    \item Anche più pagine dello stesso server possono essere inviate sulla stessa connessione.
+    \item Si risparmiano circa \textbf{1--2 RTT per oggetto} (non si riapre ogni volta la connessione).
+\end{itemize}
+
+\dfn{Pipelining}{
+    Con il \textbf{pipelining} le richieste di più oggetti vengono inviate \textbf{una dietro l'altra},
+    senza aspettare le risposte alle richieste precedenti. Da HTTP/2 richieste e risposte possono anche
+    essere \textbf{intercalate} sulla stessa connessione, con un meccanismo di \textbf{priorità}. Le
+    connessioni persistenti con pipelining sono oggi la modalità di default.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.52, every node/.style={font=\scriptsize\sffamily}]
+  % non persistente
+  \begin{scope}
+    \node[font=\footnotesize\bfseries\sffamily] at (1.5,1) {Non persistente};
+    \draw[thick] (0,0) -- (0,-15); \draw[thick] (3,0) -- (3,-15);
+    \foreach \k/\t in {0/file 1, 5/file 2, 10/file 3} {
+      \draw[msg, netblue] (0,-\k-0.2) -- (3,-\k-0.9); \draw[msg, netblue] (3,-\k-1.0) -- (0,-\k-1.7); \draw[msg, netblue] (0,-\k-1.8) -- (3,-\k-2.5);
+      \draw[msg, netgreen, very thick] (3,-\k-2.6) -- node[above, sloped] {\t} (0,-\k-3.8);
+      \node[text=netred] at (1.5,-\k-4.4) {chiusura};
+    }
+  \end{scope}
+  % persistente
+  \begin{scope}[xshift=5cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (1.5,1) {Persistente};
+    \draw[thick] (0,0) -- (0,-15); \draw[thick] (3,0) -- (3,-15);
+    \draw[msg, netblue] (0,-0.2) -- (3,-0.9); \draw[msg, netblue] (3,-1.0) -- (0,-1.7); \draw[msg, netblue] (0,-1.8) -- (3,-2.5);
+    \draw[msg, netgreen, very thick] (3,-2.6) -- node[above, sloped] {file 1} (0,-3.8);
+    \draw[msg, netblue] (0,-4.0) -- node[above, sloped] {richiesta 2} (3,-4.8);
+    \draw[msg, netgreen, very thick] (3,-4.9) -- node[above, sloped] {file 2} (0,-6.1);
+    \draw[msg, netblue] (0,-6.3) -- node[above, sloped] {richiesta 3} (3,-7.1);
+    \draw[msg, netgreen, very thick] (3,-7.2) -- node[above, sloped] {file 3} (0,-8.4);
+  \end{scope}
+  % pipelining
+  \begin{scope}[xshift=10cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (1.5,1) {Pipelining};
+    \draw[thick] (0,0) -- (0,-15); \draw[thick] (3,0) -- (3,-15);
+    \draw[msg, netblue] (0,-0.2) -- (3,-0.9); \draw[msg, netblue] (3,-1.0) -- (0,-1.7); \draw[msg, netblue] (0,-1.8) -- (3,-2.5);
+    \draw[msg, netgreen, very thick] (3,-2.6) -- node[above, sloped] {file 1} (0,-3.8);
+    \draw[msg, netred] (0,-4.0) -- (3,-4.8); \draw[msg, netred] (0,-4.3) -- (3,-5.1);
+    \node[text=netred, rotate=-15] at (1.4,-3.7) {richieste 2 e 3};
+    \draw[msg, netgreen, very thick] (3,-5.2) -- (0,-6.4); \draw[msg, netgreen, very thick] (3,-5.5) -- (0,-6.7);
+    \node[text=netgreen!60!black] at (1.5,-7.3) {file 2 e 3};
+  \end{scope}
+  \draw[-{Stealth}, thick, black!50] (-0.7,0) -- node[left, rotate=90, anchor=south] {tempo} (-0.7,-15);
+\end{tikzpicture}
+\caption{Confronto indicativo degli RTT necessari per richiedere 3 file nelle tre modalità.}
+\end{figure}
+
+\subsection{Confronto}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{7cm}p{7cm}}
+\toprule
+\textbf{Persistente} & \textbf{Non persistente} \\
+\midrule
+\itick\ più veloce, soprattutto con il pipelining & \itick\ semplice da implementare, in perfetta sintonia con la natura stateless di HTTP \\
+\itick\ richiede meno risorse (soprattutto memoria) & \icross\ richiede più risorse: per ogni connessione vanno allocati buffer e variabili TCP su client e server \\
+\icross\ più complessa da implementare, specie con il pipelining & \icross\ più lenta: 1--2 RTT in più per ogni richiesta \\
+\icross\ la connessione può restare aperta anche se inutilizzata: il server la chiude dopo un \emph{timeout} & \itick\ le connessioni non restano mai aperte inutilmente \\
+\bottomrule
+\end{tabular}
+\caption{Connessioni persistenti e non persistenti a confronto.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Il Web è una collezione di risorse identificate da \textbf{URL} e accessibili con \textbf{HTTP}, un
+          protocollo client-server.
+    \item HTTP usa \textbf{TCP} (porta 80) e, con HTTP/3, anche \textbf{UDP} con QUIC.
+    \item HTTP è \textbf{stateless}: il server non ricorda le richieste precedenti.
+    \item Connessioni \textbf{non persistenti}: una connessione per oggetto, circa 2 RTT + trasmissione per
+          ciascuno. Connessioni \textbf{persistenti}: una sola connessione, con il \textbf{pipelining} le
+          richieste partono senza aspettare le risposte.
+\end{itemize}
+}

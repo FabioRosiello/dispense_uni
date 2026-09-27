@@ -1,0 +1,508 @@
+\chapter{Node.js}
+
+Sappiamo ora che le pagine web possono essere generate al volo da programmi in
+esecuzione sul server. E sappiamo già molto di JavaScript: finora, però, l'abbiamo
+usato soltanto nell'ambiente del browser.
+
+Nulla vieta di usarlo anche in un \textbf{ambiente server}. Esistono diversi
+runtime che lo permettono --- \term{Node.js}, \term{Deno}, \term{Bun} --- e in
+questo corso useremo il primo, di gran lunga il più diffuso.
+
+\section{Che cos'è Node.js}
+
+\dfn{Node.js}{
+  \term{Node.js} è un \textbf{ambiente di esecuzione} (\textit{runtime})
+  JavaScript, open source e multipiattaforma. Esegue il motore JavaScript
+  \textbf{V8} di Google, lo stesso del progetto Chromium, e adotta un modello di
+  I/O \textbf{basato sugli eventi, asincrono per impostazione predefinita e non
+  bloccante}.}
+
+Per capire perché quel modello di I/O sia così importante, conviene partire da
+come funzionano gli altri ambienti.
+
+\section{Il modello multi-thread}
+
+In molti ambienti e linguaggi, \textbf{una richiesta è gestita da un
+thread o processo dedicato}, prelevato da un pool preallocato.
+
+Il problema è che, per servire una richiesta, un'applicazione web deve spesso
+compiere operazioni di I/O \textbf{lente e bloccanti}:
+
+\begin{itemize}
+  \item accedere a un database;
+  \item accedere a un'API esterna (per esempio con \code{fetch()});
+  \item leggere un file dal filesystem locale;
+  \item leggere il corpo della richiesta.
+\end{itemize}
+
+Di conseguenza, i thread che gestiscono le richieste passano \textbf{molto
+tempo ad aspettare} che queste operazioni si completino.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      act/.style={fill=primary!30!white, draw=primary!60!black, line width=0.5pt,
+                  minimum height=0.45cm, anchor=west, inner sep=0pt},
+      wait/.style={fill=neutral!14!white, draw=neutral!45!white, line width=0.5pt,
+                   minimum height=0.45cm, anchor=west, inner sep=0pt},
+      io/.style={fill=orange-gradient-2!60!white, draw=orange-gradient-6,
+                 line width=0.5pt, minimum height=0.35cm, anchor=west,
+                 inner sep=0pt}]
+
+    % barra del thread
+    \node[act,  minimum width=0.9cm] at (0,0) {};
+    \node[wait, minimum width=2.0cm] at (0.9,0) {};
+    \node[act,  minimum width=0.7cm] at (2.9,0) {};
+    \node[wait, minimum width=2.4cm] at (3.6,0) {};
+    \node[act,  minimum width=0.7cm] at (6.0,0) {};
+    \node[wait, minimum width=1.8cm] at (6.7,0) {};
+    \node[act,  minimum width=0.9cm] at (8.5,0) {};
+
+    \node[font=\Lato\scriptsize, anchor=east, text=neutral!25!black]
+      at (-0.2,0) {thread};
+
+    % operazioni di I/O
+    \node[io, minimum width=2.0cm] at (0.9,-0.75) {};
+    \node[io, minimum width=2.4cm] at (3.6,-0.75) {};
+    \node[io, minimum width=1.8cm] at (6.7,-0.75) {};
+    \node[font=\Lato\scriptsize, anchor=east, text=neutral!25!black, align=right]
+      at (-0.2,-0.75) {operazioni\\ di I/O};
+
+    % etichette
+    \node[font=\Lato\scriptsize, text=neutral!35!black] at (1.9,0.4) {attesa};
+    \node[font=\Lato\scriptsize, text=neutral!35!black] at (4.8,0.4) {attesa};
+    \node[font=\Lato\scriptsize, text=neutral!35!black] at (7.6,0.4) {attesa};
+
+    \draw[-{Stealth[length=5pt]}, draw=neutral!45!black, line width=0.7pt]
+      (0,-1.35) -- (9.6,-1.35);
+    \node[font=\Lato\scriptsize, text=neutral!35!black, anchor=north]
+      at (9.6,-1.42) {tempo};
+
+    \node[font=\Lato\scriptsize, text=primary!70!black, anchor=south]
+      at (0.45,0.25) {};
+  \end{tikzpicture}
+  \caption{In azzurro il tempo in cui il thread lavora davvero; in grigio quello
+           in cui aspetta.}
+  \label{fig:blocking-io}
+\end{figure}
+
+Questo modello ha due difetti:
+
+\begin{itemize}
+  \item è \textbf{inefficiente}: moltissimo tempo di thread è speso ad
+        aspettare;
+  \item ha \textbf{scalabilità limitata}: il pool di thread è preallocato a una
+        dimensione fissa, e non si possono gestire più richieste concorrenti di
+        quante ne consenta il pool.
+\end{itemize}
+
+\subsection{Una metafora: il ristorante}
+
+Il docente propone un'analogia che vale la pena riportare per esteso, perché
+rende il concetto immediato.
+
+Un ristorante ha \textbf{10 tavoli}. La direzione assume \textbf{10 camerieri},
+assegnandone uno a ciascun tavolo.
+
+\begin{itemize}
+  \item Quando arriva un cliente, viene fatto accomodare al primo tavolo libero
+        e il suo cameriere gli porta il menu. Il cliente impiega dai 5 ai 10
+        minuti per decidere: \textbf{in questo tempo il cameriere resta fermo}.
+  \item Deciso l'ordine, il cameriere lo porta in cucina. Il cuoco impiega dai
+        15 ai 30 minuti per preparare: \textbf{il cameriere resta fermo}.
+  \item Quando il piatto è pronto, il cameriere lo porta al tavolo. Il cliente
+        impiega dai 15 ai 30 minuti per mangiare: \textbf{il cameriere resta
+        fermo}.
+  \item Finito il pasto, il cameriere sparecchia e chiede il conto alla cassa,
+        che impiega dai 2 ai 5 minuti: \textbf{il cameriere resta fermo}.
+  \item Preparato il conto, il cameriere lo porta al cliente, che paga e se ne
+        va. Solo allora quel cameriere può servire un nuovo cliente.
+\end{itemize}
+
+I camerieri sono i \textbf{thread}, i clienti sono le \textbf{richieste}. Al
+massimo 10 richieste possono essere servite contemporaneamente, e le attese
+(decidere, cucinare, mangiare, preparare il conto) sono le operazioni
+\textbf{bloccanti}. Per servire una richiesta in più bisogna assumere un nuovo
+cameriere.
+
+\subsection{Il ristorante efficiente}
+
+Proviamo un'organizzazione diversa: il ristorante assume \textbf{un solo
+cameriere} per tutti e 10 i tavoli.
+
+\begin{itemize}
+  \item Quando arriva un cliente, il cameriere lo accoglie, lo fa accomodare e
+        gli porta il menu. \textbf{Mentre il cliente sceglie, il cameriere è
+        libero} di occuparsi degli altri.
+  \item Quando il cliente ha deciso, il cameriere porta l'ordine in cucina.
+        \textbf{Mentre il cuoco prepara, il cameriere torna in sala} ed è
+        disponibile.
+  \item Quando il piatto è pronto (e la campanella della cucina suona), il
+        cameriere lo porta al tavolo. \textbf{Mentre il cliente mangia, il
+        cameriere è di nuovo libero.}
+\end{itemize}
+
+Un solo cameriere serve dieci tavoli senza problemi, perché non passa mai il
+tempo ad aspettare. La campanella della cucina è la chiave: è un \textbf{evento}
+che segnala che un'operazione lenta è terminata.
+
+\section{Il modello di Node.js}
+
+Node.js è basato su una filosofia molto simile a quella del ristorante
+efficiente.
+
+\begin{itemize}
+  \item Un programma Node.js gira in un \textbf{unico processo}: non serve
+        creare nuovi thread per ogni richiesta.
+  \item Il runtime fornisce nella libreria standard un insieme di
+        \term{primitive di I/O asincrone} che impediscono al codice JavaScript
+        di bloccarsi.
+  \item La maggior parte delle librerie adotta il paradigma non bloccante
+        ovunque possibile, con ampio uso del pattern delle \textbf{callback}.
+  \item Le operazioni sincrone sono l'\textbf{eccezione}, non la norma.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      n/.style={wtnode, minimum width=3.0cm, minimum height=1.0cm},
+      q/.style={wtnodeplain, minimum width=2.4cm, minimum height=0.9cm},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                draw=neutral!45!black},
+      c/.style={font=\Lato\scriptsize, anchor=east, text=neutral!25!black}]
+
+    \node[c] (c1) at (-0.4,0.9)  {Client 1};
+    \node[c] (c2) at (-0.4,0.1)  {Client 2};
+    \node[c] (c3) at (-0.4,-0.9) {Client \textit{n}};
+    \node[font=\Lato\small, text=neutral!45!black] at (-0.75,-0.4) {\vdots};
+
+    \node[q] (ev) at (1.9,0) {coda\\ degli eventi};
+    \node[n, draw=green-gradient-6, fill=green-gradient-1!45!white]
+      (el) at (5.6,0) {\textbf{Event Loop}\\\scriptsize (un solo thread)};
+    \node[q] (wt) at (9.4,0.9) {worker\\ thread};
+    \node[wtnodeplain, minimum width=2.4cm, minimum height=0.9cm]
+      (io) at (9.4,-1.0) {database,\\ filesystem, rete};
+
+    \draw[a] (c1.east) -- (ev.west |- c1);
+    \draw[a] (c2.east) -- (ev.west |- c2);
+    \draw[a] (c3.east) -- (ev.west |- c3);
+    \draw[a] (ev) -- (el);
+    \draw[a] (el.east) -- (wt.west);
+    \draw[a] (wt.south) -- (io.north);
+    \draw[a, draw=accent!70!black] (io.west) to[out=180, in=-60]
+      node[wtlab, pos=0.5]{callback} (el.south east);
+  \end{tikzpicture}
+  \caption{L'event loop a thread singolo di Node.js.}
+  \label{fig:event-loop}
+\end{figure}
+
+\info{Un thread solo, ma non per tutto}{
+  \guillemotleft Node.js è a thread singolo\guillemotright\ è una semplificazione utile ma
+  imprecisa. È il \textbf{nostro} codice JavaScript a girare in un solo thread:
+  le operazioni di I/O vere e proprie sono delegate a un pool di worker interni
+  al runtime. La conseguenza pratica è importante: un calcolo lungo e
+  \textbf{sincrono} nel nostro codice (un ciclo pesante, una cifratura,
+  l'elaborazione di un'immagine) blocca l'event loop e quindi
+  \textbf{tutte} le richieste, non solo la propria. Node.js eccelle nei carichi
+  dominati dall'I/O, molto meno in quelli dominati dalla CPU.}
+
+\section{Installare Node.js}
+
+Ci sono tre modi:
+
+\begin{itemize}
+  \item usare gli installer disponibili sul sito ufficiale;
+  \item usare il proprio gestore di pacchetti preferito;
+  \item usare un \term{gestore di versioni} come \code{nvm}, \code{nvs} o
+        \code{nvm4w}, comodo per sperimentare con versioni diverse e passare
+        rapidamente dall'una all'altra.
+\end{itemize}
+
+Nel corso si usa Node.js \textbf{20.9.0}; con qualunque versione supportata non
+dovrebbero esserci problemi. Per verificare che tutto funzioni:
+
+\begin{lstlisting}[style=shell]
+node --version
+\end{lstlisting}
+
+\begin{console}[Terminale]
+v20.9.0
+\end{console}
+
+\begin{esempio}{Hello World in Node.js}
+\begin{lstlisting}[style=js, name=hello-world.js]
+"use strict";
+console.log("Hello Node.js!");
+\end{lstlisting}
+
+\begin{lstlisting}[style=shell]
+node hello-world.js
+\end{lstlisting}
+
+\begin{console}[Terminale]
+Hello Node.js!
+\end{console}
+\end{esempio}
+
+\subsection{Differenze rispetto all'ambiente browser}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.3cm}@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{6.3cm}@{}}
+  \textbf{Nel browser} & \textbf{In Node.js} \\
+  JavaScript serve soprattutto a manipolare il DOM: ci sono \code{window},
+  \code{document}, le API della piattaforma web come i cookie e
+  \code{localStorage}.
+  & Questi oggetti e queste API \textbf{non esistono}. In compenso c'è la
+    libreria standard con i suoi moduli per l'accesso al filesystem e alla
+    rete: si possono leggere e scrivere file, e mettersi in ascolto su un socket
+    per ricevere richieste. \\
+\end{tabular}
+\end{center}
+
+\section{npm: il gestore di pacchetti}
+
+Uno dei principali motori del successo di Node.js è \term{npm}. A settembre 2022
+erano disponibili oltre 2,1 milioni di pacchetti: il più grande repository per
+un singolo linguaggio al mondo. Esiste un pacchetto per (quasi) tutto.
+
+npm viene installato insieme a Node.js. Per verificarlo:
+
+\begin{lstlisting}[style=shell]
+npm --version
+\end{lstlisting}
+
+\subsection{Creare un pacchetto}
+
+Per creare un pacchetto npm nella directory corrente si usa \code{npm init}.
+Poiché in questo corso lavoreremo con i \textbf{moduli ES}, useremo la variante:
+
+\begin{lstlisting}[style=shell]
+npm init es6
+\end{lstlisting}
+
+Il comando chiede alcune informazioni sul progetto (nome, versione, repository,
+licenza, autore, punto di ingresso, comando di test) e al termine crea un file
+\code{package.json} nella stessa directory, che contiene tutte le informazioni
+sul pacchetto, comprese le dipendenze e i comandi per eseguirlo. Si può pensarlo
+come la versione npm del \code{pom.xml} di Maven.
+
+\begin{lstlisting}[style=json, name=package.json]
+{
+  "name": "hello-web-technologies",
+  "version": "0.0.1",
+  "description": "Web Technologies' first npm package",
+  "main": "app.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["greetings"],
+  "author": "Luigi Libero Lucio Starace",
+  "license": "MIT"
+}
+\end{lstlisting}
+
+\begin{itemize}
+  \item il \textbf{file principale} (\code{app.js} nell'esempio) viene eseguito
+        quando il codice client importa il nostro pacchetto: di norma esporta le
+        variabili e le funzioni pubbliche;
+  \item la proprietà \code{scripts} permette di definire \textbf{attività} da
+        riga di comando, eseguibili con \code{npm <nome>};
+  \item \code{"type": "module"} è ciò che abilita i moduli ES, cioè la sintassi
+        \code{import}/\code{export} vista nel capitolo 6.
+\end{itemize}
+
+Aggiungiamo un'attività \code{start}:
+
+\begin{lstlisting}[style=json, name=package.json]
+"scripts": {
+  "start": "node app.js",
+  "test": "echo \"Error: no test specified\" && exit 1"
+},
+\end{lstlisting}
+
+\begin{lstlisting}[style=shell]
+npm start
+\end{lstlisting}
+
+\begin{console}[Terminale]
+> hello-web-technologies@0.0.1 start
+> node app.js
+
+Hello Web Technologies!
+\end{console}
+
+\subsection{Installare dipendenze}
+
+Per installare una dipendenza si usa \code{npm install <nomepacchetto>}.
+Proviamo con \code{cowsay}:
+
+\begin{lstlisting}[style=shell]
+npm install cowsay
+\end{lstlisting}
+
+Succedono due cose:
+
+\begin{enumerate}
+  \item npm tiene traccia della nuova dipendenza, aggiungendo una sezione al
+        file \code{package.json}:
+\end{enumerate}
+
+\begin{lstlisting}[style=json]
+"dependencies": {
+  "cowsay": "^1.5.0"
+}
+\end{lstlisting}
+
+\begin{enumerate}
+  \setcounter{enumi}{1}
+  \item le dipendenze vengono scaricate nella directory \code{node\_modules}.
+        Si noti che npm ha scaricato non solo il pacchetto richiesto, ma anche
+        le sue dipendenze (ricorsivamente).
+\end{enumerate}
+
+\begin{lstlisting}[style=js, name=app.js]
+import cowsay from 'cowsay';
+
+console.log(cowsay.think({
+  text: "Hello Web Tech!"
+}));
+\end{lstlisting}
+
+\begin{console}[Terminale]
+ _________________
+( Hello Web Tech! )
+ -----------------
+        o   ^__^
+         o  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+\end{console}
+
+\warning{node\_modules non va versionato}{
+  Quando si distribuisce un pacchetto npm basta fornire il \textbf{proprio}
+  codice e il descrittore \code{package.json}: la directory
+  \code{node\_modules} \textbf{non} va aggiunta al controllo di versione. Chi
+  riceve il progetto esegue \code{npm install} e npm ricostruisce l'intero
+  albero delle dipendenze a partire dal \code{package.json}. È il motivo per cui
+  \code{node\_modules/} è la prima riga di quasi ogni \code{.gitignore}.}
+
+\section{Una prima applicazione web con Node.js}
+
+\begin{esempio}{Un server HTTP in venti righe}
+\begin{lstlisting}[style=js, name=app.js]
+import http from 'http';
+
+const PORT = 3000;
+
+let server = http.createServer(function (request, response) {
+  let course = "Web Technologies";
+
+  response.writeHead(200, { "Content-Type": "text/html" });
+  response.write(`<!DOCTYPE html>
+    <html><body>
+      <h1>Hello ${course}</h1>
+      <p>La data corrente e' ${new Date().toDateString()}</p>
+    </body></html>`);
+  response.end();
+}).listen(PORT);
+
+console.log(`Web app in ascolto sulla porta ${PORT}`);
+\end{lstlisting}
+
+Qui si vede bene la differenza rispetto al server statico del capitolo 2: non
+c'è alcuna document root, non c'è alcun file HTML sul disco. Il documento viene
+\textbf{costruito a ogni richiesta}, e la funzione passata a
+\code{createServer} è una \textbf{callback}, invocata dall'event loop ogni volta
+che arriva una richiesta.
+
+Si riconoscono anche gli elementi del protocollo studiati nel primo capitolo:
+il codice di stato \code{200}, l'header \code{Content-Type}, il corpo della
+risposta.
+\end{esempio}
+
+\section{Strumenti di sviluppo}
+
+\subsection{Debug in Visual Studio Code}
+
+Il modo più semplice è abilitare la funzione \term{Auto Attach}, che collega un
+debugger ai processi Node.js avviati dentro VS Code. Per abilitarla si preme
+\code{CTRL+SHIFT+P} per aprire la palette dei comandi e si cerca
+\guillemotleft Toggle Auto Attach\guillemotright; conviene poi selezionare la modalità
+\textbf{Smart}, che si collega automaticamente solo agli script fuori da
+\code{node\_modules}.
+
+I punti di interruzione si aggiungono come di consueto, facendo clic accanto al
+numero di riga. Quando l'esecuzione raggiunge un punto di interruzione si ferma,
+e il pannello \textit{Run and Debug} permette di ispezionare le variabili,
+osservare espressioni, esaminare la pila delle chiamate e controllare il flusso.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{9.0cm}@{}}
+  \textbf{Azione} & \textbf{Descrizione} \\
+  \textit{Resume}     & riprende il normale flusso di esecuzione, fino al
+                        prossimo punto di interruzione. \\
+  \textit{Step Over}  & esegue l'istruzione successiva come un blocco unico,
+                        senza entrare nei suoi passi interni. \\
+  \textit{Step Into}  & entra nell'istruzione successiva per seguirne
+                        l'esecuzione riga per riga. \\
+  \textit{Step Out}   & essendo dentro un metodo, ne completa le righe restanti
+                        e torna al contesto di esecuzione precedente. \\
+  \textit{Restart}    & termina l'esecuzione e ricomincia il debug con la
+                        configurazione corrente (non funziona con Auto Attach). \\
+  \textit{Disconnect} & termina la sessione di debug. \\
+\end{tabular}
+\end{center}
+
+\info{Meglio del \code{console.log}}{
+  È molto comune, all'inizio, cercare di capire un bug disseminando il codice di
+  \code{console.log}. Funziona, ma è lento e invasivo. Mezz'ora spesa a imparare
+  il debugger si ripaga molte volte: si vedono \textbf{tutte} le variabili in
+  scope in un colpo solo, senza modificare il codice e senza dover indovinare in
+  anticipo quali stampare.}
+
+\subsection{Ricaricamento automatico}
+
+Ogni volta che modifichiamo il codice dobbiamo riavviare l'intero server
+(\code{npm start}, oppure \code{node app.js}). Per rendere lo sviluppo più
+piacevole si usano utilità che monitorano il codice e riavviano il server di
+sviluppo quando serve: è il \term{live reloading}.
+
+Una di queste è \term{nodemon}:
+
+\begin{lstlisting}[style=shell]
+npm install nodemon
+\end{lstlisting}
+
+Basta poi sostituire \code{node app.js} con \code{nodemon app.js}:
+
+\begin{lstlisting}[style=json, name=package.json]
+"scripts": {
+  "start": "nodemon app.js"
+},
+\end{lstlisting}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Getting started} --- Node.js Docs. \\
+        \urlx{https://nodejs.org/en/learn/} \\
+        Parti rilevanti: \textit{Introduction to Node.js}, \textit{How to
+        install Node.js}, \textit{Differences between Node.js and the Browser},
+        \textit{The V8 JavaScript Engine}, \textit{An introduction to the npm
+        package manager}, \textit{ECMAScript 2015 (ES6) and beyond}.
+  \item \textbf{Eloquent JavaScript} (3\textsuperscript{a} edizione), Marijn
+        Haverbeke, capitolo 20. \\
+        \urlx{https://eloquentjavascript.net/}
+  \item \textbf{Mixu's Node book}, Mikito Takada. \\
+        \urlx{http://book.mixu.net/node/single.html} \\
+        Parti rilevanti: capitolo 2 (\textit{What is Node.js?}), capitolo 8
+        sezione 8.2 (\textit{NPM}).
+  \item \textbf{Nodemon} --- sito ufficiale. \\
+        \urlx{https://nodemon.io/}
+  \item \textbf{Node.js debugging in VS Code}. \\
+        \urlx{https://code.visualstudio.com/docs/nodejs/nodejs-debugging}
+\end{itemize}

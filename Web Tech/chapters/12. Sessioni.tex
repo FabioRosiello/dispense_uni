@@ -1,0 +1,391 @@
+\chapter{Gestione delle sessioni}
+
+Alla nostra applicazione manca ancora una funzionalità essenziale: più utenti
+devono poter registrarsi, autenticarsi e gestire ciascuno la \textbf{propria}
+lista. Realizzarla richiede un concetto nuovo, il \term{tracciamento della
+sessione}.
+
+\section{Il problema}
+
+Torniamo al punto lasciato in sospeso nel primo capitolo: HTTP è
+\textbf{stateless}. Una richiesta, di per sé, non contiene alcuna informazione
+sulle richieste precedenti.
+
+Come fa il server a sapere che un utente ha già effettuato il login?
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      hdr/.style={wtnode, minimum width=3.0cm, minimum height=0.9cm},
+      life/.style={draw=neutral!45!white, line width=0.7pt, dashed},
+      msg/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=primary!70!black},
+      rsp/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=accent!70!black},
+      ml/.style={font=\FiraCodeNL\scriptsize, midway, above, inner sep=2.5pt,
+                 fill=white, text=neutral!15!black}]
+
+    \def\xb{0} \def\xs{9.0}
+
+    \node[hdr] (B) at (\xb,0) {\textbf{Utente}};
+    \node[hdr] (S) at (\xs,0) {\textbf{Application Server}};
+    \draw[life] (B.south) -- (\xb,-4.0);
+    \draw[life] (S.south) -- (\xs,-4.0);
+
+    \draw[msg] (\xb,-0.9) -- (\xs,-0.9) node[ml]{POST /login usr=luigi\&pwd=pass};
+    \draw[rsp] (\xs,-1.8) -- (\xb,-1.8) node[ml]{200 OK};
+    \draw[msg] (\xb,-2.7) -- (\xs,-2.7) node[ml]{GET /todo};
+
+    \node[font=\Lato\Large\bfseries, text=red-gradient-6] at (\xs+0.9,-3.3) {?};
+    \node[font=\Lato\scriptsize\itshape, text=red-gradient-6!80!black,
+          anchor=west, align=left] at (\xs+1.3,-3.3)
+      {chi è questo\\ utente?};
+  \end{tikzpicture}
+  \caption{Senza stato, la terza richiesta arriva da uno sconosciuto.}
+  \label{fig:stateless-problem}
+\end{figure}
+
+\dfn{Tracciamento della sessione}{
+  Il \term{tracciamento della sessione} (\textit{session tracking}) consiste nel
+  mantenere informazioni \textbf{con stato} sulle interazioni di un utente
+  attraverso più richieste HTTP. Permette ai server di \guillemotleft riconoscere\guillemotright\ gli
+  utenti e le loro azioni, e quindi di adattare le risposte a utenti e
+  situazioni diverse.}
+
+\section{Un approccio ingenuo: i cookie}
+
+Un modo che già conosciamo perché il server \guillemotleft memorizzi\guillemotright\ dati fra
+richieste diverse è impostare dei \term{cookie}. L'idea è la seguente.
+
+\begin{enumerate}
+  \item L'utente invia una richiesta a una pagina dinamica, con nome utente e
+        password come parametri.
+  \item La pagina verifica se le credenziali sono corrette.
+    \begin{itemize}
+      \item Se lo sono, il server imposta dei cookie per tenere traccia
+            dell'interazione, per esempio
+            \code{Set-Cookie: auth=true; username=luigi}.
+      \item Se non lo sono, mostra una pagina di errore e non imposta alcun
+            cookie.
+    \end{itemize}
+  \item Le pagine dinamiche che richiedono autenticazione controllano il cookie
+        \code{auth}: se è impostato mostrano il contenuto, altrimenti
+        reindirizzano alla pagina di login.
+\end{enumerate}
+
+\subsection{Gestire il login}
+
+\begin{lstlisting}[style=js, name=login.js]
+if (isAuthenticated) {
+  response.writeHead(300, {
+    "Location": "/",
+    "Set-Cookie": [
+      `auth=true; max-age=${60 * 60}`,
+      `username=${user.username}; max-age=${60 * 60}`
+    ]
+  });
+  response.end();
+}
+\end{lstlisting}
+
+Si impostano due cookie --- uno con il nome utente, l'altro un semplice valore
+booleano --- entrambi con scadenza a un'ora, e si reindirizza alla homepage.
+
+Se invece le credenziali non sono corrette, si mostra di nuovo la pagina di
+login restituendo un codice \code{401}:
+
+\begin{lstlisting}[style=js, name=login.js]
+if (!isAuthenticated) {
+  let renderedContent = pug.renderFile("./templates/login.pug",
+    { "error": "Autenticazione fallita. Controlla le credenziali." });
+  response.writeHead(401, { "Content-Type": "text/html" });
+  response.end(renderedContent);
+}
+\end{lstlisting}
+
+\subsection{Recuperare le informazioni di sessione}
+
+Vogliamo gestire le richieste in modo diverso a seconda che l'utente sia
+autenticato o meno: se un utente non autorizzato prova a visitare \code{/todo}
+gli serviamo una pagina di errore con codice \code{401}, mentre un utente
+autenticato vede la propria lista.
+
+\begin{lstlisting}[style=js, name=auth.js]
+function checkUserAuthentication(request) {
+  let cookies = parseCookies(request);
+  if (cookies.auth) {
+    return [true, cookies.username];
+  } else {
+    return [false, undefined];
+  }
+}
+\end{lstlisting}
+
+Purtroppo, anche per analizzare i cookie siamo da soli. L'header \code{Cookie}
+si presenta così: \code{Cookie: auth=true; username=luigi}.
+
+\begin{lstlisting}[style=js, name=cookies.js]
+function parseCookies(request) {
+  const list = {};
+  const cookieHeader = request.headers?.cookie;
+  if (!cookieHeader) return list;
+
+  cookieHeader.split(`;`).forEach(function (cookie) {
+    let [name, ...rest] = cookie.split(`=`);
+    name = name?.trim();
+    if (!name) return;
+
+    const value = rest.join(`=`).trim();
+    if (!value) return;
+
+    list[name] = decodeURIComponent(value);
+  });
+
+  return list;
+}
+\end{lstlisting}
+
+\info{Perché quel \code{rest.join}}{
+  Il codice cerca di essere robusto quando il \textbf{valore} di un cookie
+  contiene a sua volta un \code{=}. Spezzare su \code{=} produce più di due
+  parti, e ricomporre tutto ciò che segue il primo \code{=} è l'unico modo
+  corretto. Di norma i cookie sono codificati come URL, ma la specifica non lo
+  impone.}
+
+\subsection{Rendere disponibile lo stato ai controller}
+
+Tutte le pagine della nostra applicazione sono influenzate dall'autenticazione:
+la barra di navigazione, per esempio, mostrerà \guillemotleft Benvenuto, utente\guillemotright\
+invece di \guillemotleft Login\guillemotright. Vogliamo quindi che questa informazione sia
+disponibile a tutti i controller.
+
+Un modo è calcolarla una volta sola in \code{handleRequest} e passarla lungo
+la catena come oggetto \term{context}.
+
+\begin{lstlisting}[style=js, name=router.js]
+function handleRequest(request, response) {
+  let [isUserAuthenticated, username] = checkUserAuthentication(request);
+
+  let context = {
+    isUserAuthenticated: isUserAuthenticated,
+    username: username
+  };
+
+  switch (request.url) {
+    /* ... altre rotte ... */
+    case "/todo":
+      handleTodoListRequest(request, response, context); break;
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=todo-controller.js]
+function handleTodoListRequest(request, response, context = {}) {
+  if (!context.isUserAuthenticated) {
+    handleError(request, response, 401, "Non autorizzato!");
+  } else {
+    switch (request.method) {
+      case "GET":
+        handleTodoListRequestGet(request, response, context); break;
+      case "POST":
+        handleTodoListRequestPost(request, response, context); break;
+      default:
+        handleError(request, response, 405, "Metodo non supportato");
+    }
+  }
+}
+\end{lstlisting}
+
+\section{I problemi dell'approccio a cookie}
+
+L'approccio funziona ed è semplice da implementare. Purtroppo soffre di un
+problema \textbf{critico}.
+
+\error{I cookie sono interamente controllati dal client}{
+  Manipolarli è banale: bastano i DevTools. Un utente può cambiare il valore del
+  proprio cookie \code{username} in qualunque altro nome utente, oppure
+  impostarsi da solo un cookie \code{auth=true} \textbf{senza mai passare dalla
+  pagina di login}. La nostra autenticazione diventa del tutto inutile.
+
+  Il problema della manomissione si può mitigare con i \term{cookie firmati}: il
+  server firma i cookie con la propria chiave privata e, finché la chiave resta
+  segreta, riconosce quelli manomessi. Resta però il fatto che i dati viaggiano
+  sul client.}
+
+Ci sono poi limiti pratici. I browser impongono restrizioni sui cookie per
+evitare problemi di prestazioni:
+
+\begin{itemize}
+  \item la dimensione di un cookie è generalmente limitata a \textbf{4096 byte};
+  \item ogni host può memorizzare in genere dai \textbf{20 ai 50 cookie} per
+        dominio.
+\end{itemize}
+
+E se dovessimo memorizzare più dati di sessione?
+
+\section{Le sessioni web}
+
+\dfn{Sessione web}{
+  Quando serve tenere traccia di informazioni attraverso più richieste, il server
+  crea una \term{sessione} per un dato client. Una sessione è una struttura dati
+  che memorizza coppie chiave-valore, \textbf{gestita e conservata sul server}.
+  È identificata da un \term{identificatore di sessione} univoco (o
+  \textit{session token}), che viene passato al client, generalmente come
+  cookie.}
+
+Il punto chiave è che i \textbf{dati restano sul server}: il client possiede
+soltanto un identificatore opaco, e non può metterci mano.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      hdr/.style={wtnode, minimum width=3.0cm, minimum height=0.9cm},
+      life/.style={draw=neutral!45!white, line width=0.7pt, dashed},
+      msg/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=primary!70!black},
+      rsp/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=accent!70!black},
+      ml/.style={font=\FiraCodeNL\scriptsize, midway, above, inner sep=2.5pt,
+                 fill=white, text=neutral!15!black}]
+
+    \def\xb{0} \def\xs{8.4}
+
+    \node[hdr] (B) at (\xb,0) {\textbf{Utente A}};
+    \node[hdr] (S) at (\xs,0) {\textbf{Application Server}};
+    \draw[life] (B.south) -- (\xb,-3.4);
+    \draw[life] (S.south) -- (\xs,-3.4);
+
+    \draw[msg] (\xb,-0.9) -- (\xs,-0.9) node[ml]{POST /login usr=john\&pwd=pass};
+    \draw[rsp] (\xs,-1.7) -- (\xb,-1.7) node[ml]{200 OK Set-Cookie: SID=ahs37...435};
+    \draw[msg] (\xb,-2.5) -- (\xs,-2.5) node[ml]{GET /todos Cookie: SID=ahs37...435};
+    \draw[rsp] (\xs,-3.2) -- (\xb,-3.2) node[ml]{200 OK lista di john};
+
+    % store lato server
+    \node[wtnodeplain, anchor=north west, align=left,
+          font=\FiraCodeNL\scriptsize] (st) at (10.4,0.4)
+      {ahs37...435\\ \ \ auth: true\\ \ \ username: john\\[3pt]
+       4fg23...43u\\ \ \ auth: true\\ \ \ username: billy};
+    \node[font=\Lato\scriptsize, text=green-gradient-6!60!black, anchor=south west]
+      at (10.4,0.5) {dati di sessione (sul server)};
+    \begin{scope}[on background layer]
+      \node[rounded corners=4pt, draw=green-gradient-6, line width=0.9pt,
+            fill=green-gradient-1!35!white, fit=(st), inner sep=7pt] {};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Il client possiede solo l'identificatore; i dati restano sul server.}
+  \label{fig:sessions}
+\end{figure}
+
+\section{Implementare le sessioni da zero}
+
+Realizzare un meccanismo di sessione di base in Node.js è piuttosto semplice.
+Si possono usare gli oggetti \code{Map} di JavaScript: una prima mappa associa
+ciascun identificatore di sessione a una sessione, che è a sua volta una mappa
+di coppie chiave-valore.
+
+\begin{lstlisting}[style=js, name=Session.js]
+class Session {
+
+  constructor() {
+    this.sessionStore = new Map();
+  }
+
+  createSession() {
+    let sessionId = this.generateNewSessionId();
+    this.sessionStore.set(sessionId, new Map());
+    return sessionId;
+  }
+
+  storeSessionData(sessionId, key, value) {
+    return this.getSessionById(sessionId)?.set(key, value);
+  }
+
+  getSessionFromRequest(request) {
+    let requestSessionId = parseCookies(request)["sessionId"];
+    return this.getSessionById(requestSessionId);
+  }
+
+  /* altri metodi ... */
+}
+\end{lstlisting}
+
+\subsection{Usare le sessioni}
+
+Quando un utente effettua il login, creiamo una nuova sessione, vi memorizziamo
+i dati rilevanti e passiamo l'identificatore come cookie.
+
+\begin{lstlisting}[style=js, name=login.js]
+if (isAuthenticated) {
+  // crea una nuova sessione per l'utente
+  let sessionId = session.createSession();
+  session.storeSessionData(sessionId, "username", user.username);
+  session.storeSessionData(sessionId, "auth", true);
+
+  response.writeHead(300, {
+    "Location": "/",
+    "Set-Cookie": [
+      `sessionId=${sessionId}; max-age=${60 * 60}`
+    ]
+  });
+  response.end();
+}
+\end{lstlisting}
+
+Quando serve accedere ai dati di sessione:
+
+\begin{lstlisting}[style=js, name=router.js]
+function handleRequest(request, response) {
+  let userSession = session.getSessionFromRequest(request);
+
+  let context = {
+    isUserAuthenticated: userSession?.get("auth"),
+    username: userSession?.get("username")
+  };
+
+  /* resto del codice */
+}
+\end{lstlisting}
+
+Il codice del router è praticamente identico a quello della versione con i
+cookie: cambia solo \textbf{da dove} arrivano i dati. Il cookie ora contiene un
+identificatore opaco, e manometterlo non serve a nulla: se l'identificatore non
+corrisponde a una sessione esistente sul server, \code{getSessionById}
+restituisce \code{undefined}.
+
+\warning{Le sessioni in memoria non bastano in produzione}{
+  Conservare le sessioni in una \code{Map} in memoria funziona benissimo per
+  imparare, ma ha due limiti concreti. Al \textbf{riavvio} del server tutte le
+  sessioni spariscono e tutti gli utenti devono rifare il login. E se
+  l'applicazione gira su \textbf{più macchine} dietro un bilanciatore di carico,
+  una richiesta servita dalla macchina B non trova la sessione creata sulla
+  macchina A. In produzione le sessioni si conservano in un archivio condiviso
+  (Redis, un database), oppure si adottano token autoconsistenti e firmati.}
+
+\subsection{Altri metodi di tracciamento}
+
+Usare un cookie per memorizzare l'identificatore di sessione è l'approccio più
+diffuso: è semplice e ampiamente supportato. Ne esistono però altri:
+
+\begin{itemize}
+  \item \term{URL rewriting}: l'identificatore viene aggiunto a ogni URL come
+        parametro di query;
+  \item \term{campi form nascosti}: l'identificatore è memorizzato in campi
+        nascosti dei form e viene inviato insieme agli altri dati.
+\end{itemize}
+
+Entrambi hanno lo svantaggio di esporre l'identificatore in luoghi dove
+è facile che finisca per essere condiviso o registrato nei log: si usano
+soprattutto quando i cookie non sono disponibili.
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Introduction to Web Applications Development}, Carles Mateu.
+        Liberamente disponibile su \textit{archive.org} sotto licenza GNU FDL. \\
+        Parte rilevante: sezione 3.11 (\textit{Session monitoring}); si possono
+        ignorare gli esempi con le Java Servlet.
+  \item \textbf{Using HTTP cookies} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies}
+  \item \textbf{RFC 6265: HTTP State Management Mechanism}. \\
+        \urlx{https://datatracker.ietf.org/doc/html/rfc6265}
+\end{itemize}

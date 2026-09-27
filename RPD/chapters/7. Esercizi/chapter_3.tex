@@ -1,0 +1,451 @@
+\chapter{Esercizi sul livello di trasporto}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il checksum}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Checksum con due overflow}
+Calcolare il checksum UDP di un segmento formato dalle tre parole a 16 bit
+\begin{center}
+\texttt{1110011001100110} \qquad \texttt{1101010101010101} \qquad \texttt{1000111100001100}
+\end{center}
+\begin{enumerate}[label=(\alph*)]
+    \item Calcolare il checksum e verificare che il ricevente ottenga sedici 1.
+    \item Il checksum rileva sempre un errore su un singolo bit? E su due bit?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+Il procedimento è: somma delle parole, \textbf{wrap around} di ogni riporto oltre il sedicesimo bit, \textbf{complemento a 1}
+finale. (Nel capitolo su UDP c'è lo stesso calcolo con parole diverse.)
+
+\begin{lstlisting}[autogobble=false, escapechar=|]
+  1110011001100110
++ 1101010101010101
+|\rule[0.55ex]{18\fontcharwd\font`0}{0.5pt}|
+ 11011101110111011      17 bit: overflow!
+  1011101110111011
++                1      wrap around
+|\rule[0.55ex]{18\fontcharwd\font`0}{0.5pt}|
+  1011101110111100
++ 1000111100001100
+|\rule[0.55ex]{18\fontcharwd\font`0}{0.5pt}|
+ 10100101011001000      di nuovo overflow
+  0100101011001000
++                1      wrap around
+|\rule[0.55ex]{18\fontcharwd\font`0}{0.5pt}|
+  0100101011001001      somma
+  1011010100110110      CHECKSUM = complemento a 1 della somma
+\end{lstlisting}
+
+\textbf{Verifica.} Il ricevente somma le tre parole (ottenendo di nuovo \texttt{0100101011001001}) e il checksum:
+\begin{lstlisting}[autogobble=false, escapechar=|]
+  0100101011001001
++ 1011010100110110
+|\rule[0.55ex]{18\fontcharwd\font`0}{0.5pt}|
+  1111111111111111      sedici 1: nessun errore rilevato
+\end{lstlisting}
+
+\textbf{(b)} Un errore su un bit cambia la somma, quindi è \textbf{sempre} rilevato. Due errori possono invece compensarsi: se
+nella stessa posizione un bit passa da 0 a 1 in una parola e da 1 a 0 in un'altra, la somma non cambia. Per esempio, invertendo
+l'ultimo bit delle prime due parole (\texttt{\dots0110} $\rightarrow$ \texttt{\dots0111} e \texttt{\dots0101} $\rightarrow$
+\texttt{\dots0100}) il ricevente ottiene ancora sedici 1.
+
+\warning{Gli errori tipici}{
+    \begin{itemize}
+      \item Buttare via il riporto invece di \textbf{risommarlo} (wrap around).
+      \item Consegnare la somma invece del suo \textbf{complemento}.
+      \item Dimenticare che, con un numero dispari di byte, si aggiunge un byte di \textbf{padding} a zero.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Prestazioni: stop-and-wait e pipelining}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Stop-and-wait via satellite}
+Due stazioni comunicano attraverso un satellite geostazionario, con $\text{RTT} = 480$ ms. Il collegamento ha rate $R = 10$ Mb/s e
+i pacchetti sono di $L = 1500$ byte; gli ACK hanno tempo di trasmissione trascurabile.
+\begin{enumerate}[label=(\alph*)]
+    \item Calcolare l'utilizzo del mittente con lo stop-and-wait e il throughput effettivo.
+    \item Ripetere con pipelining di 10 pacchetti.
+    \item Quanti pacchetti devono essere ``in volo'' per usare il canale al 100\%? A quanti byte corrispondono?
+    \item La receive window di TCP (16 bit) basta? Che cosa serve?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} $L/R = 12\,000 / 10^7 = 1{,}2$ ms. Il mittente trasmette per 1,2 ms e poi aspetta l'ACK:
+$$U = \frac{L/R}{\text{RTT} + L/R} = \frac{1{,}2}{481{,}2} \approx 0{,}0025 = 0{,}25\%$$
+Viene consegnato un pacchetto ogni $481{,}2$ ms: throughput $= 12\,000 / 0{,}4812 \approx 24{,}9$ kb/s, su un collegamento da
+10 Mb/s.
+
+\textbf{(b)} $U = \dfrac{10 \cdot L/R}{\text{RTT} + L/R} = \dfrac{12}{481{,}2} \approx 2{,}5\%$: dieci volte meglio, ma ancora poco.
+
+\textbf{(c)} Il mittente non si ferma mai se l'ACK del primo pacchetto torna prima che finisca di trasmettere l'$N$-esimo:
+$$N \cdot \frac{L}{R} \ge \text{RTT} + \frac{L}{R} \quad\Rightarrow\quad N \ge \frac{481{,}2}{1{,}2} = 401 \text{ pacchetti}$$
+In byte è circa il \textbf{bandwidth-delay product}: $R \cdot \text{RTT} = 10^7 \cdot 0{,}48 = 4{,}8\cdot 10^6$ bit $= 600$ kB.
+
+\textbf{(d)} No: con 16 bit la finestra annunciabile è al massimo $65\,535$ byte, circa un decimo di quanto serve. È il motivo
+dell'opzione TCP \textbf{window scaling}, che moltiplica la finestra per $2^k$: qui basta $k = 4$ ($65\,535 \cdot 16 \approx
+1$ MB).
+
+\info{Il caso del collegamento veloce}{
+    Con i valori del capitolo sul trasferimento affidabile ($\text{RTT} = 30$ ms, $R = 1$ Gb/s, $L = 1000$ byte) si ottiene
+    $N \ge 30{,}008/0{,}008 \approx 3751$ pacchetti e un bandwidth-delay product di $10^9 \cdot 0{,}03 = 3\cdot 10^7$ bit $= 3{,}75$ MB.
+    Più il collegamento è veloce e lungo, più la finestra deve essere grande.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Go-Back-N e Selective Repeat}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Un pacchetto perso}
+Un mittente con finestra $N = 4$ deve inviare i pacchetti da 0 a 5. Il pacchetto 2 va perso la prima volta; tutto il resto
+arriva, compresi gli ACK. Descrivere il comportamento di mittente e ricevente con Go-Back-N e con Selective Repeat, e contare
+le trasmissioni di pacchetti dati.
+\end{esercizio}
+
+\svolgimento
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{4.3cm}p{5.2cm}p{5.2cm}}
+\toprule
+\textbf{Evento} & \textbf{Go-Back-N} & \textbf{Selective Repeat} \\
+\midrule
+invio pkt0--pkt3 & finestra $[0,3]$ & finestra $[0,3]$ \\
+arrivano pkt0, pkt1 & consegna; ACK0, ACK1 & consegna; ACK0, ACK1 \\
+pkt2 perso & -- & -- \\
+arriva pkt3 & \textbf{fuori ordine: scartato}; ACK1 (duplicato) & \textbf{bufferizzato}; ACK3 \\
+arrivano ACK0, ACK1 & finestra $[2,5]$: invia pkt4, pkt5 & finestra $[2,5]$: invia pkt4, pkt5 \\
+arrivano pkt4, pkt5 & scartati; ACK1, ACK1 & bufferizzati; ACK4, ACK5 \\
+scade il timer & di pkt2: \textbf{ritrasmette pkt2, pkt3, pkt4, pkt5} & di pkt2: \textbf{ritrasmette solo pkt2} \\
+arrivano le ritrasmissioni & consegna 2, 3, 4, 5; ACK2\dots ACK5 & consegna 2, 3, 4, 5 (dal buffer); ACK2 \\
+\midrule
+\textbf{Trasmissioni di dati} & $6 + 4 = \mathbf{10}$ & $6 + 1 = \mathbf{7}$ \\
+\bottomrule
+\end{tabular}
+\caption{Lo stesso scenario con i due protocolli.}
+\end{table}
+
+In Go-Back-N il ricevente è semplicissimo (ricorda solo il numero atteso), ma una sola perdita costa la ritrasmissione di
+tutta la finestra; in Selective Repeat il ricevente deve gestire un buffer e ACK individuali, ma si ritrasmette solo ciò che
+manca. Più la finestra è grande e il canale lossy, più la differenza pesa.
+
+\begin{esercizio}{Numeri di sequenza e finestra in Selective Repeat}
+Un Selective Repeat usa numeri di sequenza su 2 bit (da 0 a 3) e una finestra di 3 pacchetti. Mostrare con uno scenario che il
+ricevente può scambiare un pacchetto vecchio per uno nuovo. Qual è la finestra massima?
+\end{esercizio}
+
+\svolgimento
+Il mittente invia pkt0, pkt1, pkt2; il ricevente li riceve tutti, li consegna, invia ACK0, ACK1, ACK2 e sposta la sua finestra
+su $\{3, 0, 1\}$. \textbf{Tutti gli ACK vanno persi}. Scade il timer e il mittente ritrasmette il \emph{vecchio} pkt0: il numero 0
+cade nella finestra del ricevente, che lo accetta come se fosse il \emph{nuovo} pkt0. Il ricevente non può distinguere i due casi,
+perché vede solo il numero di sequenza.
+
+L'ambiguità scompare se le finestre ``vecchia'' e ``nuova'' del ricevente non si sovrappongono, cioè se la finestra è al più
+\textbf{metà dello spazio dei numeri}: $N \le 2^k/2 = 2$.
+
+% ══════════════════════════════════════════════════════════════
+\section{Numeri di sequenza e di acknowledgment in TCP}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Una connessione dall'inizio alla fine}
+Un client apre una connessione TCP con numero di sequenza iniziale 1000; il server sceglie 5000. Il client invia una richiesta di
+200 byte, il server risponde con 1000 byte (in un solo segmento), poi il client chiude la connessione. Scrivere seq, ack e flag
+di tutti i segmenti, assumendo che l'ACK del three-way handshake non trasporti dati.
+\end{esercizio}
+
+\svolgimento
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.95]
+  \timeline{c}{0}{client}{11.4}
+  \timeline{s}{10}{server}{11.4}
+  \foreach \y/\txt/\dir/\col in {
+      0.5/{\circled{1} SYN, seq=1000}/r/black,
+      1.5/{\circled{2} SYN+ACK, seq=5000, ack=1001}/l/black,
+      2.5/{\circled{3} ACK, seq=1001, ack=5001}/r/black,
+      3.5/{\circled{4} seq=1001, ack=5001, 200 byte}/r/netblue,
+      4.5/{\circled{5} seq=5001, ack=1201, 1000 byte}/l/netblue,
+      5.5/{\circled{6} ACK, seq=1201, ack=6001}/r/black,
+      6.5/{\circled{7} FIN, seq=1201, ack=6001}/r/netred,
+      7.5/{\circled{8} ACK, seq=6001, ack=1202}/l/netred,
+      8.5/{\circled{9} FIN, seq=6001, ack=1202}/l/netred,
+      9.5/{\circled{10} ACK, seq=1202, ack=6002}/r/netred} {
+    \if\dir r \draw[msg, \col] (0,-\y) -- node[lbl, above, sloped] {\txt} (10,-\y-0.45);
+    \else \draw[msg, \col] (10,-\y) -- node[lbl, above, sloped] {\txt} (0,-\y-0.45); \fi
+  }
+\end{tikzpicture}
+\caption{Apertura (nero), dati (blu) e chiusura (rosso) di una connessione.}
+\end{figure}
+
+Le regole applicate:
+\begin{itemize}
+    \item \textbf{SYN e FIN consumano un numero di sequenza} ciascuno, anche senza dati: per questo il primo byte di dati del
+          client è il 1001 e l'ACK al FIN del client è 1202.
+    \item Un \textbf{ACK puro} non consuma numeri: il segmento 3 e il segmento 4 hanno entrambi seq $= 1001$.
+    \item ack $=$ numero del \textbf{prossimo byte atteso} $=$ seq ricevuto $+$ byte ricevuti: dopo 200 byte da 1001 si attende il
+          1201; dopo 1000 byte da 5001 il 6001.
+\end{itemize}
+
+\begin{esercizio}{Segmentare un flusso}
+Dopo l'handshake (ISN del mittente $= 42$) un'applicazione invia $12\,000$ byte con MSS di $1460$ byte. Quanti segmenti si
+formano? Quali sono i numeri di sequenza del primo, del secondo e dell'ultimo? Quale ACK conferma l'intero flusso?
+\end{esercizio}
+
+\svolgimento
+$\lceil 12\,000 / 1460 \rceil = \lceil 8{,}22 \rceil = 9$ segmenti: 8 pieni ($8 \cdot 1460 = 11\,680$ byte) e un ultimo da
+$320$ byte. Il SYN ha consumato il numero 42, quindi il primo byte di dati è il 43:
+\begin{itemize}
+    \item 1\textsuperscript{o} segmento: seq $= 43$ (byte 43--1502);
+    \item 2\textsuperscript{o} segmento: seq $= 43 + 1460 = 1503$;
+    \item $k$-esimo segmento: seq $= 43 + (k-1)\cdot 1460$; il 9\textsuperscript{o}: seq $= 43 + 11\,680 = 11\,723$ (byte 11\,723--12\,042).
+\end{itemize}
+L'ACK che conferma tutto è $12\,043$.
+
+\begin{esercizio}{ACK cumulativi}
+L'host B ha ricevuto da A tutti i byte fino al 249. A invia a B due segmenti consecutivi, di 100 e 60 byte; il primo ha seq
+$= 250$. La porta di A è 40000, quella di B è 80. B invia un ACK per ogni segmento ricevuto.
+\begin{enumerate}[label=(\alph*)]
+    \item Quali sono seq, porta sorgente e porta destinazione del secondo segmento?
+    \item Se il primo segmento arriva prima del secondo, quali sono ack e porte dell'ACK del primo?
+    \item Se il secondo arriva per primo, quale ack contiene il suo ACK?
+    \item Se il primo segmento va perso e il secondo arriva, che cosa succede?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item seq $= 250 + 100 = 350$; porta sorgente 40000, destinazione 80.
+    \item ack $= 350$; porta sorgente 80, destinazione 40000 (le porte si invertono).
+    \item ack $= 250$: B ha un ``buco'' e continua a chiedere il byte 250. È un ACK \textbf{duplicato}; il segmento fuori ordine
+          viene di solito bufferizzato.
+    \item B risponde al secondo segmento con ack $= 250$. Allo scadere del timer (o dopo 3 ACK duplicati) A ritrasmette il segmento
+          con seq $= 250$; B, che aveva bufferizzato il secondo, risponde con ack $= 410$: un solo ACK \textbf{cumulativo} conferma
+          entrambi.
+\end{enumerate}
+
+% ══════════════════════════════════════════════════════════════
+\section{Stima dell'RTT e timeout}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Tre campioni}
+Inizialmente $\text{EstimatedRTT} = 100$ ms e $\text{DevRTT} = 10$ ms. Arrivano in sequenza i campioni 120, 140 e 90 ms. Con
+$\alpha = 0{,}125$ e $\beta = 0{,}25$ calcolare l'evoluzione di EstimatedRTT, DevRTT e TimeoutInterval, aggiornando DevRTT
+\textbf{prima} di EstimatedRTT (come prescrive l'RFC 6298).
+\end{esercizio}
+
+\svolgimento
+$$\text{DevRTT} \leftarrow 0{,}75\,\text{DevRTT} + 0{,}25\,|\text{Sample} - \text{EstimatedRTT}| \qquad
+  \text{EstimatedRTT} \leftarrow 0{,}875\,\text{EstimatedRTT} + 0{,}125\,\text{Sample}$$
+$$\text{Timeout} = \text{EstimatedRTT} + 4\,\text{DevRTT}$$
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{cccc}
+\toprule
+\textbf{Campione} & \textbf{DevRTT} (ms) & \textbf{EstimatedRTT} (ms) & \textbf{Timeout} (ms) \\
+\midrule
+120 & $0{,}75\cdot 10 + 0{,}25\cdot|120-100| = 12{,}5$ & $0{,}875\cdot 100 + 0{,}125\cdot 120 = 102{,}5$ & $102{,}5 + 50 = 152{,}5$ \\
+140 & $0{,}75\cdot 12{,}5 + 0{,}25\cdot|140-102{,}5| = 18{,}75$ & $89{,}69 + 17{,}5 = 107{,}19$ & $107{,}19 + 75 = 182{,}19$ \\
+90 & $0{,}75\cdot 18{,}75 + 0{,}25\cdot|90-107{,}19| = 18{,}36$ & $93{,}79 + 11{,}25 = 105{,}04$ & $105{,}04 + 73{,}44 = 178{,}48$ \\
+\bottomrule
+\end{tabular}
+\caption{Evoluzione della stima e del timeout.}
+\end{table}
+
+Il timeout cresce quando i campioni oscillano (il secondo si scosta di 37,5 ms dalla stima) e si stabilizza quando tornano
+coerenti: quando si è incerti sull'RTT, si allarga il margine per evitare ritrasmissioni inutili.
+
+\warning{L'ordine conta (un po')}{
+    Aggiornando prima EstimatedRTT e poi DevRTT (come nelle trasparenze), con il primo campione si ottiene
+    $\text{Est} = 102{,}5$, $\text{Dev} = 0{,}75\cdot 10 + 0{,}25\cdot|120 - 102{,}5| = 11{,}875$ e Timeout $= 150$ ms. All'esame
+    si segue l'ordine indicato dal testo, dichiarandolo.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Controllo di flusso}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{La finestra di ricezione}
+Il buffer di ricezione di B è $\text{RcvBuffer} = 4000$ byte; in un certo istante $\text{LastByteRcvd} = 12\,500$ e
+$\text{LastByteRead} = 10\,000$.
+\begin{enumerate}[label=(\alph*)]
+    \item Quanto vale la finestra annunciata ad A?
+    \item Se A ha $\text{LastByteSent} = 12\,500$ e $\text{LastByteAcked} = 11\,000$, quanti byte può ancora inviare?
+    \item Che cosa succede se l'applicazione in B smette di leggere?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Nel buffer ci sono $12\,500 - 10\,000 = 2500$ byte non ancora letti:
+$\text{rwnd} = 4000 - 2500 = 1500$ byte.
+
+\textbf{(b)} Il vincolo è $\text{LastByteSent} - \text{LastByteAcked} \le \text{rwnd}$. In volo ci sono già
+$12\,500 - 11\,000 = 1500$ byte, esattamente rwnd: A \textbf{non può inviare nulla} finché non arrivano nuovi ACK o una
+finestra più grande.
+
+\textbf{(c)} LastByteRead resta fermo, il buffer si riempie e rwnd scende a 0: A si ferma. Per non restare bloccato per sempre
+(B non ha dati da inviare e quindi non manderebbe aggiornamenti), A invia periodicamente \textbf{zero window probe} di un byte,
+le cui risposte riportano la finestra aggiornata.
+
+% ══════════════════════════════════════════════════════════════
+\section{Controllo di congestione}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Evoluzione di cwnd}
+Un mittente TCP Reno parte con $\text{cwnd} = 1$ MSS e $\text{ssthresh} = 8$ MSS. Tutti gli ACK arrivano regolarmente, tranne
+che: all'RTT 6 si verificano 3 ACK duplicati; all'RTT 10 scade un timeout. Tracciare cwnd e ssthresh per i primi 12 RTT, indicando
+lo stato.
+\end{esercizio}
+
+\svolgimento
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{cccll}
+\toprule
+\textbf{RTT} & \textbf{cwnd} & \textbf{ssthresh} & \textbf{Stato} & \textbf{Evento / azione} \\
+\midrule
+1 & 1 & 8 & slow start & inizio \\
+2 & 2 & 8 & slow start & crescita esponenziale \\
+3 & 4 & 8 & slow start & \\
+4 & 8 & 8 & slow start & cwnd $\ge$ ssthresh: si passa a congestion avoidance \\
+5 & 9 & 8 & cong. avoidance & +1 MSS per RTT \\
+6 & 10 & 8 & cong. avoidance & \textbf{3 ACK duplicati} \\
+7 & 8 & 5 & fast recovery & ssthresh $= 10/2 = 5$; cwnd $= 5 + 3 = 8$; ritrasmissione \\
+8 & 5 & 5 & cong. avoidance & ACK nuovo: cwnd $=$ ssthresh \\
+9 & 6 & 5 & cong. avoidance & \\
+10 & 7 & 5 & cong. avoidance & \textbf{timeout} \\
+11 & 1 & 3 & slow start & ssthresh $= \lfloor 7/2 \rfloor = 3$; cwnd $= 1$ \\
+12 & 2 & 3 & slow start & \\
+\bottomrule
+\end{tabular}
+\caption{Evoluzione di cwnd e ssthresh (in MSS).}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=11cm, height=5.5cm, xmin=0.5, xmax=12.5, ymin=0, ymax=11, xtick={1,...,12}, ytick={0,2,...,10},
+    xlabel={RTT}, ylabel={MSS}, grid=major, grid style={gray!20}, label style={font=\footnotesize\sffamily},
+    tick label style={font=\scriptsize}, legend pos=north east, legend style={font=\scriptsize\sffamily}]
+  \addplot[very thick, netblue, mark=*, mark size=1.8pt] coordinates {(1,1)(2,2)(3,4)(4,8)(5,9)(6,10)(7,8)(8,5)(9,6)(10,7)(11,1)(12,2)};
+  \addlegendentry{cwnd}
+  \addplot[thick, netred, dashed, const plot] coordinates {(0.5,8)(6.5,8)(6.5,5)(10.5,5)(10.5,3)(12.5,3)};
+  \addlegendentry{ssthresh}
+  \node[font=\scriptsize\sffamily, anchor=south] at (axis cs:6,10) {3 dup ACK};
+  \node[font=\scriptsize\sffamily, anchor=south west] at (axis cs:10,7) {timeout};
+\end{axis}
+\end{tikzpicture}
+\caption{La finestra dell'esercizio: dimezzamento dopo i duplicati, ritorno a 1 dopo il timeout.}
+\end{figure}
+
+\begin{esercizio}{Leggere un grafico di cwnd}
+Il grafico mostra la finestra di congestione di una connessione TCP Reno (in MSS) per 25 RTT.
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[width=12cm, height=5.8cm, xmin=0, xmax=26, ymin=0, ymax=42, xtick={1,3,...,25}, ytick={0,5,...,40},
+    xlabel={RTT}, ylabel={cwnd (MSS)}, grid=major, grid style={gray!20}, label style={font=\footnotesize\sffamily},
+    tick label style={font=\scriptsize}]
+  \addplot[very thick, netblue, mark=*, mark size=1.5pt] coordinates {(1,1)(2,2)(3,4)(4,8)(5,16)(6,32)(7,33)(8,34)(9,35)(10,36)(11,37)(12,38)
+      (13,19)(14,20)(15,21)(16,22)(17,23)(18,1)(19,2)(20,4)(21,8)(22,11)(23,12)(24,13)(25,14)};
+\end{axis}
+\end{tikzpicture}
+\end{center}
+\begin{enumerate}[label=(\alph*)]
+    \item In quali intervalli è attivo lo slow start? E la congestion avoidance?
+    \item Dopo l'RTT 12 e dopo l'RTT 17 viene rilevata una perdita: in che modo, in ciascun caso?
+    \item Qual è il valore iniziale di ssthresh? Quanto vale ssthresh all'RTT 13 e all'RTT 18?
+    \item In quale RTT viene inviato il 70\textsuperscript{o} segmento?
+    \item Che cosa sarebbe successo dopo l'RTT 12 con TCP Tahoe?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Slow start: RTT 1--6 e 18--22 (la finestra raddoppia). Congestion avoidance: RTT 6--12, 13--17 e 22--25 (+1 MSS per RTT).
+    \item Dopo l'RTT 12 la finestra passa da 38 a 19, cioè si \textbf{dimezza}: \textbf{3 ACK duplicati}. Dopo l'RTT 17 torna a 1:
+          \textbf{timeout}.
+    \item All'inizio lo slow start si ferma a 32, quindi $\text{ssthresh} = 32$. Dopo i duplicati $\text{ssthresh} = 38/2 = 19$;
+          dopo il timeout $\text{ssthresh} = \lfloor 23/2 \rfloor = 11$ (infatti all'RTT 22 la crescita esponenziale, che darebbe 16,
+          si ferma a 11).
+    \item I segmenti inviati si accumulano: dopo gli RTT 1--6 sono $1+2+4+8+16+32 = 63$; nell'RTT 7 si inviano i segmenti dal 64 al
+          96. Il 70\textsuperscript{o} parte quindi nell'\textbf{RTT 7}.
+    \item Tahoe non distingue i due tipi di perdita: anche dopo i 3 ACK duplicati avrebbe riportato cwnd a 1, con
+          $\text{ssthresh} = 19$, ricominciando con lo slow start.
+\end{enumerate}
+
+\begin{esercizio}{Throughput medio}
+Una connessione TCP a lungo termine ha MSS di 1460 byte e RTT di 100 ms, e subisce una perdita (3 ACK duplicati) ogni volta che
+la finestra raggiunge $W = 40$ MSS.
+\begin{enumerate}[label=(\alph*)]
+    \item Qual è il throughput medio?
+    \item Quanto tempo passa tra una perdita e la successiva?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} Nel regime a dente di sega la finestra oscilla tra $W/2$ e $W$, con media $0{,}75\,W = 30$ MSS per RTT:
+$$\text{throughput} \approx \frac{0{,}75 \cdot W \cdot \text{MSS}}{\text{RTT}} = \frac{30 \cdot 1460 \cdot 8}{0{,}1} \approx 3{,}5 \text{ Mb/s}$$
+
+\textbf{(b)} Dopo ogni perdita la finestra riparte da $W/2 = 20$ e cresce di 1 MSS per RTT fino a 40: servono 20 RTT, cioè
+\textbf{2 secondi}.
+
+% ══════════════════════════════════════════════════════════════
+\section{TCP con Wireshark}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Osservare il controllo di congestione}
+Avviare la cattura, scaricare un file di prova (\texttt{wget http://speedtest.tele2.net/10MB.zip}), fermare la cattura e isolare la
+connessione con \emph{Follow $\rightarrow$ TCP Stream}. Individuare apertura e chiusura della connessione, la crescita della
+finestra, eventuali perdite e aggiornamenti della finestra di ricezione.
+\end{esercizio}
+
+\svolgimento
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{4.5cm}p{10cm}}
+\toprule
+\textbf{Filtro} & \textbf{Che cosa mostra} \\
+\midrule
+\texttt{tcp} & tutto il traffico TCP: il three-way handshake (SYN, SYN-ACK, ACK) all'inizio e lo scambio di FIN alla fine \\
+\texttt{tcp.analysis.bytes\_in\_flight} & i byte inviati e non ancora confermati, cioè LastByteSent $-$ LastByteAcked: la finestra effettiva in azione \\
+\texttt{tcp.analysis.duplicate\_ack} & gli ACK duplicati: dove ce ne sono tre di fila, subito dopo si trova una ritrasmissione veloce \\
+\texttt{tcp.analysis.retransmission} & le ritrasmissioni (per timeout o fast retransmit) \\
+\texttt{tcp.analysis.window\_update} & gli aggiornamenti della finestra di ricezione: il controllo di flusso \\
+\bottomrule
+\end{tabular}
+\caption{Filtri di Wireshark per analizzare TCP.}
+\end{table}
+
+Che cosa ci si aspetta di vedere:
+\begin{itemize}
+    \item all'inizio i byte in volo crescono rapidissimamente (raddoppiano a ogni RTT): \textbf{slow start};
+    \item poi la crescita diventa lineare: \textbf{congestion avoidance};
+    \item in corrispondenza di ACK duplicati o timeout, cadute nette: il \textbf{dente di sega};
+    \item \emph{Statistics $\rightarrow$ TCP Stream Graphs $\rightarrow$ Time Sequence (Stevens)} disegna i numeri di sequenza nel
+          tempo: la \textbf{pendenza} è il throughput.
+\end{itemize}
+
+\info{Flusso o congestione?}{
+    Se una caduta è preceduta da perdite (ACK duplicati, ritrasmissioni), è \textbf{congestione}. Se invece la finestra si
+    appiattisce senza perdite e compaiono \texttt{window\_update} con valori bassi, è \textbf{controllo di flusso}: il ricevente
+    non legge abbastanza in fretta.
+}
+
+\gbox{\iinfo\ Formule da ricordare}{primary!80!black}{
+\begin{itemize}
+    \item Checksum: somma a 16 bit con wrap around, poi complemento a 1; il ricevente deve ottenere tutti 1.
+    \item Utilizzo: $U = \dfrac{N \cdot L/R}{\text{RTT} + L/R}$; finestra per $U = 1$: $N \ge (\text{RTT} + L/R)/(L/R)$.
+    \item Selective Repeat: finestra $\le 2^k/2$.
+    \item ack $=$ seq ricevuto $+$ byte di dati; SYN e FIN consumano un numero di sequenza.
+    \item $\text{Timeout} = \text{EstimatedRTT} + 4\,\text{DevRTT}$; \quad $\text{rwnd} = \text{RcvBuffer} - (\text{LastByteRcvd} - \text{LastByteRead})$.
+    \item Reno: 3 dup ACK $\Rightarrow$ ssthresh $=$ cwnd/2, cwnd $=$ ssthresh $+ 3$; timeout $\Rightarrow$ ssthresh $=$ cwnd/2, cwnd $= 1$.
+    \item Throughput medio $\approx 0{,}75\,W/\text{RTT}$.
+\end{itemize}
+}

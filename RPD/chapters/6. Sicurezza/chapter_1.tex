@@ -1,0 +1,642 @@
+\chapter{Attacchi alle reti e fondamenti di crittografia}
+
+% ══════════════════════════════════════════════════════════════
+\section{Perché la sicurezza di rete}
+% ══════════════════════════════════════════════════════════════
+
+Alcune applicazioni scambiano \textbf{informazioni sensibili} (credenziali, dati personali, \dots), e sulle reti pubbliche i messaggi
+dovrebbero essere protetti: è il motivo per cui quasi ogni protocollo applicativo ha una variante sicura (HTTPS, SMTPS, SSH, FTPS).
+
+\dfn{Sicurezza di rete}{
+    La \textbf{sicurezza di rete} è il campo che studia i possibili \textbf{attacchi} alle reti e i modi per \textbf{prevenirli}.
+}
+
+\begin{itemize}
+    \item Le reti fanno parte della nostra vita (la connessione a Internet è considerata quasi come l'acqua o la corrente), e una grande
+          quantità dei nostri dati sensibili viaggia in rete.
+    \item Esistono molti tipi di attacchi, con scopi e meccanismi diversi.
+    \item Gli attacchi evolvono insieme alla tecnologia e al pubblico delle reti.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{I malware}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Malware}{
+    Un \textbf{malware} è un software malevolo che può arrivare su un computer attraverso la rete (un file scaricato, un allegato di posta,
+    \dots).
+}
+
+Una volta infettato un dispositivo, un malware può fare danni in molti modi:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lp{11cm}}
+\toprule
+\textbf{Tipo} & \textbf{Cosa fa} \\
+\midrule
+Adware & costringe il sistema a mostrare pubblicità \\
+Scareware & mostra falsi allarmi per indurre l'utente a scaricare altri malware \\
+Wiper / ransomware & cancella / \textbf{cifra} i file (e chiede un riscatto per restituirli) \\
+Spyware & raccoglie informazioni private (password, numeri di documento, \dots); per esempio i \textbf{keylogger} registrano i tasti premuti \\
+Rootkit & ottiene i privilegi di amministratore (root) del sistema \\
+Zombie / botnet & trasforma il dispositivo in uno ``schiavo'', una testa di ponte per attaccare altri dispositivi \\
+\bottomrule
+\end{tabular}
+\caption{Alcune famiglie di malware.}
+\end{table}
+
+I malware di oggi sono spesso \textbf{auto-replicanti}: infettato un host, da lì cercano di entrare in altri host su Internet, e da quelli in
+altri ancora. Si diffondono in due forme:
+
+\dfn{Virus e worm}{
+    \begin{itemize}
+      \item Un \textbf{virus} richiede una qualche \textbf{interazione dell'utente} per infettare il dispositivo. Per esempio un allegato
+            con codice eseguibile malevolo che, una volta aperto, si replica inviando mail simili ai contatti dell'utente. I virus sono
+            spesso camuffati da componenti software legittimi (\textbf{cavalli di Troia}, \emph{trojan horses}).
+      \item Un \textbf{worm} entra in un dispositivo \textbf{senza alcuna interazione} esplicita dell'utente. Per esempio l'utente sta
+            eseguendo un'applicazione di rete vulnerabile che accetta il worm senza intervento; il worm poi scansiona la rete alla ricerca
+            di altri host con la stessa applicazione.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Gli attacchi DoS}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Denial of Service (DoS)}{
+    Gli attacchi \textbf{DoS} (negazione del servizio) sono molto comuni e hanno lo scopo di rendere una rete, un host o un altro pezzo
+    di infrastruttura (server Web, DNS, \dots) \textbf{inutilizzabile dagli utenti legittimi}.
+}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.44\linewidth}\centering
+  \includegraphics[width=0.95\linewidth]{cap21/ddos.png}
+\end{minipage}\hfill
+\begin{minipage}{0.52\linewidth}
+Ci sono tre tipi di attacchi DoS:
+\begin{enumerate}
+  \item \textbf{Attacco a una vulnerabilità}: si inviano messaggi costruiti ad arte a un'applicazione o a un sistema operativo vulnerabile
+        per bloccarlo o farlo andare in crash.
+  \item \textbf{Bandwidth flooding}: si inonda l'host bersaglio di pacchetti, impedendo a quelli legittimi di raggiungerlo.
+  \item \textbf{Connection flooding}: si aprono moltissime connessioni TCP, mezze aperte o complete, verso il bersaglio, che smette di
+        accettare connessioni legittime (per esempio il \emph{SYN flood}).
+\end{enumerate}
+\end{minipage}
+\caption{Un DDoS (\emph{Distributed DoS}): l'attaccante comanda una botnet di zombie che attaccano la vittima tutti insieme.}
+\end{figure}
+
+\info{Perché ``distribuito''}{
+    Un solo attaccante ha banda limitata ed è facile da bloccare filtrando il suo indirizzo. Con migliaia di zombie sparsi per il mondo
+    il traffico è enorme e proviene da indirizzi diversi, quindi è molto più difficile da distinguere da quello legittimo.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il packet sniffing}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Packet sniffing}{
+    Lo \textbf{sniffing} prevede un ricevitore \textbf{passivo} (lo \emph{sniffer}) che registra una copia dei pacchetti interessanti di un
+    host bersaglio, cercando di rubare informazioni sensibili (\emph{eavesdropping}, origliare).
+}
+
+\begin{itemize}
+    \item Gli sniffer si possono usare in qualunque rete \textbf{broadcast} (cablata o senza fili), semplicemente copiando i pacchetti
+          destinati ad altri invece di scartarli.
+    \item Nelle reti non broadcast uno sniffer può essere inserito in un malware (spyware) che infetta i dispositivi di rete (per esempio i
+          router), in modo che tutto il traffico inoltrato venga anche copiato.
+    \item Poiché gli sniffer sono \textbf{passivi} (non immettono traffico nella rete), sono \textbf{difficilissimi da rilevare}.
+    \item Per difendersi dallo sniffing si usa la \textbf{crittografia}.
+\end{itemize}
+
+Su Internet ci sono molti sniffer liberamente disponibili: un esempio notevole è \textbf{Wireshark} (ex Ethereal), che abbiamo usato nelle
+esercitazioni.
+
+% ══════════════════════════════════════════════════════════════
+\section{L'IP spoofing}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{IP spoofing}{
+    L'\textbf{IP spoofing} è la tecnica con cui un host malevolo immette nella rete pacchetti con \textbf{indirizzo sorgente falso}
+    (contraffatto).
+}
+
+\begin{itemize}
+    \item Si può usare, insieme alle vulnerabilità di un'applicazione, per attaccare specifici host fingendosi un altro utente.
+    \item Si può usare anche per attacchi DoS (alternativa alle botnet): messaggi da indirizzi sorgente diversi sono più difficili da filtrare.
+    \item Spoofing e sniffing insieme permettono attacchi \textbf{man-in-the-middle} (MitM): l'attaccante si mette tra due host che comunicano,
+          fingendosi l'uno con l'altro. I due host credono di parlare tra loro, ma in realtà parlano con l'attaccante.
+    \item Contro lo spoofing servono controlli di \textbf{integrità dei messaggi} e di \textbf{autenticazione degli estremi}, che permettono di
+          stabilire se un messaggio non è stato modificato e se proviene davvero dalla sorgente dichiarata.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (a) at (0,0) {\icon[1cm]{pc}}; \node[below=-2pt of a] {A};
+  \node (b) at (9,0) {\icon[1.1cm]{laptop}}; \node[below=-2pt of b] {B};
+  \node[draw, fill=netred!20, rounded corners, minimum width=1.4cm, minimum height=0.8cm] (t) at (4.5,-1.2) {T (Trudy)};
+  \draw[msg, netred, thick] (a) -- node[above, sloped] {``sono B''} (t);
+  \draw[msg, netred, thick] (t) -- node[above, sloped] {``sono A''} (b);
+  \draw[dashed, black!40, thick] (a) -- node[above] {A e B credono di parlare direttamente} (b);
+\end{tikzpicture}
+\caption{L'attacco man-in-the-middle: T finge di essere B con A e di essere A con B, intercettando i messaggi (spesso aiutandosi con lo spoofing).}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Le proprietà di una comunicazione sicura}
+% ══════════════════════════════════════════════════════════════
+
+Visti i tipi di attacco, possiamo definire le proprietà che una comunicazione sicura dovrebbe garantire.
+
+\dfn{Le quattro proprietà}{
+    \begin{itemize}
+      \item \textbf{Confidenzialità}: solo il mittente e il destinatario previsto devono poter capire il contenuto del messaggio
+            (contro lo \emph{sniffing}).
+      \item \textbf{Integrità del messaggio}: il contenuto non deve essere alterato, né in modo malevolo né per errore.
+      \item \textbf{Autenticazione degli estremi} (\emph{end-point authentication}): mittente e destinatario devono poter confermare
+            l'identità dell'altra parte (contro lo \emph{spoofing}).
+      \item \textbf{Sicurezza operativa}: un'infrastruttura di rete che impedisca agli host malevoli di infilarsi nella comunicazione.
+    \end{itemize}
+}
+
+Le prime tre proprietà sono realizzate \textbf{via software}; l'ultima (sicurezza operativa) si basa tipicamente su \textbf{hardware}
+specifico (firewall, sistemi di rilevazione delle intrusioni).
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Attacco} & \textbf{Proprietà violata} & \textbf{Contromisura} \\
+\midrule
+Sniffing & confidenzialità & crittografia \\
+Alterazione dei messaggi & integrità & hash crittografici, MAC \\
+Spoofing, replay & autenticazione & nonce, certificati \\
+DoS, intrusioni, malware & sicurezza operativa & firewall, IDS \\
+\bottomrule
+\end{tabular}
+\caption{Attacchi, proprietà e contromisure.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Introduzione alla crittografia}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Crittografia}{
+    Una tecnica \textbf{crittografica} permette a un mittente di \textbf{camuffare i dati} in modo che siano incomprensibili per un intruso:
+    l'intruso non deve ricavare alcuna informazione dai dati intercettati, mentre il destinatario deve poter recuperare i dati originali.
+    \begin{itemize}
+      \item Nella sua forma iniziale il messaggio si chiama \textbf{testo in chiaro} (\emph{plaintext} o \emph{cleartext}) ed è leggibile da tutti.
+      \item Prima di immetterlo nel canale, il mittente usa un \textbf{algoritmo di cifratura} che lo trasforma in una forma illeggibile, il
+            \textbf{testo cifrato} (\emph{ciphertext}), che va \textbf{decifrato} alla ricezione.
+    \end{itemize}
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\linewidth]{cap21/modello_intruso.png}
+    \caption{Il modello di cifratura (da Tanenbaum): Alice cifra con la chiave $K_E$, Bob decifra con $K_D$; Trudy può ascoltare passivamente o intervenire attivamente.}
+\end{figure}
+
+Con la notazione del Tanenbaum:
+
+\begin{itemize}
+    \item $K$ è la \textbf{chiave}, $P$ il messaggio in chiaro (\emph{plaintext}), $C$ il messaggio cifrato (\emph{ciphertext});
+    \item la cifratura con chiave $K$ si scrive $E_K(P) = C$ e la decifratura $D_K(C) = P$, quindi $D_K(E_K(P)) = P$.
+\end{itemize}
+
+\subsection{Le chiavi e il principio di Kerckhoffs}
+
+Nei sistemi crittografici moderni, compresi quelli di Internet, la tecnica di cifratura è \textbf{nota e standard per tutti} (anche per
+l'intruso). La parte sconosciuta sono le \textbf{chiavi di cifratura e decifratura}.
+
+\dfn{Chiave}{
+    Una \textbf{chiave} è una stringa alfanumerica che va fornita all'algoritmo di cifratura o decifratura per cifrare o decifrare i messaggi.
+    Le chiavi di cifratura e decifratura possono essere \textbf{identiche} (crittografia \emph{simmetrica}) o \textbf{diverse}
+    (\emph{asimmetrica}).
+}
+
+\dfn{Principio di Kerckhoffs}{
+    \textbf{Tutti gli algoritmi devono essere pubblici; solo le chiavi sono segrete.} La ``sicurezza per oscurità'' (\emph{security by
+    obscurity}), cioè tenere segreto l'algoritmo, non funziona mai: gli algoritmi pubblici vengono studiati e attaccati da migliaia di esperti,
+    e quelli che resistono sono davvero robusti.
+}
+
+\subsection{I problemi della crittoanalisi}
+
+Chi cerca di ``rompere'' un cifrario (il \emph{crittoanalista}) può trovarsi in tre situazioni, dalla più difficile alla più favorevole:
+
+\begin{enumerate}
+    \item \textbf{solo testo cifrato} (\emph{ciphertext only}): ha a disposizione solo testi cifrati;
+    \item \textbf{testo in chiaro noto} (\emph{known plaintext}): ha alcuni testi cifrati e i corrispondenti testi in chiaro;
+    \item \textbf{testo in chiaro scelto} (\emph{chosen plaintext}): può cifrare a piacere testi in chiaro scelti da lui.
+\end{enumerate}
+
+Un buon cifrario deve resistere anche nel terzo caso.
+
+\subsection{Cifrari per sostituzione}
+
+\dfn{Cifrario per sostituzione}{
+    In un cifrario per \textbf{sostituzione} ogni simbolo viene sostituito con un altro. La chiave è la \textbf{corrispondenza tra simboli}.
+}
+
+\begin{center}
+\begin{tabular}{rl}
+testo in chiaro: & \texttt{a b c d e f g h i j k l m n o p q r s t u v w x y z} \\
+testo cifrato: & \texttt{Q W E R T Y U I O P A S D F G H J K L Z X C V B N M} \\
+\end{tabular}
+\end{center}
+
+Con questa chiave \texttt{attacco} diventa \texttt{QZZQEEG}. Anche se le chiavi possibili sono $26! \approx 4\cdot 10^{26}$, per l'alfabeto
+latino (e altri) questi cifrari sono \textbf{facilmente attaccabili}: si sfruttano le \textbf{regolarità statistiche} della lingua (in italiano
+le lettere più frequenti sono e, a, i, o; le doppie sono frequenti; certe coppie di lettere sono comunissime).
+
+\subsection{Cifrari per trasposizione}
+
+\dfn{Cifrario per trasposizione}{
+    In un cifrario per \textbf{trasposizione} i simboli \textbf{non cambiano}, ma vengono \textbf{riordinati}. Nel cifrario a trasposizione per
+    colonne la chiave è una parola senza lettere ripetute: le sue lettere, in ordine alfabetico, danno l'ordine con cui leggere le colonne.
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.55\linewidth]{cap21/trasposizione.png}
+    \caption{Trasposizione per colonne con chiave MEGABUCK (da Tanenbaum): il testo si scrive per righe e si legge colonna per colonna, nell'ordine indicato dai numeri.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{La crittografia simmetrica}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Crittografia simmetrica}{
+    Nella crittografia \textbf{simmetrica} c'è \textbf{una sola chiave}, usata sia per cifrare sia per decifrare.
+    \begin{itemize}
+      \item \textbf{Cifratura}: il testo in chiaro, insieme alla chiave, viene passato all'algoritmo di cifratura, che genera un testo cifrato
+            che può viaggiare in rete in sicurezza.
+      \item \textbf{Decifratura}: il testo cifrato, insieme alla chiave, viene passato all'algoritmo di decifratura, che ricrea il testo in chiaro.
+    \end{itemize}
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node[draw, fill=white, rounded corners] (p1) at (0,0) {testo in chiaro};
+  \node[draw, fill=netred!20, minimum width=2cm, minimum height=0.8cm] (e) at (3,0) {cifratura};
+  \node[draw, fill=lphy!60, rounded corners] (c) at (6.5,0) {testo cifrato};
+  \node[draw, fill=netgreen!20, minimum width=2cm, minimum height=0.8cm] (d) at (10,0) {decifratura};
+  \node[draw, fill=white, rounded corners] (p2) at (13,0) {testo in chiaro};
+  \draw[msg] (p1) -- (e); \draw[msg] (e) -- (c); \draw[msg] (c) -- node[above, text=netred] {canale} (d); \draw[msg] (d) -- (p2);
+  \node (k1) at (3,1.3) {chiave $K$};
+  \node (k2) at (10,1.3) {stessa chiave $K$};
+  \draw[msg] (k1) -- (e); \draw[msg] (k2) -- (d);
+  \node[draw, fill=netred!15, rounded corners] (t) at (6.5,-1.3) {intruso};
+  \draw[msg, dashed, netred] (c) -- node[right] {sniffing: vede solo il cifrato} (t);
+\end{tikzpicture}
+\caption{Crittografia simmetrica: la stessa chiave serve a cifrare e a decifrare.}
+\end{figure}
+
+\subsection{Il problema dello scambio delle chiavi}
+
+\warning{Come ci si scambia la chiave?}{
+    Il problema della crittografia simmetrica (a chiave singola) è che la chiave segreta deve essere \textbf{comunicata} (\emph{key
+    exchange problem}).
+    \begin{itemize}
+      \item Gli host possono usare un \textbf{canale sicuro} per scambiarsi la chiave.
+      \item Gli host possono usare un \textbf{protocollo} che permetta loro di ``convergere'' su una chiave condivisa.
+    \end{itemize}
+    Se due parti non riescono a stabilire in modo sicuro la chiave iniziale, non potranno comunicare in sicurezza: un terzo che abbia
+    intercettato la chiave durante lo scambio potrà leggere tutti i messaggi. Inoltre, con $N$ utenti che vogliono parlare a coppie servono
+    $\frac{N(N-1)}{2}$ chiavi, una per ogni coppia (dell'ordine di $N^2$).
+}
+
+\subsection{Il one-time pad}
+
+\dfn{One-time pad}{
+    Il \textbf{one-time pad} è un cifrario \textbf{inviolabile}: si sceglie come chiave (il \emph{pad}) una stringa di bit
+    \textbf{casuale}, lunga quanto il messaggio, e si cifra facendo lo XOR bit a bit: $C = P \oplus K$. Per decifrare si rifà lo XOR con lo
+    stesso pad: $C \oplus K = P \oplus K \oplus K = P$.
+}
+
+\begin{esempio}{Cifrare e decifrare con lo XOR}
+Con $P = \texttt{0111}$ e $K = \texttt{1101}$:
+\begin{center}
+\begin{tabular}{lcl}
+cifratura & $P \oplus K$ & $= \texttt{0111} \oplus \texttt{1101} = \texttt{1010} = C$ \\
+decifratura & $C \oplus K$ & $= \texttt{1010} \oplus \texttt{1101} = \texttt{0111} = P$ \\
+\end{tabular}
+\end{center}
+\end{esempio}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\linewidth]{cap21/one_time_pad.png}
+    \caption{Con il one-time pad, dallo stesso testo cifrato si ottengono testi in chiaro diversi usando pad diversi (da Tanenbaum): senza il pad, ogni messaggio della stessa lunghezza è ugualmente probabile.}
+\end{figure}
+
+Il one-time pad introduce una grande quantità di ridondanza e impedisce che qualsiasi informazione del testo in chiaro $P$ si rifletta nel
+testo cifrato $C$. Ha però problemi pratici:
+
+\begin{enumerate}
+    \item \textbf{condivisione del pad}: il pad (la chiave) va distribuito in sicurezza;
+    \item \textbf{errori di sincronizzazione}: se il messaggio ha uno spostamento (un bit perso), la decifratura fallisce da lì in poi;
+    \item il punto vero: il pad ha la \textbf{stessa dimensione del messaggio}. Se si ha un modo sicuro di trasmettere il pad, tanto vale
+          trasmettere direttamente il messaggio (salvo casi particolari, come uno scambio di persona del pad su un supporto fisico).
+\end{enumerate}
+
+\warning{One-time vuol dire una volta sola}{
+    Un pad \textbf{non deve mai essere usato più di una volta}: se due messaggi sono cifrati con lo stesso pad, $C_1 \oplus C_2 = P_1 \oplus P_2$,
+    e da questo l'intruso può ricavare molto sui due testi in chiaro.
+}
+
+\subsection{Due principi fondamentali}
+
+\dfn{I due principi della crittografia}{
+    \begin{enumerate}
+      \item \textbf{Ridondanza}: ogni messaggio cifrato deve contenere una qualche forma di ridondanza. Altrimenti un attaccante potrebbe inviare
+            un messaggio cifrato \textbf{a caso}, che dopo la decifratura verrebbe accettato come valido.
+      \item \textbf{Freschezza}: serve un meccanismo per prevenire la \textbf{ripetizione} di vecchi messaggi (\emph{replay attack}).
+    \end{enumerate}
+}
+
+\begin{esempio}{Ridondanza e freschezza in pratica}
+\begin{itemize}
+    \item \textbf{Ridondanza}: l'attaccante genera un $C$ a caso e lo manda. Se il destinatario accetta qualsiasi $D_K(C)$, lo scambia per un
+          messaggio valido. Se invece ogni messaggio contiene anche un campo di controllo (per esempio $h = H(m)$, così che si invia
+          $E_K(m, h)$), il destinatario decifra, ricalcola $H(m)$ e verifica la corrispondenza: un $C$ casuale non la supera.
+    \item \textbf{Freschezza}: T registra un messaggio cifrato valido da A a B (per esempio ``paga 100 euro a T'') e lo rimanda a B più tardi. B lo
+          decifra correttamente e lo esegue di nuovo! Si risolve con i \textbf{timestamp} (messaggi validi solo per poco tempo) o con numeri usati
+          una sola volta (\emph{nonce}), che vedremo parlando di autenticazione.
+\end{itemize}
+\end{esempio}
+
+\subsection{Algoritmi a chiave simmetrica: il DES}
+
+\dfn{DES (Data Encryption Standard)}{
+    Il \textbf{DES} è un algoritmo a chiave simmetrica storico:
+    \begin{itemize}
+      \item il testo in chiaro viene cifrato a \textbf{blocchi di 64 bit};
+      \item la cifratura avviene in \textbf{19 stadi};
+      \item usa una chiave da \textbf{56 bit} (esistono versioni con chiavi più lunghe, come il Triple DES): la versione a 56 bit oggi
+            \textbf{non è più considerata sicura}. Il suo successore è l'\textbf{AES}.
+    \end{itemize}
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\linewidth]{cap21/des.png}
+    \caption{La struttura del DES (da Tanenbaum): a sinistra i 19 stadi, a destra una singola iterazione.}
+\end{figure}
+
+\begin{itemize}
+    \item Il primo e l'ultimo stadio sono \textbf{trasposizioni} (una inversa dell'altra); il diciottesimo scambia i due blocchi da 32 bit.
+    \item Nei 16 stadi intermedi, detti iterazioni: i 32 bit di sinistra dell'uscita sono i 32 bit di destra dell'ingresso ($L_i = R_{i-1}$);
+          quelli di destra sono $L_{i-1} \oplus f(R_{i-1}, K_i)$, dove la funzione $f$ \textbf{espande}, fa lo \textbf{XOR con la chiave}
+          dell'iterazione $K_i$ e applica \textbf{sostituzioni} e \textbf{trasposizioni}.
+    \item La chiave $K_i$ è diversa per ogni iterazione (derivata dalla chiave principale per trasposizione).
+\end{itemize}
+
+\subsection{Le modalità di cifratura: il CBC}
+
+\warning{Cifrare blocco per blocco non basta}{
+    Il DES eseguito blocco per blocco non è altro che una \textbf{sostituzione} di simboli in altri simboli: ogni blocco da 64 bit viene
+    cifrato separatamente, quindi blocchi di testo in chiaro \textbf{uguali} producono blocchi cifrati \textbf{uguali}. Un attaccante potrebbe
+    riconoscere schemi ripetuti, o scambiare e ricombinare blocchi (per esempio in una busta paga cifrata, sostituire il blocco dello stipendio
+    con quello di un collega più pagato).
+}
+
+\dfn{CBC (Cipher Block Chaining)}{
+    Il \textbf{CBC} è una modalità di cifratura molto usata che \textbf{concatena} i blocchi con lo XOR:
+    $$C_0 = E_K(P_0 \oplus IV), \qquad C_i = E_K(P_i \oplus C_{i-1})$$
+    dove $IV$ è un \textbf{vettore di inizializzazione} casuale, diverso per ogni messaggio. Così lo stesso blocco in chiaro produce blocchi
+    cifrati diversi a seconda di tutto ciò che lo precede.
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{cap21/cbc.png}
+    \caption{CBC: cifratura (a sinistra) e decifratura (a destra), $P_i = D_K(C_i) \oplus C_{i-1}$.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{L'integrità dei messaggi}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Integrità del messaggio}{
+    L'\textbf{integrità del messaggio} (detta anche \emph{autenticazione del messaggio}) è il problema di verificare che:
+    \begin{enumerate}
+      \item il messaggio \textbf{non sia stato manomesso};
+      \item il messaggio sia stato davvero \textbf{originato dall'host previsto}.
+    \end{enumerate}
+}
+
+Si può creare un elemento di controllo, in modo simile al checksum o al CRC. Tipicamente si usa una \textbf{funzione hash}, cioè una
+funzione che associa a dati di dimensione arbitraria valori di dimensione fissa.
+
+\dfn{Funzione hash crittografica}{
+    Una \textbf{funzione hash crittografica} è una funzione $H$ che trasforma un messaggio $x$ in una stringa di dimensione fissa $H(x)$ tale
+    che sia \textbf{computazionalmente impossibile} trovare un altro messaggio $y$ con $H(y) = H(x)$. Esempi: SHA-256 (e i vecchi MD5 e SHA-1,
+    oggi considerati insicuri).
+}
+
+\subsection{Primo tentativo: accodare l'hash}
+
+\begin{enumerate}
+    \item A crea il messaggio $m$ e calcola l'hash $h = H(m)$.
+    \item A accoda $h$ al messaggio, creando il messaggio esteso $(m, h)$, e lo invia a B.
+    \item B riceve $(m, h)$ e calcola $H(m)$. Se $H(m) = h$, il messaggio è integro.
+\end{enumerate}
+
+\warning{Un approccio ovviamente difettoso}{
+    Un intruso può falsificare l'intero messaggio $(m, h)$, creandone uno nuovo ``su misura'' $(m', h')$ con $h' = H(m')$: è comunque coerente con
+    la funzione hash, e B lo accetta. La funzione $H$ è pubblica, quindi chiunque può calcolarla.
+}
+
+\subsection{Il MAC: hash con segreto condiviso}
+
+\dfn{Message Authentication Code (MAC)}{
+    A e B condividono un \textbf{segreto} $s$ (una chiave o una password), una stringa nota solo a loro.
+    \begin{enumerate}
+      \item A crea la concatenazione $m + s$ e ne calcola l'hash $h = H(m + s)$: è il \textbf{MAC} (\emph{Message Authentication Code}).
+      \item A accoda il MAC al messaggio, creando $(m, H(m+s))$, e lo invia a B.
+      \item B riceve $(m, h)$ e, conoscendo $s$, calcola $H(m+s)$. Se coincide con $h$, il messaggio è integro e viene da A.
+    \end{enumerate}
+    Un intruso che invia $(m', h')$ non conosce $s$: non può calcolare $H(m'+s)$, e B scopre la falsificazione.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.85, every node/.style={font=\scriptsize\sffamily}]
+  \timeline{a}{0}{Host A}{4.2}
+  \timeline{t}{4.5}{Intruso}{4.2}
+  \timeline{b}{9}{Host B}{4.2}
+  \node[draw, fill=llink!50, anchor=east] at (-0.2,-0.5) {$h = H(m + s)$};
+  \draw[msg, netblue] (0,-0.8) -- node[above] {$(m, h)$} (4.5,-1.4);
+  \node[draw, fill=netred!20] at (4.5,-2.0) {sostituisce};
+  \draw[msg, netred] (4.5,-2.6) -- node[above] {$(m', h')$} (9,-3.2);
+  \node[draw, fill=netred!10, anchor=west, text width=3cm, align=left] at (9.2,-3.4) {$h' \neq H(m' + s)$: il messaggio è falso!};
+\end{tikzpicture}
+\caption{Con il segreto condiviso l'intruso non riesce più a costruire un MAC valido.}
+\end{figure}
+
+\warning{Un nome, due significati}{
+    Qui MAC significa \textbf{Message Authentication Code}, e non ha nulla a che vedere con il \emph{Medium Access Control} (e gli indirizzi MAC)
+    del livello di collegamento.
+}
+
+Come in tutti gli approcci simmetrici, il segreto va \textbf{scambiato}: lo si può fare combinando crittografia asimmetrica e certificati.
+
+% ══════════════════════════════════════════════════════════════
+\section{La crittografia asimmetrica}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Crittografia asimmetrica (a chiave pubblica)}{
+    Nella crittografia \textbf{asimmetrica} ci sono \textbf{due chiavi} per ogni partecipante: una \textbf{pubblica} e una \textbf{privata}.
+    \begin{itemize}
+      \item Un messaggio cifrato con una delle due chiavi va decifrato con l'altra, e viceversa.
+      \item La chiave pubblica può essere inviata su canali non sicuri o pubblicata; la chiave privata è disponibile \textbf{solo al proprietario}.
+    \end{itemize}
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node[draw, fill=white, rounded corners] (p1) at (0,0) {testo in chiaro};
+  \node[draw, fill=netred!20, minimum width=2cm, minimum height=0.8cm] (e) at (3,0) {cifratura};
+  \node[draw, fill=lphy!60, rounded corners] (c) at (6.5,0) {testo cifrato};
+  \node[draw, fill=netgreen!20, minimum width=2cm, minimum height=0.8cm] (d) at (10,0) {decifratura};
+  \node[draw, fill=white, rounded corners] (p2) at (13,0) {testo in chiaro};
+  \draw[msg] (p1) -- (e); \draw[msg] (e) -- (c); \draw[msg] (c) -- (d); \draw[msg] (d) -- (p2);
+  \node (k1) at (3,1.3) {chiave \textbf{pubblica} di B};
+  \node (k2) at (10,1.3) {chiave \textbf{privata} di B};
+  \draw[msg] (k1) -- (e); \draw[msg] (k2) -- (d);
+  \node[draw, fill=netred!15, rounded corners, text width=4.5cm, align=center] (t) at (6.5,-1.5) {l'intruso può conoscere la chiave pubblica, ma non può decifrare};
+  \draw[msg, dashed, netred] (c) -- (t);
+\end{tikzpicture}
+\caption{A cifra con la chiave pubblica di B; solo B, con la propria chiave privata, può decifrare.}
+\end{figure}
+
+L'uso tipico: cifrare con la \textbf{chiave pubblica} del destinatario e decifrare con la sua \textbf{chiave privata}.
+
+\begin{itemize}
+    \item Se l'intruso intercetta la chiave pubblica, non riesce comunque a decifrare i messaggi.
+    \item L'host A usa la chiave pubblica di B per cifrare messaggi che si possono leggere solo con la chiave privata di B, che è solo nelle mani di B.
+\end{itemize}
+
+\info{Pro e contro rispetto alla crittografia simmetrica}{
+    \begin{itemize}
+      \item[\itick] La chiave privata \textbf{non va distribuita}; basta una coppia di chiavi per utente (invece di $N^2$ chiavi a coppie).
+      \item[\icross] La sicurezza si basa su proprietà matematiche ed è molto \textbf{più lenta} (circa 1000 volte) della crittografia simmetrica.
+    \end{itemize}
+    Per questo la si usa soprattutto per \textbf{stabilire chiavi simmetriche di sessione}, con cui poi si cifrano i dati.
+}
+
+\dfn{Requisiti di un algoritmo a chiave pubblica}{
+    \begin{enumerate}
+      \item $D(E(P)) = P$ (correttezza);
+      \item deve essere estremamente difficile ricavare la chiave privata da quella pubblica;
+      \item $E$ non deve poter essere violato con un attacco a \textbf{testo in chiaro scelto}: l'intruso ha la chiave pubblica, quindi può cifrare
+            tutti i testi in chiaro che vuole.
+    \end{enumerate}
+}
+
+\subsection{RSA}
+
+\dfn{RSA}{
+    L'\textbf{RSA} (Rivest, Shamir, Adleman) è l'algoritmo a chiave pubblica più diffuso. La sua sicurezza si basa sulla difficoltà di
+    \textbf{fattorizzare numeri grandi}.
+    \begin{itemize}
+      \item \textbf{Generazione delle chiavi}: si scelgono due numeri primi grandi $p$ e $q$; si calcolano $n = p \cdot q$ e $z = (p-1)(q-1)$; si
+            sceglie $d$ primo con $z$; si trova $e$ tale che $e \cdot d \equiv 1 \pmod z$. La chiave \textbf{pubblica} è $(e, n)$, quella
+            \textbf{privata} è $(d, n)$.
+      \item \textbf{Cifratura} (per un messaggio di $k$ bit, visto come numero $P < n$): $C = P^e \bmod n$.
+      \item \textbf{Decifratura}: $P = C^d \bmod n$.
+    \end{itemize}
+}
+
+\begin{esempio}{RSA con numeri piccoli (da Tanenbaum)}
+$p = 3$, $q = 11$: $n = 33$, $z = 2 \cdot 10 = 20$. Scegliamo $d = 7$ (primo con 20) e cerchiamo $e$ con $7e \equiv 1 \pmod{20}$: $e = 3$
+($21 \bmod 20 = 1$). Chiave pubblica $(3, 33)$, privata $(7, 33)$.
+\begin{itemize}
+    \item Cifrare $P = 19$: $C = 19^3 \bmod 33 = 6859 \bmod 33 = 28$.
+    \item Decifrare: $P = 28^7 \bmod 33 = 19$.
+\end{itemize}
+Con numeri di centinaia di cifre, ricavare $d$ da $(e, n)$ richiederebbe di fattorizzare $n$: praticamente impossibile.
+\end{esempio}
+
+\subsection{Lo scambio di chiavi Diffie-Hellman}
+
+\dfn{Diffie-Hellman}{
+    Il protocollo \textbf{Diffie-Hellman} permette a due parti di stabilire un \textbf{segreto condiviso} su un canale pubblico.
+    \begin{enumerate}
+      \item Alice sceglie un numero segreto $x$ e invia a Bob due numeri pubblici $n$ e $g$ (primi grandi) e il valore $g^x \bmod n$.
+      \item Bob sceglie un numero segreto $y$ e invia ad Alice $g^y \bmod n$.
+      \item Alice calcola $(g^y \bmod n)^x \bmod n = g^{xy} \bmod n$; Bob calcola $(g^x \bmod n)^y \bmod n = g^{xy} \bmod n$.
+    \end{enumerate}
+    Entrambi ottengono lo stesso segreto $g^{xy} \bmod n$. Un intruso che ascolta conosce $n$, $g$, $g^x \bmod n$ e $g^y \bmod n$, ma non può
+    calcolare $g^{xy} \bmod n$ senza conoscere $x$ o $y$: ricavarli dalle potenze modulari (il \emph{logaritmo discreto}) è praticamente
+    impossibile.
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.52\linewidth]{cap21/dh.png}
+    \caption{Lo scambio di chiavi Diffie-Hellman.}
+\end{figure}
+
+\warning{L'attacco man-in-the-middle a Diffie-Hellman}{
+    Diffie-Hellman da solo è vulnerabile a un attacco \textbf{man-in-the-middle}: Trudy intercetta $g^x \bmod n$ di Alice e le risponde con un proprio
+    $g^z \bmod n$, poi fa lo stesso con Bob. Alice crede di condividere un segreto con Bob, ma lo condivide con Trudy ($g^{xz}$), e così Bob
+    ($g^{yz}$). Trudy decifra, legge e ricifra tutto. Serve \textbf{confermare le identità}, non solo condividere un segreto: è il ruolo dei
+    certificati.
+    \begin{center}\includegraphics[width=0.55\linewidth]{cap21/dh_attacco.png}\end{center}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Le autorità di certificazione}
+% ══════════════════════════════════════════════════════════════
+
+Con la crittografia a chiave pubblica è fondamentale verificare che una chiave pubblica appartenga davvero all'entità con cui si vuole
+comunicare. Altrimenti potremmo avere la chiave di qualcun altro (un attaccante) e cifrare messaggi leggibili da estranei.
+
+\dfn{Autorità di certificazione (CA)}{
+    Il legame tra una chiave pubblica e una certa entità viene tipicamente certificato da una \textbf{Certification Authority} (CA), il cui
+    compito è validare le identità ed emettere certificati.
+    \begin{enumerate}
+      \item Una CA \textbf{verifica che un'entità sia chi dice di essere}. Non esiste un protocollo per farlo: bisogna fidarsi che la CA abbia
+            eseguito una verifica sufficientemente rigorosa. Funziona come una selezione naturale: se una CA è inaffidabile nessuno si fida di
+            lei; esistono CA pubbliche e statali ragionevolmente affidabili, ma bisogna comunque fidarsi.
+      \item Verificata l'identità, la CA crea un \textbf{certificato} che lega la chiave pubblica dell'entità alla sua identità. Il certificato
+            contiene la chiave pubblica e un identificativo univoco del proprietario (per esempio un nome o un indirizzo IP), ed è
+            \textbf{firmato} digitalmente dalla CA.
+    \end{enumerate}
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node[draw, fill=cloudbg, rounded corners, minimum width=2.6cm, minimum height=1cm] (bob) at (0,0) {Bob: chiave pubblica $K_B^+$ + prova d'identità};
+  \node[draw, fill=netgreen!20, rounded corners, minimum width=2.2cm, minimum height=1cm, align=center] (ca) at (6,0) {CA\\(cifra con la propria\\chiave privata)};
+  \node[draw, fill=llink!60, rounded corners, text width=3.2cm, align=center] (cert) at (11,0) {\textbf{certificato}: ``$K_B^+$ appartiene a Bob'', firmato dalla CA};
+  \draw[msg] (bob) -- (ca); \draw[msg] (ca) -- (cert);
+  \node[text width=12cm, align=center] at (6,-1.3) {Alice verifica la firma con la chiave pubblica della CA (già presente nel browser o nel sistema operativo): se è valida, può fidarsi che $K_B^+$ sia di Bob.};
+\end{tikzpicture}
+\caption{La CA lega una chiave pubblica a un'identità.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Attacchi: \textbf{malware} (virus, worm, trojan, ransomware, botnet), \textbf{DoS}/DDoS, \textbf{sniffing} (passivo), \textbf{IP spoofing},
+          man-in-the-middle.
+    \item Proprietà: \textbf{confidenzialità}, \textbf{integrità}, \textbf{autenticazione}, \textbf{sicurezza operativa}.
+    \item \textbf{Kerckhoffs}: algoritmi pubblici, chiavi segrete. Cifrari per sostituzione e trasposizione; one-time pad inviolabile ma impraticabile.
+    \item \textbf{Simmetrica} (DES, AES; modalità CBC): una chiave, veloce, ma va scambiata. \textbf{Asimmetrica} (RSA): chiave pubblica e privata,
+          lenta, usata per scambiare chiavi. \textbf{Diffie-Hellman}: segreto condiviso, ma vulnerabile al MitM.
+    \item \textbf{Integrità}: hash crittografici; il \textbf{MAC} $H(m+s)$ usa un segreto condiviso. Principi: ridondanza e freschezza.
+    \item Le \textbf{CA} certificano il legame tra chiave pubblica e identità.
+\end{itemize}
+}

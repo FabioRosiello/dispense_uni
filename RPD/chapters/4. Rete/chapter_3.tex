@@ -1,0 +1,446 @@
+\chapter{DHCP, NAT e IPv6}
+
+% ══════════════════════════════════════════════════════════════
+\section{L'assegnazione degli indirizzi IP}
+% ══════════════════════════════════════════════════════════════
+
+Dentro un blocco di indirizzi, gli indirizzi IP vanno assegnati alle singole interfacce. Un amministratore di sistema
+può farlo in due modi:
+
+\begin{itemize}
+    \item \textbf{manualmente}: assegnando a mano un indirizzo a ciascun host (indirizzo \emph{statico});
+    \item \textbf{automaticamente}: è la rete ad assegnare un indirizzo libero agli host che arrivano.
+\end{itemize}
+
+Il secondo approccio, il più comune, si realizza con il \textbf{Dynamic Host Configuration Protocol} (DHCP).
+
+\dfn{DHCP}{
+    Il \textbf{DHCP} assegna automaticamente a un host che si collega alla rete le informazioni necessarie per
+    usarla: oltre all'\textbf{indirizzo IP}, la \textbf{subnet mask}, l'indirizzo del \textbf{gateway predefinito}
+    (per uscire dalla rete) e quello del \textbf{server DNS locale}. È \emph{plug-and-play}, ed è quello che si usa
+    nelle nostre case.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il funzionamento del DHCP}
+% ══════════════════════════════════════════════════════════════
+
+Il DHCP è un protocollo \textbf{client-server}: un host appena arrivato (client) contatta il server DHCP per ricevere
+la configurazione di rete. Il servizio può essere offerto da un computer o dal router stesso. Formalmente, il DHCP è un
+protocollo di \textbf{livello applicativo} (usa UDP).
+
+Riprendiamo l'esempio delle tre subnet collegate da un router, e supponiamo che la subnet di destra
+(\texttt{223.1.2.0/24}) abbia un server DHCP: quando un nuovo host entra nella rete, ``contratta'' il proprio indirizzo
+con il server. L'aggiunta di un host avviene in quattro passi (ricordati spesso con l'acronimo \textbf{DORA}):
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.34\linewidth}\centering
+  \includegraphics[width=0.9\linewidth]{cap15/dhcp_messaggi.png}
+\end{minipage}\hfill
+\begin{minipage}{0.62\linewidth}
+\begin{enumerate}
+  \item \textbf{Discover} --- ricerca del server: il nuovo host invia in \textbf{broadcast} un messaggio \emph{DHCP discover}
+        (UDP, porta \textbf{67}) per trovare un server DHCP.
+        \begin{itemize}
+          \item IP destinazione: \texttt{255.255.255.255} (broadcast);
+          \item IP sorgente: \texttt{0.0.0.0} (``questo host'', che non ha ancora un indirizzo);
+          \item un identificativo di transazione casuale.
+        \end{itemize}
+  \item \textbf{Offer} --- offerta: poiché possono esserci più server, ogni server che riceve il discover risponde con un
+        messaggio in broadcast (porta \textbf{68}) che offre una possibile configurazione (campo \texttt{yiaddr}, \emph{Your
+        Internet ADDRess}). IP destinazione \texttt{255.255.255.255}, IP sorgente quello del server (\texttt{223.1.2.5}).
+  \item \textbf{Request} --- richiesta: il client sceglie un'offerta tra quelle ricevute e la accetta ``facendo l'eco''
+        del messaggio di offerta.
+  \item \textbf{ACK} --- conferma: il server conferma la transazione con un messaggio finale.
+\end{enumerate}
+\end{minipage}
+\caption{I quattro messaggi del DHCP (da Kurose).}
+\end{figure}
+
+\warning{Perché tutto in broadcast}{
+    Nel passo 1 il client \textbf{non ha ancora un indirizzo} e \textbf{non sa dove sia il server}: l'unico modo di
+    raggiungerlo è il broadcast. Anche l'offerta viaggia in broadcast, perché il client non può ancora ricevere
+    pacchetti indirizzati a un IP che non ha. L'indirizzo assegnato ha una \textbf{durata} (\emph{lease time}): scaduta,
+    va rinnovata, altrimenti può essere riassegnata a un altro host.
+}
+
+\subsection{Il DHCP relay agent}
+
+\begin{itemize}
+    \item Nell'esempio tutto funziona perché il server DHCP e l'host sono nella \textbf{stessa subnet}: i broadcast non
+          attraversano i router.
+    \item Se il server esiste ma sta in un'altra subnet, serve un \textbf{DHCP relay agent} che inoltri i messaggi DHCP (può
+          farlo un router).
+    \item Configurando il router come relay agent, anche gli host delle subnet \texttt{223.1.1.0/24} e \texttt{223.1.3.0/24}
+          vengono serviti dal server DHCP della subnet \texttt{223.1.2.0/24}.
+\end{itemize}
+
+\subsection{Verificare la configurazione}
+
+Su Linux il comando \texttt{ip} mostra la configurazione ricevuta dal DHCP:
+
+\begin{lstlisting}[language=bash]
+$ ip addr       # indirizzo IP e maschera delle interfacce
+$ ip route      # gateway predefinito (riga "default via ...")
+\end{lstlisting}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il problema della visibilità}
+% ══════════════════════════════════════════════════════════════
+
+Su Internet ci sono miliardi di dispositivi che dovrebbero avere un indirizzo IP univoco per essere raggiungibili da
+chiunque. Ma è davvero necessario che \textbf{tutti} i dispositivi siano visibili a tutti? È una buona idea che la mia
+stampante sia raggiungibile (e usabile) da chiunque su Internet?
+
+Avere tutti i dispositivi raggiungibili dall'esterno delle reti locali pone problemi evidenti:
+
+\begin{itemize}
+    \item gli indirizzi IP sono \textbf{finiti} (e gli IPv4 praticamente esauriti);
+    \item se i dispositivi sono collegati localmente, spesso è irragionevole o indesiderabile esporli tutti su Internet;
+    \item gli amministratori locali dovrebbero conoscere la struttura dei blocchi di indirizzi soprastanti per assegnare
+          indirizzi liberi, cosa che spesso non dipende da loro (per esempio nelle reti di casa).
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il NAT}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Network Address Translation (NAT)}{
+    Il servizio di \textbf{NAT} permette di \textbf{rimappare} gli indirizzi IP dei pacchetti di una rete in indirizzi
+    diversi (\emph{network masquerading}). Si usa una \textbf{tabella di traduzione} che associa molte coppie
+    indirizzo/porta locali (della LAN) a una coppia indirizzo/porta globale (della WAN). Il servizio può essere offerto
+    dai router.
+}
+
+La rete locale mascherata si chiama \textbf{rete privata} (o \emph{realm} con indirizzi privati): gli indirizzi privati
+sono validi \textbf{solo all'interno} della rete privata.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (pc) at (0,1.4) {\icon[0.9cm]{pc}}; \node[left=0pt of pc, font=\scriptsize\ttfamily] {192.168.0.23};
+  \node (lp) at (0,0) {\icon[1cm]{laptop}}; \node[left=0pt of lp, font=\scriptsize\ttfamily] {192.168.0.11};
+  \node (ph) at (0,-1.4) {\icon[0.6cm]{smartphone}}; \node[left=0pt of ph, font=\scriptsize\ttfamily] {192.168.0.7};
+  \node (r) at (4,0) {\icon[1.3cm]{router}}; \node[below=0pt of r, align=center] {router NAT};
+  \foreach \n in {pc,lp,ph} \draw[wired] (\n) -- (r);
+  \node[netcloud, minimum width=3cm] (i) at (9,0) {Internet};
+  \draw[wired, line width=2pt] (r) -- node[above, font=\scriptsize\ttfamily] {203.0.113.221} (i);
+  \draw[decorate, decoration={brace, amplitude=6pt, mirror}] (-1.8,-2.1) -- (4.6,-2.1) node[midway, below=7pt, text=netgreen!50!black] {rete privata: indirizzi 192.168.0.x};
+  \draw[decorate, decoration={brace, amplitude=6pt, mirror}] (4.8,-2.1) -- (10.6,-2.1) node[midway, below=7pt, text=netblue] {per Internet c'è un solo indirizzo pubblico};
+\end{tikzpicture}
+\caption{Con il NAT tutti i dispositivi di casa escono verso Internet con lo stesso indirizzo pubblico del router.}
+\end{figure}
+
+\subsection{Un esempio di NAT}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{cap15/nat_esempio.png}
+    \caption{Un router NAT tra una rete privata 10.0.0.0/24 e Internet (da Kurose).}
+\end{figure}
+
+Le quattro interfacce della rete locale hanno indirizzi della subnet \texttt{10.0.0.0/24}; lato Internet il router ha un solo
+indirizzo, \texttt{138.76.29.7}. Il router si comporta da ``passamessaggi'' che sovrascrive gli indirizzi secondo la tabella:
+
+\begin{enumerate}
+    \item L'host \texttt{10.0.0.1} invia un datagramma verso il server Web \texttt{128.119.40.186}, porta 80, usando la porta sorgente 3345.
+    \item Il router NAT riceve il datagramma, sceglie una porta libera (\textbf{5001}), \textbf{sostituisce} indirizzo e porta sorgente
+          con \texttt{138.76.29.7, 5001} e aggiunge la riga alla tabella di traduzione.
+    \item Il server risponde a \texttt{138.76.29.7, 5001}: per lui, la richiesta è arrivata dal router.
+    \item Il router riceve la risposta, cerca \texttt{138.76.29.7, 5001} nella tabella e \textbf{riscrive} destinazione e porta con
+          \texttt{10.0.0.1, 3345}, poi la inoltra nella LAN.
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Lato WAN} & \textbf{Lato LAN} \\
+\midrule
+138.76.29.7, 5001 & 10.0.0.1, 3345 \\
+138.76.29.7, 5002 & 10.0.0.2, 3345 \\
+\dots & \dots \\
+\bottomrule
+\end{tabular}
+\caption{La tabella di traduzione NAT: la seconda riga mostra perché serve una porta nuova.}
+\end{table}
+
+\warning{Perché il NAT cambia anche la porta}{
+    Gli host non sanno nulla del traffico degli altri host: due host della LAN potrebbero scegliere \textbf{la stessa
+    porta} sorgente (3345) nello stesso momento. Il NAT non può quindi riusare la porta iniziale, e ne assegna una nuova.
+    Poiché la porta è di 16 bit, un NAT può gestire \textbf{oltre 60\,000 connessioni} contemporanee con un solo indirizzo IP pubblico.
+}
+
+\subsection{Il limite del NAT}
+
+\info{NAT traversal}{
+    Nell'esempio la comunicazione è stata \textbf{iniziata dall'host interno} \texttt{10.0.0.1}: la riga della tabella nasce
+    proprio da quel primo pacchetto in uscita. Se un pacchetto arriva da Internet \textbf{senza comunicazioni precedenti}
+    (qualcuno vuole contattare un server che sta dietro il NAT), il router non ha informazioni sufficienti per sapere a quale
+    host interno consegnarlo. Servono allora tecniche aggiuntive, dette di \textbf{NAT traversal} (per esempio l'inoltro
+    manuale delle porte sul router, o protocolli per scoprire e aprire le mappature). Il NAT è anche criticato perché un router,
+    dispositivo di livello 3, modifica i numeri di porta, che appartengono al livello 4.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Gli indirizzi IP riservati}
+% ══════════════════════════════════════════════════════════════
+
+Perché gli amministratori locali possano organizzare una rete privata senza interferenze, per convenzione alcuni blocchi di
+indirizzi sono \textbf{riservati}: ISP e ICANN non possono assegnarli a nessuna organizzazione.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llp{7.5cm}}
+\toprule
+\textbf{Blocco} & \textbf{Intervallo} & \textbf{Uso} \\
+\midrule
+10.0.0.0/8 & 10.0.0.0 -- 10.255.255.255 & reti private \\
+172.16.0.0/12 & 172.16.0.0 -- 172.31.255.255 & reti private \\
+192.168.0.0/16 & 192.168.0.0 -- 192.168.255.255 & reti private (tipiche delle case) \\
+127.0.0.0/8 & 127.0.0.0 -- 127.255.255.255 & ``questa macchina'' (\emph{loopback}), di solito 127.0.0.1 \\
+0.0.0.0 & --- & rete corrente; per estensione, un indirizzo con la parte di host a 0 indica la rete \\
+255.255.255.255 & --- & broadcast; per estensione, un indirizzo con la parte di host tutta a 1 è il broadcast della subnet \\
+\bottomrule
+\end{tabular}
+\caption{Indirizzi IPv4 riservati.}
+\end{table}
+
+La riserva è necessaria perché gli indirizzi privati potrebbero coincidere con indirizzi pubblici, rendendo ambiguo
+l'instradamento dentro la rete. Con blocchi riservati, un router sa che \texttt{192.168.x.x} non è mai un indirizzo di Internet.
+
+% ══════════════════════════════════════════════════════════════
+\section{ping e nmap per la scoperta degli host}
+% ══════════════════════════════════════════════════════════════
+
+Per verificare se un host è raggiungibile si usa \textbf{ping} (identico su Linux e Windows), basato su \textbf{ICMP}
+(\emph{Internet Control Message Protocol}): invia all'host un pacchetto \emph{echo request} a cui l'host risponde
+automaticamente con un \emph{echo reply}, e misura il tempo trascorso, cioè l'\textbf{RTT}. Lo vedremo in dettaglio nel
+prossimo capitolo.
+
+Oltre alla scansione delle porte, \textbf{nmap} può mappare i dispositivi di una rete, usando ping (ICMP) per scoprire gli host:
+
+\begin{lstlisting}[language=bash]
+$ ping [indirizzo]                               # l'host risponde?
+$ sudo nmap -sn [indirizzo gateway]/[bit di subnet]  # quali host sono accesi nella subnet?
+\end{lstlisting}
+
+% ══════════════════════════════════════════════════════════════
+\section{Esempio completo: configurare una LAN}
+% ══════════════════════════════════════════════════════════════
+
+Vogliamo creare una nuova rete locale (LAN) dentro una rete più grande preesistente (WAN). L'amministratore della WAN
+ci fornisce:
+
+\begin{itemize}
+    \item l'indirizzo della WAN: \texttt{150.100.0.0/16};
+    \item l'indirizzo del gateway che porta all'esterno (WAN/Internet): \texttt{150.100.50.1};
+    \item un indirizzo libero per la nostra rete: \texttt{150.100.50.10}.
+\end{itemize}
+
+Useremo un router con NAT e decidiamo che la nuova LAN avrà indirizzo \texttt{192.168.1.0/24} (riservato alle reti private).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node[netcloud, minimum width=2.8cm] (inet) at (0,3.2) {Internet};
+  \node[draw=netblue, thick, rounded corners, fill=cloudbg, minimum width=7cm, minimum height=2.2cm] (wan) at (0,0.8) {};
+  \node[anchor=north east, text=netblue] at (wan.north east) {WAN \texttt{150.100.0.0/16}};
+  \node (rw) at (-1.8,1.0) {\icon[1.1cm]{router}}; \node[below=-1pt of rw, align=center, font=\scriptsize\sffamily] {router WAN\\\texttt{150.100.50.1}};
+  \draw[wired, line width=2pt] (inet) -- (rw);
+  \node[draw=netgreen!70!black, thick, rounded corners, fill=netgreen!8, minimum width=7cm, minimum height=2.6cm] (lan) at (0,-2.4) {};
+  \node[anchor=south east, text=netgreen!50!black] at (lan.south east) {LAN \texttt{192.168.1.0/24}};
+  \node (rl) at (-1.8,-1.6) {\icon[1.1cm]{router}};
+  \node[anchor=west, font=\scriptsize\ttfamily, text=netblue] at (-1.2,-0.9) {WAN: 150.100.50.10};
+  \node[anchor=west, font=\scriptsize\ttfamily, text=netgreen!50!black] at (-1.2,-1.8) {LAN: 192.168.1.1};
+  \draw[wired] (rw) -- (rl);
+  \node (h1) at (-2.3,-3.2) {\icon[0.8cm]{laptop}}; \node[right=0pt of h1, font=\scriptsize\ttfamily, align=left] {192.168.1.100\\(DHCP)};
+  \node (h2) at (1.2,-3.2) {\icon[0.8cm]{pc}}; \node[right=0pt of h2, font=\scriptsize\ttfamily, align=left] {192.168.1.10\\(manuale)};
+  \draw[wired] (rl) -- (h1); \draw[wired] (rl) -- (h2);
+\end{tikzpicture}
+\caption{La LAN da configurare: il router locale ha un'interfaccia nella WAN e una nella LAN.}
+\end{figure}
+
+\subsection{1. Il lato WAN del router}
+
+Il router locale ha \textbf{due interfacce}, una verso la WAN e una verso la LAN. Sul lato WAN vanno impostati:
+
+\begin{itemize}
+    \item l'indirizzo del router nella WAN: \texttt{150.100.50.10};
+    \item la subnet mask della WAN: \texttt{255.255.0.0};
+    \item il gateway: \texttt{150.100.50.1};
+    \item uno o più server DNS.
+\end{itemize}
+
+Se la WAN ha un servizio DHCP, si può anche scegliere un indirizzo dinamico.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth]{cap15/config_wan.png}
+    \caption{La pagina di configurazione ``Internet'' (lato WAN) di un router domestico: indirizzo statico, maschera, gateway e DNS (valori di un esempio reale, diversi da quelli del testo).}
+\end{figure}
+
+\subsection{2. Il lato LAN del router}
+
+\begin{itemize}
+    \item All'interfaccia LAN del router si dà un indirizzo della nuova rete: poiché la LAN è \texttt{192.168.1.0/24}, al router si
+          assegna \texttt{192.168.1.1/24} (è consuetudine dare al router l'indirizzo \texttt{.1}).
+    \item Se il router offre anche il DHCP, si specificano:
+    \begin{itemize}
+      \item il \textbf{pool di indirizzi} per gli host DHCP, per esempio da \texttt{192.168.1.100} a \texttt{192.168.1.250};
+      \item il \textbf{lease time}: la durata dell'assegnazione, dopo la quale l'indirizzo può essere riusato;
+      \item gateway e DNS da comunicare agli host.
+    \end{itemize}
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth]{cap15/config_lan.png}
+    \caption{La configurazione del server DHCP del router: pool di indirizzi, lease time, gateway e DNS.}
+\end{figure}
+
+\subsection{3. Gli host}
+
+Su un nuovo host (per esempio con Linux Mint) si può scegliere come configurare la connessione:
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.44\linewidth}\centering
+  \includegraphics[width=0.85\linewidth]{cap15/host_dhcp.png}\\{\small (a) automatica (DHCP)}
+\end{minipage}\hfill
+\begin{minipage}{0.44\linewidth}\centering
+  \includegraphics[width=0.85\linewidth]{cap15/host_manuale.png}\\{\small (b) manuale}
+\end{minipage}
+\caption{Configurazione della connessione su un host.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Automatica (DHCP)}: l'host riceve dal DHCP un indirizzo tra \texttt{192.168.1.100} e \texttt{192.168.1.250}.
+    \item \textbf{Manuale}: bisogna conoscere la configurazione della rete e gli indirizzi disponibili, e indicare
+          l'\textbf{indirizzo dell'host} (statico, \textbf{fuori dal pool} del DHCP, per esempio \texttt{192.168.1.10}), la
+          \textbf{subnet mask}, il \textbf{gateway} e uno o più \textbf{DNS}.
+\end{itemize}
+
+Gli host collegati inviano i loro pacchetti al router locale, senza sapere nulla della WAN esterna; il router locale è
+configurato per inoltrarli al router della WAN, e da lì eventualmente a Internet.
+
+\warning{Indirizzi manuali fuori dal pool}{
+    Un indirizzo assegnato a mano deve stare \textbf{fuori} dall'intervallo del DHCP: altrimenti prima o poi il DHCP lo
+    assegnerà anche a un altro host, e due interfacce avranno lo stesso indirizzo (conflitto).
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{IPv6}
+% ══════════════════════════════════════════════════════════════
+
+All'inizio degli anni '90 l'IETF (organizzazione nata nel 1986) avviò lo sviluppo di un successore di IPv4, per
+affrontare la \textbf{carenza di indirizzi} a 32 bit. IPv6 fu progettato per avere molti più indirizzi, ma fu anche
+l'occasione per aggiornare altri aspetti di IPv4 sulla base dell'esperienza accumulata.
+
+\info{E IPv5?}{
+    Non si sa esattamente quando gli IPv4 si esauriranno del tutto (si era ipotizzato il 2008, poi il 2018, e qualche
+    indirizzo è ancora disponibile). \textbf{IPv5} fu proposto nel 1979 e si basava sullo sperimentale \emph{Internet Stream
+    Protocol} (ST); usava ancora indirizzi a 32 bit, e fu abbandonato soprattutto per la stessa carenza di indirizzi.
+}
+
+\subsection{I vantaggi di IPv6}
+
+\begin{itemize}
+    \item \textbf{Indirizzi molto più grandi}: da 32 a \textbf{128 bit}, cioè $2^{128} \approx 3{,}4\cdot 10^{38}$ indirizzi. Il mondo
+          non resterà senza indirizzi: si potrebbe dare un indirizzo a ogni granello di sabbia del pianeta.
+    \item \textbf{Header di lunghezza fissa}, 40 byte: alcuni campi di IPv4 sono stati eliminati o resi facoltativi, e i router
+          elaborano i pacchetti più velocemente.
+    \item \textbf{Etichettatura dei flussi} (\emph{flow labeling}): i pacchetti di certe applicazioni (per esempio lo streaming
+          audio/video) possono essere raggruppati in un flusso con un identificativo. Il ruolo preciso dei flussi è ancora discusso.
+\end{itemize}
+
+\info{Come si scrive un indirizzo IPv6}{
+    Un indirizzo IPv6 si scrive come 8 gruppi di 4 cifre esadecimali separati da due punti, per esempio
+    \texttt{2001:0db8:0000:0000:0000:ff00:0042:8329}. Gli zeri iniziali di ogni gruppo si possono omettere, e una sequenza di
+    gruppi tutti a zero si può sostituire (una sola volta) con \texttt{::}: l'indirizzo diventa \texttt{2001:db8::ff00:42:8329}.
+    L'indirizzo di loopback è \texttt{::1}.
+}
+
+\subsection{Il datagramma IPv6}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.55\linewidth]{cap15/ipv6_datagramma.png}
+    \caption{Il datagramma IPv6: header fisso di 40 byte.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Version} (4 bit): la versione, cioè 6.
+    \item \textbf{Traffic class} (8 bit): come il TOS di IPv4, serve a dare priorità ai datagrammi (per esempio voce su IP rispetto a SMTP).
+    \item \textbf{Flow label} (20 bit): identifica un flusso di datagrammi.
+    \item \textbf{Payload length} (16 bit): numero di byte del payload (esclusi i 40 byte di header).
+    \item \textbf{Next header} (8 bit): il protocollo superiore a cui consegnare i dati (TCP, UDP, \dots), come il campo protocollo di IPv4.
+    \item \textbf{Hop limit} (8 bit): il time-to-live, decrementato a ogni inoltro.
+    \item \textbf{Indirizzi sorgente e destinazione} (128 + 128 bit).
+    \item \textbf{Data}: il payload.
+\end{itemize}
+
+\subsection{Cosa manca rispetto a IPv4}
+
+\begin{itemize}
+    \item \textbf{Campi della frammentazione}: IPv6 non permette frammentazione e riassemblaggio nei router intermedi, ma solo negli
+          host. Se un router riceve un datagramma IPv6 troppo grande da inoltrare, lo \textbf{scarta} e rimanda al mittente un
+          messaggio di errore ``\emph{Packet Too Big}''; il mittente rinvia i dati con datagrammi più piccoli.
+    \item \textbf{Checksum dell'header}: richiede tempo in ogni router ed è ridondante, perché i protocolli di collegamento di
+          solito controllano già l'intero pacchetto (e TCP/UDP controllano i propri dati).
+    \item \textbf{Opzioni}: non fanno più parte dell'header standard; alcune si possono indicare nel campo \emph{next header}
+          (accanto agli identificativi di TCP/UDP), come header di estensione.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Dalla IPv4 alla IPv6}
+% ══════════════════════════════════════════════════════════════
+
+C'è un grosso problema: IPv6 \textbf{non è retrocompatibile}. I sistemi che capiscono solo IPv4 non sanno gestire i datagrammi IPv6.
+Come può Internet adottare IPv6?
+
+\begin{itemize}
+    \item \textbf{Flag day}: a una certa data e ora tutte le macchine di Internet vengono spente e aggiornate da IPv4 a IPv6. Un
+          approccio simile fu usato quando fu introdotto TCP, e fu un disastro anche nella piccola Internet di allora: con miliardi
+          di dispositivi è impensabile.
+    \item \textbf{Tunneling}: router specifici (i \emph{tunnel}) incapsulano i datagrammi IPv6 dentro datagrammi IPv4 (e viceversa)
+          in modo quasi trasparente, per attraversare le parti di rete che parlano solo IPv4. È l'approccio più realistico, già
+          usato nella pratica.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \foreach \x/\n/\c in {0/A/lnet, 2.6/B/lnet, 5.2/C/lphy, 7.8/D/lphy, 10.4/E/lnet, 13/F/lnet} {
+    \node (\n) at (\x,0) {\icon[0.9cm]{router}}; \node[above=-2pt of \n] {\n};
+  }
+  \node[below=0pt of A] {IPv6}; \node[below=0pt of B] {IPv6/v4}; \node[below=0pt of C] {IPv4}; \node[below=0pt of D] {IPv4}; \node[below=0pt of E] {IPv6/v4}; \node[below=0pt of F] {IPv6};
+  \foreach \a/\b in {A/B, B/C, C/D, D/E, E/F} \draw[wired] (\a) -- (\b);
+  \draw[very thick, netorange, rounded corners, dashed] (2.4,-1.2) rectangle (10.6,0.9);
+  \node[text=netorange, font=\footnotesize\bfseries\sffamily] at (6.5,1.1) {tunnel};
+  \node[field, fill=lnet!60, minimum width=1.6cm] at (1.3,-1.8) {datagramma IPv6};
+  \node[field, fill=lphy!80, minimum width=1.1cm] (h4) at (5.6,-1.8) {header IPv4};
+  \node[field, fill=lnet!60, minimum width=1.6cm, right=0pt of h4] {datagramma IPv6};
+  \node[field, fill=lnet!60, minimum width=1.6cm] at (11.7,-1.8) {datagramma IPv6};
+\end{tikzpicture}
+\caption{Tunneling: B incapsula il datagramma IPv6 in un datagramma IPv4 per attraversare C e D; E lo estrae.}
+\end{figure}
+
+L'adozione di IPv6, inizialmente lenta, sta accelerando.
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Il \textbf{DHCP} assegna automaticamente indirizzo, maschera, gateway e DNS con quattro messaggi: discover, offer,
+          request, ACK (broadcast, porte UDP 67/68); oltre le subnet serve un relay agent.
+    \item Il \textbf{NAT} fa uscire una rete privata con un solo indirizzo pubblico, riscrivendo indirizzi e porte secondo una
+          tabella; le connessioni avviate dall'esterno richiedono NAT traversal.
+    \item Blocchi \textbf{riservati}: 10/8, 172.16/12, 192.168/16 (privati), 127/8 (loopback), 0.0.0.0, 255.255.255.255.
+    \item \textbf{IPv6}: indirizzi a 128 bit, header fisso di 40 byte, flow label; niente frammentazione nei router, niente checksum,
+          niente opzioni nell'header; transizione con \textbf{tunneling}.
+\end{itemize}
+}

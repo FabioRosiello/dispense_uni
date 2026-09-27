@@ -1,0 +1,964 @@
+\chapter{JavaScript avanzato}
+
+Nel capitolo precedente abbiamo visto i concetti chiave del linguaggio:
+variabili, funzioni, scope (e hoisting), oggetti e costruttori. Qui
+proseguiamo con altri concetti fondamentali: i \textbf{prototipi} e
+l'ereditarietà, le \textbf{strutture dati} (array, mappe, insiemi), le
+\textbf{classi}, la gestione degli \textbf{errori} e i \textbf{moduli}.
+
+\section{Prototipi ed ereditarietà}
+
+L'ereditarietà è un aspetto essenziale della programmazione orientata agli
+oggetti. JavaScript la realizza in un modo particolare, detto
+\term{ereditarietà prototipale}.
+
+\dfn{Prototipo}{
+  Ogni oggetto ha una speciale proprietà nascosta chiamata
+  \term{[[Prototype]]}, che vale \code{null} oppure fa riferimento a un altro
+  oggetto. Quando accediamo a una proprietà di un oggetto e questa manca,
+  JavaScript la cerca risalendo la \term{catena dei prototipi}.}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      o/.style={rounded corners=3pt, draw=primary!65!black, line width=0.9pt,
+                fill=primary!8!white, minimum width=3.0cm, minimum height=1.0cm,
+                align=center},
+      a/.style={-{Stealth[length=6pt,width=5pt]}, line width=1pt,
+                draw=accent!70!black}]
+
+    \node[o] (a) at (0,0)    {\code{cat}\\[2pt]\scriptsize name: "Garfield"};
+    \node[o] (b) at (0,-2.0) {\code{pet}\\[2pt]\scriptsize legs: 4};
+    \node[o, draw=neutral!55!white, fill=neutral!8!white] (c) at (0,-4.0)
+      {\code{Object.prototype}\\[2pt]\scriptsize toString(), valueOf()\ldots};
+    \node[font=\Lato\small, text=neutral!35!black] (n) at (0,-5.4) {\code{null}};
+
+    \draw[a] (a) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (b);
+    \draw[a] (b) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (c);
+    \draw[a] (c) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (n);
+
+    \node[font=\Lato\scriptsize, anchor=west, align=left, text=neutral!25!black]
+      at (2.6,-1.0) {la ricerca di una proprietà\\ risale la catena finché non\\
+                     la trova, o finché non\\ arriva a \code{null}};
+  \end{tikzpicture}
+  \caption{La catena dei prototipi.}
+  \label{fig:proto-chain}
+\end{figure}
+
+\begin{esempio}{Impostare un prototipo}
+\begin{lstlisting}[style=js, name=prototipi.js]
+let pet = {
+  legs: 4,
+  greet() { console.log("..."); }
+}
+
+let cat = {
+  __proto__: pet          // imposta il prototipo
+}
+
+cat.greet();              // "..."
+console.log(cat.legs);    // 4
+console.log(cat.__proto__);  // Object { legs: 4, greet: greet() }
+\end{lstlisting}
+
+\code{\_\_proto\_\_} è un getter/setter per la vera proprietà
+\code{[[Prototype]]}. Nel JavaScript moderno si preferiscono
+\code{Object.getPrototypeOf()} e \code{Object.setPrototypeOf()}.
+\end{esempio}
+
+\subsection{I prototipi si usano solo in lettura}
+
+Questo è il punto che genera più confusione: i prototipi intervengono
+\textbf{solo} quando si legge una proprietà. Le operazioni di scrittura e di
+cancellazione agiscono \textbf{direttamente sull'oggetto}.
+
+\begin{esempio}{Scrittura e prototipo}
+\begin{lstlisting}[style=js, name=scrittura-proto.js]
+let pet = { legs: 4 }
+
+let cat   = { name: "Garfield" }
+let snake = { name: "Salazar" }
+
+Object.setPrototypeOf(cat, pet);
+Object.setPrototypeOf(snake, pet);
+
+snake.legs = 0;   // NON modifica pet: crea una proprieta' propria su snake
+
+console.log(`Cat legs: ${cat.legs}`);      // Cat legs: 4   (letta dal prototipo)
+console.log(`Snake legs: ${snake.legs}`);  // Snake legs: 0 (propria)
+console.log(`Pet legs: ${pet.legs}`);      // Pet legs: 4   (intatta)
+\end{lstlisting}
+
+Assegnando \code{snake.legs = 0} non si è toccato \code{pet}: si è creata una
+proprietà \textbf{propria} su \code{snake}, che da quel momento
+\guillemotleft oscura\guillemotright\ quella del prototipo.
+\end{esempio}
+
+\subsection{Costruttori e prototipi}
+
+Possiamo creare oggetti con le funzioni costruttore, come \code{new Pet()}.
+Quando \code{Pet.prototype} è un oggetto, l'operatore \code{new} lo usa per
+impostare il \code{[[Prototype]]} dell'oggetto appena creato.
+
+\begin{lstlisting}[style=js, name=costruttore-proto.js]
+let pet = { eats: true };
+
+function Duck(name) {
+  this.name = name;
+}
+
+Duck.prototype = pet;
+
+let chuck = new Duck("Chuck");   // chuck.__proto__ == pet
+console.log(chuck.eats);         // true
+\end{lstlisting}
+
+E se la funzione costruttore non ha una proprietà \code{prototype}? In quel caso
+viene usato un \term{prototipo predefinito}: un oggetto con una sola proprietà
+\code{constructor}, che punta indietro alla funzione costruttore.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\footnotesize,
+      o/.style={rounded corners=3pt, draw=primary!65!black, line width=0.8pt,
+                fill=primary!8!white, minimum width=2.9cm, minimum height=1.0cm,
+                align=center},
+      pt/.style={o, draw=accent!60!black, fill=accent!9!white},
+      g/.style={o, draw=neutral!55!white, fill=neutral!7!white},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                draw=neutral!45!black}]
+
+    \node[o]  (fn) at (0,1.6)   {\code{Pet}\\\scriptsize (funzione)};
+    \node[pt] (pr) at (5.0,1.6) {\code{Pet.prototype}\\\scriptsize constructor: Pet};
+    \node[g]  (op) at (11.0,1.6) {\code{Object.prototype}\\\scriptsize toString()\ldots};
+
+    \node[o] (c1) at (3.4,-1.4) {\code{chuck}\\\scriptsize name: Chuck, age: 3};
+    \node[o] (c2) at (7.0,-1.4) {\code{rick}\\\scriptsize name: Rick, age: 7};
+
+    % Pet <-> Pet.prototype
+    \draw[a] ([yshift=6pt]fn.east) -- node[wtlab, above]{\code{prototype}}
+             ([yshift=6pt]pr.west);
+    \draw[a] ([yshift=-6pt]pr.west) -- node[wtlab, below]{\code{constructor}}
+             ([yshift=-6pt]fn.east);
+
+    % Pet.prototype -> Object.prototype
+    \draw[a] (pr.east) -- node[wtlab, above]{\code{[[Prototype]]}} (op.west);
+
+    % gli oggetti creati puntano al prototipo
+    \draw[a] (c1.north) -- ([xshift=-16pt]pr.south);
+    \draw[a] (c2.north) -- ([xshift=16pt]pr.south);
+    \node[wtlab] at (5.0,0.1) {\code{[[Prototype]]}};
+  \end{tikzpicture}
+  \caption{Costruttore, prototipo e oggetti creati.}
+  \label{fig:constructor-proto}
+\end{figure}
+
+Questo meccanismo ci permette, dato un oggetto, di risalire al costruttore che
+lo ha creato:
+
+\begin{lstlisting}[style=js]
+let b = chuck.constructor('Bob', 1);
+\end{lstlisting}
+
+\subsection{Due modi per aggiungere metodi}
+
+\begin{lstlisting}[style=js, name=metodi-proto.js]
+function describe() {
+  console.log(`I'm ${this.name} and my age is ${this.age}`);
+}
+
+function Pet(name, age) {
+  this.name = name;
+  this.age  = age;
+  this.describe = describe;   // (1) un metodo su OGNI oggetto creato
+}
+
+Pet.prototype.describe = describe;   // (2) un solo metodo, sul prototipo
+
+let chuck = new Pet('Chuck', 3);
+let rick  = new Pet('Rick', 7);
+
+chuck.describe();
+rick.describe();
+\end{lstlisting}
+
+\info{Quale dei due conviene}{
+  Con la soluzione (1) ogni oggetto riceve una \textbf{propria copia} del
+  riferimento al metodo; con la (2) esiste un solo metodo, condiviso da tutti
+  gli oggetti tramite il prototipo. Con mille oggetti la differenza in memoria è
+  concreta, ed è il motivo per cui i metodi vanno di norma sul prototipo. È
+  esattamente ciò che fanno le classi, che vedremo fra poco.}
+
+\section{Array}
+
+Gli \term{array} permettono di memorizzare sequenze ordinate di valori. Si
+dichiarano con la sintassi letterale a parentesi quadre o con il costruttore
+\code{Array}.
+
+\begin{lstlisting}[style=js, name=array.js]
+// sintassi letterale
+let a = ["HTML", "CSS", "JS"];
+console.log(a);   // Array(3) [ "HTML", "CSS", "JS" ]
+
+// sintassi con costruttore
+let b = new Array("HTML", "CSS", "JS");
+console.log(b);   // Array(3) [ "HTML", "CSS", "JS" ]
+\end{lstlisting}
+
+\subsection{Indicizzazione}
+
+Gli array sono indicizzati \textbf{a partire da 0}. I singoli valori si leggono
+e si scrivono con la notazione a parentesi quadre. La proprietà \code{length}
+contiene l'\textbf{indice massimo più uno}.
+
+\begin{lstlisting}[style=js, name=indici.js]
+let a = ["HTML", "CSS", "JS"];
+
+a[2] = "JavaScript";
+a[3] = "React";
+
+console.log(a[0]);       // HTML
+console.log(a[2]);       // JavaScript
+console.log(a[3]);       // React
+console.log(a.length);   // 4
+\end{lstlisting}
+
+\subsection{La proprietà length}
+
+Si sarà notata la definizione insolita di \code{length}: non è il
+\textbf{conteggio} dei valori nell'array.
+
+\begin{esempio}{length non conta gli elementi}
+\begin{lstlisting}[style=js, name=length.js]
+let a = [1, 2, 3, 4, 5];
+a[999] = 998;
+
+console.log(a.length);   // 1000 (!)
+console.log(a[5]);       // undefined
+console.log(a[999]);     // 998
+console.log(a[2000]);    // undefined
+\end{lstlisting}
+
+Un'altra cosa interessante è che \code{length} è \textbf{scrivibile}:
+
+\begin{lstlisting}[style=js, name=length2.js]
+let a = [1, 2, 3, 4, 5];
+
+a.length = 3;
+console.log(a);    // [1, 2, 3]
+
+a.length = 5;
+console.log(a);    // [1, 2, 3, <2 empty slots>]
+
+a.length = 0;      // svuota l'array
+\end{lstlisting}
+
+Assegnare a \code{length} un valore più piccolo è il modo più rapido (e più
+sorprendente) di troncare un array.
+\end{esempio}
+
+\subsection{Tipi eterogenei}
+
+Un array può contenere dati di tipo diverso, funzioni comprese.
+
+\begin{lstlisting}[style=js, name=eterogeneo.js]
+let a = [
+  "JavaScript",
+  { name: "John", job: "Dev" },
+  12,
+  function (name) { console.log(`Hello ${name}`); }
+]
+
+console.log(a[1].name);        // John
+a[3]("Web Technologies");      // Hello Web Technologies
+\end{lstlisting}
+
+\subsection{Metodi per aggiungere e rimuovere}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.2cm}}l@{}}
+  \textbf{Metodo} & \textbf{Effetto} \\
+  \code{push()}    & aggiunge un elemento \textbf{in fondo} \\
+  \code{pop()}     & preleva un elemento \textbf{dal fondo} \\
+  \code{unshift()} & aggiunge un elemento \textbf{all'inizio} \\
+  \code{shift()}   & preleva un elemento \textbf{dall'inizio} \\
+\end{tabular}
+\end{center}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\footnotesize,
+      c/.style={draw=primary!60!black, fill=primary!10!white, line width=0.7pt,
+                minimum size=0.55cm},
+      n/.style={c, draw=accent!60!black, fill=accent!16!white},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+                draw=neutral!45!black}]
+
+    \foreach \op/\i in {push/0, unshift/1, pop/2, shift/3} {
+      \node[font=\FiraCodeNL\scriptsize, anchor=east, text=neutral!25!black]
+        at (-0.25,-\i*1.05) {.\op()};
+    }
+
+    % push
+    \begin{scope}[yshift=0cm]
+      \node[c] (p1) at (0.3,0) {A}; \node[c] (p2) at (0.85,0) {B};
+      \draw[a] (1.5,0) -- (2.4,0);
+      \node[c] at (2.9,0) {A}; \node[c] at (3.45,0) {B}; \node[n] at (4.0,0) {C};
+    \end{scope}
+    % unshift
+    \begin{scope}[yshift=-1.05cm]
+      \node[c] at (0.3,0) {A}; \node[c] at (0.85,0) {B};
+      \draw[a] (1.5,0) -- (2.4,0);
+      \node[n] at (2.9,0) {C}; \node[c] at (3.45,0) {A}; \node[c] at (4.0,0) {B};
+    \end{scope}
+    % pop
+    \begin{scope}[yshift=-2.1cm]
+      \node[c] at (0.3,0) {A}; \node[c] at (0.85,0) {B}; \node[n] at (1.4,0) {C};
+      \draw[a] (2.0,0) -- (2.9,0);
+      \node[c] at (3.4,0) {A}; \node[c] at (3.95,0) {B};
+    \end{scope}
+    % shift
+    \begin{scope}[yshift=-3.15cm]
+      \node[n] at (0.3,0) {A}; \node[c] at (0.85,0) {B}; \node[c] at (1.4,0) {C};
+      \draw[a] (2.0,0) -- (2.9,0);
+      \node[c] at (3.4,0) {B}; \node[c] at (3.95,0) {C};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{I quattro metodi fondamentali degli array (in viola l'elemento
+           aggiunto o rimosso).}
+  \label{fig:array-methods}
+\end{figure}
+
+\begin{lstlisting}[style=js, name=metodi-array.js]
+let a = [1];      // [1]
+a.push(2);        // [1, 2]
+a.unshift(0);     // [0, 1, 2]
+
+let x = a.pop();     // [0, 1]
+let y = a.shift();   // [1]
+
+console.log(x);   // 2
+console.log(y);   // 0
+\end{lstlisting}
+
+\subsection{Iterazione}
+
+Gli array si possono percorrere con un \code{for} sugli indici, con la sintassi
+\code{for..of}, oppure con il metodo \code{forEach}.
+
+\begin{lstlisting}[style=js, name=iterazione.js]
+let a = ["a", "b", "c"];
+a[4] = "e";              // lascia un buco in posizione 3
+
+for (let i = 0; i < a.length; i++)
+  console.log(a[i]);     // a, b, c, undefined, e
+
+for (let item of a)
+  console.log(item);     // a, b, c, undefined, e
+
+a.forEach((value, index, array) => {
+  console.log(`a[${index}]=${value}`);
+});
+
+for (let key in a) {
+  console.log(a[key]);   // a, b, c, e   (salta il buco!)
+}
+\end{lstlisting}
+
+\warning{Non usare for..in sugli array}{
+  Poiché gli array sono oggetti, \code{for..in} funziona, ma è una cattiva idea
+  per due motivi. È da 10 a 100 volte \textbf{più lento}, e itera su
+  \textbf{tutte} le proprietà enumerabili, comprese quelle che non sono valori
+  dell'array. Come si vede nell'esempio, salta anche i buchi, comportandosi in
+  modo diverso da \code{for..of}. Per gli array si usa \code{for..of} o
+  \code{forEach}; \code{for..in} è per gli oggetti.}
+
+\subsection{Array multidimensionali}
+
+Gli elementi di un array possono essere altri array: è così che si definiscono
+le matrici.
+
+\begin{lstlisting}[style=js, name=matrice.js]
+let matrix = [
+  [1, 2, 3],
+  [4, 5, 6],
+  [7, 8, 9],
+]
+
+console.log(matrix[0][0]);   // 1
+console.log(matrix[1][1]);   // 5
+console.log(matrix[2][2]);   // 9
+\end{lstlisting}
+
+\section{Assegnamenti destrutturanti}
+
+Una sintassi speciale che permette di \guillemotleft spacchettare\guillemotright\ un array in più
+variabili.
+
+\begin{lstlisting}[style=js, name=destrutturazione.js]
+let [x, y] = ["a", "b", "c"];   // gli elementi in eccesso vengono scartati
+console.log(x);      // a
+console.log(y);      // b
+
+let [a, b, ...rest] = [1, 2, 3, 4, 5];   // il resto finisce in rest
+console.log(a);      // 1
+console.log(b);      // 2
+console.log(rest);   // [3, 4, 5]
+
+// la stessa sintassi vale per i parametri di una funzione
+function greet(msg, ...names) {
+  console.log(`${msg} to ${names}`);
+}
+
+greet("Hello", "Ann", "Bob", "Carl");   // Hello to Ann,Bob,Carl
+\end{lstlisting}
+
+\section{Iterabili}
+
+Il ciclo \code{for..of} funziona con gli \term{oggetti iterabili}. Gli array
+sono iterabili, e lo sono anche le stringhe.
+
+\begin{lstlisting}[style=js, name=iterabili.js]
+let string = "Web Technologies!";
+for (let char of string) {
+  console.log(char);   // W, e, b, , T, e, ...
+}
+\end{lstlisting}
+
+E se avessimo un oggetto nostro che rappresenta una collezione di valori e
+volessimo usarlo in un \code{for..of}?
+
+\begin{lstlisting}[style=js, name=range.js]
+// range rappresenta un insieme di interi: da min fino a max, a passi di step
+let range = { min: 1, max: 10, step: 2 }
+
+for (let value of range) {   // TypeError: range is not iterable
+  console.log(value);
+}
+\end{lstlisting}
+
+Per rendere un oggetto iterabile bisogna implementare il metodo speciale
+\code{Symbol.iterator}.
+
+\subsection{Il protocollo di iterazione}
+
+\begin{itemize}
+  \item Quando un ciclo \code{for..of} inizia, invoca \textbf{una sola volta} il
+        metodo \code{Symbol.iterator} sull'oggetto (e solleva un
+        \code{TypeError} se il metodo non esiste).
+  \item Da lì in avanti il ciclo lavora soltanto con l'oggetto
+        (\term{iteratore}) restituito da quella chiamata.
+  \item Quando serve il valore successivo, il ciclo invoca il metodo
+        \code{next()} sull'iteratore.
+  \item Il risultato di \code{next()} è un oggetto della forma
+        \code{\{done: boolean, value: any\}}, dove \code{done: true} significa
+        che l'iterazione è finita; altrimenti \code{value} è il valore
+        successivo.
+\end{itemize}
+
+\begin{esempio}{Implementare Symbol.iterator}
+\begin{lstlisting}[style=js, name=symbol-iterator.js]
+let range = { min: 1, max: 10, step: 3 }
+
+range[Symbol.iterator] = function () {
+  return {
+    current: this.min,
+    max: this.max,
+    step: this.step,
+
+    next() {
+      let n = { done: false, value: this.current };
+      if (n.value > this.max)
+        n.done = true;
+      this.current += this.step;
+      return n;
+    }
+  }
+}
+
+for (let value of range)
+  console.log(value);   // 1, 4, 7, 10
+\end{lstlisting}
+
+È anche possibile lavorare direttamente con l'iteratore. Il ciclo seguente è
+equivalente al \code{for..of} qui sopra:
+
+\begin{lstlisting}[style=js, name=iteratore-esplicito.js]
+let iterator = range[Symbol.iterator]();
+
+while (true) {
+  let result = iterator.next();
+  if (result.done)
+    break;
+  console.log(result.value);
+}
+\end{lstlisting}
+\end{esempio}
+
+\section{Mappe}
+
+Le \term{mappe} sono collezioni di coppie chiave-valore. Sono quindi come gli
+oggetti? Non proprio: le mappe ammettono chiavi di \textbf{qualunque tipo}.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{8.4cm}@{}}
+  \textbf{Metodo} & \textbf{Descrizione} \\
+  \code{new Map()}           & crea la mappa \\
+  \code{map.set(key, value)} & memorizza il valore alla chiave \\
+  \code{map.get(key)}        & restituisce il valore, o \code{undefined} \\
+  \code{map.has(key)}        & \code{true} se la chiave esiste \\
+  \code{map.delete(key)}     & rimuove la coppia chiave-valore \\
+  \code{map.clear()}         & svuota la mappa \\
+  \code{map.size}            & il numero di elementi \\
+\end{tabular}
+\end{center}
+
+\begin{esempio}{Mappe contro oggetti}
+\begin{lstlisting}[style=js, name=mappe.js]
+let map = new Map();
+let o = {};
+
+map.set(1, "Num");      map.set("1", "Str");
+map.set(true, "Bool");  map.set("true", "Str");
+
+console.log(map);
+// Map { 1 -> "Num", "1" -> "Str", true -> "Bool", "true" -> "Str" }
+console.log(map.size);   // 4
+
+o[1] = "Num";     o["1"] = "String";
+o[true] = "Bool"; o["true"] = "String";
+
+console.log(o);   // Object { 1: "String", true: "String" }
+\end{lstlisting}
+
+La differenza è netta: nell'oggetto le chiavi vengono \textbf{convertite in
+stringa}, quindi \code{1} e \code{"1"} sono la stessa chiave e i valori si
+sovrascrivono; restano due proprietà su quattro. Nella mappa le quattro chiavi
+sono distinte.
+\end{esempio}
+
+\subsection{Iterare su una mappa}
+
+\begin{lstlisting}[style=js, name=iterazione-mappe.js]
+let map = new Map();
+map.set("Hello", "JS"); map.set(1, true); map.set(false, 42);
+
+for (let key of map.keys()) {          // iterabile sulle chiavi
+  console.log(key);                    // Hello, 1, false
+}
+
+for (let value of map.values()) {      // iterabile sui valori
+  console.log(value);                  // JS, true, 42
+}
+
+for (let [key, value] of map.entries()) {   // iterabile sulle coppie
+  console.log(`${key}: ${value}`);
+}
+
+for (let [key, value] of map) {        // equivalente al precedente
+  console.log(`${key}: ${value}`);
+}
+\end{lstlisting}
+
+\section{Insiemi}
+
+Gli \term{insiemi} (\textit{Set}) sono una struttura dati per collezioni di
+valori \textbf{senza ripetizioni}.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{8.0cm}@{}}
+  \textbf{Metodo} & \textbf{Descrizione} \\
+  \code{new Set([iterable])} & crea l'insieme; se riceve un iterabile, ne copia
+                               i valori \\
+  \code{set.add(value)}      & memorizza il valore, restituisce l'insieme \\
+  \code{set.delete(value)}   & elimina il valore; \code{true} se esisteva \\
+  \code{set.has(value)}      & \code{true} se il valore è presente \\
+  \code{set.clear()}         & svuota l'insieme \\
+  \code{set.size}            & il numero di elementi \\
+\end{tabular}
+\end{center}
+
+\begin{lstlisting}[style=js, name=insiemi.js]
+let set = new Set();
+
+let eric = { name: "Eric" };
+let stan = { name: "Stan" };
+let kyle = { name: "Kyle" };
+
+set.add(eric); set.add(stan);
+set.add(kyle); set.add(eric);   // gia' presente
+set.add(kyle);                  // gia' presente
+
+console.log(set.size);          // 3
+
+for (let user of set) {
+  console.log(user.name);       // Eric, Stan, Kyle
+}
+\end{lstlisting}
+
+\section{Classi}
+
+Conosciamo il concetto di classe dalla programmazione orientata agli oggetti: le
+classi sono modelli per creare oggetti. In JavaScript i costruttori e
+\code{new} servono già a questo, ma il linguaggio offre anche un costrutto
+\code{class} più evoluto.
+
+\begin{lstlisting}[style=js, name=classi.js]
+class Pet {
+  constructor(name) { this.name = name }
+  method1() { /* ... */ }
+  method2() { /* ... */ }
+}
+
+let pet = new Pet("Chuck");
+\end{lstlisting}
+
+\code{new Pet()} crea un nuovo oggetto e invoca il metodo \code{constructor}
+con gli argomenti dati, che imposta la proprietà \code{name} sull'oggetto. Il
+nuovo oggetto viene poi restituito.
+
+\subsection{Che cos'è davvero una classe}
+
+Non è una nuova entità del linguaggio: \code{typeof(Pet)} restituisce
+\code{"function"}. In JavaScript le classi sono un tipo particolare di
+\textbf{funzione}.
+
+Che cosa fa allora il costrutto \code{class Pet \{...\}}?
+
+\begin{enumerate}
+  \item Crea una funzione costruttore chiamata \code{Pet}, il cui codice è preso
+        dal metodo \code{constructor()} (o è vuoto se il metodo non c'è).
+  \item Memorizza gli altri metodi della classe in \code{Pet.prototype}.
+\end{enumerate}
+
+È esattamente il secondo dei due modi di aggiungere metodi visti all'inizio del
+capitolo: le classi sono \textbf{zucchero sintattico} sopra i prototipi.
+
+\subsection{Proprietà, getter e setter}
+
+Come gli oggetti, anche le classi supportano proprietà e accessori.
+
+\begin{lstlisting}[style=js, name=classi-props.js]
+class Duck {
+  species = "Duck";                    // proprieta'
+
+  constructor(name) { this.name = name }
+
+  greet() {
+    console.log("Quack!");
+  }
+
+  get fullDescription() {
+    return `${this.name} the ${this.species}`;
+  }
+
+  [Symbol.iterator]() { /* ... */ }
+}
+
+let duck = new Duck("Chuck");
+duck.greet();                        // Quack!
+console.log(duck.fullDescription);   // Chuck the Duck
+\end{lstlisting}
+
+\subsection{Ereditarietà fra classi}
+
+Le classi JavaScript possono ereditare da altre classi con la parola chiave
+\code{extends}.
+
+\begin{lstlisting}[style=js, name=ereditarieta.js]
+class Pet {
+  describe() { console.log("I'm a pet"); }
+  greet()    { console.log("..."); }
+}
+
+class Duck extends Pet {
+  greet() { console.log("Quack!"); }   // sovrascrive il metodo del padre
+}
+
+let chuck = new Duck();
+chuck.describe();   // I'm a pet   (ereditato)
+chuck.greet();      // Quack!      (sovrascritto)
+\end{lstlisting}
+
+Internamente, \code{extends} è realizzato proprio tramite la proprietà
+\code{[[Prototype]]}: il prototipo di \code{Duck.prototype} è
+\code{Pet.prototype}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\footnotesize,
+      o/.style={rounded corners=3pt, draw=primary!65!black, line width=0.8pt,
+                fill=primary!8!white, minimum width=2.9cm, minimum height=0.9cm,
+                align=center},
+      g/.style={o, draw=neutral!55!white, fill=neutral!7!white},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                draw=accent!70!black}]
+
+    \node[o] (dp) at (0,0)    {\code{Duck.prototype}\\\scriptsize greet()};
+    \node[o] (pp) at (0,-1.7) {\code{Pet.prototype}\\\scriptsize describe(), greet()};
+    \node[g] (op) at (0,-3.4) {\code{Object.prototype}};
+
+    \node[o] (ch) at (4.6,0.9) {\code{chuck}};
+
+    \draw[a] (dp) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (pp);
+    \draw[a] (pp) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (op);
+    \draw[a] (ch) to[out=180, in=60] node[wtlab, pos=0.6]{\code{[[Prototype]]}} (dp.north east);
+
+    \node[font=\Lato\scriptsize, anchor=west, align=left, text=neutral!25!black]
+      at (3.2,-1.7) {\code{chuck.greet()} trova subito\\ il metodo su
+                     \code{Duck.prototype};\\[4pt]
+                     \code{chuck.describe()} non lo trova\\ e risale a
+                     \code{Pet.prototype}};
+  \end{tikzpicture}
+  \caption{L'ereditarietà fra classi è ereditarietà fra prototipi.}
+  \label{fig:class-inheritance}
+\end{figure}
+
+\section{Gestione degli errori}
+
+Quando uno script viene eseguito, possono verificarsi errori: perché chi
+programma sbaglia, perché l'utente fornisce input inattesi, e così via. Quando
+accade, di norma lo script si ferma immediatamente e stampa un messaggio in
+console.
+
+\begin{lstlisting}[style=js, name=errore.js]
+let myvar = 0;
+for (let num of [1, 2, 3, 4, 5]) {
+  mvvar += num;    // ReferenceError: mvvar is not defined (refuso!)
+}
+console.log(myvar);
+\end{lstlisting}
+
+\subsection{try / catch / finally}
+
+Il costrutto \code{try/catch/finally} permette di gestire gli errori.
+Concettualmente è lo stesso costrutto di Java, con qualche differenza.
+
+\begin{lstlisting}[style=js, name=trycatch.js]
+try {
+  console.log("starting");
+  x = 1;                            // dimenticata la parola chiave let
+  console.log("assignment done");   // non viene eseguita
+} catch (error) {
+  console.log(error.name);
+  console.log(error.message);
+} finally {
+  console.log("done");
+}
+\end{lstlisting}
+
+Le particolarità rispetto a Java sono due:
+
+\begin{itemize}
+  \item ci può essere \textbf{al più un} blocco \code{catch} (è comunque
+        ammesso \code{try/finally} senza \code{catch});
+  \item i diversi tipi di errore si distinguono \textbf{dentro} il blocco
+        \code{catch}, non con più blocchi.
+\end{itemize}
+
+\begin{lstlisting}[style=js, name=tipi-errore.js]
+try {
+  x = 1;
+} catch (error) {
+  if (error instanceof ReferenceError) {
+    console.log("Got a ReferenceError");
+  } else {
+    console.log(`Got something else: ${error.name}`);
+  }
+}
+\end{lstlisting}
+
+\subsection{L'operatore instanceof}
+
+L'operatore \code{instanceof} verifica se la proprietà \code{prototype} di un
+dato costruttore compare \textbf{da qualche parte} nella catena dei prototipi di
+un oggetto.
+
+\begin{lstlisting}[style=js, name=instanceof.js]
+function Pet(name, species, age) {
+  this.name = name;
+  this.species = species;
+  this.age = age;
+}
+
+const pet = new Pet('Chuck', 'Duck', 3);
+
+console.log(pet instanceof Pet);      // true
+console.log(pet instanceof Object);   // true
+\end{lstlisting}
+
+\subsection{Sollevare errori}
+
+Gli errori in JavaScript si propagano come in Java: verso l'alto, finché non
+vengono catturati o finché non si raggiunge la cima dell'albero delle chiamate
+(nel qual caso l'esecuzione dello script viene interrotta bruscamente e l'errore
+finisce in console). Si sollevano con la parola chiave \code{throw}.
+
+\begin{lstlisting}[style=js, name=throw.js]
+try {
+  throw new Error("Oops!");
+} catch (err) {
+  console.log(err.name);      // Error
+  console.log(err.message);   // Oops!
+}
+\end{lstlisting}
+
+È possibile definire tipi di errore propri, estendendo \code{Error}:
+
+\begin{lstlisting}[style=js, name=errore-custom.js]
+class MyError extends Error {
+  constructor(message = "Whoops") {
+    super(message);
+    this.name = "MyError";
+  }
+}
+
+try {
+  throw new MyError();
+} catch (err) {
+  console.log(err.name);      // MyError
+  console.log(err.message);   // Whoops
+}
+\end{lstlisting}
+
+\section{Moduli}
+
+\subsection{Perché servono}
+
+Il JavaScript moderno permette di definire \term{moduli} a livello di
+linguaggio: sono un modo di suddividere programmi complessi in più file,
+ciascuno contenente classi o funzioni per uno scopo specifico.
+
+I vantaggi:
+
+\begin{itemize}
+  \item migliorano la \textbf{manutenibilità};
+  \item favoriscono la \textbf{separazione delle responsabilità};
+  \item aiutano a disambiguare e a prevenire i \textbf{conflitti di nome},
+        migliorando la riusabilità.
+\end{itemize}
+
+Un modulo è semplicemente un file JavaScript. I moduli si caricano a vicenda e
+usano le direttive \code{export} e \code{import} per scambiarsi funzionalità.
+
+\begin{itemize}
+  \item \code{export} marca variabili e funzioni che devono essere accessibili
+        fuori dal modulo corrente;
+  \item \code{import} permette di importare funzionalità specifiche da altri
+        moduli, purché siano state esportate.
+\end{itemize}
+
+\subsection{Il problema, e la soluzione}
+
+\begin{esempio}{Il conflitto di nomi}
+Supponiamo di voler riutilizzare del codice scritto per altri progetti: un file
+\code{pet.js} e un file \code{greet.js}.
+
+\begin{lstlisting}[style=js, name=pet.js]
+function Pet(name, age) {
+  this.name = name; this.age = age;
+}
+
+let msg = "Hello";
+
+function greet(pet) {
+  console.log(`${msg}, I'm ${pet.name}`);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=greet.js]
+let msg = "Howdy";
+
+function greet(name, message = msg) {
+  console.log(`${message}, ${name}`);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=script.js]
+let chuck = new Pet("Chuck", 7);   // Pet e' definita in pet.js
+greet(chuck);                      // vorremmo: Hello, I'm Chuck
+greet("Web Technologies");         // vorremmo: Howdy, Web Technologies
+\end{lstlisting}
+
+Si potrebbe pensare di includere semplicemente tutti gli script nella pagina:
+
+\begin{lstlisting}[style=html]
+<script src="./pet.js"></script>
+<script src="./greet.js"></script>
+<script src="./script.js"></script>
+\end{lstlisting}
+
+Ma non funziona: entrambi i file definiscono \code{msg} e \code{greet} nello
+stesso scope globale, e il secondo sovrascrive il primo. Per farlo funzionare
+dovremmo \textbf{modificare} il codice che volevamo riutilizzare, usando
+identificatori diversi. Il che vanifica lo scopo stesso del riutilizzo.
+\end{esempio}
+
+\begin{esempio}{La soluzione con i moduli}
+\begin{lstlisting}[style=js, name=pet-module.js]
+export function Pet(name, age) {
+  this.name = name; this.age = age;
+}
+
+let msg = "Hello";              // non serve esportarla
+
+export function greet(pet) {
+  console.log(`${msg}, I'm ${pet.name}`);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=greet-module.js]
+let msg = "Howdy";              // non serve esportarla
+
+export function greet(name, message = msg) {
+  console.log(`${message}, ${name}`);
+}
+\end{lstlisting}
+
+Nel documento HTML basta includere lo script principale, dichiarandolo come
+modulo:
+
+\begin{lstlisting}[style=html]
+<script type="module" src="./script-module.js"></script>
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=script-module.js]
+import { Pet, greet as greetPet } from './pet-module.js';
+import { greet } from './greet-module.js';
+
+let chuck = new Pet("Chuck", 7);
+greetPet(chuck);              // Hello, I'm Chuck
+greet("Web Technologies");    // Howdy, Web Technologies
+\end{lstlisting}
+
+Due cose da notare. Le variabili \code{msg} non danno più conflitto, perché
+ciascuna vive nello \textbf{scope del proprio modulo}. E la clausola \code{as}
+permette di rinominare un import, risolvendo il conflitto fra le due funzioni
+\code{greet} senza toccare i file originali.
+\end{esempio}
+
+\info{I moduli hanno un proprio scope}{
+  È questo il punto centrale: ogni modulo ha uno scope suo. Ciò che non viene
+  esportato non è visibile dall'esterno, e ciò che viene importato va indicato
+  esplicitamente. Il vecchio modello, in cui tutti gli script condividevano un
+  unico scope globale, rendeva impossibile riusare codice scritto da altri senza
+  leggerlo per intero a caccia di collisioni.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{The Modern JavaScript Tutorial} \\
+        \urlx{https://javascript.info/} \\
+        Parte 1: \textit{Prototypes and inheritance}, \textit{Data types}
+        (5.4--5.7), \textit{Classes} (9.1--9.4, 9.6), \textit{Generators and
+        advanced iteration} (12.1), \textit{Modules} (13.1, 13.2).
+  \item \textbf{Eloquent JavaScript} (3\textsuperscript{a} edizione), Marijn
+        Haverbeke. \\
+        \urlx{https://eloquentjavascript.net/} \\
+        Capitoli 6 e 10.
+  \item \textbf{JavaScript Reference} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference}
+\end{itemize}

@@ -1,0 +1,595 @@
+\chapter{Esercizi sul livello applicativo}
+
+% ══════════════════════════════════════════════════════════════
+\section{Preparare Wireshark}
+% ══════════════════════════════════════════════════════════════
+
+Prima di svolgere gli esercizi di laboratorio serve un Wireshark funzionante e utilizzabile \textbf{da utente non-root}
+(catturare pacchetti come root è sconsigliato: Wireshark analizza dati che arrivano dalla rete, cioè potenzialmente ostili).
+
+\begin{lstlisting}[language=bash]
+sudo apt update
+sudo apt install wireshark          # rispondere "Sì" alla cattura per utenti non-root
+
+getent group wireshark              # esiste il gruppo wireshark?
+groups                              # l'utente ne fa parte?
+
+sudo dpkg-reconfigure wireshark-common      # se serve cambiare la scelta fatta all'installazione
+sudo usermod -aG wireshark $USER            # aggiungere l'utente al gruppo
+newgrp wireshark                            # (oppure logout e login)
+
+getcap /usr/bin/dumpcap             # deve mostrare cap_net_raw,cap_net_admin=eip
+sudo setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap   # solo se mancano i permessi
+\end{lstlisting}
+
+\info{Chi cattura davvero i pacchetti}{
+    La cattura non la fa l'interfaccia grafica ma il piccolo programma \texttt{dumpcap}, che ha bisogno delle
+    \emph{capabilities} \texttt{cap\_net\_raw} (leggere pacchetti grezzi) e \texttt{cap\_net\_admin} (mettere l'interfaccia in
+    modalità promiscua). Assegnarle solo a lui è più sicuro che eseguire Wireshark come root.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{HTTP con Wireshark}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Interazione base: GET e risposta}
+\begin{enumerate}
+    \item Avviare il browser e Wireshark, senza iniziare la cattura. Nel campo del filtro di visualizzazione scrivere \texttt{http}.
+    \item Attendere poco più di un minuto (il motivo sarà chiaro alla fine), poi avviare la cattura.
+    \item Visitare \url{http://www.columbia.edu/~fdc/sample.html} e fermare la cattura.
+\end{enumerate}
+Si vedranno la richiesta GET e la risposta del server. Espandere solo la sezione HTTP (Frame, Ethernet, IP e TCP chiuse) e
+rispondere:
+\begin{enumerate}[label=(\alph*)]
+    \item Quale versione di HTTP usa il browser? E il server?
+    \item Quali lingue il browser dichiara di accettare?
+    \item Qual è l'indirizzo IP del proprio computer? E quello del server?
+    \item Qual è il codice di stato restituito?
+    \item Quando è stata modificata l'ultima volta la pagina?
+    \item Quanti byte di contenuto sono stati inviati?
+    \item Nei byte grezzi ci sono header che non compaiono nella lista dei pacchetti?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+Una cattura tipica ha questo aspetto (i valori esatti dipendono dal browser e dal momento):
+
+\begin{lstlisting}[language=http]
+GET /~fdc/sample.html HTTP/1.1
+Host: www.columbia.edu
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7
+Accept-Encoding: gzip, deflate
+Connection: keep-alive
+
+HTTP/1.1 200 OK
+Date: ...
+Server: Apache
+Last-Modified: ...
+Content-Length: ...
+Content-Type: text/html
+\end{lstlisting}
+
+\begin{enumerate}[label=(\alph*)]
+    \item La versione del browser è in fondo alla \textbf{riga di richiesta}, quella del server all'inizio della \textbf{riga di
+          stato}: tipicamente entrambe \texttt{HTTP/1.1}. Non devono coincidere per forza: il server risponde con la versione più
+          alta che supporta compatibile con quella del client.
+    \item Nell'header \texttt{Accept-Language}. I valori \texttt{q} (\emph{quality factor}, da 0 a 1) indicano la preferenza
+          relativa: prima l'italiano, poi l'inglese.
+    \item Non sono nel messaggio HTTP: si leggono espandendo la sezione \emph{Internet Protocol}. Nella GET \emph{Source} è il
+          proprio host e \emph{Destination} il server; nella risposta sono invertiti.
+    \item Nella riga di stato: \texttt{200 OK}.
+    \item Nell'header \texttt{Last-Modified} della risposta.
+    \item Nell'header \texttt{Content-Length}, che conta i byte del \textbf{corpo}, non dell'intero messaggio.
+    \item Sì: la vista compatta mostra solo la prima riga, mentre nei byte grezzi si trovano tutti gli header (\texttt{Date},
+          \texttt{Server}, \texttt{Content-Type}, \texttt{User-Agent}, \texttt{Accept-Encoding}, e spesso header aggiunti da proxy
+          e cache come \texttt{Via}, \texttt{X-Cache}, \texttt{ETag}).
+\end{enumerate}
+
+\info{Perché aspettare un minuto}{
+    Il server aggiorna il timestamp \texttt{Last-Modified} ogni minuto, così la pagina sembra modificata da meno di un minuto
+    prima del download. È un trucco per \textbf{invalidare le cache} (del browser e dei proxy): un GET condizionale con
+    \texttt{If-Modified-Since} riceverà sempre \texttt{200 OK} con la pagina, e mai \texttt{304 Not Modified}.
+}
+
+\begin{esercizio}{Un server diverso}
+Ripetere l'esperimento con \url{http://scottaaronson.com}. Che differenze si notano nella risposta?
+\end{esercizio}
+
+\svolgimento
+Le differenze da cercare e commentare sono tipicamente:
+\begin{itemize}
+    \item \textbf{redirezione}: molti siti rispondono \texttt{301 Moved Permanently} o \texttt{302 Found}, con un header
+          \texttt{Location} che punta alla versione \texttt{https://}; si vede quindi una catena di richieste;
+    \item un \textbf{software server} diverso (header \texttt{Server}, per esempio \texttt{nginx} invece di \texttt{Apache});
+    \item \textbf{assenza di \texttt{Last-Modified}} se la pagina è generata dinamicamente, magari sostituito da un
+          \texttt{ETag};
+    \item \texttt{Transfer-Encoding: chunked} al posto di \texttt{Content-Length}, quando il server non conosce in anticipo la
+          lunghezza della risposta;
+    \item molte più GET (fogli di stile, script, immagini), spesso su più connessioni in parallelo.
+\end{itemize}
+
+\begin{esercizio}{Una risposta divisa in più segmenti}
+Svuotare la cache del browser, avviare la cattura, visitare di nuovo \url{http://www.columbia.edu/~fdc/sample.html} e fermare la
+cattura. Il file HTML è abbastanza lungo da non stare in un solo segmento TCP.
+\begin{enumerate}[label=(\alph*)]
+    \item Quante GET ha inviato il browser? In quale pacchetto si trova la GET della pagina?
+    \item In quale pacchetto si trovano il codice di stato e la frase della risposta? Quali sono?
+    \item Quanti segmenti TCP con dati sono serviti per trasportare la risposta?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Con la cache vuota c'è una GET per la pagina ed eventualmente altre per gli oggetti collegati (per esempio
+          \texttt{favicon.ico}). Il numero di pacchetto è nella prima colonna; il filtro \texttt{http.request.method == "GET"}
+          le isola.
+    \item È il pacchetto con \texttt{HTTP/1.1 200 OK} nella colonna \emph{Info}. Attenzione: \textbf{non} è il primo pacchetto
+          della risposta ma l'\textbf{ultimo}, perché Wireshark mostra il messaggio HTTP solo quando ha riassemblato tutti i
+          pezzi; i precedenti sono marcati ``\emph{TCP segment of a reassembled PDU}''.
+    \item Selezionando la risposta, la sezione \texttt{[N Reassembled TCP Segments]} elenca tutti i segmenti usati, con i loro
+          numeri di pacchetto: il conteggio si legge lì.
+\end{enumerate}
+
+\info{Stimare il numero di segmenti a mano}{
+    Se il corpo è di $L$ byte, gli header HTTP occupano $H$ byte e la MSS vale 1460 byte, i segmenti di dati sono almeno
+    $$\left\lceil \frac{L + H}{\text{MSS}} \right\rceil \qquad \text{per esempio}\quad \left\lceil \frac{30\,000 + 300}{1460} \right\rceil = \lceil 20{,}75 \rceil = 21$$
+    Il valore osservato può essere maggiore: il server non riempie sempre i segmenti.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Leggere i messaggi HTTP}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Una richiesta e la sua risposta}
+Un browser invia la richiesta seguente e riceve la risposta riportata sotto.
+\begin{lstlisting}[language=http]
+GET /corsi/reti/index.html HTTP/1.1
+Host: www.docenti.esempio.it
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0
+Accept: text/html,application/xhtml+xml
+Accept-Language: it-IT,it;q=0.8,en;q=0.5
+Connection: keep-alive
+If-Modified-Since: Mon, 14 Sep 2026 08:12:00 GMT
+
+HTTP/1.1 304 Not Modified
+Date: Tue, 15 Sep 2026 10:02:11 GMT
+Server: Apache
+Connection: Keep-Alive
+Keep-Alive: timeout=5, max=100
+ETag: "3f80f-1b6-5f4e2c1a"
+\end{lstlisting}
+\begin{enumerate}[label=(\alph*)]
+    \item Qual è l'URL completo dell'oggetto richiesto?
+    \item Il browser chiede una connessione persistente o non persistente?
+    \item Si può ricavare dal messaggio l'indirizzo IP del client?
+    \item Perché la richiesta contiene \texttt{If-Modified-Since}? Quali risposte sono possibili?
+    \item L'oggetto è stato trasferito? Che cosa mostrerà il browser?
+    \item Per quanto tempo il server terrà aperta la connessione?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Si ottiene unendo \texttt{Host} e il percorso della riga di richiesta: \url{http://www.docenti.esempio.it/corsi/reti/index.html}.
+    \item Persistente: \texttt{Connection: keep-alive} (in HTTP/1.1 la connessione è comunque persistente di default).
+    \item No: l'indirizzo IP non fa parte del messaggio HTTP ma dell'header del datagramma IP che lo trasporta. Il messaggio
+          applicativo non sa (e non deve sapere) nulla degli strati inferiori.
+    \item Il browser (o una cache) possiede già una copia dell'oggetto ricevuta il 14 settembre, e chiede di riceverlo
+          \textbf{solo se} è cambiato da allora: è un \textbf{GET condizionale}. Il server risponde \texttt{200 OK} con il nuovo
+          oggetto se è stato modificato, \texttt{304 Not Modified} senza corpo altrimenti.
+    \item No: la risposta 304 non ha corpo. Il browser mostra la copia che ha in cache, risparmiando banda e tempo.
+    \item \texttt{Keep-Alive: timeout=5, max=100}: la connessione viene chiusa dopo 5 secondi di inattività o dopo 100 richieste.
+\end{enumerate}
+
+\begin{esercizio}{Cookie passo per passo}
+Un utente visita per la prima volta il sito di un negozio online, poi ci torna il giorno dopo dallo stesso browser.
+Descrivere gli header relativi ai cookie in ciascun messaggio e che cosa fa il server con il valore del cookie.
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}
+    \item \textbf{Prima richiesta}: il browser non ha cookie per quel sito, quindi la richiesta non contiene l'header
+          \texttt{Cookie}.
+    \item \textbf{Prima risposta}: il server crea un identificativo (per esempio \texttt{1678}), crea una riga per quell'utente
+          nel proprio \textbf{database di back-end} e risponde con \texttt{Set-Cookie: id=1678}.
+    \item Il browser memorizza la coppia (sito, \texttt{id=1678}) nel proprio file dei cookie.
+    \item \textbf{Richieste successive} (anche il giorno dopo): il browser allega \texttt{Cookie: id=1678}. Il server consulta il
+          database e ``riconosce'' l'utente: carrello, preferenze, raccomandazioni.
+\end{enumerate}
+HTTP resta \textbf{senza stato}: lo stato è mantenuto agli estremi (file dei cookie nel browser, database nel server) e il
+cookie è solo la chiave che li collega.
+
+% ══════════════════════════════════════════════════════════════
+\section{Tempi di risposta}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{DNS, connessioni e pipelining}
+Un utente clicca un link. L'indirizzo IP del server non è in cache: per risolverlo si interrogano in sequenza 3 server DNS, con
+RTT di 20, 30 e 50 ms. La pagina è composta da un file HTML base e da 8 piccoli oggetti sullo stesso server, con
+$\text{RTT}_0 = 40$ ms. I tempi di trasmissione sono trascurabili. Calcolare il tempo per ottenere:
+\begin{enumerate}[label=(\alph*)]
+    \item il solo file HTML;
+    \item la pagina completa con connessioni non persistenti, in sequenza;
+    \item la pagina completa con connessioni non persistenti e fino a 5 connessioni parallele;
+    \item la pagina completa con una connessione persistente senza pipelining;
+    \item la pagina completa con una connessione persistente con pipelining.
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+Il DNS costa $20 + 30 + 50 = 100$ ms. Ogni connessione TCP nuova costa 1 RTT di apertura più 1 RTT per richiesta e risposta.
+\begin{enumerate}[label=(\alph*)]
+    \item $100 + 2\,\text{RTT}_0 = 100 + 80 = \mathbf{180}$ \textbf{ms}.
+    \item Ogni oggetto richiede una nuova connessione: $180 + 8 \cdot 2\,\text{RTT}_0 = 180 + 640 = \mathbf{820}$ \textbf{ms}.
+    \item Gli 8 oggetti si scaricano in due ``giri'' (5 connessioni, poi 3), ciascuno da $2\,\text{RTT}_0$:
+          $180 + 2 \cdot 80 = \mathbf{340}$ \textbf{ms}.
+    \item La connessione resta aperta; ogni oggetto costa 1 RTT: $180 + 8 \cdot 40 = \mathbf{500}$ \textbf{ms}.
+    \item Le 8 richieste partono una dietro l'altra e le risposte arrivano insieme: $180 + 40 = \mathbf{220}$ \textbf{ms}.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[xbar, width=10cm, height=5.2cm, xmin=0, xmax=950, bar width=9pt,
+    symbolic y coords={{(e) persistente, pipelining},{(d) persistente},{(c) 5 parallele},{(b) non persistente}},
+    ytick=data, y tick label style={font=\footnotesize\sffamily}, x tick label style={font=\scriptsize},
+    xlabel={tempo (ms)}, label style={font=\footnotesize\sffamily},
+    nodes near coords, nodes near coords style={font=\scriptsize\sffamily}, enlarge y limits=0.2, grid=major, grid style={gray!20}]
+  \addplot[fill=netblue!55, draw=netblue] coordinates {(220,{(e) persistente, pipelining}) (500,{(d) persistente}) (340,{(c) 5 parallele}) (820,{(b) non persistente})};
+\end{axis}
+\end{tikzpicture}
+\caption{Tempo per scaricare la pagina completa nei quattro casi (DNS incluso).}
+\end{figure}
+
+\begin{esercizio}{Distribuire un file: client-server o P2P?}
+Un file di $F = 15$ Gbit deve essere distribuito a $N$ utenti. Il server ha capacità di upload $u_s = 30$ Mb/s; ogni utente
+scarica a $d_i = 2$ Mb/s e, nel caso P2P, carica a $u_i = 700$ kb/s. Calcolare il tempo minimo di distribuzione con
+architettura client-server e P2P, per $N = 10$, $100$, $1000$.
+\end{esercizio}
+
+\svolgimento
+\textbf{Client-server.} Il server deve caricare $N$ copie ($N F$ bit, al massimo a $u_s$), e ogni client non può scaricare più
+velocemente di $d_{\min}$:
+$$D_{\text{cs}} \ge \max\left\{ \frac{N F}{u_s},\ \frac{F}{d_{\min}} \right\}$$
+
+\textbf{P2P.} Il server deve caricare almeno \emph{una} copia; il client più lento scarica a $d_{\min}$; e in tutto vanno caricati
+$N F$ bit, usando la capacità del server \emph{più quella di tutti i peer}:
+$$D_{\text{P2P}} \ge \max\left\{ \frac{F}{u_s},\ \frac{F}{d_{\min}},\ \frac{N F}{u_s + \sum_i u_i} \right\}$$
+
+Con i dati: $F/u_s = 15\cdot 10^9 / 3\cdot 10^7 = 500$ s; $F/d_{\min} = 15\cdot 10^9 / 2 \cdot 10^6 = 7500$ s.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{rrrr}
+\toprule
+$N$ & $N F / u_s$ & $N F / (u_s + N u)$ & \\
+\midrule
+10 & 5\,000 s & $150\cdot 10^9 / 37\cdot 10^6 \approx 4\,054$ s & $D_{\text{cs}} = 7\,500$ s, \ $D_{\text{P2P}} = 7\,500$ s \\
+100 & 50\,000 s & $1{,}5\cdot 10^{12} / 10^8 = 15\,000$ s & $D_{\text{cs}} = 50\,000$ s, \ $D_{\text{P2P}} = 15\,000$ s \\
+1000 & 500\,000 s & $1{,}5\cdot 10^{13} / 7{,}3\cdot 10^8 \approx 20\,548$ s & $D_{\text{cs}} = 500\,000$ s, \ $D_{\text{P2P}} \approx 20\,548$ s \\
+\bottomrule
+\end{tabular}
+\caption{Tempi minimi di distribuzione.}
+\end{table}
+
+Nel client-server il tempo cresce \textbf{linearmente} con $N$; nel P2P ogni nuovo peer porta anche capacità di upload, e il
+tempo resta limitato: per $N \to \infty$ tende a $F/u = 15 \cdot 10^9 / 7 \cdot 10^5 \approx 21\,429$ s. È la
+\textbf{scalabilità intrinseca} del P2P (la curva vista nel capitolo sulla posta e il P2P).
+
+% ══════════════════════════════════════════════════════════════
+\section{DNS con nslookup}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Esplorare un dominio}
+Eseguire in sequenza, su un dominio a scelta (a lezione \texttt{vatican.va}): una query A, una query NS, una query SOA, una
+query A per il name server principale e infine la query A rivolta \textbf{direttamente} al name server principale. Commentare
+ciascuna risposta.
+\end{esercizio}
+
+\svolgimento
+Gli output completi per \texttt{vatican.va} sono riportati nel capitolo sul DNS; qui li riassumiamo.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{4.6cm}p{4.6cm}p{5.4cm}}
+\toprule
+\textbf{Comando} & \textbf{Risultato} & \textbf{Commento} \\
+\midrule
+\texttt{nslookup vatican.va} & \texttt{185.152.70.106} & record A. \emph{Non-authoritative}: risponde il resolver locale (\texttt{127.0.0.53}), non un server autorevole \\
+\texttt{nslookup -type=NS vatican.va} & \texttt{a.nic.va}, \texttt{b.nic.va}, \texttt{c.nic.va}, \texttt{osiris.namex.it}, \texttt{seth.namex.it} & i server autorevoli (per nome, non per indirizzo) \\
+\texttt{nslookup -type=SOA vatican.va} & origin \texttt{a.nic.va}, serial, refresh, \dots & \texttt{a.nic.va} è il primario; nessun glue record in coda \\
+\texttt{nslookup -type=A a.nic.va} & \texttt{212.77.0.110} & l'indirizzo del primario \\
+\texttt{nslookup -type=A vatican.va 212.77.0.110} & \texttt{185.152.70.106} & chiesto al server autorevole: dovrebbe essere \emph{authoritative}, ma il flag AA può non essere impostato per configurazione \\
+\bottomrule
+\end{tabular}
+\caption{Le cinque query su \texttt{vatican.va}.}
+\end{table}
+
+\info{I campi del record SOA}{
+    \begin{itemize}
+      \item \texttt{serial} (2025062401): versione della zona, incrementata a ogni modifica; i secondari la confrontano per capire
+            se aggiornarsi.
+      \item \texttt{refresh} (14400 s = 4 ore): ogni quanto un secondario controlla il primario.
+      \item \texttt{retry} (3600 s = 1 ora): dopo quanto riprovare se il controllo fallisce.
+      \item \texttt{expire} (1209600 s = 14 giorni): dopo quanto un secondario che non raggiunge il primario smette di
+            considerarsi autorevole.
+      \item \texttt{minimum} (3600 s): TTL minimo, usato anche per le risposte negative (``il nome non esiste'').
+      \item \texttt{mail addr} (\texttt{dnsop.net.va}): l'indirizzo dell'amministratore, con il primo punto al posto della @.
+    \end{itemize}
+}
+
+\begin{esempio}{Il mail server di un dominio}
+\begin{lstlisting}[language=bash]
+$ nslookup -type=MX mit.edu
+mit.edu   mail exchanger = 100 mit-edu.mail.protection.outlook.com.
+
+$ nslookup -type=A mit-edu.mail.protection.outlook.com
+Address: 52.101.11.3
+Address: 52.101.8.44
+Address: 52.101.42.14
+Address: 52.101.40.1
+\end{lstlisting}
+Prima si ottiene il \textbf{nome} del mail server (record MX), poi il suo \textbf{indirizzo} (record A). Il 100 è la
+\textbf{preferenza}: con più record MX si prova prima quello con il valore più basso. I quattro indirizzi sono un esempio di
+\textbf{distribuzione del carico}: il DNS li restituisce ruotandone l'ordine.
+\end{esempio}
+
+\begin{esempio}{Alias e nome canonico}
+\begin{lstlisting}[language=bash]
+$ nslookup www.mit.edu
+www.mit.edu               canonical name = www.mit.edu.edgekey.net.
+www.mit.edu.edgekey.net   canonical name = e9566.dscb.akamaiedge.net.
+Name:    e9566.dscb.akamaiedge.net
+Address: 23.50.153.111
+\end{lstlisting}
+Una catena di CNAME: \texttt{www.mit.edu} è un alias, e il nome canonico finale è un nodo della CDN Akamai. È il servizio di
+\textbf{host aliasing} del DNS, usato dalle CDN per indirizzare ogni utente verso un server vicino.
+\end{esempio}
+
+% ══════════════════════════════════════════════════════════════
+\section{DNS con Wireshark}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Una query standard}
+Avviare la cattura, eseguire \texttt{nslookup <nome\_a\_piacere>}, fermare la cattura e filtrare con \texttt{dns}.
+\begin{enumerate}[label=(\alph*)]
+    \item Qual è la porta di destinazione della richiesta? E la porta sorgente della risposta?
+    \item A quale indirizzo IP è inviata la richiesta? È il server DNS locale predefinito?
+    \item Di che tipo è la query? La richiesta contiene già delle risposte?
+    \item Quante domande e quante risposte contiene il messaggio di risposta?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Entrambe \textbf{53}, la porta ben nota del DNS (sezione \emph{User Datagram Protocol}). La porta di destinazione della
+          risposta è invece la porta effimera scelta dal sistema operativo per il client.
+    \item Tipicamente \texttt{127.0.0.53} (il resolver locale \texttt{systemd-resolved}), oppure il router di casa o il server
+          dell'ISP. Si verifica con \texttt{cat /etc/resolv.conf} o \texttt{resolvectl status}: deve coincidere.
+    \item Sezione \emph{Queries}, campo \emph{Type}: \texttt{A (Host Address)}. La richiesta ha \emph{Answer RRs} $= 0$: una
+          domanda non contiene risposte.
+    \item \emph{Questions} $= 1$ (la domanda viene ripetuta nella risposta, così il client può appaiarle) e \emph{Answer RRs}
+          pari al numero di record restituiti, spesso più di uno (CNAME intermedi, più indirizzi).
+\end{enumerate}
+
+\info{I campi da guardare nell'header DNS}{
+    \begin{itemize}
+      \item \textbf{Transaction ID}: appaia richiesta e risposta (ed è ciò che un attaccante dovrebbe indovinare per falsificare
+            una risposta).
+      \item \textbf{QR}: 0 per le query, 1 per le risposte.
+      \item \textbf{RD} (\emph{Recursion Desired}): il client chiede la risoluzione ricorsiva; \textbf{RA} (\emph{Recursion
+            Available}): il server la offre.
+      \item \textbf{AA} (\emph{Authoritative Answer}): la risposta viene da un server autorevole per il nome.
+    \end{itemize}
+}
+
+\begin{esercizio}{Una query NS}
+Ripetere con \texttt{nslookup -type=NS <nome\_a\_piacere>}.
+\begin{enumerate}[label=(\alph*)]
+    \item A quale indirizzo è inviata la richiesta? Quante domande contiene? Contiene risposte?
+    \item Nella risposta: quante risposte ci sono e che informazioni contengono? Quanti record aggiuntivi, e di che tipo?
+\end{enumerate}
+Suggerimento: interrogare anche server in alto nella gerarchia (inclusi i root server) con l'opzione \texttt{-norecurse}, e poi
+senza, confrontando i risultati.
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Lo stesso resolver locale: il tipo di query non cambia il destinatario. Una domanda, di tipo NS, e nessuna risposta.
+    \item Tante risposte quanti sono i name server autorevoli del dominio: ognuna contiene il \textbf{nome} di un server. Nella
+          sezione \emph{Additional records} ci sono i \textbf{glue record}: record A (e AAAA) con gli \textbf{indirizzi} di quei
+          server.
+\end{enumerate}
+
+\warning{Perché servono i glue record}{
+    Per risolvere \texttt{esempio.it} devo chiedere a \texttt{ns1.esempio.it}; ma per contattare \texttt{ns1.esempio.it} devo
+    prima risolvere il suo nome, cosa che richiede di chiedere a \texttt{ns1.esempio.it}\dots{} Il glue record spezza questa
+    \textbf{dipendenza circolare} fornendo direttamente l'indirizzo.
+}
+
+\info{L'effetto di \texttt{-norecurse}}{
+    Con \texttt{-norecurse} il flag RD è 0: il server risponde solo con ciò che sa già. Un root server risponde con un
+    \textbf{referral} (i name server del TLD, con i glue record), non con l'indirizzo finale. Senza l'opzione il risultato non
+    cambia, perché i root server \textbf{non offrono} la ricorsione (RA $= 0$). Per esempio
+    \texttt{nslookup iana.org c.root-servers.net} non restituisce record A, ma i name server del dominio \texttt{org}. (Se si è
+    dietro una VPN il risultato può sorprendere: si veda il caso di studio nel capitolo su ICMP.)
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{DNS: domande d'esame}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Cambiare l'indirizzo di un server}
+Si cambia l'indirizzo IP di una macchina di nome \texttt{server-1.ortofrutta.it}, che ospita (per esempio) un server FTP.
+Spiegare come è gestito l'aggiornamento affinché la modifica sia riflessa nel DNS.
+\end{esercizio}
+
+\svolgimento
+Che la macchina ospiti un server FTP è irrilevante. L'associazione nome--indirizzo è nel server \textbf{autorevole}, dove
+l'amministratore la modifica, ma è \textbf{replicata} nelle cache di moltissimi server. Il DNS non avvisa le cache: il punto
+cruciale è il \textbf{TTL}. Nessun aggiornamento attivo; si lascia che i record in cache \textbf{scadano}, e alla richiesta
+successiva vengono sostituiti da quelli aggiornati. Nel frattempo alcuni client riceveranno il vecchio indirizzo: errori
+temporanei che vengono tollerati.
+
+\info{La strategia pratica}{
+    Chi sa di dover cambiare indirizzo \textbf{abbassa il TTL} (per esempio a 60 s) qualche giorno prima, fa la modifica, e
+    rialza il TTL a transizione completata. La finestra di incoerenza passa da ore a un minuto.
+}
+
+\begin{esercizio}{Risolvere un nome con una cache parziale}
+Si deve risolvere \texttt{feijoada.dsc.utfpr.edu.br} da un portatile in un laboratorio di UniNA, con la cache vuota. Il portatile
+interroga \texttt{dscna2.unina.it}, nella cui cache (per interrogazioni precedenti) c'è un record NS con l'indirizzo del server
+DNS di \texttt{dsc.utfpr.edu.br}. Spiegare come il name server di UniNA gestisce la richiesta e come ci si aspetta che
+risponda il server di \texttt{dsc.utfpr.edu.br}.
+\end{esercizio}
+
+\svolgimento
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.9]
+  \timeline{p}{0}{portatile}{4.8}
+  \timeline{u}{6.2}{\texttt{dscna2.unina.it}}{4.8}
+  \timeline{d}{12.4}{server di \texttt{dsc.utfpr.edu.br}}{4.8}
+  \draw[msg] (0,-0.5) -- node[lbl, above, sloped] {\circled{1} query ricorsiva: \texttt{feijoada.dsc.utfpr.edu.br}?} (6.2,-1.0);
+  \node[lbl, fill=llink!60, rounded corners, anchor=west] at (6.35,-1.6) {\circled{2} in cache: NS di \texttt{dsc.utfpr.edu.br}};
+  \draw[msg] (6.2,-2.2) -- node[lbl, above, sloped] {\circled{3} query iterativa} (12.4,-2.7);
+  \draw[msg, netgreen!60!black] (12.4,-3.1) -- node[lbl, above, sloped] {\circled{4} risposta autorevole (AA), record A} (6.2,-3.6);
+  \draw[msg, netgreen!60!black] (6.2,-3.9) -- node[lbl, above, sloped] {\circled{5} indirizzo IP (messo in cache)} (0,-4.4);
+\end{tikzpicture}
+\caption{La cache permette di saltare root server, \texttt{br}, \texttt{edu.br} e \texttt{utfpr.edu.br}.}
+\end{figure}
+\begin{enumerate}
+    \item Il portatile invia una query \textbf{ricorsiva}: vuole l'indirizzo finale (o un errore).
+    \item \texttt{dscna2.unina.it} consulta la cache e trova il record NS (con l'indirizzo) del server della zona
+          \texttt{dsc.utfpr.edu.br}: \textbf{non deve partire dai root server}, e salta i passi root $\rightarrow$ \texttt{br}
+          $\rightarrow$ \texttt{edu.br} $\rightarrow$ \texttt{utfpr.edu.br}.
+    \item Invia una query \textbf{iterativa} direttamente a quel server, chiedendo il record A di \texttt{feijoada.dsc.utfpr.edu.br}.
+    \item Il server è autorevole per la zona: risponde con una \textbf{risposta autorevole} (flag AA) contenente il record A.
+    \item \texttt{dscna2.unina.it} mette la risposta in cache per la durata del TTL e la restituisce al portatile.
+\end{enumerate}
+Il senso della domanda è il ruolo della cache: un solo record NS risparmia 3--4 scambi. È anche il motivo per cui i root
+server non collassano: la maggior parte delle risoluzioni non li raggiunge mai.
+
+\begin{esercizio}{Contare i messaggi DNS}
+Un host con cache vuota vuole risolvere \texttt{www.cs.esempio.edu}; anche il server DNS locale ha la cache vuota, ed è
+autorevole per \texttt{cs.esempio.edu} un server distinto da quello di \texttt{esempio.edu}. Quanti messaggi DNS vengono scambiati
+in tutto, se il server locale procede in modo \textbf{iterativo}? Quanti ne gestisce il root server se invece tutta la
+catena procede in modo \textbf{ricorsivo}?
+\end{esercizio}
+
+\svolgimento
+In modo iterativo: host $\rightarrow$ locale (1), locale $\leftrightarrow$ root (2), locale $\leftrightarrow$ TLD \texttt{edu} (2),
+locale $\leftrightarrow$ server di \texttt{esempio.edu} (2), locale $\leftrightarrow$ server di \texttt{cs.esempio.edu} (2),
+locale $\rightarrow$ host (1): \textbf{10 messaggi}. Il root server gestisce una domanda e una risposta.
+
+In modo ricorsivo i messaggi sono sempre 10, ma ogni server deve \textbf{restare in attesa} della risposta del successivo,
+mantenendo lo stato della richiesta: il root server resterebbe impegnato per tutta la durata della risoluzione. È per questo
+che i server in alto nella gerarchia rispondono solo in modo iterativo.
+
+\begin{esercizio}{Scrivere i resource record}
+La piccola azienda \texttt{ortofrutta.it} ha: un name server \texttt{ns1.ortofrutta.it} (\texttt{203.0.113.2}); un server
+\texttt{server-1.ortofrutta.it} (\texttt{203.0.113.10}) che ospita il sito, raggiungibile come \texttt{www.ortofrutta.it}; un
+mail server \texttt{mail.ortofrutta.it} (\texttt{203.0.113.25}) che riceve la posta \texttt{@ortofrutta.it}. Scrivere i resource
+record nel server autorevole dell'azienda e quelli da inserire nel server del TLD \texttt{it}.
+\end{esercizio}
+
+\svolgimento
+Nel formato (NAME, VALUE, TYPE), trascurando il TTL:
+\begin{lstlisting}
+; server autorevole di ortofrutta.it
+(ortofrutta.it,            ns1.ortofrutta.it,        NS)
+(ns1.ortofrutta.it,        203.0.113.2,              A)
+(server-1.ortofrutta.it,   203.0.113.10,             A)
+(www.ortofrutta.it,        server-1.ortofrutta.it,   CNAME)
+(ortofrutta.it,            mail.ortofrutta.it,       MX)    ; con preferenza, es. 10
+(mail.ortofrutta.it,       203.0.113.25,             A)
+
+; server del TLD it
+(ortofrutta.it,            ns1.ortofrutta.it,        NS)
+(ns1.ortofrutta.it,        203.0.113.2,              A)     ; glue record
+\end{lstlisting}
+Il record A di \texttt{ns1} nel server del TLD è proprio un \textbf{glue record}: senza, nessuno potrebbe contattare il name
+server dell'azienda.
+
+% ══════════════════════════════════════════════════════════════
+\section{Socket}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Chi parte per primo}
+Con i programmi client e server UDP e TCP visti nel capitolo sui socket:
+\begin{enumerate}[label=(\alph*)]
+    \item che cosa succede se si avvia il client TCP \textbf{prima} del server?
+    \item e se si avvia il client UDP prima del server?
+    \item un server UDP con un solo socket può servire due client? E un server TCP?
+    \item che numero di porta usa il client, se non chiama \texttt{bind()}?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item \texttt{connect()} fallisce subito: il SYN del client raggiunge un host dove nessun processo è in ascolto su quella
+          porta, e il sistema operativo risponde con un segmento \textbf{RST}. Il programma riceve l'errore
+          \emph{Connection refused}.
+    \item \texttt{sendto()} ha successo (UDP non verifica nulla), ma il datagramma viene scartato a destinazione (al più torna
+          un messaggio ICMP \emph{port unreachable}). Il client resta \textbf{bloccato per sempre} in \texttt{recvfrom()}, a
+          meno di impostare un timeout: con UDP l'affidabilità è compito dell'applicazione.
+    \item UDP: sì, lo stesso socket riceve datagrammi da chiunque, e \texttt{recvfrom()} dice chi è il mittente a cui rispondere.
+          TCP: il server usa un \textbf{welcoming socket} per accettare le connessioni e un \textbf{socket dedicato} per ciascun
+          client, restituito da \texttt{accept()}.
+    \item Una porta \textbf{effimera} assegnata automaticamente dal sistema operativo (su Linux tipicamente tra 32768 e 60999).
+\end{enumerate}
+
+% ══════════════════════════════════════════════════════════════
+\section{Domande di teoria}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{HTTP}
+\begin{enumerate}[label=(\alph*)]
+    \item Spiegare quali sono le parti di un URL e l'uso di ciascuna.
+    \item Spiegare brevemente il three-way handshake usato per stabilire una connessione HTTP.
+    \item Illustrare che cos'è il pipelining in HTTP.
+    \item Su quali protocolli di trasporto si basa HTTP?
+\end{enumerate}
+Le risposte devono essere complete e possono essere concise.
+\end{esercizio}
+
+\svolgimento
+\textbf{(a)} La struttura è \texttt{protocol://[userinfo@]host[:port][/path][?query][\#fragment]}:
+\begin{itemize}
+    \item \textbf{protocol}: come accedere alla risorsa (\texttt{http}, \texttt{https}, \texttt{ftp}\dots); determina la porta di default;
+    \item \textbf{userinfo} (facoltativo, \emph{deprecato}): nome utente e password, che finirebbero in chiaro nei log e nella cronologia;
+    \item \textbf{host}: nome (da risolvere con il DNS) o indirizzo IP del server;
+    \item \textbf{port} (facoltativa): se omessa, 80 per HTTP e 443 per HTTPS;
+    \item \textbf{path}: il percorso della risorsa sul server;
+    \item \textbf{query}: dopo \texttt{?}, parametri della richiesta (\texttt{chiave=valore\&\dots});
+    \item \textbf{fragment}: dopo \texttt{\#}, una parte della risorsa; è gestito \textbf{solo dal client} e non viene mai inviato al server.
+\end{itemize}
+
+\textbf{(b)} Il three-way handshake \textbf{non è di HTTP ma di TCP}, su cui HTTP si appoggia:
+\begin{enumerate}
+    \item il client invia un \textbf{SYN} con un numero di sequenza iniziale casuale \texttt{client\_isn}, senza dati;
+    \item il server alloca buffer e variabili e risponde con \textbf{SYN-ACK}: ack $=$ \texttt{client\_isn}$+1$ e il proprio
+          \texttt{server\_isn} casuale;
+    \item il client risponde con un \textbf{ACK} (ack $=$ \texttt{server\_isn}$+1$), che può già contenere la richiesta HTTP.
+\end{enumerate}
+L'apertura costa 1 RTT: una richiesta su una connessione nuova costa circa 2 RTT più il tempo di trasmissione.
+
+\textbf{(c)} Con il \textbf{pipelining} il client invia più richieste \textbf{una dietro l'altra}, senza aspettare le risposte;
+richiede una connessione persistente e risparmia RTT. Da HTTP/2 richieste e risposte possono anche essere
+\textbf{interlacciate} sulla stessa connessione, con priorità, evitando che un oggetto grande blocchi i successivi.
+
+\textbf{(d)} Tradizionalmente \textbf{TCP} (porta 80, o 443 con TLS). Con \textbf{HTTP/3} anche \textbf{UDP}, attraverso
+\textbf{QUIC}, che reimplementa affidabilità e controllo di congestione sopra UDP.
+
+\gbox{\iinfo\ Formule da ricordare}{primary!80!black}{
+\begin{itemize}
+    \item Connessione non persistente: $2\,\text{RTT} + t_{\text{trasm}}$ per oggetto; persistente: 1 RTT per oggetto dopo il primo;
+          con pipelining: 1 RTT per tutti.
+    \item Distribuzione di file: $D_{\text{cs}} \ge \max\{N F/u_s,\ F/d_{\min}\}$; \
+          $D_{\text{P2P}} \ge \max\{F/u_s,\ F/d_{\min},\ N F/(u_s + \sum u_i)\}$.
+    \item DNS: porta 53 su UDP; la cache e il TTL governano la propagazione delle modifiche.
+\end{itemize}
+}

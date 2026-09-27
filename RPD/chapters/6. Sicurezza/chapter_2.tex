@@ -1,0 +1,587 @@
+\chapter{Autenticazione, SSL/TLS e sicurezza operativa}
+
+Ricordiamo le quattro proprietà di una comunicazione sicura: \textbf{confidenzialità} (contro lo sniffing), \textbf{integrità del
+messaggio}, \textbf{autenticazione degli estremi} (contro lo spoofing) e \textbf{sicurezza operativa}. Le prime tre sono realizzate via
+software; l'ultima si basa tipicamente su hardware dedicato. In questo capitolo completiamo l'autenticazione, vediamo come tutto si
+combina in SSL/TLS e chiudiamo con firewall e IDS.
+
+% ══════════════════════════════════════════════════════════════
+\section{L'autenticazione degli estremi}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Autenticazione degli estremi}{
+    L'\textbf{autenticazione degli estremi} (\emph{end-point authentication}) è il processo con cui un'entità \textbf{dimostra la propria
+    identità} a un'altra entità attraverso una rete.
+}
+
+\begin{itemize}
+    \item Tipicamente un \textbf{protocollo di autenticazione} (AP, \emph{Authentication Protocol}) viene eseguito \textbf{prima} che le due
+          parti eseguano qualche altro protocollo: serve a stabilire le identità di entrambe prima di cominciare a lavorare.
+    \item Esempi di protocolli che ne hanno bisogno: un trasferimento affidabile (basato su TCP), uno scambio di informazioni di routing (DV o
+          LS), un protocollo di posta (SMTP), \dots
+    \item Per l'autenticazione ci si può appoggiare alle \textbf{CA} viste nel capitolo precedente, ma non basta.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Tentativi progressivi di autenticazione}
+% ══════════════════════════════════════════════════════════════
+
+Supponiamo che l'host A debba autenticarsi presso B prima di lavorare insieme. Costruiamo un protocollo per tentativi, correggendo a ogni
+passo il difetto del precedente (l'approccio del Kurose, con i protocolli ap1.0, ap2.0, \dots).
+
+\subsection{Tentativo 1: controllare l'indirizzo IP}
+
+Se A e B hanno già comunicato e l'indirizzo IP di A è sempre lo stesso, B potrebbe autenticare A \textbf{controllando l'indirizzo IP} nel
+datagramma: se è quello noto, si assume che a inviare sia A.
+
+\warning{Basta falsificare l'indirizzo}{
+    Questa tecnica funziona contro intrusi ``ingenui'' che cercano di spacciarsi per A, ma non basta: un intruso ``meno ingenuo'' può
+    \textbf{falsificare l'indirizzo} nel pacchetto (spoofing).
+}
+
+Un modo di evitare lo spoofing è sfruttare i \textbf{router}: un router può essere configurato per inoltrare solo datagrammi legittimi, cioè con
+indirizzo sorgente che appartiene davvero agli host dietro di lui.
+
+\begin{itemize}
+    \item Il router deve conoscere gli IP dei propri host (altrimenti gli host sarebbero irraggiungibili).
+    \item Può quindi rilevare i pacchetti il cui indirizzo non è coerente con la sorgente, e scartarli prima che facciano danni.
+\end{itemize}
+
+Purtroppo questa capacità \textbf{non è universalmente adottata} né imposta: bisogna assumere che lo spoofing sia possibile.
+
+\subsection{Tentativo 2: una password segreta}
+
+Un altro approccio, il più comune, è usare una \textbf{password segreta}: la password funziona come un segreto condiviso tra chi autentica e chi
+viene autenticato. Gmail, Facebook, Telnet, FTP e moltissimi altri servizi usano l'autenticazione con password. Lo stesso segreto può servire
+anche al controllo di integrità.
+
+\warning{La password si può intercettare}{
+    Il primo problema è che l'intruso può \textbf{intercettare la password} (eavesdropping) dai messaggi, e usarla insieme a un IP falsificato. Con
+    Telnet, che trasmette tutto in chiaro, basta uno sniffer.
+}
+
+\subsection{Tentativo 3: una password cifrata}
+
+L'intercettazione si evita \textbf{cifrando la password}, così che diventi illeggibile per l'intruso. Se si usa una cifratura simmetrica non serve
+nemmeno una password aggiuntiva: la chiave condivisa stessa, che deve essere un segreto tra i due host, può fare da password.
+
+\warning{L'attacco a ripetizione (playback)}{
+    La cifratura è una buona cosa, ma non basta: un intruso ``molto furbo'' può infilarsi nella comunicazione fingendosi A con un
+    \textbf{attacco a ripetizione} (\emph{playback} o \emph{replay attack}).
+    \begin{itemize}
+      \item L'intruso sniffa i pacchetti da A a B cercando di ottenere la versione \textbf{cifrata} della password di A.
+      \item Se ci riesce, può \textbf{ripetere} la password cifrata a B in una nuova sessione, usandola \textbf{senza nemmeno capirla}.
+      \item A differenza dei MitM classici (in tempo reale), sniffing e ripetizione avvengono in momenti separati.
+    \end{itemize}
+    Il problema è che B non riesce a capire se A è ``\textbf{vivo}'', cioè se c'è una sessione attiva in corso tra il vero A e B.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.8, every node/.style={font=\scriptsize\sffamily}]
+  \timeline{a}{0}{A}{4.5}
+  \timeline{t}{4}{Trudy}{4.5}
+  \timeline{b}{8}{B}{4.5}
+  \draw[msg, netblue] (0,-0.4) -- node[above, pos=0.3] {``sono A'', $K_{AB}$(password)} (8,-0.4);
+  \fill[netred] (4,-0.4) circle (2.5pt); \node[text=netred, anchor=west] at (4.1,-0.8) {registra};
+  \node[text=black!50] at (4,-1.6) {\dots giorni dopo \dots};
+  \draw[msg, netred] (4,-2.6) -- node[above] {``sono A'', $K_{AB}$(password)} (8,-2.6);
+  \node[anchor=west, text width=2.8cm, align=left] at (8.2,-2.6) {B decifra: la password è corretta!};
+\end{tikzpicture}
+\caption{L'attacco playback: Trudy non conosce la password, ma riusa il messaggio cifrato.}
+\end{figure}
+
+Il problema somiglia all'apertura di una connessione TCP, in cui con il three-way handshake i due host si assicurano di essere entrambi vivi. Nel
+three-way handshake gli host usano \textbf{numeri di sequenza iniziali casuali}, perché ritrasmissioni di vecchie connessioni non vengano
+scambiate per SYN o SYNACK nuovi. Un'idea simile si può usare per l'autenticazione.
+
+% ══════════════════════════════════════════════════════════════
+\section{La soluzione: il nonce}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Nonce}{
+    Un \textbf{nonce} è un numero casuale (o pseudocasuale) che un protocollo usa \textbf{una sola volta nella vita} (\emph{number used once}).
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.85, every node/.style={font=\scriptsize\sffamily}]
+  \timeline{a}{0}{Host A}{4.6}
+  \timeline{b}{7}{Host B}{4.6}
+  \node[anchor=east] at (-0.2,-0.2) {chiave $K_{AB}$}; \node[anchor=west] at (7.2,-0.2) {chiave $K_{AB}$};
+  \draw[msg] (0,-0.5) -- node[above] {1. ``sono A''} (7,-1.0);
+  \node[draw, fill=llink!60, anchor=west] at (7.2,-1.3) {2. crea un nonce $R$ usato una sola volta};
+  \draw[msg, netorange] (7,-1.6) -- node[above] {$R$} (0,-2.1);
+  \draw[msg, netblue] (0,-2.6) -- node[above] {3. $K_{AB}(R + \text{password})$} (7,-3.1);
+  \node[draw, fill=netgreen!20, anchor=west, text width=3.6cm, align=left] at (7.2,-3.6) {4. decifra: se il nonce è quello inviato, dall'altra parte c'è davvero A};
+\end{tikzpicture}
+\caption{Autenticazione con nonce e chiave simmetrica condivisa.}
+\end{figure}
+
+Supponendo che A e B condividano una chiave simmetrica, il nonce si usa così:
+
+\begin{enumerate}
+    \item A invia a B il messaggio ``sono A''.
+    \item B sceglie un nonce $R$ e lo invia ad A.
+    \item A cifra il nonce insieme alla password con la chiave simmetrica condivisa e rimanda il risultato a B.
+    \item B decifra il messaggio: se il nonce decifrato coincide con quello che aveva inviato, A è autenticato.
+\end{enumerate}
+
+\begin{itemize}
+    \item La password diventa una sorta di \textbf{password monouso}: ogni password cifrata è legata al proprio nonce, e non può essere riusata in altre
+          sessioni (da qualcun altro).
+    \item Se password e nonce arrivano correttamente a B, si può ragionevolmente assumere che dietro ci sia A, \textbf{vivo} in quel momento.
+\end{itemize}
+
+\info{Con la crittografia asimmetrica}{
+    Lo stesso schema funziona con le chiavi pubbliche: B invia il nonce $R$, A lo cifra con la propria \textbf{chiave privata}, e B lo decifra con la
+    chiave \textbf{pubblica} di A. Solo A può aver prodotto quel messaggio. Resta però il problema di essere sicuri che la chiave pubblica sia davvero
+    di A: di nuovo servono i \textbf{certificati}.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{SSL e TLS}
+% ══════════════════════════════════════════════════════════════
+
+Abbiamo visto che diverse tecniche crittografiche si possono usare e integrare per offrire confidenzialità, integrità e autenticazione alle
+connessioni TCP.
+
+\dfn{SSL/TLS}{
+    Queste tecniche sono realizzate dal \textbf{Secure Socket Layer} (SSL), una versione ``potenziata'' di TCP che offre servizi di sicurezza.
+    \begin{itemize}
+      \item Una versione leggermente modificata di SSL 3 si chiama \textbf{Transport Layer Security} (TLS), ed è quella usata oggi.
+      \item Esiste un equivalente per le comunicazioni basate su UDP, il \textbf{Datagram TLS} (DTLS).
+    \end{itemize}
+}
+
+\begin{itemize}
+    \item SSL è usato da molti protocolli applicativi: Web, posta, messaggistica istantanea, voice over IP, \dots
+    \item Spesso la connessione tra il browser e un sito usa \textbf{HTTPS} (HTTP + SSL/TLS) invece di HTTP: il lucchetto nella barra degli indirizzi.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \begin{scope}
+    \node[font=\bfseries\sffamily] at (0,2.3) {TCP normale};
+    \node[lay app, minimum width=3cm] (a1) at (0,1.5) {Applicazione};
+    \node[lay tra, minimum width=3cm] (t1) at (0,0.6) {TCP};
+    \node[lay net, minimum width=3cm] (n1) at (0,-0.3) {IP};
+    \node[lay link, minimum width=3cm] (l1) at (0,-1.2) {Accesso (link + fisico)};
+    \draw[very thick, netblue] (-1.6,1.05) -- (1.6,1.05); \node[right, text=netblue] at (1.6,1.05) {socket TCP};
+  \end{scope}
+  \begin{scope}[xshift=7.5cm]
+    \node[font=\bfseries\sffamily] at (0,2.3) {TCP con SSL};
+    \node[lay app, minimum width=3cm] (a2) at (0,1.8) {Applicazione};
+    \node[layer, fill=netred!30, minimum width=3cm] (s2) at (0,1.0) {sottolivello SSL};
+    \node[lay tra, minimum width=3cm] (t2) at (0,0.2) {TCP};
+    \node[lay net, minimum width=3cm] (n2) at (0,-0.6) {IP};
+    \node[lay link, minimum width=3cm] (l2) at (0,-1.4) {Accesso (link + fisico)};
+    \draw[very thick, netred] (-1.6,1.4) -- (1.6,1.4); \node[right, text=netred] at (1.6,1.4) {socket SSL};
+    \draw[very thick, netblue] (-1.6,0.6) -- (1.6,0.6); \node[right, text=netblue] at (1.6,0.6) {socket TCP};
+    \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (-1.7,2.1) -- (-1.7,0.7) node[midway, left=6pt, align=right] {livello\\applicativo};
+  \end{scope}
+\end{tikzpicture}
+\caption{SSL si inserisce tra l'applicazione e TCP: tecnicamente sta nel livello applicativo, ma allo sviluppatore appare come un trasporto sicuro.}
+\end{figure}
+
+\begin{itemize}
+    \item Poiché SSL protegge TCP, può essere usato da \textbf{qualsiasi applicazione} che gira su TCP.
+    \item SSL offre un'\textbf{API} semplice, con socket simili a quelli di TCP: un'applicazione che vuole usare SSL include le librerie SSL.
+    \item Anche se SSL risiede tecnicamente nel livello applicativo, dal punto di vista dello sviluppatore sembra un protocollo di trasporto che offre i
+          servizi di TCP arricchiti di sicurezza.
+\end{itemize}
+
+SSL ha tre fasi principali: \textbf{handshake}, \textbf{derivazione delle chiavi} e \textbf{trasferimento dati}.
+
+% ══════════════════════════════════════════════════════════════
+\section{SSL: l'handshake}
+% ══════════════════════════════════════════════════════════════
+
+Un client B vuole usare SSL per comunicare con un server A. Nella fase di handshake B deve:
+
+\begin{itemize}
+    \item \textbf{stabilire una connessione TCP} con A;
+    \item \textbf{verificare che A sia davvero A} (e non un server fasullo);
+    \item \textbf{inviare ad A una chiave segreta principale} (\emph{master secret}), il segreto condiviso.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.72, every node/.style={font=\scriptsize\sffamily}]
+  \timeline{b}{0}{Client B}{8.4}
+  \timeline{a}{7}{Server A}{8.4}
+  \draw[msg, black!60] (0,-0.3) -- node[above] {TCP SYN} (7,-0.8);
+  \draw[msg, black!60] (7,-1.0) -- node[above] {TCP SYNACK} (0,-1.5);
+  \draw[msg, black!60] (0,-1.7) -- node[above] {TCP ACK} (7,-2.2);
+  \draw[msg, netblue, thick] (0,-2.8) -- node[above] {SSL hello} (7,-3.3);
+  \draw[msg, netgreen!60!black, thick] (7,-3.6) -- node[above] {certificato (con la chiave pubblica di A)} (0,-4.1);
+  \node[draw, fill=llink!60, anchor=east, text width=2.8cm, align=right] at (-0.2,-4.8) {verifica il certificato con la CA; crea il Master Secret MS};
+  \draw[msg, netred, thick] (0,-5.6) -- node[above] {$K_A^+$(MS): MS cifrato con la chiave pubblica di A} (7,-6.1);
+  \node[draw, fill=llink!60, anchor=west, text width=2.8cm, align=left] at (7.2,-6.5) {decifra con la chiave privata e ottiene MS};
+  \node[draw, fill=netgreen!20, text width=5cm, align=center] at (3.5,-7.6) {ora solo A e B conoscono MS};
+\end{tikzpicture}
+\caption{L'handshake SSL (semplificato).}
+\end{figure}
+
+\begin{enumerate}
+    \item Stabilita la connessione TCP, B invia ad A un messaggio \textbf{hello}.
+    \item Il server A risponde con il proprio \textbf{certificato}, che contiene la sua \textbf{chiave pubblica}.
+    \item Poiché il certificato è stato certificato da una CA, il client B si fida che la chiave pubblica nel certificato appartenga ad A.
+    \item B genera un \textbf{Master Secret} (MS), che userà solo per questa sessione SSL (è un nonce), lo cifra con la chiave pubblica di A e lo invia ad A.
+    \item Il server A decifra il messaggio con la propria chiave privata e ottiene MS. Dopo questa fase, \textbf{solo B e A} conoscono il master secret della sessione.
+\end{enumerate}
+
+\info{Asimmetrica per iniziare, simmetrica per lavorare}{
+    SSL usa la crittografia \textbf{asimmetrica} (lenta) solo per scambiare in sicurezza il segreto, e poi la crittografia \textbf{simmetrica} (veloce) per
+    tutti i dati. È lo schema ibrido tipico di quasi tutti i protocolli sicuri.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{SSL: la derivazione delle chiavi}
+% ══════════════════════════════════════════════════════════════
+
+Poiché MS è un segreto condiviso tra B e A, potrebbe essere usato come chiave simmetrica per tutta la cifratura e il controllo di integrità della
+sessione. È però più sicuro che A e B usino \textbf{chiavi diverse} per la cifratura e per l'integrità, e per i due flussi di dati (da A a B e da B ad A).
+
+Da MS si ricavano \textbf{quattro chiavi}:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Chiave} & \textbf{Uso} \\
+\midrule
+$E_{B\rightarrow A}$ & chiave di \textbf{cifratura} di sessione per i dati da B ad A \\
+$M_{B\rightarrow A}$ & chiave \textbf{MAC} di sessione per i dati da B ad A \\
+$E_{A\rightarrow B}$ & chiave di \textbf{cifratura} di sessione per i dati da A a B \\
+$M_{A\rightarrow B}$ & chiave \textbf{MAC} di sessione per i dati da A a B \\
+\bottomrule
+\end{tabular}
+\caption{Le quattro chiavi di sessione derivate dal master secret (MAC = Message Authentication Code).}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{SSL: il trasferimento dati}
+% ══════════════════════════════════════════════════════════════
+
+SSL protegge TCP spezzando il flusso di dati dell'applicazione in \textbf{record}. Per ciascun record:
+
+\begin{enumerate}
+    \item SSL accoda al record un \textbf{MAC}, per il controllo di integrità ($\text{record}_i + \text{MAC}$);
+    \item il record così modificato viene \textbf{cifrato};
+    \item il record cifrato viene passato a TCP per la trasmissione.
+\end{enumerate}
+
+\warning{E l'integrità dell'intero flusso?}{
+    Così si garantisce l'integrità dei singoli record, ma non dell'intero flusso. Poiché è cifrato solo il payload, un MitM tra A e B può ancora
+    danneggiare il flusso \textbf{invertendo o eliminando segmenti}. Per esempio può catturare due segmenti consecutivi, scambiarne l'ordine insieme ai
+    numeri di sequenza TCP, e inviarli al ricevente, che non si accorge dell'inversione finché i dati non arrivano all'applicazione.
+}
+
+Per evitarlo SSL integra anche un \textbf{numero di sequenza} nel messaggio prima della cifratura: il vero messaggio cifrato è
+$$\text{record}_i + \text{MAC} + \text{numeroDiSequenza}_i$$
+dove il MAC è calcolato anche sul numero di sequenza. Conoscendo la procedura e la chiave MAC, il ricevente può certificare l'integrità e
+l'\textbf{ordine} dei messaggi.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[field, fill=lapp!60, minimum width=6cm] (f) at (0,0) {flusso di dati dell'applicazione};
+  \foreach \i/\x in {1/-2, 2/0, 3/2} \node[field, fill=lapp!60, minimum width=1.8cm] (r\i) at (\x,-1) {record \i};
+  \draw[-{Stealth}] (0,-0.35) -- (0,-0.65);
+  \node[field, fill=lapp!60, minimum width=1.8cm] (rr) at (-2,-2.2) {record 1};
+  \node[field, fill=netred!25, minimum width=0.9cm, right=0pt of rr] (mac) {MAC};
+  \node[field, fill=llink, minimum width=0.9cm, right=0pt of mac] (sq) {seq 1};
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (rr.south west) -- (sq.south east) node[midway, below=6pt] {cifrato con $E_{B\rightarrow A}$ \quad (MAC calcolato con $M_{B\rightarrow A}$)};
+  \node[field, fill=ltra, minimum width=1.2cm] (tcp) at (4.4,-2.2) {header TCP};
+  \node[field, fill=black!15, minimum width=2.6cm, right=0pt of tcp] {payload cifrato};
+  \draw[-{Stealth}, thick] (1.9,-2.2) -- (3.75,-2.2);
+\end{tikzpicture}
+\caption{Il trasferimento dati in SSL: record, MAC, numero di sequenza e cifratura, poi TCP.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{I firewall}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Firewall}{
+    Un \textbf{firewall} è una combinazione di hardware e software che \textbf{isola} (protegge) una rete da Internet, permettendo o negando il
+    passaggio dei pacchetti.
+}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.45\linewidth}\centering
+  \includegraphics[width=0.95\linewidth]{cap22/packet_filter.png}
+\end{minipage}\hfill
+\begin{minipage}{0.51\linewidth}
+\begin{itemize}
+  \item \textbf{Tutto} il traffico in entrata e in uscita dovrebbe passare per il firewall, e solo il traffico \textbf{autorizzato} (secondo la politica di
+        sicurezza locale) può passare.
+  \item Il firewall fa da \textbf{unico punto di accesso} alla rete pubblica, ma le grandi organizzazioni possono avere più livelli di firewall o
+        firewall distribuiti.
+  \item Il firewall stesso deve essere \textbf{immune alle intrusioni}: se viene compromesso, dà un falso senso di sicurezza.
+\end{itemize}
+\end{minipage}
+\caption{Un firewall tra la rete amministrata e la rete pubblica.}
+\end{figure}
+
+Vediamo tre approcci: il \textbf{filtraggio tradizionale} dei pacchetti, il \textbf{filtraggio stateful} e l'\textbf{application gateway}.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il filtraggio tradizionale dei pacchetti}
+% ══════════════════════════════════════════════════════════════
+
+\begin{itemize}
+    \item Un \textbf{filtro di pacchetti} è di solito realizzato sul \textbf{gateway}, il router che collega la rete locale all'ISP.
+    \item Esamina \textbf{ogni singolo datagramma} e decide se accettarlo o scartarlo in base a regole specificate dall'amministratore. Si possono avere
+          regole diverse per i datagrammi in entrata e in uscita, o per le singole interfacce.
+\end{itemize}
+
+Le regole si basano tipicamente su:
+
+\begin{itemize}
+    \item indirizzo IP sorgente o destinazione;
+    \item tipo di protocollo nel campo del datagramma IP (TCP, UDP, ICMP, \dots);
+    \item porta sorgente e destinazione;
+    \item bit dei flag TCP (SYN, ACK, \dots);
+    \item \dots
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{6cm}p{8cm}}
+\toprule
+\textbf{Politica} & \textbf{Impostazione del firewall} \\
+\midrule
+Solo traffico Web in uscita & scartare tutti i segmenti TCP SYN in uscita con porta di destinazione diversa da 80 \\
+Niente streaming (non critico) & scartare il traffico UDP in entrata non essenziale \\
+Non rispondere ai ping dall'esterno & scartare le risposte ICMP ping in uscita (echo reply) \\
+Telnet solo con host fidati & inoltrare i datagrammi Telnet (porta 23) solo da e verso un elenco di indirizzi \\
+\bottomrule
+\end{tabular}
+\caption{Esempi di politiche e relative regole.}
+\end{table}
+
+\warning{I filtri non proteggono dallo spoofing}{
+    Politiche basate su indirizzi e porte non proteggono dallo \textbf{spoofing}: un pacchetto con indirizzo sorgente falsificato su quello di un host
+    fidato passa il filtro.
+}
+
+\subsection{Le access control list}
+
+Nei router le regole del firewall sono realizzate con le \textbf{access control list} (ACL). Consideriamo l'ACL dell'interfaccia che collega il
+router all'ISP, per un'organizzazione con indirizzi \texttt{222.22/16} che vuole lasciar passare \textbf{solo il traffico Web}:
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lllllll}
+\toprule
+\textbf{Azione} & \textbf{IP sorgente} & \textbf{IP destinazione} & \textbf{Protocollo} & \textbf{Porta sorg.} & \textbf{Porta dest.} & \textbf{Flag} \\
+\midrule
+allow & 222.22/16 & esterno a 222.22/16 & TCP & $>$ 1023 & 80 & qualsiasi \\
+allow & esterno a 222.22/16 & 222.22/16 & TCP & 80 & $>$ 1023 & ACK \\
+allow & 222.22/16 & esterno a 222.22/16 & UDP & $>$ 1023 & 53 & --- \\
+allow & esterno a 222.22/16 & 222.22/16 & UDP & 53 & $>$ 1023 & --- \\
+deny & tutto & tutto & tutto & tutto & tutto & tutto \\
+\bottomrule
+\end{tabular}
+\caption{Una ACL che permette solo il traffico Web (le regole si leggono dall'alto: vale la prima che corrisponde).}
+\end{table}
+
+\begin{enumerate}
+    \item La prima regola lascia \textbf{uscire} qualsiasi pacchetto TCP con porta di destinazione 80.
+    \item La seconda lascia \textbf{entrare} qualsiasi pacchetto TCP con porta sorgente 80 e flag \textbf{ACK = 1} (tutti i messaggi Web di risposta portano
+          un ACK, mentre un tentativo di aprire una connessione dall'esterno avrebbe SYN senza ACK).
+    \item La terza e la quarta insieme permettono ai pacchetti \textbf{DNS} di uscire ed entrare (senza DNS non si navigherebbe).
+    \item L'ultima nega tutto il resto.
+\end{enumerate}
+
+\subsection{Il limite: il filtraggio è stateless}
+
+\warning{Pacchetti ACK falsi}{
+    Il filtraggio tradizionale è \textbf{senza stato}: esamina ogni pacchetto da solo. Per quanto restrittiva, la tabella precedente lascia entrare
+    \textbf{qualsiasi} pacchetto dall'esterno con ACK = 1 e porta sorgente 80, anche se non fa parte di nessuna connessione aperta dall'interno.
+    Pacchetti di questo tipo sono noti per essere usati negli attacchi DoS. La soluzione ingenua sarebbe bloccare anche i pacchetti TCP ACK, ma
+    impedirebbe agli utenti interni di navigare sul Web.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il filtraggio stateful}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Filtro stateful}{
+    I \textbf{filtri stateful} risolvono il problema tenendo traccia di \textbf{tutte le connessioni TCP in corso} in una \textbf{tabella delle
+    connessioni}, per capire se il traffico appartiene a una connessione legittima.
+    \begin{itemize}
+      \item Il firewall riconosce l'\textbf{inizio} di una nuova connessione (la sequenza SYN, SYNACK, ACK del three-way handshake) e la sua
+            \textbf{fine} (il pacchetto FIN).
+      \item Può anche assumere (in modo conservativo) che la connessione sia finita quando non vede attività per un certo tempo (per esempio 60 secondi).
+    \end{itemize}
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.65\linewidth]{cap22/stateful_table.png}
+    \caption{L'ACL di un filtro stateful: la colonna ``check connection'' indica le regole che richiedono di verificare la tabella delle connessioni. In questo caso sono ammessi solo i pacchetti ACK che appartengono a connessioni già stabilite.}
+\end{figure}
+
+Una tabella stateful ha di solito una colonna ``\emph{check connection}'' che indica se un pacchetto deve far parte di una connessione già
+stabilita: un pacchetto con ACK = 1 in arrivo dall'esterno passa solo se nella tabella c'è una connessione aperta dall'interno con gli stessi
+indirizzi e porte.
+
+% ══════════════════════════════════════════════════════════════
+\section{L'application gateway}
+% ══════════════════════════════════════════════════════════════
+
+I filtri visti finora controllano soprattutto indirizzi IP e porte. Ma può servire permettere o negare funzionalità in base agli \textbf{utenti} o
+all'\textbf{applicazione}, per esempio:
+
+\begin{itemize}
+    \item solo i tecnici possono usare certi protocolli (come Telnet verso l'esterno), negati agli utenti normali;
+    \item all'interno di un protocollo sono permessi solo certi tipi di messaggi o comandi.
+\end{itemize}
+
+Compiti del genere vanno oltre le capacità dei filtri tradizionali e stateful: l'identità degli utenti interni è un dato applicativo, e non compare
+negli header IP/TCP/UDP.
+
+\dfn{Application gateway}{
+    Un \textbf{application gateway} (o \emph{application-level gateway}, ALG) permette di filtrare i pacchetti in base ai \textbf{dati di livello
+    applicativo}. È realizzato di solito come un \textbf{server separato} che lavora insieme al firewall.
+}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.4\linewidth}\centering
+  \includegraphics[width=0.95\linewidth]{cap22/app_gateway.png}
+\end{minipage}\hfill
+\begin{minipage}{0.56\linewidth}
+\begin{itemize}
+  \item L'idea è \textbf{negare tutte le connessioni} di un certo protocollo (per esempio Telnet) \textbf{tranne} quelle da e verso l'application gateway.
+  \item Un utente che vuole usare il protocollo ristretto deve prima \textbf{autenticarsi presso il gateway} (nome utente e password).
+  \item Il server controlla se l'utente ha il permesso per quel protocollo.
+  \item Se sì, tutte le richieste e le risposte vengono inoltrate attraverso il gateway (che fa da \textbf{proxy}).
+\end{itemize}
+Le reti interne hanno spesso più application gateway, per protocolli diversi (Telnet, HTTP, FTP, posta).
+\end{minipage}
+\caption{Un gateway per Telnet: sessione host--gateway e sessione gateway--host remoto, con un router che filtra tutto il resto.}
+\end{figure}
+
+\warning{Gli svantaggi}{
+    \begin{itemize}
+      \item Serve un application gateway \textbf{diverso per ogni applicazione}.
+      \item C'è una \textbf{penalità di prestazioni} dovuta al proxy (soprattutto con molti utenti).
+      \item Il software sugli host deve sapere \textbf{come usare} l'application gateway.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Gli Intrusion Detection System}
+% ══════════════════════════════════════════════════════════════
+
+Per rilevare certi tipi di attacco serve un'\textbf{ispezione profonda dei pacchetti} (\emph{deep packet inspection}): controllare, anche nel
+contenuto, schemi di attacco noti o traffico sospetto.
+
+\dfn{IDS e IPS}{
+    Un \textbf{Intrusion Detection System} (IDS) è un insieme di dispositivi specializzati che \textbf{monitorano la rete} cercando pacchetti sospetti.
+    \begin{itemize}
+      \item Il suo compito principale è \textbf{riconoscere} i pacchetti potenzialmente malevoli e \textbf{allertare} l'amministratore di rete (che poi
+            deciderà cosa fare).
+      \item Se può anche \textbf{bloccare} (filtrare) i pacchetti sospetti, si parla di \textbf{Intrusion Prevention System} (IPS).
+    \end{itemize}
+}
+
+Le organizzazioni usano gli IDS per rilevare un'ampia gamma di attacchi (o di potenziali attacchi):
+
+\begin{itemize}
+    \item scansioni della rete o delle porte (per esempio con nmap);
+    \item flooding DoS;
+    \item worm e virus;
+    \item \dots
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.65\linewidth]{cap22/ids.png}
+    \caption{Una rete con filtro, application gateway, sensori IDS e zona demilitarizzata (da Kurose).}
+\end{figure}
+
+Il sistema è spesso composto da:
+
+\begin{itemize}
+    \item uno o più \textbf{sensori IDS};
+    \item un unico \textbf{processore IDS centrale}, che raccoglie e integra le informazioni e invia gli allarmi.
+\end{itemize}
+
+Gli IDS possono essere:
+
+\begin{itemize}
+    \item \textbf{basati su firme} (\emph{signature-based}): mantengono un ampio database di \textbf{firme di attacco}, cioè insiemi di regole legate a
+          un'attività di intrusione (è il tipo più comune). Non riconoscono attacchi nuovi;
+    \item \textbf{basati su anomalie} (\emph{anomaly-based}): costruiscono un \textbf{profilo del traffico} normale e segnalano i flussi statisticamente
+          insoliti. Possono scoprire attacchi nuovi, ma è difficile distinguere il traffico anomalo da quello semplicemente raro.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{La zona demilitarizzata (DMZ)}
+% ══════════════════════════════════════════════════════════════
+
+Nelle reti grandi capita spesso di dover avere \textbf{due livelli di sicurezza} per dispositivi diversi: i server che devono comunicare con il mondo
+esterno, per esempio, hanno bisogno di un filtraggio più blando.
+
+\dfn{Zona demilitarizzata (DMZ)}{
+    Una \textbf{zona demilitarizzata} (DMZ) è una regione a \textbf{bassa sicurezza}, con restrizioni limitate, in cui ospitare i server che devono
+    essere raggiungibili dall'esterno (Web, FTP, DNS). Un approccio tipico è mettere la DMZ \textbf{tra due firewall}: uno esterno, meno restrittivo, e
+    uno interno, più restrittivo.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node[netcloud, minimum width=2.4cm] (i) at (0,0) {Internet};
+  \node[draw, fill=netred!30, minimum width=0.5cm, minimum height=1.8cm] (f1) at (2.6,0) {};
+  \node[below=2pt of f1, align=center] {firewall\\esterno};
+  \node[draw=netorange, thick, dashed, rounded corners, fill=netorange!8, minimum width=3.4cm, minimum height=2.4cm] (dmz) at (5.6,0) {};
+  \node[anchor=north, text=netorange, font=\footnotesize\bfseries\sffamily] at (dmz.north) {DMZ};
+  \node at (4.8,-0.3) {\icon[0.45cm]{server}}; \node at (5.6,-0.3) {\icon[0.45cm]{server}}; \node at (6.4,-0.3) {\icon[0.45cm]{server}};
+  \node[font=\scriptsize\sffamily] at (5.6,-0.95) {Web \quad FTP \quad DNS};
+  \node[draw, fill=netred!60, minimum width=0.5cm, minimum height=1.8cm] (f2) at (8.6,0) {};
+  \node[below=2pt of f2, align=center] {firewall interno\\+ app. gateway};
+  \node[draw=netgreen!60!black, thick, rounded corners, fill=netgreen!8, minimum width=3.2cm, minimum height=2.4cm] (lan) at (11.6,0) {};
+  \node[anchor=north, text=netgreen!50!black, font=\footnotesize\bfseries\sffamily] at (lan.north) {rete interna};
+  \node at (11,-0.3) {\icon[0.6cm]{pc}}; \node at (12.1,-0.3) {\icon[0.7cm]{laptop}};
+  \draw[wired] (i) -- (f1); \draw[wired] (f1) -- (dmz); \draw[wired] (dmz) -- (f2); \draw[wired] (f2) -- (lan);
+  \node[text width=4cm, align=center, text=netred] at (5.6,-1.8) {filtraggio blando, sensori IDS};
+  \node[text width=4cm, align=center, text=netgreen!50!black] at (11.6,-1.8) {alta sicurezza, sensori IDS};
+\end{tikzpicture}
+\caption{La DMZ tra due firewall.}
+\end{figure}
+
+\begin{itemize}
+    \item La regione ad \textbf{alta sicurezza} è protetta da un filtro di pacchetti e da un application gateway, ed è monitorata da sensori IDS.
+    \item La regione a \textbf{bassa sicurezza} (la DMZ) è protetta solo dal filtro ed è monitorata dai sensori.
+\end{itemize}
+
+\info{Oltre la sicurezza: la privatezza}{
+    Crittografia e firewall proteggono i contenuti, ma chi osserva la rete vede comunque \textbf{chi} parla con \textbf{chi} (gli indirizzi IP non sono
+    cifrati). Per nascondere anche questo esistono reti di anonimizzazione come \textbf{Tor}, che fa passare il traffico cifrato attraverso più nodi, e
+    sistemi come \textbf{Whonix} che instradano tutto il traffico di una macchina virtuale attraverso Tor.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item \textbf{Autenticazione}: l'IP si falsifica, la password si intercetta, la password cifrata si ripete (\textbf{playback}); la soluzione è il
+          \textbf{nonce}, usato una sola volta.
+    \item \textbf{SSL/TLS} protegge TCP: \textbf{handshake} (certificato del server, master secret cifrato con la chiave pubblica), \textbf{derivazione}
+          di 4 chiavi (cifratura e MAC per ogni direzione), \textbf{trasferimento} a record con MAC e numero di sequenza. HTTPS = HTTP + TLS.
+    \item \textbf{Firewall}: filtraggio \textbf{tradizionale} (ACL su indirizzi, porte, flag; stateless), \textbf{stateful} (tabella delle connessioni),
+          \textbf{application gateway} (dati applicativi, utenti, proxy).
+    \item \textbf{IDS/IPS}: ispezione profonda, basati su firme o su anomalie; la \textbf{DMZ} ospita i server pubblici tra due firewall.
+\end{itemize}
+}

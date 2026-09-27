@@ -1,0 +1,750 @@
+\chapter{Asincronismo e richieste di rete}
+
+Completiamo la panoramica su JavaScript con tre argomenti: la
+\textbf{memorizzazione dei dati} nel browser, i costrutti per la
+\textbf{programmazione asincrona} e le \textbf{richieste di rete}.
+
+\section{Memorizzare dati nel browser}
+
+I browser moderni offrono diverse API utilizzabili da JavaScript per
+memorizzare e recuperare i dati di un'applicazione: i \term{cookie}, il
+\term{Web Storage} (\code{localStorage} e \code{sessionStorage}) e
+\term{IndexedDB}.
+
+\subsection{Cookie}
+
+\dfn{Cookie}{
+  I \term{cookie} sono piccole stringhe di dati. Fanno parte del protocollo HTTP
+  e servono a \guillemotleft superarne\guillemotright\ la mancanza di stato. Vengono tipicamente
+  impostati in una risposta HTTP tramite l'header \code{Set-Cookie}; i browser
+  li memorizzano e li inviano in \textbf{tutte} le richieste successive verso lo
+  stesso dominio, tramite l'header \code{Cookie}.}
+
+È il meccanismo che avevamo anticipato nel primo capitolo, parlando della
+natura \textit{stateless} di HTTP.
+
+I cookie del sito corrente sono accessibili tramite la proprietà
+\code{document.cookie}. Il suo valore è una stringa di coppie
+\code{nome=valore} separate da \code{;}, e ogni coppia è un cookie distinto.
+
+\begin{lstlisting}[style=html, name=cookie.html]
+<h1>Hello!</h1>
+<script>
+  if (document.cookie.indexOf("name=") === -1) {   // nessun cookie "name"
+    let name = prompt("Please, state your name:");
+    document.cookie = `name=${name}; max-age=10`;  // scade fra 10 secondi
+  }
+
+  let name = document.cookie.replace("name=", "");
+  document.querySelector("h1").innerHTML = `Hello, ${name}!`;
+</script>
+\end{lstlisting}
+
+\subsection{localStorage}
+
+Lavorare con i cookie da JavaScript non è comodissimo: soprattutto quando i
+cookie sono molti, bisogna manipolare stringhe, spezzarle, usare espressioni
+regolari.
+
+L'oggetto \code{localStorage} offre un modo molto più semplice di memorizzare
+coppie chiave/valore nel browser:
+
+\begin{itemize}
+  \item i dati \textbf{non} vengono inviati a ogni richiesta, quindi se ne
+        possono memorizzare molti di più;
+  \item l'interfaccia è simile a quella di una \code{Map};
+  \item può memorizzare \textbf{solo valori stringa};
+  \item esiste un \code{localStorage} distinto per ogni combinazione di dominio,
+        protocollo e porta.
+\end{itemize}
+
+\begin{lstlisting}[style=html, name=localstorage.html]
+<h1>Hello!</h1>
+<script>
+  if (localStorage.getItem("name") === null) {   // niente "name" memorizzato
+    let name = prompt("Please, state your name:");
+    localStorage.setItem("name", name);
+  }
+
+  let name = localStorage.name;
+  document.querySelector("h1").innerHTML = `Hello, ${name}!`;
+</script>
+\end{lstlisting}
+
+\subsection{sessionStorage e IndexedDB}
+
+I dati in \code{localStorage} sopravvivono persino a un riavvio completo del
+browser. \code{sessionStorage} offre le stesse funzionalità, ma si usa molto più
+di rado: esiste solo all'interno della \textbf{scheda} corrente del browser, e i
+dati sopravvivono a un aggiornamento della pagina ma non alla chiusura e
+riapertura della scheda.
+
+\term{IndexedDB} è invece un vero database integrato nel browser: supporta tipi
+di chiave diversi, transazioni e interrogazioni su intervalli di chiavi, e può
+memorizzare ancora più dati di \code{localStorage}. È inutilmente potente per le
+tradizionali applicazioni web client-server, ed è pensato soprattutto per le
+applicazioni che devono funzionare \textbf{offline}. Basta sapere che esiste.
+
+\warning{Nulla di ciò che sta nel browser è sicuro}{
+  Cookie, \code{localStorage} e IndexedDB vivono sul computer dell'utente e sono
+  ispezionabili e modificabili con due clic dai DevTools. Non vanno quindi
+  \textbf{mai} usati per memorizzare segreti, né per conservare informazioni di
+  cui il server debba fidarsi: un carrello con i prezzi, per esempio, va sempre
+  ricalcolato lato server. Vale la stessa regola vista per l'input dell'utente:
+  ciò che arriva dal client va sempre verificato.}
+
+\section{Sincronismo e asincronismo}
+
+Il codice JavaScript viene tipicamente eseguito in modo \term{sincrono}: ogni
+istruzione attende il completamento delle precedenti. È un modo di programmare
+intuitivo, ma ha qualche inconveniente: alcune istruzioni possono richiedere
+molto tempo, per esempio quando si attende l'input dell'utente, il
+completamento di una richiesta di rete o la fine di un calcolo complesso. Le
+istruzioni successive, magari importanti, restano bloccate ad aspettare.
+
+\begin{lstlisting}[style=js, name=sincrono.js]
+function firstOperation(value)  { return 1 + value; }
+function secondOperation(value) { return 2 + value; }
+function thirdOperation(value)  { return 3 + value; }
+
+function setupPage() {
+  let result = 0;
+  result = firstOperation(result);
+  result = secondOperation(result);
+  result = thirdOperation(result);
+  console.log(`Result is ${result}`);
+}
+\end{lstlisting}
+
+\subsection{Callback}
+
+\dfn{Callback}{
+  Una \term{callback} è una funzione passata come argomento a un'altra
+  funzione, con l'aspettativa che venga invocata al momento opportuno.}
+
+Ci ricordano qualcosa? I gestori di eventi del capitolo precedente sono, in
+effetti, delle callback.
+
+Riscriviamo l'esempio precedente in stile asincrono, con le callback.
+
+\begin{lstlisting}[style=js, name=callback.js]
+function firstOperation(value, cb)  { cb(1 + value); }
+function secondOperation(value, cb) { cb(2 + value); }
+function thirdOperation(value, cb)  { cb(3 + value); }
+
+function setupPage() {
+  let result = 0;
+  firstOperation(result, (r1) => {
+    secondOperation(r1, (r2) => {
+      thirdOperation(r2, (r3) => {
+        console.log(`Result is ${r3}`);
+      });
+    });
+  });
+  console.log("Done");
+}
+\end{lstlisting}
+
+\error{Callback Hell}{
+  L'indentazione che si allarga a destra ha un nome: \term{Callback Hell},
+  oppure \term{Pyramid of Doom}. Con molte callback annidate il codice diventa
+  rapidamente illeggibile, e la situazione peggiora ulteriormente quando si deve
+  gestire anche la propagazione degli errori: ogni livello deve controllare e
+  inoltrare l'errore al livello successivo.
+
+  Il JavaScript delle origini gestiva l'asincronismo così. Nel JavaScript
+  moderno si usa un costrutto diverso: le \term{Promise}.}
+
+\section{Promise}
+
+Nella programmazione capita spesso di avere:
+
+\begin{enumerate}
+  \item del codice \term{produttore}, che fa qualcosa e ci mette un certo tempo:
+        attendere l'input dell'utente, scaricare dati dalla rete, svolgere
+        calcoli complessi;
+  \item del codice \term{consumatore}, che ha bisogno dei risultati del
+        produttore.
+\end{enumerate}
+
+Le \term{Promise} sono il modo di \guillemotleft collegare\guillemotright\ produttori e consumatori.
+
+\subsection{Creare una Promise}
+
+Un oggetto \code{Promise} si crea con il costruttore apposito.
+
+\begin{lstlisting}[style=js]
+let promise = new Promise(function (resolve, reject) {
+  // Executor: qui il codice del produttore
+});
+\end{lstlisting}
+
+La funzione passata come argomento si chiama \term{executor}, e viene invocata
+\textbf{immediatamente} alla creazione della Promise. \code{resolve} e
+\code{reject} sono callback fornite da JavaScript: quando il codice
+dell'executor termina, deve invocare
+
+\begin{itemize}
+  \item \code{resolve(value)} se è andato a buon fine, con risultato
+        \code{value};
+  \item \code{reject(error)} se si è verificato un errore, dove \code{error} è
+        l'oggetto errore.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      s/.style={rounded corners=4pt, line width=1pt, align=center,
+                minimum width=3.6cm, minimum height=1.15cm},
+      a/.style={-{Stealth[length=6pt,width=5pt]}, line width=1pt}]
+
+    \node[s, draw=neutral!55!white, fill=neutral!9!white] (p) at (0,0)
+      {\scriptsize Status \textbf{"pending"}\\ \scriptsize Result
+       \code{undefined}};
+
+    \node[s, draw=green-gradient-6, fill=green-gradient-1!50!white] (f) at (6.6,1.5)
+      {\scriptsize Status \textbf{"fulfilled"}\\ \scriptsize Result
+       \code{result}};
+
+    \node[s, draw=red-gradient-6, fill=red-gradient-1!40!white] (r) at (6.6,-1.5)
+      {\scriptsize Status \textbf{"rejected"}\\ \scriptsize Reason
+       \code{error}};
+
+    \draw[a, draw=green-gradient-6] (p.east) to[out=20, in=180]
+      node[wtlab, above, pos=0.55]{\code{resolve(result)}} (f.west);
+    \draw[a, draw=red-gradient-6] (p.east) to[out=-20, in=180]
+      node[wtlab, below, pos=0.55]{\code{reject(error)}} (r.west);
+
+    \node[font=\Lato\scriptsize, text=neutral!35!black, anchor=south]
+      at (0,0.75) {\code{new Promise(executor)}};
+  \end{tikzpicture}
+  \caption{Il ciclo di vita di una Promise.}
+  \label{fig:promise-lifecycle}
+\end{figure}
+
+\info{Stato e risultato sono privati}{
+  \textit{Status} e \textit{Result} sono proprietà \textbf{interne}: non si
+  possono leggere direttamente dal codice. L'unico modo di accedere al risultato
+  è registrare le funzioni da eseguire quando la Promise si risolve, come
+  vediamo subito. Una Promise che ha lasciato lo stato \code{pending} si dice
+  \term{settled} (\guillemotleft sistemata\guillemotright), e da quel momento il suo stato non
+  cambia più.}
+
+\begin{lstlisting}[style=js, name=promise.js]
+let promise = new Promise(function (resolve, reject) {
+  let number = Math.random();
+
+  setTimeout(() => {     // setTimeout riceve una callback e un tempo in ms
+    if (number > 0.5) {
+      resolve(number);
+    } else {
+      reject(new Error("Number too small"));
+    }
+  }, 1000);
+});
+
+console.log(promise);    // Promise { <state>: "pending" }
+\end{lstlisting}
+
+\subsection{then, catch e finally}
+
+Il codice consumatore riceve una Promise, cioè la promessa che un dato sarà
+disponibile a un certo punto nel futuro. Le azioni da compiere quando la Promise
+è risolta (o rifiutata) si registrano con i metodi offerti dall'oggetto Promise.
+Il più importante è \code{.then()}.
+
+\begin{lstlisting}[style=js]
+promise.then(
+  function (result) { /* invocata se la promise e' fulfilled */ },
+  function (error)  { /* invocata se la promise e' rejected  */ }
+)
+\end{lstlisting}
+
+Si può anche registrare una sola funzione, quella per il caso di successo.
+Quando invece interessa solo il caso di errore si può passare \code{null} come
+primo argomento, oppure — meglio — usare il metodo equivalente \code{.catch()}.
+
+\begin{lstlisting}[style=js]
+promise.catch(
+  (error) => { /* invocata se la promise e' rejected */ }
+)
+\end{lstlisting}
+
+Come i blocchi \code{try/catch}, anche le Promise hanno un metodo
+\code{.finally()}. Riceve una callback senza argomenti, viene invocato appena la
+Promise è \textit{settled} (in un senso o nell'altro), ed è pensato per le
+operazioni di pulizia che vanno eseguite in ogni caso.
+
+\begin{esempio}{L'ordine di esecuzione}
+\begin{lstlisting}[style=js, name=promise-ordine.js]
+let promise = new Promise(function (resolve, reject) {
+  let number = Math.random();
+  setTimeout(() => {
+    if (number > 0.5) {
+      resolve(number);
+    } else {
+      reject(new Error(`Number too small: ${number}`));
+    }
+  }, 1000);
+});
+
+console.log("Here");
+
+promise.finally(() => { console.log("Promise settled") });
+
+promise.then(
+  (result) => { console.log(`Done: ${result}`) },
+  (error)  => { console.log(error.message) }
+);
+
+console.log("There");
+\end{lstlisting}
+
+\begin{console}
+Here
+There
+Promise settled
+Done: 0.6      (oppure "Number too small: 0.3")
+\end{console}
+
+L'ordine è il punto centrale: \code{"There"} viene stampato \textbf{prima} del
+risultato, perché il codice non si è fermato ad aspettare la Promise. È
+esattamente ciò che volevamo ottenere con l'asincronismo.
+\end{esempio}
+
+\subsection{Concatenare le Promise}
+
+E se dovessimo eseguire una \textbf{sequenza} di passi asincroni? È qui che
+entra in gioco il \term{promise chaining}, e che si vede il vantaggio rispetto
+alle callback annidate.
+
+\begin{lstlisting}[style=js, name=chaining.js]
+let promise = new Promise(function (resolve, reject) {
+  setTimeout(() => { resolve(1); }, 1000);
+});
+
+console.log("Here");
+
+promise
+  .then((result) => { console.log(result); return result * 2; })
+  .then((result) => { console.log(result); return result * 2; })
+  .then((result) => { console.log(result); return result * 2; })
+
+console.log("There");
+\end{lstlisting}
+
+\begin{console}
+Here
+There
+1
+2
+4
+\end{console}
+
+Come funziona, se la Promise originale si risolve una sola volta con il valore
+1? Il punto è che \textbf{ogni invocazione di \code{.then()} restituisce una
+nuova Promise}, che rappresenta il completamento del gestore stesso. Quando un
+gestore restituisce un valore, quel valore diventa il risultato della nuova
+Promise, che alimenta il \code{.then()} successivo.
+
+\begin{warningbox}{{Concatenare non è registrare più gestori}}
+  I due frammenti seguenti sembrano simili ma fanno cose molto diverse.
+
+\begin{lstlisting}[style=js]
+// concatenazione: stampa 1, poi 2, poi 4
+promise
+  .then((r) => { console.log(r); return r * 2; })
+  .then((r) => { console.log(r); return r * 2; })
+  .then((r) => { console.log(r); return r * 2; });
+\end{lstlisting}
+
+\begin{lstlisting}[style=js]
+// tre gestori indipendenti sulla STESSA promise: stampa 1, 1, 1
+promise.then((r) => { console.log(r); return r * 2; });
+promise.then((r) => { console.log(r); return r * 2; });
+promise.then((r) => { console.log(r); return r * 2; });
+\end{lstlisting}
+
+  Nel primo caso si costruisce una catena, in cui ogni anello riceve il
+  risultato del precedente. Nel secondo si registrano tre gestori indipendenti
+  sulla \textbf{stessa} Promise, che ricevono tutti e tre lo stesso valore
+  iniziale.
+\end{warningbox}
+
+\begin{esempio}{Errori in una catena}
+\begin{lstlisting}[style=js, name=catena-errori.js]
+promise.finally(() => {
+  console.log("Promise settled");
+}).then((r) => {
+  console.log(r);
+  return r * 2;
+}).then((r) => {
+  console.log(r);
+  throw new Error("Oops");   // equivale a un reject()
+  return r * 2;              // mai raggiunta
+}).then((r) => {
+  console.log(r);            // saltata: la catena e' in errore
+  return r * 2;
+}).catch((error) => {
+  console.warn(error.message);
+});
+\end{lstlisting}
+
+Quando un anello della catena fallisce, tutti i \code{.then()} successivi
+vengono \textbf{saltati} fino al primo \code{.catch()}. È lo stesso
+comportamento di un'eccezione che risale i blocchi \code{try}, e risolve
+elegantemente il problema della gestione degli errori che rendeva pesanti le
+callback.
+\end{esempio}
+
+\subsection{I metodi statici della classe Promise}
+
+Spesso serve coordinare \textbf{più} operazioni asincrone. La classe
+\code{Promise} offre quattro metodi statici per farlo.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{8.4cm}@{}}
+  \textbf{Metodo} & \textbf{Si risolve\ldots} \\
+  \code{Promise.all}        & quando \textbf{tutte} si risolvono; rifiuta appena
+                              una rifiuta \\
+  \code{Promise.allSettled} & quando tutte sono \textit{settled}, qualunque sia
+                              l'esito \\
+  \code{Promise.race}       & appena la \textbf{prima} si sistema, in un senso o
+                              nell'altro \\
+  \code{Promise.any}        & appena la prima si \textbf{risolve} (ignora i
+                              rifiuti) \\
+\end{tabular}
+\end{center}
+
+\begin{esempio}{Promise.all}
+Prende in ingresso un array di Promise e restituisce una nuova Promise che
+rappresenta il completamento di tutte. Il risultato è un array, in cui ogni
+Promise di ingresso contribuisce con un elemento, \textbf{nell'ordine di
+partenza} e non in quello di completamento.
+
+\begin{lstlisting}[style=js, name=promise-all.js]
+let prom = Promise.all([
+  new Promise(resolve => setTimeout(() => resolve(3), 3000)),
+  new Promise(resolve => setTimeout(() => resolve(2), 2000)),
+  new Promise(resolve => setTimeout(() => resolve(1), 1000)),
+]).then((result) => {
+  console.log(result);   // Array(3) [3, 2, 1]
+});
+\end{lstlisting}
+\end{esempio}
+
+\begin{esempio}{Promise.allSettled}
+\code{Promise.all} rifiuta se una qualunque delle Promise di ingresso rifiuta:
+è un \textit{tutto o niente}. \code{Promise.allSettled} attende invece che tutte
+si sistemino e restituisce un array di oggetti che descrivono lo stato di
+ciascuna.
+
+\begin{lstlisting}[style=js, name=promise-allsettled.js]
+let p = Promise.allSettled([
+  new Promise((res, rej) => { setTimeout(() => rej(new Error("Oops")), 1000) }),
+  new Promise((res, rej) => { setTimeout(() => res(1), 2000) }),
+]).then((result) => {
+  console.log(result);
+}).catch((err) => {
+  console.warn(err.message);   // non viene eseguito
+});
+\end{lstlisting}
+\end{esempio}
+
+\begin{esempio}{Promise.race e Promise.any}
+\code{Promise.race} si sistema appena una delle Promise di ingresso si sistema,
+e ne assume il risultato (o l'errore).
+
+\begin{lstlisting}[style=js, name=promise-race.js]
+let p = Promise.race([
+  new Promise((res, rej) => { setTimeout(() => rej(new Error("Oops")), 2000) }),
+  new Promise((res, rej) => { setTimeout(() => res(1), 1000) }),
+]).then((result) => {
+  console.log(result);   // 1: la seconda arriva prima
+});
+
+let p2 = Promise.race([
+  new Promise((res, rej) => { setTimeout(() => rej(new Error("Oops")), 1000) }),
+  new Promise((res, rej) => { setTimeout(() => res(1), 2000) }),
+]).catch((err) => {
+  console.warn(err.message);   // Oops: qui arriva prima il rifiuto
+});
+\end{lstlisting}
+
+\code{Promise.any} è simile, ma attende la prima Promise \textbf{risolta},
+ignorando i rifiuti.
+
+\begin{lstlisting}[style=js, name=promise-any.js]
+let p = Promise.any([
+  new Promise((res, rej) => { setTimeout(() => res(3), 3000) }),
+  new Promise((res, rej) => { setTimeout(() => rej(new Error("Oops")), 1000) }),
+  new Promise((res, rej) => { setTimeout(() => res(1), 2000) }),
+]).then((result) => {
+  console.log(result);   // 1
+});
+\end{lstlisting}
+
+Se \textbf{tutte} rifiutano, \code{Promise.any} rifiuta con un
+\code{AggregateError} che raccoglie tutti gli errori.
+
+\begin{lstlisting}[style=js, name=promise-any2.js]
+let p = Promise.any([
+  new Promise((res, rej) => { setTimeout(() => rej(new Error("Woah")), 2000) }),
+  new Promise((res, rej) => { setTimeout(() => rej(new Error("Oops")), 1000) }),
+  new Promise((res, rej) => { setTimeout(() => rej(new Error("Ouch")), 1000) }),
+]).catch((err) => {
+  console.warn(err.message);             // No promise in Promise.any was resolved
+  console.warn(err.errors[0].message);   // Woah
+  console.warn(err.errors[1].message);   // Oops
+  console.warn(err.errors[2].message);   // Ouch
+});
+\end{lstlisting}
+\end{esempio}
+
+Infine, \code{Promise.resolve(result)} e \code{Promise.reject(error)} creano
+Promise \textbf{già sistemate}. Si usano soprattutto per compatibilità, quando
+una funzione deve restituire una Promise anche se il valore è già disponibile.
+
+\begin{lstlisting}[style=js]
+let p = Promise.resolve(1);   // come new Promise(resolve => resolve(1))
+p.then(result => console.log(result));
+\end{lstlisting}
+
+\section{async e await}
+
+Il JavaScript moderno include una sintassi speciale per lavorare con le
+Promise, basata su due parole chiave: \code{async} e \code{await}.
+
+\subsection{async}
+
+La parola chiave \code{async} si mette davanti a una funzione e garantisce che
+quella funzione restituisca \textbf{sempre} una Promise:
+
+\begin{itemize}
+  \item qualunque altro valore restituito viene implicitamente avvolto in una
+        Promise risolta;
+  \item gli errori sollevati vengono avvolti in una Promise rifiutata.
+\end{itemize}
+
+\begin{lstlisting}[style=js, name=async.js]
+async function f() {
+  return new Promise(/* ... */);
+}
+
+async function g() {
+  return 1;              // equivale a Promise.resolve(1)
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=async-uso.js]
+console.log("Here");
+
+async function f() {
+  // throw new Error("Ouch");
+  return 1;
+}
+
+f().then(console.log).catch(console.warn);
+
+console.log("There");
+\end{lstlisting}
+
+\begin{console}
+Here
+There
+1
+\end{console}
+
+\subsection{await}
+
+La parola chiave \code{await} si può usare \textbf{solo dentro funzioni async},
+e sospende l'esecuzione finché una Promise non è sistemata.
+
+\begin{lstlisting}[style=js, name=await.js]
+console.log("Here");
+
+async function f() {
+  let promise = new Promise(function (res, rej) {
+    setTimeout(() => { res("Done!") }, 2000);
+  });
+
+  let result = await promise;   // l'esecuzione si ferma qui
+  console.log(`After Await. Result is ${result}`);
+  return result;
+}
+
+f().then(console.log);
+
+console.log("There");
+\end{lstlisting}
+
+\begin{console}
+Here
+There
+After Await. Result is Done!
+Done!
+\end{console}
+
+\info{Perché async/await è più leggibile}{
+  \code{await} permette di scrivere codice asincrono che \textbf{si legge come
+  codice sincrono}: niente catene di \code{.then()}, niente annidamenti. In più,
+  dentro una funzione \code{async} si possono usare i normali blocchi
+  \code{try/catch} per gestire gli errori, invece di \code{.catch()}.
+
+  È importante però capire che si tratta di \textbf{zucchero sintattico} sopra
+  le Promise: \code{await} non blocca il browser, sospende soltanto la funzione
+  \code{async} in cui si trova, mentre il resto del programma continua a girare.
+  Ecco perché nell'esempio \code{"There"} viene stampato prima del risultato.}
+
+\section{Richieste di rete}
+
+JavaScript può anche \textbf{scaricare dati} da Internet. Nel JavaScript
+tradizionale si usavano oggetti \code{XMLHttpRequest} e delle callback per
+gestire gli eventi di stato.
+
+\begin{lstlisting}[style=html, name=xhr.html]
+<h1>Cat Facts</h1>
+<button id="btn">Click Here To Load a Cat Fact</button>
+<p id="fact"></p>
+<script>
+  let btn = document.getElementById("btn");
+
+  btn.onclick = () => {
+    let req = new XMLHttpRequest();
+    req.onload = handleFact;
+    req.open("GET", "https://catfact.ninja/fact");
+    req.send();
+
+    function handleFact(result) {
+      let fact = JSON.parse(this.responseText);
+      document.getElementById("fact").innerHTML = fact.fact;
+    }
+  }
+</script>
+\end{lstlisting}
+
+\subsection{L'API fetch}
+
+Il modo moderno di effettuare richieste HTTP da JavaScript è la funzione
+\code{fetch()}, che prende in ingresso una URL e un insieme opzionale di
+opzioni, e restituisce una \textbf{Promise} che si risolve in un oggetto
+\code{Response}.
+
+\begin{lstlisting}[style=js]
+let promise = fetch("url", [options]);
+\end{lstlisting}
+
+Le opzioni permettono di specificare il metodo HTTP, gli header della richiesta
+e altro ancora: qui si ricongiungono le nozioni su HTTP viste nel primo
+capitolo.
+
+\subsection{Lavorare con la risposta}
+
+La Promise restituita da \code{fetch} si risolve \textbf{appena arrivano gli
+header} della risposta. A quel punto possiamo già controllare il codice di stato
+e gli header, ma il \textbf{corpo} potrebbe non essere ancora disponibile.
+
+\begin{lstlisting}[style=js, name=fetch-response.js]
+async function f() {
+  let response = await fetch("./example.json");
+
+  // un header specifico
+  console.log(response.headers.get('Content-Type'));   // application/json
+
+  // iterazione su tutti gli header della risposta
+  for (let [key, value] of response.headers) {
+    console.log(`Header ${key}: ${value}`);
+  }
+
+  console.log(response.status);
+
+  if (response.ok) {
+    console.log("Request was successful");
+  } else {
+    console.log("Some error occurred");
+  }
+}
+\end{lstlisting}
+
+Per ottenere il corpo, l'oggetto \code{Response} offre diversi metodi, anch'essi
+basati su Promise.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.1cm}}>{\raggedright\arraybackslash}p{8.0cm}@{}}
+  \textbf{Metodo} & \textbf{Restituisce} \\
+  \code{.text()}        & il corpo della risposta come testo \\
+  \code{.json()}        & il corpo interpretato come JSON \\
+  \code{.blob()}        & un \code{Blob} (dati binari con un tipo) \\
+  \code{.arrayBuffer()} & un \code{ArrayBuffer} (rappresentazione binaria di
+                          basso livello) \\
+  \code{.formData()}    & un oggetto \code{FormData} (dati inviati da un form) \\
+\end{tabular}
+\end{center}
+
+\error{Il corpo si può leggere una volta sola}{
+  Si può scegliere \textbf{un solo} metodo di lettura del corpo. Se si è già
+  invocato \code{response.text()}, una successiva \code{response.json()} non
+  funzionerà, perché il contenuto del corpo è già stato consumato.}
+
+\begin{esempio}{Leggere una risposta JSON}
+\begin{lstlisting}[style=js, name=fetch-json.js]
+async function f() {
+  let response = await fetch("https://catfact.ninja/fact");
+
+  if (response.ok) {
+    let fact = await response.json();
+    document.getElementById("fact").innerHTML = fact.fact;
+  } else {
+    console.log("Some error occurred");
+  }
+}
+\end{lstlisting}
+
+Da confrontare con la versione basata su \code{XMLHttpRequest} vista poco fa:
+stesso risultato, molto meno codice e nessuna callback annidata.
+\end{esempio}
+
+\begin{esempio}{Scaricare dati binari con blob}
+\begin{lstlisting}[style=html, name=fetch-blob.html]
+<input id="msg" placeholder="Insert your message here" type="text">
+<button id="btn">Generate QR</button>
+<img id="img">
+<script>
+  document.getElementById("btn").onclick = () => {
+    let msg = document.getElementById("msg").value;
+    let url = `https://image-charts.com/chart?chs=200x200&cht=qr&chl=${msg}`;
+
+    fetch(url)
+      .then((response) => {
+        return response.blob();
+      })
+      .then((blob) => {
+        let img = document.getElementById("img");
+        img.src = URL.createObjectURL(blob);
+      });
+  }
+</script>
+\end{lstlisting}
+
+Il \code{Blob} scaricato viene trasformato in una URL locale temporanea con
+\code{URL.createObjectURL()}, che si può assegnare direttamente all'attributo
+\attr{src} di un'immagine.
+\end{esempio}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{The Modern JavaScript Tutorial} \\
+        \urlx{https://javascript.info/} \\
+        Parte 2: \textit{Storing data in the browser} (4.1, 4.2). \\
+        Parte 1: \textit{Promises and async/await} (11.1--11.5, 11.8). \\
+        Parte 3: \textit{Network requests} (3.1, 3.8).
+  \item \textbf{Eloquent JavaScript} (3\textsuperscript{a} edizione), Marijn
+        Haverbeke. \\
+        \urlx{https://eloquentjavascript.net/} \\
+        Capitoli 11 e 18.
+  \item \textbf{JavaScript Reference} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference}
+\end{itemize}

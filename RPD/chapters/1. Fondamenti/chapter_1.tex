@@ -1,0 +1,1574 @@
+\chapter{Reti, topologie e categorie}
+
+Questo primo capitolo è \emph{terminologico}: introduce il vocabolario con cui parleremo per
+tutto il resto del corso. Non è difficile, ma non va sottovalutato: termini come \emph{host},
+\emph{link}, \emph{throughput}, \emph{commutazione di pacchetto}, \emph{ISP} torneranno in
+ogni capitolo, e all'esame vanno usati con precisione.
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.25cm]
+  \node[lay app, minimum width=3.2cm] (a) {Applicazioni};
+  \node[lay tra, minimum width=3.2cm, below=0pt of a] (t) {Trasporto};
+  \node[lay net, minimum width=3.2cm, below=0pt of t] (n) {Rete};
+  \node[lay link, minimum width=3.2cm, below=0pt of n] (l) {Collegamento e fisico};
+  \node[lbl, right=0.4cm of a, anchor=west, text width=8.5cm, align=left] {il Web, la posta, i messaggi: quello che usiamo ogni giorno};
+  \node[lbl, right=0.4cm of t, anchor=west, text width=8.5cm, align=left] {come un flusso di byte sopravvive a una rete che perde pezzi};
+  \node[lbl, right=0.4cm of n, anchor=west, text width=8.5cm, align=left] {indirizzi, router, scelta del percorso};
+  \node[lbl, right=0.4cm of l, anchor=west, text width=8.5cm, align=left] {frame, errori, collisioni e cavi veri};
+  \draw[-{Stealth[length=3mm]}, very thick, primary] ([xshift=-0.5cm]a.north west) -- ([xshift=-0.5cm]l.south west);
+\end{tikzpicture}
+\end{center}
+
+Il corso parte dall'alto (le applicazioni) e scende verso il basso; lungo il percorso si
+scrivono programmi in C sui socket, e si chiude con sicurezza e privatezza. Oggi, però, si
+risponde a due domande più semplici: \textbf{di cosa è fatta una rete} e \textbf{come si
+classificano le reti}.
+
+% ══════════════════════════════════════════════════════════════
+\section{Che cos'è una rete di calcolatori}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Rete di calcolatori}{
+    Una \textbf{rete di calcolatori} è una collezione di dispositivi di calcolo
+    \textbf{interconnessi} e \textbf{autonomi}. Due dispositivi sono interconnessi se possono
+    \textbf{scambiarsi informazione}.
+}
+
+Le due parole chiave vanno prese sul serio.
+
+\begin{itemize}
+    \item \textbf{Autonomi}: nessun dispositivo comanda gli altri. Ognuno ha la propria capacità di
+          calcolo e funziona per conto suo: se un nodo si spegne, gli altri continuano a lavorare.
+    \item \textbf{Interconnessi}: esiste un mezzo attraverso cui i dispositivi si scambiano bit. Può
+          essere rame, fibra ottica o onde radio: alla definizione \emph{non importa}.
+\end{itemize}
+
+\begin{esempio}{Autonomo o no?}
+Un disco SSD collegato con due metri di cavo USB al vostro portatile \textbf{non} forma una rete
+con il portatile: è una periferica, completamente controllata dal calcolatore a cui è attaccata.
+Il vostro smartphone e il portatile collegati allo stesso Wi-Fi, invece, sono due dispositivi
+autonomi che si scambiano informazione: formano una rete. Anche un piccolo sensore che fa
+misure e le trasmette è un dispositivo autonomo. ``Dispositivo di calcolo'' non significa
+necessariamente ``computer'' in senso stretto.
+\end{esempio}
+
+Le reti, a loro volta, possono essere collegate tra loro formando reti più grandi.
+L'esempio per eccellenza è \textbf{Internet}, che è appunto una \emph{rete di reti}.
+
+\info{L'unica trasmissione ``vera'' è quella fisica}{
+    Quando scaricate un film da un server, a voi sembra che il vostro programma parli direttamente
+    con il programma sul server. In realtà l'informazione viaggia solo come \textbf{fenomeno fisico}
+    (impulsi elettrici, luce, onde radio). Tutte le altre ``conversazioni'' tra programmi sono
+    \emph{virtuali}: poggiano sulla trasmissione fisica. Questa idea diventerà centrale nel prossimo
+    capitolo, con il modello a strati.
+}
+
+\subsection{A cosa servono le reti}
+
+Gli usi principali delle reti sono:
+
+\begin{itemize}
+    \item \textbf{Accesso all'informazione}: pagine Web, basi di dati remote, file condivisi.
+    \item \textbf{Comunicazione tra persone}: posta elettronica, messaggistica, videochiamate, VoIP.
+    \item \textbf{Commercio elettronico}: acquisti online, home banking.
+    \item \textbf{Intrattenimento}: streaming audio e video, giochi multiutente.
+    \item \textbf{Internet of Things (IoT)}: oggetti ``non informatici'' connessi alla rete, come
+          elettrodomestici, termostati, tapparelle, sensori, contatori dell'energia.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Client e server}
+% ══════════════════════════════════════════════════════════════
+
+Uno dei concetti fondamentali delle reti è la coppia \textbf{client}--\textbf{server}
+(cliente e servitore). L'idea è la stessa del bar: il cliente chiede un caffè, il barista
+lo serve. Il barista è sempre lì, pronto, e serve tanti clienti uno dopo l'altro.
+
+\dfn{Client e server}{
+    Un \textbf{server} è un'entità che \textbf{possiede un'informazione o offre un servizio} e
+    resta in attesa di richieste. Un \textbf{client} è un'entità che \textbf{richiede esplicitamente}
+    quell'informazione o quel servizio al server. Un singolo server gestisce tipicamente le
+    richieste di centinaia o migliaia di client.
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.55\linewidth]{cap01/client_server.png}
+    \caption{Una rete con due client e un server (da Tanenbaum).}
+\end{figure}
+
+Esempi che usate già tutti i giorni: il \emph{browser} è un client, il \emph{server Web}
+dell'università è un server; il programma di posta sul telefono è un client, il server di
+posta di Ateneo, che custodisce la vostra casella e le vostre credenziali, è un server.
+
+\subsection{Client e server sono processi}
+
+Nelle figure disegniamo client e server come macchine, ma chi comunica davvero non è una
+macchina: è un \textbf{processo}, cioè un programma in esecuzione su quella macchina.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{cap01/client_server_processi.png}
+    \caption{La comunicazione avviene tra un processo client e un processo server.}
+\end{figure}
+
+Lo schema di interazione è sempre lo stesso: il processo client \textbf{invia un messaggio di
+richiesta} e poi \textbf{attende una risposta}; il processo server riceve la richiesta, esegue
+un'azione (per esempio legge un file dal disco) e \textbf{invia la risposta}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.9]
+  \timeline{c}{0}{Processo client}{4.6}
+  \timeline{s}{7}{Processo server}{4.6}
+  \draw[msg, netblue] (0,-0.5) -- node[lbl, above, sloped] {richiesta (``dammi la pagina X'')} (7,-1.5);
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (7.2,-1.5) -- (7.2,-2.9) node[midway, right=6pt, lbl, text width=3cm, align=left] {elabora: cerca X,\\ prepara la risposta};
+  \draw[msg, netgreen] (7,-2.9) -- node[lbl, above, sloped] {risposta (contenuto di X)} (0,-3.9);
+  \draw[decorate, decoration={brace, amplitude=5pt}] (-0.2,-0.5) -- (-0.2,-3.9) node[midway, left=6pt, lbl] {attende};
+\end{tikzpicture}
+\caption{Lo scambio richiesta--risposta tra due processi. Il tempo scorre verso il basso.}
+\end{figure}
+
+\info{La forma di (quasi) tutto ciò che scriveremo}{
+    Due processi, uno per parte, che si scambiano messaggi secondo regole concordate: è la forma
+    di quasi tutti i programmi che scriveremo in questo corso, a partire da quelli in C con i socket.
+}
+
+\subsection{Peer-to-peer: niente ruoli fissi}
+
+L'architettura client-server non è l'unica possibile.
+
+\dfn{Peer-to-peer (P2P)}{
+    In un sistema \textbf{peer-to-peer} (da pari a pari) non esistono client e server fissi: ogni
+    partecipante (\emph{peer}) può agire \textbf{sia da client sia da server}. Non esiste un database
+    centrale di ciò che è disponibile: ogni peer chiede ai peer che conosce.
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth]{cap01/p2p.png}
+    \caption{In un sistema peer-to-peer ogni nodo può chiedere e fornire servizi.}
+\end{figure}
+
+Poiché non c'è un elenco centrale, i protocolli P2P devono prevedere dei meccanismi per
+\textbf{scoprire} gli altri partecipanti e ciò che offrono. In cambio, il carico è distribuito:
+ogni peer che scarica un file può anche ridistribuirlo ad altri (lo vedremo con BitTorrent).
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{3.2cm}p{5.6cm}p{5.6cm}}
+\toprule
+ & \textbf{Client-server} & \textbf{Peer-to-peer} \\
+\midrule
+Ruoli & fissi: chi chiede e chi serve & ogni peer fa entrambe le cose \\
+Punto centrale & il server (sempre acceso, indirizzo noto) & nessuno, o solo di supporto \\
+Scalabilità & il server deve reggere tutti i client & ogni nuovo peer aggiunge capacità \\
+Problemi tipici & costo e guasto del server & scoperta dei peer, sicurezza, affidabilità \\
+Esempi & Web, posta elettronica & BitTorrent, alcune parti di VoIP \\
+\bottomrule
+\end{tabular}
+\caption{Confronto tra le due architetture.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Internet: una rete di reti}
+% ══════════════════════════════════════════════════════════════
+
+Anche se la usiamo tutti i giorni, non è affatto ovvio che cosa sia Internet.
+
+\dfn{Internet}{
+    \textbf{Internet} è una \textbf{rete di reti} (\emph{internetwork}): un insieme di reti
+    \textbf{indipendenti}, con tecnologie diverse e gestite da organizzazioni diverse, collegate tra
+    loro attraverso i \textbf{fornitori di accesso} (ISP) in modo da comportarsi come
+    \textbf{un'unica rete}. Il nome stesso lo dice: \emph{inter-net}, rete tra reti.
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\linewidth]{cap01/internet_rete_di_reti.png}
+    \caption{Reti domestiche, aziendali, mobili e di data center, collegate attraverso gli ISP (da Kurose).}
+\end{figure}
+
+Guardiamo la figura partendo da casa nostra:
+
+\begin{itemize}
+    \item La \textbf{rete di casa} (\emph{home network}) collega telefoni, portatili, stampante,
+          televisore. È gestita dal \textbf{router di casa}, in modo indipendente: il vostro
+          fornitore di accesso non sa e non si occupa di come sono organizzati i dispositivi dentro
+          casa vostra.
+    \item Il router di casa si collega alla rete di un \textbf{ISP locale o regionale}, quello a cui
+          pagate l'abbonamento.
+    \item Allo stesso modo, la \textbf{rete aziendale} (\emph{enterprise network}, per esempio la
+          rete dell'Università) e la \textbf{rete mobile} del vostro operatore telefonico sono reti
+          a sé, ciascuna con la propria gestione.
+    \item Gli ISP locali e regionali sono a loro volta collegati a \textbf{ISP nazionali o globali},
+          che trasportano il traffico tra regioni e continenti.
+    \item Accanto a loro ci sono le reti dei \textbf{content provider} e dei \textbf{data center}
+          (Google, Netflix, \dots), che ospitano i servizi che usiamo.
+\end{itemize}
+
+Ogni rete è gestita e integrata nella rete dell'ISP a cui si appoggia; gli ISP sono integrati
+in ISP più grandi, e così via, fino a formare un'unica struttura: Internet.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    every node/.style={font=\footnotesize\sffamily},
+    isp/.style={ellipse, draw=netblue!70, fill=cloudbg, minimum width=2.6cm, minimum height=0.9cm, align=center},
+    lan/.style={rounded corners=3pt, draw=netgreen!70!black, fill=netgreen!12, minimum width=2.3cm, minimum height=0.9cm, align=center}]
+  \node[isp, fill=netblue!25, minimum width=6.5cm] (glob) at (0,0) {ISP nazionali / globali\\(dorsali, backbone)};
+  \node[isp] (reg1) at (-3.8,-1.8) {ISP regionale};
+  \node[isp] (reg2) at (3.8,-1.8) {ISP regionale};
+  \node[isp] (acc1) at (-5.2,-3.6) {ISP di accesso};
+  \node[isp] (acc2) at (-1.8,-3.6) {ISP di accesso};
+  \node[isp] (mob) at (1.9,-3.6) {operatore\\mobile};
+  \node[isp] (acc3) at (5.3,-3.6) {ISP di accesso};
+  \node[lan] (home) at (-5.8,-5.4) {\icon[0.45cm]{laptop}\icon[0.3cm]{smartphone}\\rete di casa};
+  \node[lan] (home2) at (-3.3,-5.4) {\icon[0.45cm]{pc}\icon[0.45cm]{laptop}\\rete di casa};
+  \node[lan] (ent) at (-0.6,-5.4) {\icon[0.45cm]{pc}\icon[0.3cm]{server}\\rete aziendale};
+  \node[lan] (phones) at (2.1,-5.4) {\icon[0.3cm]{smartphone}\icon[0.3cm]{smartphone}\\telefoni};
+  \node[lan] (dc) at (5.3,-5.4) {\icon[0.3cm]{server}\icon[0.3cm]{server}\\data center};
+  \foreach \a/\b in {glob/reg1, glob/reg2, reg1/acc1, reg1/acc2, reg2/mob, reg2/acc3, acc1/home, acc1/home2, acc2/ent, mob/phones, acc3/dc}
+     \draw[wired] (\a) -- (\b);
+  \draw[wired, dashed, netorange] (dc.north east) to[out=70, in=0] node[pos=0.55, right, lbl, text=netorange] {peering diretto\\del content provider} (glob.east);
+  \node[lbl, text=primary] at (0,0.95) {\bfseries Internet = l'insieme di tutte queste reti interconnesse};
+\end{tikzpicture}
+\caption{Ogni rete si appoggia a un ISP, e gli ISP si appoggiano a ISP più grandi: il risultato è una rete di reti.}
+\end{figure}
+
+La cosa straordinaria è che, nonostante tecnologie, velocità, protocolli e contratti diversi,
+tutto \emph{funziona come se fossimo sulla stessa rete}. Potete chiamare un parente in Nuova
+Zelanda: i vostri dati attraversano decine di reti diverse, ma l'applicazione non se ne accorge.
+Non è magia, è un'abilissima progettazione dei protocolli.
+
+\subsection{Il collante: l'Internet Protocol (IP)}
+
+Il protocollo che rende uniforme questa enorme eterogeneità è l'\textbf{Internet Protocol (IP)}.
+
+\dfn{Internet Protocol (IP)}{
+    L'\textbf{Internet Protocol} è il protocollo che permette di consegnare pacchetti di dati
+    (\textbf{datagrammi}) da un host sorgente a un host destinazione attraverso una rete di reti.
+    Ogni interfaccia collegata a Internet ha un \textbf{indirizzo IP}, e ogni datagramma porta con
+    sé l'indirizzo del mittente e quello del destinatario. I router leggono l'indirizzo di
+    destinazione e inoltrano il datagramma, salto dopo salto, verso la rete giusta.
+}
+
+Tre caratteristiche di IP da ricordare fin da ora:
+
+\begin{itemize}
+    \item \textbf{È comune a tutti}: qualunque tecnologia ci sia sotto (Ethernet, Wi-Fi, fibra, 4G/5G)
+          e qualunque applicazione ci sia sopra (Web, posta, videochiamate), in mezzo c'è sempre IP.
+          È l'unico punto su cui tutti devono essere d'accordo.
+    \item \textbf{Nasconde le differenze}: le applicazioni vedono un'unica rete, non le decine di reti
+          attraversate.
+    \item \textbf{È ``best effort''}: IP fa del suo meglio per consegnare i datagrammi, ma non
+          garantisce né che arrivino, né che arrivino in ordine. Le garanzie, quando servono, vengono
+          aggiunte sopra (da TCP, come vedremo).
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \fill[lapp!70] (-5,2.6) -- (5,2.6) -- (3.2,1.4) -- (-3.2,1.4) -- cycle;
+  \node at (0,2.05) {Web \quad posta \quad DNS \quad streaming \quad VoIP \quad giochi \quad \dots};
+  \fill[ltra] (-3.2,1.4) -- (3.2,1.4) -- (1.6,0.6) -- (-1.6,0.6) -- cycle;
+  \node at (0,1.0) {TCP \quad UDP};
+  \fill[lnet] (-1.6,0.6) rectangle (1.6,-0.2);
+  \node at (0,0.2) {\bfseries IP};
+  \fill[llink] (-1.6,-0.2) -- (1.6,-0.2) -- (3.2,-1.0) -- (-3.2,-1.0) -- cycle;
+  \node at (0,-0.6) {Ethernet \quad Wi-Fi \quad 4G/5G};
+  \fill[lphy] (-3.2,-1.0) -- (3.2,-1.0) -- (5,-2.2) -- (-5,-2.2) -- cycle;
+  \node at (0,-1.6) {rame \quad fibra \quad radio \quad satellite \quad \dots};
+  \draw[<-, thick, primary] (1.8,0.2) -- (5.2,0.2) node[right, lbl, text=primary, align=left] {la ``vita stretta''\\della clessidra};
+\end{tikzpicture}
+\caption{La clessidra di Internet: tante applicazioni sopra, tante tecnologie sotto, un solo protocollo in mezzo.}
+\end{figure}
+
+Studieremo IP in dettaglio nella Parte IV; per ora basta sapere che è lui a tenere insieme Internet.
+
+% ══════════════════════════════════════════════════════════════
+\section{Breve storia di Internet}
+% ══════════════════════════════════════════════════════════════
+
+L'idea di una rete ``universale'' fu teorizzata da alcuni ricercatori (il più noto è
+J.C.R.~Licklider) già negli anni '50--'60. Le tappe da ricordare sono poche.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \draw[-{Stealth[length=3mm]}, line width=2pt, primary] (0,0) -- (15.5,0);
+  \foreach \x/\y/\t/\d in {0.8/1969/ARPANET/{4 nodi: UCLA, SRI,\\UCSB, Utah}, 4.0/1974/TCP e IP/{Kahn e Cerf\\progettano TCP/IP}, 7.2/1986/NSFNET/{dorsale TCP/IP\\per la ricerca}, 10.4/1990/fine ARPANET/{ARPANET viene\\dismessa}, 13.6/1995/fine NSFNET/{cadono le ultime\\restrizioni commerciali}} {
+    \fill[primary] (\x,0) circle (4pt);
+    \node[above=6pt, font=\bfseries\sffamily] at (\x,0) {\y};
+    \node[above=20pt, text=primary!80!black] at (\x,0) {\t};
+    \node[below=6pt, align=center] at (\x,0) {\d};
+  }
+\end{tikzpicture}
+\caption{Le tappe principali: da rete di ricerca a Internet commerciale.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{1969 --- ARPANET}. L'agenzia ARPA del Dipartimento della Difesa statunitense finanzia
+          una rete di ricerca per università e centri di ricerca. Alla fine del 1969 ha quattro nodi:
+          UCLA, SRI (Stanford Research Institute), UC Santa Barbara e Utah. Reti simili nascevano in modo
+          indipendente negli USA e in Europa.
+    \item \textbf{1974 --- TCP/IP}. Robert Kahn e Vinton Cerf progettano il \emph{Transmission Control
+          Protocol} (TCP) e l'\emph{Internet Protocol} (IP), i protocolli su cui poggia ancora oggi Internet.
+    \item \textbf{1986 --- NSFNET}. La National Science Foundation finanzia una dorsale basata su TCP/IP.
+          Si va verso l'idea di rete di reti, ma sia ARPANET sia NSFNET vietano il traffico commerciale.
+    \item \textbf{1990} --- ARPANET viene dismessa.
+    \item \textbf{1995} --- anche NSFNET viene dismessa e con lei cade l'ultima restrizione al traffico
+          commerciale: nella seconda metà degli anni '90 nasce l'Internet che usiamo.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.45\linewidth}\centering
+      \includegraphics[width=\linewidth]{cap01/arpanet_1969.png}\\
+      {\small (a) ARPANET nel 1969}
+    \end{minipage}\hfill
+    \begin{minipage}{0.45\linewidth}\centering
+      \includegraphics[width=\linewidth]{cap01/nsfnet_1992.png}\\
+      {\small (b) la dorsale NSFNET nel 1992}
+    \end{minipage}
+    \caption{Due fotografie della rete prima dell'Internet commerciale.}
+\end{figure}
+
+\info{Perché la storia conta}{
+    Internet non è stata progettata come un sistema unico e coerente: è cresciuta
+    \textbf{aggregando reti preesistenti e diverse tra loro}. Per questo i suoi protocolli sono
+    progettati per tollerare l'eterogeneità. Prima di Internet esistevano reti non integrate tra loro
+    (per esempio il Minitel francese), lente e poco pervasive, che non ebbero lo stesso impatto.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Di cosa è fatta una rete: dispositivi, collegamenti, host}
+% ══════════════════════════════════════════════════════════════
+
+Fisicamente, una rete è composta da due grandi famiglie di elementi.
+
+\dfn{Infrastruttura e host}{
+    \begin{itemize}
+      \item L'\textbf{infrastruttura} è l'insieme dei \textbf{dispositivi di rete} e dei
+            \textbf{collegamenti} (\emph{link}) tra loro. È dedicata esclusivamente a far comunicare i
+            dispositivi, non a eseguire applicazioni per gli utenti.
+      \item Gli \textbf{host}, detti anche \textbf{sistemi terminali} (\emph{end systems}), sono le
+            macchine che \textbf{eseguono le applicazioni} e che producono o consumano i dati.
+    \end{itemize}
+}
+
+\subsection{I dispositivi dell'infrastruttura}
+
+Nelle figure di rete si usano dei simboli standard, in larga parte introdotti da Cisco, per
+indicare i dispositivi. Conviene impararli subito.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\centering\arraybackslash}m{2cm} m{2.3cm} m{10cm}}
+\toprule
+\textbf{Simbolo} & \textbf{Dispositivo} & \textbf{Che cosa fa} \\
+\midrule
+\icon[1.3cm]{router} & \textbf{Router} & Collega \textbf{reti diverse} e inoltra i pacchetti verso la rete
+di destinazione, scegliendo ogni volta da quale collegamento farli uscire (in base all'indirizzo IP).
+È il dispositivo che tiene insieme Internet. \\
+\icon[1.1cm]{accesspoint} & \textbf{Access point} & Punto di accesso \textbf{senza fili}: collega i
+dispositivi Wi-Fi alla rete cablata, facendo da ``ponte'' tra le onde radio e il cavo. \\
+\icon[1.2cm]{switch} & \textbf{Switch} & Collega più dispositivi \textbf{della stessa rete locale}.
+Riceve un frame su una porta e lo inoltra \textbf{solo} sulla porta a cui è collegato il destinatario
+(in base all'indirizzo fisico, detto MAC). \\
+\icon[1.2cm]{hub} & \textbf{Hub} & Il ``fratello povero'' dello switch: tutto ciò che riceve su una
+porta lo \textbf{ripete su tutte le altre}, senza guardare a chi è destinato. Oggi è quasi del tutto
+sostituito dagli switch. \\
+\bottomrule
+\end{tabular}
+\caption{I principali dispositivi di rete e i loro simboli.}
+\end{table}
+
+\info{Il router di casa fa tante cose insieme}{
+    Il ``router'' che l'operatore vi installa in casa è in realtà un apparecchio che contiene
+    \emph{più} dispositivi: un router (verso l'ISP), uno switch (le porte Ethernet sul retro), un
+    access point (il Wi-Fi) e spesso anche il modem. Nelle figure li disegneremo separati.
+}
+
+\subsection{Gli host}
+
+\begin{center}
+\begin{tabular}{cccc}
+\icon[1.4cm]{laptop} & \icon[0.8cm]{server} & \icon[1.3cm]{smartphone} & \icon[1.1cm]{pc} \\
+\small Laptop & \small Server & \small Smartphone & \small PC
+\end{tabular}
+\end{center}
+
+Sono host il portatile, lo smartphone, il PC, il server del sistema informativo di Ateneo, il
+Raspberry che a casa fa da server per i file: tutte macchine che \textbf{eseguono applicazioni}.
+
+\dfn{Commutatore di pacchetto (packet switch)}{
+    Router e switch sono entrambi \textbf{commutatori di pacchetto}: \textbf{ricevono} un pacchetto di
+    dati da un collegamento e lo \textbf{inoltrano} su un altro collegamento.
+}
+
+\warning{Nodo non vuol dire host}{
+    Un router è un \textbf{nodo} della rete ma \textbf{non è un host}: non esegue applicazioni per gli
+    utenti. Come vedremo nel prossimo capitolo, non implementa nemmeno tutti gli strati della pila
+    protocollare.
+}
+
+\subsection{La rete come grafo}
+
+Le reti condividono il vocabolario con la \textbf{teoria dei grafi}.
+
+\dfn{Nodi, collegamenti e cammini}{
+    I dispositivi connessi alla rete sono i \textbf{nodi}; le connessioni tra nodi sono i
+    \textbf{collegamenti} (\emph{link}, o canali di comunicazione). Una sequenza di nodi e collegamenti
+    che porta da un estremo all'altro è un \textbf{cammino} (\emph{path}). Gli \textbf{host} sono i nodi
+    speciali che forniscono o usano servizi.
+}
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.47\linewidth}\centering
+      \includegraphics[width=\linewidth]{cap01/rete_grafo.png}\\ {\small (a) la rete come grafo}
+    \end{minipage}\hfill
+    \begin{minipage}{0.47\linewidth}\centering
+      \includegraphics[width=\linewidth]{cap01/rete_path.png}\\ {\small (b) un cammino tra due host}
+    \end{minipage}
+    \caption{Idealmente gli host sono le foglie del grafo e i nodi intermedi inoltrano i dati.}
+\end{figure}
+
+Idealmente gli host stanno sulle \textbf{foglie} del grafo, mentre i nodi intermedi (router,
+switch) si occupano di inoltrare i dati (nella pratica non sempre è così). Se telefonate a un
+parente in Nuova Zelanda non esiste un cavo diretto tra i due telefoni: i dati seguono un
+cammino attraverso molti nodi. A meno di stendere un cavo dedicato, cosa che alcune
+organizzazioni con esigenze di sicurezza o affidabilità fanno davvero.
+
+% ══════════════════════════════════════════════════════════════
+\section{Le cinque componenti di una comunicazione}
+% ══════════════════════════════════════════════════════════════
+
+Ogni comunicazione di dati, qualunque sia la tecnologia usata, ha cinque componenti.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\small\sffamily}]
+  \node[box, fill=lphy!60, minimum width=2.4cm] (snd) at (0,0) {\icon[0.9cm]{pc}\\Mittente};
+  \node[box, fill=lphy!60, minimum width=2.4cm] (rcv) at (10,0) {\icon[0.9cm]{laptop}\\Destinatario};
+  \draw[line width=2.5pt, netred] (snd.east) -- (rcv.west) node[midway, below=4pt, text=netred] {Mezzo trasmissivo};
+  \node[box, fill=yellow!60, minimum width=2cm] (m) at (5,1.3) {Messaggio};
+  \draw[msg, netred] (m.east) -- ++(1.2,0);
+  \node[box, fill=cloudbg, text width=2.2cm, align=left, font=\scriptsize\sffamily] (p1) at (0,2.4) {Regola 1: \dots\\Regola 2: \dots\\Regola $n$: \dots};
+  \node[box, fill=cloudbg, text width=2.2cm, align=left, font=\scriptsize\sffamily] (p2) at (10,2.4) {Regola 1: \dots\\Regola 2: \dots\\Regola $n$: \dots};
+  \node[above=1pt of p1] {Protocollo};
+  \node[above=1pt of p2] {Protocollo};
+  \draw[dashed, thick, primary] (p1.east) -- node[above, lbl, text=primary] {stesse regole da entrambe le parti} (p2.west);
+  \foreach \n/\pos in {1/{5,1.95}, 2/{-1.55,-0.6}, 3/{11.55,-0.6}, 4/{5,-0.85}, 5/{11.55,2.9}}
+     \node[circle, fill=primary, text=white, font=\scriptsize\bfseries, inner sep=1.5pt] at (\pos) {\n};
+\end{tikzpicture}
+\caption{Le cinque componenti: (1) messaggio, (2) mittente, (3) destinatario, (4) mezzo, (5) protocollo.}
+\end{figure}
+
+\begin{enumerate}
+    \item \textbf{Messaggio}: i dati da trasmettere.
+    \item \textbf{Mittente} (\emph{sender}): l'entità che invia il messaggio.
+    \item \textbf{Destinatario} (\emph{receiver}): l'entità che deve ricevere il messaggio.
+    \item \textbf{Mezzo} (\emph{medium}): il canale fisico attraverso cui il messaggio viaggia.
+    \item \textbf{Protocollo}: l'insieme di regole, note a entrambi, che fanno funzionare lo scambio.
+\end{enumerate}
+
+L'ultima componente è la più importante: senza un protocollo condiviso, i bit che arrivano al
+destinatario sono solo rumore.
+
+\subsection{Che cos'è un protocollo}
+
+\dfn{Protocollo}{
+    Un \textbf{protocollo} definisce il \textbf{formato} e l'\textbf{ordine} dei messaggi scambiati tra
+    due o più entità comunicanti, e le \textbf{azioni} intraprese quando un messaggio viene inviato o
+    ricevuto.
+}
+
+I protocolli esistono anche nella vita di tutti i giorni. Quando rispondete al telefono dite
+``Pronto'' (in un'azienda si risponde con il nome della ditta); chi chiama aspetta che l'altro
+parli per primo; mentre uno parla, l'altro non dovrebbe parlare. Chiedere l'ora a uno
+sconosciuto ha la stessa struttura: un saluto, un saluto di risposta, poi la domanda vera.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.85]
+  \begin{scope}
+    \timeline{a}{0}{Persona A}{5}
+    \timeline{b}{4.2}{Persona B}{5}
+    \draw[msg] (0,-0.4) -- node[lbl, above, sloped] {Ciao} (4.2,-1.0);
+    \draw[msg] (4.2,-1.4) -- node[lbl, above, sloped] {Ciao} (0,-2.0);
+    \draw[msg] (0,-2.4) -- node[lbl, above, sloped] {Che ore sono?} (4.2,-3.0);
+    \draw[msg] (4.2,-3.6) -- node[lbl, above, sloped] {Le 14:00} (0,-4.2);
+  \end{scope}
+  \begin{scope}[xshift=7cm]
+    \timeline{c}{0}{Client}{5}
+    \timeline{s}{5}{Server}{5}
+    \draw[msg, netblue] (0,-0.4) -- node[lbl, above, sloped] {richiesta connessione TCP} (5,-1.0);
+    \draw[msg, netblue] (5,-1.4) -- node[lbl, above, sloped] {risposta connessione TCP} (0,-2.0);
+    \draw[msg, netgreen] (0,-2.4) -- node[lbl, above, sloped] {GET http://gaia.cs.umass.edu/\dots} (5,-3.0);
+    \draw[msg, netgreen] (5,-3.6) -- node[lbl, above, sloped] {$\langle$file$\rangle$} (0,-4.2);
+  \end{scope}
+  \draw[-{Stealth}, thick, black!50] (-0.9,-0.2) -- node[lbl, left, rotate=90, anchor=south] {tempo} (-0.9,-4.6);
+\end{tikzpicture}
+\caption{Un protocollo umano e un protocollo di rete hanno la stessa forma: apertura, richiesta, risposta.}
+\end{figure}
+
+\begin{itemize}
+    \item Il \textbf{formato} dice come sono fatti i messaggi (come interpretare i bit che arrivano,
+          quali sono dati e quali controllo).
+    \item L'\textbf{ordine} dice chi parla per primo e come si risponde.
+    \item Le \textbf{azioni} dicono cosa fare quando arriva un messaggio: se chiedete un file, il
+          server deve andarlo a prendere dal proprio file system e trasmetterlo.
+\end{itemize}
+
+\warning{Protocolli diversi: nessuna comunicazione}{
+    Due entità che usano protocolli diversi non riescono a svolgere alcun lavoro utile, anche se
+    sono perfettamente collegate. Tutto ciò che nel corso coinvolge due parti remote è governato da
+    un protocollo.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Rappresentazione e flusso dei dati}
+% ══════════════════════════════════════════════════════════════
+
+I dati possono essere testo, numeri, immagini, audio o video: sul mezzo trasmissivo sono
+\textbf{sempre bit}. Ciò che cambia, a seconda della comunicazione, è la \textbf{direzione}
+in cui i bit possono fluire su un collegamento.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\small\sffamily}]
+  % simplex
+  \node[box, minimum width=2cm] (a1) at (0,0) {\icon[0.5cm]{server}\\Mainframe};
+  \node[box, minimum width=2cm] (b1) at (8,0) {\icon[0.6cm]{pc}\\Monitor};
+  \draw[line width=1.5pt] (a1) -- (b1);
+  \draw[msg, netred] (3,0.35) -- (5,0.35);
+  \node[lbl, text=netred] at (4,0.7) {direzione dei dati};
+  \node[anchor=west, text width=5cm] at (9.3,0) {\textbf{Simplex}: una sola direzione.\\ \scriptsize es.\ monitor, tastiera, radio FM};
+  % half duplex
+  \node[box, minimum width=2cm] (a2) at (0,-2.3) {Stazione A};
+  \node[box, minimum width=2cm] (b2) at (8,-2.3) {Stazione B};
+  \draw[line width=1.5pt] (a2) -- (b2);
+  \draw[msg, netred] (3,-1.95) -- node[lbl, above] {al tempo $t_1$} (5,-1.95);
+  \draw[msg, netblue] (5,-2.65) -- node[lbl, below] {al tempo $t_2$} (3,-2.65);
+  \node[anchor=west, text width=5cm] at (9.3,-2.3) {\textbf{Half-duplex}: entrambe le direzioni, \emph{a turno}.\\ \scriptsize es.\ walkie-talkie, radio CB (``passo'')};
+  % full duplex
+  \node[box, minimum width=2cm] (a3) at (0,-4.6) {Stazione A};
+  \node[box, minimum width=2cm] (b3) at (8,-4.6) {Stazione B};
+  \draw[line width=1.5pt] (a3) -- (b3);
+  \draw[msg, netred] (3,-4.25) -- (5,-4.25);
+  \draw[msg, netblue] (5,-4.95) -- (3,-4.95);
+  \node[lbl] at (4,-3.75) {sempre, in entrambi i sensi};
+  \node[anchor=west, text width=5cm] at (9.3,-4.6) {\textbf{Full-duplex}: entrambe le direzioni \emph{contemporaneamente}.\\ \scriptsize es.\ telefono};
+\end{tikzpicture}
+\caption{Le tre modalità di flusso dei dati su un collegamento.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Simplex}: monodirezionale. Un estremo trasmette sempre, l'altro riceve sempre.
+    \item \textbf{Half-duplex}: bidirezionale ma a turni. Quando A trasmette a B, B non può trasmettere
+          ad A, e viceversa. Con le radio CB si parla, si dice ``passo'' e si lascia il canale all'altro.
+    \item \textbf{Full-duplex}: bidirezionale e simultaneo, come in una telefonata.
+\end{itemize}
+
+\subsection{Rate, banda e throughput}
+
+Tre grandezze facili da confondere, tutte misurate in bit al secondo (bit/s o b/s).
+
+\dfn{Transmission rate, bandwidth, throughput}{
+    \begin{itemize}
+      \item Il \textbf{transmission rate} (velocità di trasmissione) è il \textbf{massimo} che un
+            \textbf{dispositivo} riesce a trasmettere.
+      \item La \textbf{bandwidth} (larghezza di banda) è il \textbf{massimo} che un \textbf{cammino}
+            (collegamenti e nodi insieme) riesce a trasportare.
+      \item Il \textbf{throughput} è la quantità di dati che \textbf{sta effettivamente fluendo} lungo
+            quel cammino in un certo istante.
+    \end{itemize}
+}
+
+I primi due sono \emph{tetti}, il terzo è una \emph{misura}. Il throughput non supera mai la
+banda.
+
+\info{L'analogia del tubo per innaffiare}{
+    Il tubo per innaffiare il giardino sopporta al massimo un certo flusso d'acqua: è la sua
+    \emph{banda}. Ma non siete obbligati ad aprire il rubinetto al massimo: l'acqua che sta passando
+    adesso è il \emph{throughput}. E se il tubo ha un tratto più stretto, tutto il flusso è limitato
+    da quel tratto.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\small\sffamily}]
+  \node (h1) at (0,0) {\icon[1.1cm]{laptop}};
+  \node (r1) at (3.5,0) {\icon[1.1cm]{router}};
+  \node (r2) at (7,0) {\icon[1.1cm]{router}};
+  \node (h2) at (10.5,0) {\icon[0.6cm]{server}};
+  \draw[line width=6pt, netblue!70] (h1) -- node[above=5pt, lbl] {100 Mb/s} (r1);
+  \draw[line width=2pt, netred] (r1) -- node[above=5pt, lbl, text=netred] {\bfseries 10 Mb/s} (r2);
+  \draw[line width=6pt, netblue!70] (r2) -- node[above=5pt, lbl] {1 Gb/s} (h2);
+  \draw[decorate, decoration={brace, amplitude=6pt, mirror}] (0,-0.9) -- (10.5,-0.9) node[midway, below=8pt, lbl] {banda del cammino = 10 Mb/s (il collo di bottiglia) \quad throughput attuale, per esempio, 4 Mb/s};
+\end{tikzpicture}
+\caption{La banda di un cammino è limitata dal suo collegamento più lento.}
+\end{figure}
+
+\warning{Due significati di ``banda''}{
+    In questo capitolo \emph{banda} indica una \textbf{velocità} (bit/s). Quando arriveremo al livello
+    fisico la stessa parola indicherà anche una \textbf{larghezza in frequenza} (Hz): l'intervallo di
+    frequenze usato dal segnale elettromagnetico. Sono concetti legati ma diversi.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Pacchetti e store-and-forward}
+% ══════════════════════════════════════════════════════════════
+
+I messaggi lunghi non viaggiano ``in un pezzo solo'': vengono spezzati in \textbf{pacchetti},
+ciascuno con un proprio \textbf{header} (intestazione), proprio come ogni lettera ha la sua busta
+con l'indirizzo.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[field, minimum width=9cm, fill=lapp!50] (m) at (0,0) {messaggio lungo (per esempio un file)};
+  \foreach \i/\x in {1/-3.6, 2/-1.2, 3/1.2, 4/3.6} {
+    \node[field, minimum width=0.5cm, fill=lnet] (h\i) at (\x-0.85,-1.6) {H};
+    \node[field, minimum width=1.2cm, fill=lapp!50, right=0pt of h\i] {parte \i};
+  }
+  \draw[-{Stealth}, thick] (0,-0.4) -- (0,-1.15);
+  \node[lbl] at (0,-2.3) {ogni pacchetto = header (con indirizzi e informazioni di controllo) + un pezzo del messaggio};
+\end{tikzpicture}
+\caption{Un messaggio viene diviso in pacchetti, ciascuno con il proprio header.}
+\end{figure}
+
+Perché dividere? Gestire un flusso continuo di bit sarebbe complicatissimo: se si verifica un
+errore bisognerebbe ritrasmettere tutto. Con i pacchetti si ritrasmette \textbf{solo il pacchetto
+danneggiato}, e più comunicazioni possono condividere lo stesso collegamento alternando i propri
+pacchetti.
+
+\dfn{Tempo di trasmissione e store-and-forward}{
+    \begin{itemize}
+      \item Un pacchetto di $L$ bit su un collegamento di rate $R$ bit/s richiede
+            $\dfrac{L}{R}$ secondi per essere trasmesso.
+      \item Un commutatore di pacchetto è \textbf{store-and-forward} (memorizza e inoltra): deve
+            \textbf{ricevere l'intero pacchetto} prima di poterne trasmettere il primo bit sul
+            collegamento successivo.
+      \item Attraverso $N$ collegamenti di rate $R$, senza altro traffico, un pacchetto impiega
+            $N\cdot\dfrac{L}{R}$ secondi.
+    \end{itemize}
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[xscale=1.1, every node/.style={font=\footnotesize\sffamily}]
+  \foreach \x/\n in {0/Sorgente, 3/Router 1, 6/Router 2, 9/Destinazione} {
+    \node[above] at (\x,0.1) {\n};
+    \draw[thick] (\x,0) -- (\x,-5.2);
+  }
+  \fill[netblue!40] (0,0) -- (3,-0.6) -- (3,-1.6) -- (0,-1.0) -- cycle;
+  \fill[netblue!40] (3,-1.6) -- (6,-2.2) -- (6,-3.2) -- (3,-2.6) -- cycle;
+  \fill[netblue!40] (6,-3.2) -- (9,-3.8) -- (9,-4.8) -- (6,-4.2) -- cycle;
+  \draw[<->] (-0.3,0) -- node[left] {$L/R$} (-0.3,-1.0);
+  \draw[<->] (9.3,-3.8) -- node[right] {ultimo bit} (9.3,-4.8);
+  \node[lbl, text width=2.6cm, fill=white, inner sep=1pt] at (4.5,-0.6) {il router 1 riceve \emph{tutto} il pacchetto\dots};
+  \node[lbl, text width=2.6cm, fill=white, inner sep=1pt] at (1.5,-2.6) {\dots e solo allora lo inoltra};
+  \draw[decorate, decoration={brace, amplitude=6pt}] (9.9,0) -- (9.9,-4.8) node[midway, right=8pt] {$3\cdot L/R$};
+  \draw[-{Stealth}, thick, black!50] (-1.3,0) -- node[left, rotate=90, anchor=south] {tempo} (-1.3,-5);
+\end{tikzpicture}
+\caption{Store-and-forward su tre collegamenti: ogni nodo aspetta l'intero pacchetto prima di inoltrarlo.}
+\end{figure}
+
+\begin{esempio}{Quanto ci mette un pacchetto}
+Un pacchetto di $L = 10\,000$ bit attraversa $N = 3$ collegamenti da $R = 1$ Mb/s. Ogni
+trasmissione dura $L/R = 10^4/10^6 = 0{,}01$ s, quindi il ritardo complessivo di trasmissione è
+$3 \cdot 0{,}01 = 0{,}03$ s (trascurando la propagazione e le code).
+\end{esempio}
+
+\subsection{Code e perdite}
+
+Ogni collegamento in uscita da un commutatore ha una \textbf{coda} (\emph{buffer}): tutto ciò che
+deve essere trasmesso si mette in fila.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (A) at (-4,1) {\icon[0.9cm]{pc}};
+  \node (B) at (-4,-1) {\icon[0.9cm]{laptop}};
+  \node (R) at (0,0) {\icon[1.3cm]{router}};
+  \draw[wired] (A) -- node[above, sloped, lbl] {100 Mb/s} (R);
+  \draw[wired] (B) -- node[below, sloped, lbl] {100 Mb/s} (R);
+  % coda
+  \draw[thick] (1.1,0.35) -- (4.1,0.35); \draw[thick] (1.1,-0.35) -- (4.1,-0.35); \draw[thick] (4.1,0.35) -- (4.1,-0.35);
+  \foreach \x in {1.3,1.8,2.3,2.8,3.3,3.8} \fill[netblue!60] (\x,-0.25) rectangle (\x+0.4,0.25);
+  \node[above] at (2.6,0.4) {coda di uscita (piena)};
+  \draw[wired, netred] (4.1,0) -- node[above, lbl, text=netred] {1,5 Mb/s} (6.5,0);
+  \node at (7.2,0) {\icon[0.9cm]{router}};
+  \fill[netred!70] (0.6,0.9) rectangle (1.0,1.3);
+  \draw[netred, very thick] (0.5,0.8) -- (1.1,1.4); \draw[netred, very thick] (0.5,1.4) -- (1.1,0.8);
+  \node[right, text=netred] at (1.2,1.1) {pacchetto scartato: \textbf{perdita}};
+\end{tikzpicture}
+\caption{Se i pacchetti arrivano più velocemente di quanto il collegamento riesca a smaltirli, si accodano; a coda piena vengono scartati.}
+\end{figure}
+
+\dfn{Ritardo di accodamento e perdita}{
+    Se i pacchetti arrivano più velocemente di quanto il collegamento in uscita riesca a trasmetterli,
+    \textbf{aspettano in coda} (ritardo di accodamento). Se la coda è piena, il pacchetto in arrivo
+    viene \textbf{scartato}: è la \textbf{perdita di pacchetti} (\emph{packet loss}).
+}
+
+Da qui nascono le perdite su cui costruiremo gran parte del corso: TCP, per esempio, esiste proprio
+per recuperarle.
+
+% ══════════════════════════════════════════════════════════════
+\section{Commutazione di circuito e commutazione di pacchetto}
+% ══════════════════════════════════════════════════════════════
+
+Ci sono due modi fondamentali di far attraversare una rete ai dati.
+
+\subsection{Commutazione di circuito}
+
+\dfn{Commutazione di circuito (circuit switching)}{
+    Prima di trasmettere, la rete \textbf{riserva} lungo tutto il cammino una certa capacità di
+    trasmissione, e la \textbf{mantiene dedicata} per tutta la durata della sessione; alla fine il
+    circuito viene rilasciato. È il modello della rete \textbf{telefonica} tradizionale.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (A) at (0,0) {\icon[0.9cm]{pc}};
+  \node (s1) at (2.5,1) {\icon[0.9cm]{switch}};
+  \node (s2) at (2.5,-1.2) {\icon[0.9cm]{switch}};
+  \node (s3) at (5.5,1) {\icon[0.9cm]{switch}};
+  \node (s4) at (5.5,-1.2) {\icon[0.9cm]{switch}};
+  \node (B) at (8,0) {\icon[1cm]{laptop}};
+  \foreach \a/\b in {A/s2, s1/s2, s2/s4, s3/s4, s4/B, s1/s4} \draw[wired, black!40] (\a) -- (\b);
+  \draw[pathhl] (A) -- (s1) -- (s3) -- (B);
+  \node[text=netred] at (4,1.5) {circuito riservato per A--B};
+  \node[lbl, text width=5cm] at (4,-2.3) {su ogni collegamento del cammino una parte della capacità è dedicata ad A e B, anche quando non parlano};
+\end{tikzpicture}
+\caption{Commutazione di circuito: un cammino e la sua capacità vengono riservati per l'intera sessione.}
+\end{figure}
+
+Come si ``ritaglia'' un circuito da un collegamento condiviso da più utenti? In due modi:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \begin{scope}
+    \draw[-{Stealth}] (0,0) -- (5,0) node[right] {tempo};
+    \draw[-{Stealth}] (0,0) -- (0,3) node[above] {frequenza};
+    \foreach \i/\c in {0/lapp, 1/ltra, 2/lnet, 3/llink} {
+      \fill[\c] (0.05,0.1+\i*0.7) rectangle (4.8,0.7+\i*0.7);
+      \node at (2.4,0.4+\i*0.7) {utente \the\numexpr\i+1\relax};
+    }
+    \node[font=\small\bfseries\sffamily] at (2.5,-0.5) {FDM};
+  \end{scope}
+  \begin{scope}[xshift=7.5cm]
+    \draw[-{Stealth}] (0,0) -- (5,0) node[right] {tempo};
+    \draw[-{Stealth}] (0,0) -- (0,3) node[above] {frequenza};
+    \foreach \k in {0,1} \foreach \i/\c in {0/lapp, 1/ltra, 2/lnet, 3/llink} {
+      \fill[\c] (0.1+\k*2.35+\i*0.58,0.1) rectangle (0.62+\k*2.35+\i*0.58,2.8);
+      \node[rotate=90] at (0.36+\k*2.35+\i*0.58,1.45) {utente \the\numexpr\i+1\relax};
+    }
+    \node[font=\small\bfseries\sffamily] at (2.5,-0.5) {TDM};
+  \end{scope}
+\end{tikzpicture}
+\caption{FDM: ogni utente ha una propria banda di frequenze, sempre. TDM: ogni utente ha tutta la banda, ma solo nel proprio intervallo di tempo (\emph{slot}), che si ripete ciclicamente.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{FDM} (\emph{Frequency Division Multiplexing}): lo spettro di frequenze del collegamento
+          viene diviso in bande, e ogni circuito ne riceve una (come le stazioni radio).
+    \item \textbf{TDM} (\emph{Time Division Multiplexing}): il tempo viene diviso in trame, ogni trama in
+          intervalli (\emph{slot}), e ogni circuito riceve uno slot per trama.
+\end{itemize}
+
+\subsection{Commutazione di pacchetto}
+
+\dfn{Commutazione di pacchetto (packet switching)}{
+    La rete \textbf{non riserva nulla} in anticipo. Ogni pacchetto viene inviato indipendentemente e
+    usa i collegamenti \textbf{su richiesta}; se un collegamento è occupato, il pacchetto \textbf{attende
+    in coda}. È il modello di Internet.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (A) at (0,0.8) {\icon[0.8cm]{pc}};
+  \node (C) at (0,-0.8) {\icon[0.9cm]{laptop}};
+  \node (R) at (3,0) {\icon[1.2cm]{router}};
+  \node (R2) at (8,0) {\icon[1.2cm]{router}};
+  \draw[wired] (A) -- (R); \draw[wired] (C) -- (R); \draw[wired] (R) -- (R2);
+  \foreach \x/\c in {4.2/netblue, 4.8/netgreen, 5.4/netgreen, 6.0/netblue, 6.6/netgreen} \fill[\c!70] (\x,0.18) rectangle (\x+0.45,0.55);
+  \node[lbl, text width=6cm] at (5.5,-0.8) {i pacchetti di A (blu) e di C (verde) si alternano sullo stesso collegamento, secondo il bisogno del momento};
+\end{tikzpicture}
+\caption{Commutazione di pacchetto: la capacità del collegamento è condivisa dinamicamente (multiplexing statistico).}
+\end{figure}
+
+\subsection{Perché Internet ha scelto i pacchetti}
+
+Il traffico dei calcolatori è \textbf{a raffica} (\emph{bursty}): brevi periodi di intensa attività
+(si carica una pagina) alternati a lunghi silenzi (la si legge). Riservare un circuito
+significherebbe tenere capacità inutilizzata per la maggior parte del tempo.
+
+\begin{esempio}{10 utenti contro 35 utenti}
+Un collegamento da 1 Mb/s è condiviso da utenti che, quando sono attivi, trasmettono a 100 kb/s,
+ma sono attivi solo il 10\% del tempo.
+\begin{itemize}
+    \item Con la \textbf{commutazione di circuito} a ogni utente vanno riservati 100 kb/s sempre:
+          il collegamento serve al massimo $1\,000/100 = \mathbf{10}$ utenti.
+    \item Con la \textbf{commutazione di pacchetto} si possono servire \textbf{35} utenti: la probabilità
+          che più di 10 di loro siano attivi \emph{nello stesso istante} è circa $0{,}0004$. Quasi sempre,
+          quindi, il collegamento basta per tutti, con le stesse prestazioni percepite.
+\end{itemize}
+\end{esempio}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{3.3cm}p{5.5cm}p{5.5cm}}
+\toprule
+ & \textbf{Circuito} & \textbf{Pacchetto} \\
+\midrule
+Riserva di risorse & sì, per tutta la sessione & no, uso su richiesta \\
+Prestazioni & garantite, costanti & variabili: code, ritardi, perdite \\
+Uso della capacità & spreco nei silenzi & efficiente (multiplexing statistico) \\
+Fase preliminare & instaurazione del circuito & nessuna \\
+Esempio & rete telefonica tradizionale & Internet \\
+\bottomrule
+\end{tabular}
+\caption{Commutazione di circuito e di pacchetto a confronto.}
+\end{table}
+
+\info{Anche la voce viaggia a pacchetti}{
+    Quando telefonate con un'app di messaggistica non viene riservato alcun cammino: la vostra voce
+    viene codificata e spedita a pacchetti (tipicamente con UDP, che vedremo), sperando che arrivino
+    in tempo per ricostruire l'audio dall'altra parte.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Collegamenti punto-punto e multipunto}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Punto-punto e multipunto}{
+    \begin{itemize}
+      \item In un collegamento \textbf{punto-punto} esiste un collegamento \textbf{dedicato} tra
+            \textbf{esattamente due} dispositivi, cablato o senza fili.
+      \item In un collegamento \textbf{multipunto} (o \emph{broadcast}) \textbf{più dispositivi
+            condividono lo stesso collegamento}, cablato o senza fili: quando uno trasmette, tutti
+            gli altri lo sentono.
+    \end{itemize}
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \begin{scope}
+    \node[font=\small\bfseries\sffamily] at (2.5,1.3) {Punto-punto};
+    \node (a) at (0,0.4) {\icon[0.8cm]{pc}}; \node (b) at (5,0.4) {\icon[0.8cm]{pc}};
+    \draw[wired] (a) -- node[above, lbl] {cablato} (b);
+    \node (c) at (0,-1.2) {\icon[0.8cm]{laptop}}; \node (d) at (5,-1.2) {\icon[0.8cm]{laptop}};
+    \draw[wireless] (c) -- node[above, lbl] {senza fili} (d);
+    \node[lbl, text width=5cm] at (2.5,-2.3) {tutta la capacità è per quei due};
+  \end{scope}
+  \begin{scope}[xshift=8cm]
+    \node[font=\small\bfseries\sffamily] at (2.5,1.3) {Multipunto};
+    \draw[backbone] (-0.3,0.2) -- (5.3,0.2);
+    \foreach \x [count=\i] in {0,1.7,3.4,5.0} { \node (p\i) at (\x,0.95) {\icon[0.6cm]{pc}}; \draw[wired] (\x,0.2) -- (p\i); }
+    \node (ap) at (2.5,-1.1) {\icon[0.8cm]{accesspoint}};
+    \foreach \x/\y in {0.2/-1.5, 4.8/-1.5, 1.0/-2.3, 4.0/-2.3} { \node (l) at (\x,\y) {\icon[0.55cm]{laptop}}; \draw[wireless] (ap) -- (l); }
+    \node[lbl, text width=5cm] at (2.5,-3.1) {se due trasmettono insieme\dots?};
+  \end{scope}
+\end{tikzpicture}
+\caption{Nel punto-punto il collegamento è di due soli dispositivi; nel multipunto il mezzo (un cavo condiviso o l'etere) è di tutti.}
+\end{figure}
+
+\warning{Il problema del mezzo condiviso}{
+    Se due dispositivi su un collegamento multipunto trasmettono nello stesso istante, i segnali si
+    sovrappongono e diventano incomprensibili: è una \textbf{collisione}. A gestire l'accesso al
+    mezzo condiviso è un sottostrato del livello di collegamento chiamato \textbf{MAC}
+    (\emph{Medium Access Control}), che studieremo nella Parte V.
+}
+
+La distinzione non è solo fisica: pesa anche sul progetto dei protocolli dei livelli superiori.
+Notate che la rete Wi-Fi di casa, dal punto di vista logico, è un mezzo condiviso: tutti i
+dispositivi ``parlano nell'aria'' vicino allo stesso access point.
+
+% ══════════════════════════════════════════════════════════════
+\section{Topologie di rete}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Topologia di rete}{
+    La \textbf{topologia} di una rete è la disposizione dei suoi nodi e dei suoi collegamenti:
+    \textbf{chi è collegato fisicamente con chi}, indipendentemente da ciò che gira sopra.
+}
+
+\info{Perché si chiama ``topologia''}{
+    Il nome viene dal greco \emph{tópos}, ``luogo''. In matematica la topologia studia le proprietà
+    che non cambiano deformando un oggetto senza strapparlo: \textbf{le distanze non contano}, conta solo
+    \textbf{chi è connesso con chi}. Allo stesso modo, la topologia di una rete ignora quanto sono lunghi
+    i cavi e dove stanno fisicamente gli apparati.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \begin{scope}
+    \node[gnode, label=left:{\scriptsize A}] (a) at (0,0) {};
+    \node[gnode, label=above:{\scriptsize B}] (b) at (1.2,1.2) {};
+    \node[gnode, label=right:{\scriptsize C}] (c) at (2.4,0) {};
+    \node[gnode, label=below:{\scriptsize D}] (d) at (1.2,-1.2) {};
+    \draw[wired] (a)--(b)--(c)--(d)--(a); \draw[wired] (b)--(d);
+    \node[lbl] at (1.2,-2) {disegno compatto};
+  \end{scope}
+  \node[font=\Large] at (4.1,0) {$=$};
+  \begin{scope}[xshift=5.5cm]
+    \node[gnode, label=left:{\scriptsize A}] (a) at (0,-0.6) {};
+    \node[gnode, label=above:{\scriptsize B}] (b) at (3.5,1.3) {};
+    \node[gnode, label=right:{\scriptsize C}] (c) at (7.5,-0.2) {};
+    \node[gnode, label=below:{\scriptsize D}] (d) at (2.2,-1.3) {};
+    \draw[wired] (a)--(b)--(c)--(d)--(a); \draw[wired] (b)--(d);
+    \node[lbl] at (3.7,-2) {stessa rete, cavi lunghi chilometri};
+  \end{scope}
+\end{tikzpicture}
+\caption{Due disegni della stessa topologia: le lunghezze cambiano, i collegamenti no.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.65\linewidth]{cap01/topologie.png}
+    \caption{Le topologie più comuni: anello, maglia, stella, completamente connessa, linea, albero, bus.}
+\end{figure}
+
+\subsection{Bus}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.4\linewidth}\centering
+  \includegraphics[width=0.85\linewidth]{cap01/topo_bus.png}
+\end{minipage}\hfill
+\begin{minipage}{0.56\linewidth}
+Ogni host si collega a \textbf{un unico cavo condiviso} (il \emph{bus} o \emph{backbone}): ogni
+trasmissione raggiunge tutti, e le \textbf{collisioni sono possibili}. È la topologia delle prime
+reti Ethernet.
+\begin{itemize}
+  \item[\itick] semplice ed economica, adatta a reti piccole;
+  \item[\itick] se si guasta il collegamento di un singolo host, gli altri non se ne accorgono;
+  \item[\icross] se si \textbf{interrompe il bus}, la rete si spezza in due.
+\end{itemize}
+\textbf{Collegamenti}: 1 backbone e $n$ collegamenti di accesso ($1+n$).
+\end{minipage}
+\end{figure}
+
+\subsection{Anello (ring)}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.4\linewidth}\centering
+  \includegraphics[width=0.85\linewidth]{cap01/topo_ring.png}
+\end{minipage}\hfill
+\begin{minipage}{0.56\linewidth}
+Ogni host è collegato punto-punto con \textbf{esattamente altri due} (quello che lo precede e quello
+che lo segue); il segnale viene inoltrato lungo l'anello, da un nodo all'altro, fino a destinazione.
+Un esempio storico è il \emph{Token Ring} di IBM.
+\begin{itemize}
+  \item[\itick] economica, prestazioni migliori del bus;
+  \item[\icross] aggiungere un nodo significa ``aprire'' l'anello;
+  \item[\icross] come in una catena, l'anello più debole blocca tutto: un nodo malfunzionante può
+        compromettere l'intera rete.
+\end{itemize}
+\textbf{Collegamenti}: $n$ collegamenti duplex.
+\end{minipage}
+\end{figure}
+
+\subsection{Stella (star)}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.4\linewidth}\centering
+  \includegraphics[width=0.85\linewidth]{cap01/topo_star.png}
+\end{minipage}\hfill
+\begin{minipage}{0.56\linewidth}
+Gli host sono collegati \textbf{solo a un controllore centrale} (hub, switch o router), che smista
+tutti i messaggi; non ci sono collegamenti diretti tra host. Il router di casa, con i dispositivi
+collegati ad esso, forma proprio una stella.
+\begin{itemize}
+  \item[\itick] economica, semplice e \textbf{scalabile}: aggiungere un host = aggiungere un collegamento;
+  \item[\itick] se un host si guasta, gli altri continuano a funzionare;
+  \item[\icross] ogni host deve poter raggiungere il controllore;
+  \item[\icross] il controllore è un \textbf{single point of failure}: se si guasta, non funziona più nulla.
+\end{itemize}
+\textbf{Collegamenti}: 1 controllore e $n$ collegamenti duplex.
+\end{minipage}
+\end{figure}
+
+\subsection{Albero (tree)}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.4\linewidth}\centering
+  \includegraphics[width=0.85\linewidth]{cap01/topo_tree.png}
+\end{minipage}\hfill
+\begin{minipage}{0.56\linewidth}
+\textbf{Più stelle collegate attraverso una dorsale} (un bus): è la forma che ha quasi ogni rete
+reale di un edificio (una stella per piano, collegate da una dorsale).
+\begin{itemize}
+  \item[\itick] versatile, scalabile, ben supportata dai produttori di hardware e software;
+  \item[\icross] più difficile da configurare di una singola stella: i controllori devono coordinarsi;
+  \item[\icross] eredita la debolezza della dorsale: se si interrompe, si stacca un intero sottoalbero.
+\end{itemize}
+\end{minipage}
+\end{figure}
+
+\subsection{Linea (line)}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \foreach \i in {0,...,5} \node[gnode] (n\i) at (\i*1.6,0) {};
+  \foreach \i [evaluate=\i as \j using int(\i+1)] in {0,...,4} \draw[wired] (n\i) -- (n\j);
+  \draw[netred, very thick] (3.8,-0.3) -- (4.2,0.3); \draw[netred, very thick] (3.8,0.3) -- (4.2,-0.3);
+  \node[lbl, text=netred] at (4,-0.7) {un guasto spezza la linea};
+\end{tikzpicture}
+\caption{Topologia a linea (o a catena): $n$ nodi e $n-1$ collegamenti.}
+\end{figure}
+
+I nodi sono disposti in sequenza, ciascuno collegato al precedente e al successivo (ma, a
+differenza dell'anello, il primo e l'ultimo non si chiudono). Servono solo $n-1$ collegamenti,
+ma i messaggi tra nodi lontani attraversano tutti quelli in mezzo e un solo guasto divide la
+rete.
+
+\subsection{Maglia (mesh)}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.4\linewidth}\centering
+  \includegraphics[width=0.85\linewidth]{cap01/topo_mesh.png}
+\end{minipage}\hfill
+\begin{minipage}{0.56\linewidth}
+Gli host sono collegati punto-punto tra loro, \textbf{senza gerarchia}:
+\begin{itemize}
+  \item \textbf{full mesh} (completamente connessa): ogni nodo è collegato a tutti gli altri;
+  \item \textbf{partial mesh}: ogni nodo è collegato solo ad alcuni.
+\end{itemize}
+\begin{itemize}
+  \item[\itick] collegamenti \textbf{dedicati}: niente contesa come nel bus, buona robustezza;
+  \item[\itick] se un collegamento cade, il traffico prende un'altra strada;
+  \item[\icross] ogni nodo ha bisogno di tante porte quanti sono i suoi vicini;
+  \item[\icross] \textbf{non scala}: una full mesh ha $\dfrac{n(n-1)}{2}$ collegamenti.
+\end{itemize}
+\end{minipage}
+\end{figure}
+
+\subsubsection*{Perché una full mesh ha $n(n-1)/2$ collegamenti}
+
+In una full mesh ogni nodo è collegato a \textbf{tutti gli altri} $n-1$ nodi.
+
+\begin{enumerate}
+    \item Ogni nodo ha quindi $n-1$ collegamenti (e $n-1$ porte). Sommando su tutti gli $n$ nodi
+          si ottengono $n(n-1)$ ``estremità di collegamento''.
+    \item Ma ogni collegamento ha \textbf{due} estremità: il collegamento A--B è stato contato una
+          volta partendo da A e una volta partendo da B.
+    \item Dividendo per 2 si ottiene il numero di collegamenti: $\dfrac{n(n-1)}{2}$.
+\end{enumerate}
+
+In modo equivalente, il numero di collegamenti è il numero di \textbf{coppie non ordinate} di nodi,
+cioè $\binom{n}{2}$; oppure si può contare aggiungendo i nodi uno alla volta: il secondo nodo
+porta 1 collegamento nuovo, il terzo 2, il quarto 3, \dots, l'$n$-esimo $n-1$, e
+$1+2+\dots+(n-1) = \dfrac{n(n-1)}{2}$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \foreach \n/\x in {3/0, 4/3.3, 5/6.8, 6/10.6} {
+    \begin{scope}[xshift=\x cm]
+      \foreach \i in {1,...,\n} \node[gnode] (v\i) at ({90+360/\n*(\i-1)}:1.1) {};
+      \foreach \i in {1,...,\n} \foreach \j in {1,...,\n} { \ifnum\i<\j \draw[wired, line width=0.8pt] (v\i) -- (v\j); \fi }
+      \pgfmathtruncatemacro{\L}{\n*(\n-1)/2}
+      \node[lbl] at (0,-1.7) {$n=\n$: \textbf{\L} collegamenti};
+    \end{scope}
+  }
+\end{tikzpicture}
+\caption{Full mesh con 3, 4, 5 e 6 nodi: i collegamenti crescono con il quadrato dei nodi.}
+\end{figure}
+
+\begin{esempio}{La crescita quadratica}
+Con $n=10$ nodi servono $\dfrac{10\cdot 9}{2} = 45$ collegamenti; con $n=100$ ne servono
+$\dfrac{100\cdot 99}{2} = 4\,950$, e ogni nodo avrebbe bisogno di 99 porte. Ecco perché la full mesh
+è impraticabile oltre poche decine di nodi, e perché gli ISP non si collegano ``tutti con tutti''
+(lo rivedremo parlando di IXP).
+\end{esempio}
+
+\subsection{Topologie ibride}
+
+Le reti reali \textbf{mescolano} le topologie: ogni parte è scelta per il proprio segmento, e il
+risultato non è nessuna delle forme componenti.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.44\linewidth}\centering
+  \includegraphics[width=\linewidth]{cap01/topo_ibrida.png}
+\end{minipage}\hfill
+\begin{minipage}{0.52\linewidth}\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (hub) at (0,0) {\icon[1.1cm]{switch}};
+  \node[below=-2pt of hub, lbl] {centro stella};
+  \foreach \ang/\name in {90/Bus 1, 210/Bus 2, 330/Bus 3} {
+    \begin{scope}[rotate=\ang]
+      \draw[wired] (0.55,0) -- (1.3,0);
+      \draw[backbone, line width=2pt] (1.3,-1.1) -- (1.3,1.1);
+      \foreach \t in {-0.8,0,0.8} { \draw[wired, line width=0.7pt] (1.3,\t) -- (1.75,\t); \fill[netgreen] (1.75,\t) circle (3pt); }
+    \end{scope}
+  }
+\end{tikzpicture}
+\end{minipage}
+\caption{Una dorsale a stella che collega tre reti a bus: una topologia ibrida.}
+\end{figure}
+
+Nell'esempio il centro della stella non è collegato a singoli host, ma a tre \emph{bus}, ciascuno
+con i propri host. Le reti della TV via cavo, come vedremo, hanno una struttura ibrida di questo
+tipo (albero di bus).
+
+\subsection{Confronto tra le topologie}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llp{4cm}p{4.2cm}}
+\toprule
+\textbf{Topologia} & \textbf{Collegamenti} & \textbf{Se si guasta un host} & \textbf{Se si guasta il mezzo} \\
+\midrule
+Bus & $1+n$ & nessun effetto sugli altri & la rete si divide \\
+Anello & $n$ & l'anello può interrompersi & l'anello può interrompersi \\
+Stella & $n$ & nessun effetto sugli altri & solo quell'host resta isolato \\
+Albero & $n$ + dorsale & nessun effetto sugli altri & si isola un intero sottoalbero \\
+Linea & $n-1$ & la linea si spezza & la linea si spezza \\
+Mesh (full) & $n(n-1)/2$ & il traffico usa altri collegamenti & il traffico usa altri collegamenti \\
+\bottomrule
+\end{tabular}
+\caption{Robustezza e costo delle topologie ($n$ = numero di host).}
+\end{table}
+
+\info{Robustezza contro costo}{
+    La robustezza si compra con i collegamenti, e i collegamenti si comprano con porte e cavi: ogni
+    rete reale è un compromesso tra le ultime due colonne della tabella e la seconda.
+}
+
+\warning{E la riservatezza?}{
+    Una domanda frequente: una topologia come il bus, dove tutti ricevono tutto, è insicura? La
+    riservatezza \textbf{non} dipende dalla topologia: è garantita da protocolli crittografici che
+    funzionano a prescindere da chi può ascoltare le trasmissioni. Lo vedremo nella Parte VI.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Categorie di reti per estensione}
+% ══════════════════════════════════════════════════════════════
+
+Le reti si classificano in base alla \textbf{distanza} che coprono. Non è un dettaglio: la distanza
+determina le \textbf{tecnologie} utilizzabili (quanto costa un cavo, quanto ritardo si accumula,
+quanti errori ci sono).
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.3\linewidth}\centering
+  \includegraphics[width=0.9\linewidth]{cap01/categorie.png}
+\end{minipage}\hfill
+\begin{minipage}{0.66\linewidth}\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \draw[-{Stealth}, thick] (0,0) -- (10,0) node[right] {distanza};
+  \foreach \x/\t in {0.3/1 m, 1.6/10 m, 2.9/100 m, 4.2/1 km, 5.5/10 km, 6.8/100 km, 8.1/1000 km, 9.4/10000 km} {
+    \draw (\x,0.1) -- (\x,-0.1); \node[below] at (\x,-0.1) {\t};
+  }
+  \fill[lapp] (0.1,0.3) rectangle (1.5,0.9); \node at (0.8,0.6) {PAN};
+  \fill[ltra] (1.7,0.3) rectangle (4.8,0.9); \node at (3.25,0.6) {LAN};
+  \fill[lnet] (4.9,0.3) rectangle (6.3,0.9); \node at (5.6,0.6) {MAN};
+  \fill[llink] (6.4,0.3) rectangle (9.9,0.9); \node at (8.15,0.6) {WAN};
+  \node[lbl] at (0.8,1.3) {una persona}; \node[lbl] at (3.25,1.3) {stanza, edificio, campus};
+  \node[lbl] at (5.6,1.3) {città}; \node[lbl] at (8.15,1.3) {nazione, continente, pianeta};
+\end{tikzpicture}
+\end{minipage}
+\caption{Le categorie di reti per estensione (i confini sono indicativi).}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{PAN} (\emph{Personal Area Network}): attorno a una persona, pochi metri.
+    \item \textbf{LAN} (\emph{Local Area Network}): un edificio o un campus.
+    \item \textbf{MAN} (\emph{Metropolitan Area Network}): una città.
+    \item \textbf{WAN} (\emph{Wide Area Network}): una nazione, un continente o più.
+\end{itemize}
+
+\warning{Zone grigie}{
+    La classificazione si fa ``a spanne'': i confini non sono rigidi e una rete può stare a cavallo
+    di due categorie. L'importante è capire l'ordine di grandezza e le conseguenze tecnologiche.
+}
+
+\subsection{PAN --- Personal Area Network}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.36\linewidth}\centering
+  \includegraphics[width=0.9\linewidth]{cap01/pan.png}
+\end{minipage}\hfill
+\begin{minipage}{0.6\linewidth}
+Una PAN collega i dispositivi nel raggio d'azione di una persona: cuffie, tastiera, mouse, orologio,
+stampante. L'esempio tipico è \textbf{Bluetooth}, una rete senza fili a corto raggio che elimina i
+cavi da cercare e collegare. Bluetooth funziona in modalità \textbf{master--slave}: il calcolatore
+(master) dice alle periferiche (slave) quando e su quale frequenza possono trasmettere.
+\end{minipage}
+\caption{Una PAN Bluetooth.}
+\end{figure}
+
+\subsection{LAN --- Local Area Network}
+
+\dfn{LAN}{
+    Una \textbf{LAN} è una rete \textbf{privata} all'interno di un edificio o di un campus. Le sue
+    dimensioni sono limitate, quindi il \textbf{tempo di trasmissione nel caso peggiore è noto} in
+    anticipo; ha \textbf{bassa latenza}, \textbf{pochi errori} e oggi velocità da 100 Mb/s a decine di Gb/s.
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.45\linewidth]{cap01/lan_switch.png}
+    \caption{Una LAN che collega dodici computer a uno switch.}
+\end{figure}
+
+Le LAN possono essere \textbf{senza fili} o \textbf{cablate}:
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{cap01/lan_wireless_wired.png}
+    \caption{A sinistra una rete wireless 802.11: ogni macchina parla con un access point, che inoltra i dati verso la rete cablata. A destra una rete Ethernet commutata: ogni macchina ha il proprio cavo verso uno switch, che inoltra i frame in base all'indirizzo.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Wireless LAN} (WLAN): lo standard è \textbf{IEEE 802.11}, il Wi-Fi di casa.
+    \item \textbf{LAN cablata}: tipicamente \textbf{Ethernet commutata} (\emph{switched Ethernet}), con il
+          classico cavo di rete. Se il Wi-Fi in camera va male, un cavo Ethernet collegato al router
+          garantisce una banda più stabile.
+\end{itemize}
+
+\subsubsection*{La rete di casa}
+
+La rete domestica è una LAN, ma è \textbf{la LAN con i requisiti più difficili}:
+
+\begin{itemize}
+    \item viene installata da qualcuno che non leggerà il manuale: deve \textbf{funzionare da sola},
+          appena tirato fuori il router dalla scatola (vedremo i protocolli, come DHCP, che lo rendono
+          possibile);
+    \item i dispositivi vengono comprati uno alla volta, nel corso degli anni, da produttori diversi, e
+          devono comunque \textbf{funzionare insieme};
+    \item i margini di guadagno sono bassi, mentre sicurezza, affidabilità e interoperabilità costano;
+    \item un elettrodomestico insicuro non è un file perso: è una serratura che qualcun altro può aprire.
+\end{itemize}
+
+\info{IoT: prima un problema di sicurezza}{
+    È nelle case che l'Internet of Things arriva davvero (televisore, frigorifero, telecamere,
+    tapparelle), ed è per questo che l'IoT è un problema di \textbf{sicurezza} prima ancora che di rete.
+}
+
+\subsection{MAN --- Metropolitan Area Network}
+
+\dfn{MAN}{
+    Una \textbf{MAN} copre l'area di una \textbf{città}. Collega tra loro edifici, quartieri o
+    abitazioni di un'area urbana, tipicamente con un'infrastruttura posseduta da un unico operatore.
+}
+
+L'esempio più noto è la \textbf{rete della televisione via cavo}, molto diffusa in Nord America.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\linewidth]{cap01/man_cavo.png}
+    \caption{Una MAN via cavo: televisione e Internet entrano nella stessa \emph{head-end} e vengono distribuite alle case.}
+\end{figure}
+
+\begin{itemize}
+    \item Al centro c'è la \textbf{head-end} (\emph{cable head-end}, o \emph{cable modem termination
+          system}): riceve i canali TV dall'\textbf{antenna} e, da quando la rete è usata anche per
+          Internet, è collegata a \textbf{Internet}.
+    \item Dalla head-end partono cavi che, attraverso delle \textbf{scatole di giunzione}
+          (\emph{junction box}), raggiungono le strade; lungo ogni strada le case sono collegate allo
+          stesso cavo, come su un \textbf{bus}. Nel complesso la rete è un \textbf{albero di bus}.
+    \item La rete era nata per distribuire la televisione \textbf{in una sola direzione}. È stata poi
+          trasformata in un servizio Internet \textbf{bidirezionale} usando le parti dello spettro di
+          frequenze lasciate libere dai canali TV.
+\end{itemize}
+
+Altri esempi di MAN sono le reti in fibra ottica che collegano le sedi di un'università o gli
+uffici pubblici di una città.
+
+\subsection{WAN --- Wide Area Network}
+
+Una WAN copre una nazione o un continente. L'esempio classico del Tanenbaum è un'azienda con
+tre uffici in Australia: Perth, Melbourne e Brisbane.
+
+\dfn{Host e subnet in una WAN}{
+    In una WAN:
+    \begin{itemize}
+      \item le macchine che eseguono le applicazioni sono gli \textbf{host};
+      \item tutto ciò che trasporta i loro messaggi, cioè \textbf{linee di trasmissione e router},
+            forma la \textbf{subnet} (sottorete di comunicazione). La subnet di solito è posseduta da
+            qualcun altro, tipicamente una compagnia di telecomunicazioni.
+    \end{itemize}
+}
+
+\warning{Due significati di ``subnet''}{
+    Qui \emph{subnet} (terminologia del Tanenbaum) indica l'infrastruttura di trasporto di una WAN.
+    Nella Parte IV la stessa parola indicherà un \emph{blocco di indirizzi IP} (subnetting). Non
+    confondete i due usi.
+}
+
+La complessità di una WAN sta soprattutto nel \textbf{modo} in cui si realizzano i collegamenti
+tra sedi lontane. Ci sono tre soluzioni tipiche.
+
+\subsubsection*{1. Linee dedicate (leased lines)}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.55\linewidth]{cap01/wan_leased.png}
+    \caption{Tre uffici collegati da linee affittate: la subnet (in grigio) è fatta di router e linee di trasmissione.}
+\end{figure}
+
+L'azienda \textbf{affitta linee di trasmissione} da un operatore e le collega con i propri router.
+La capacità delle linee è sua, garantita e prevedibile; ma è la soluzione più \textbf{costosa} e meno
+flessibile (aggiungere una sede significa affittare nuove linee). Stendere i propri cavi
+attraverso l'Australia, del resto, non è alla portata di quasi nessuno.
+
+\subsubsection*{2. Collegamenti virtuali su Internet (VPN)}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.55\linewidth]{cap01/wan_internet.png}
+    \caption{La stessa WAN realizzata come rete privata virtuale (VPN) sopra Internet.}
+\end{figure}
+
+Invece di affittare linee, gli uffici si collegano con \textbf{collegamenti virtuali} che viaggiano
+sopra la normale connettività Internet: per la WAN è come se esistesse una linea diretta tra le
+sedi, ma in realtà i dati attraversano la rete di reti. È una \textbf{VPN} (\emph{Virtual Private
+Network}). È \textbf{economica e flessibile}, ma la capacità \textbf{non è più nostra}: le prestazioni
+seguono quello che sta facendo Internet in quel momento, senza garanzie di velocità né di
+affidabilità.
+
+\subsubsection*{3. Attraverso la rete di un ISP}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.55\linewidth]{cap01/wan_isp.png}
+    \caption{Gli uffici collegati attraverso la rete di un ISP.}
+\end{figure}
+
+Le reti delle sedi si collegano a un \textbf{Internet Service Provider}, e la \textbf{rete dell'ISP}
+trasporta il traffico tra le sedi e verso il resto di Internet. L'azienda non gestisce linee
+proprie: se ne occupa l'ISP, che possiede o affitta le proprie dorsali (anche intercontinentali) e
+offre il servizio secondo un contratto.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{3.2cm}p{3.5cm}p{3.5cm}p{3.5cm}}
+\toprule
+ & \textbf{Linee dedicate} & \textbf{VPN su Internet} & \textbf{Rete di un ISP} \\
+\midrule
+Chi gestisce le linee & l'azienda (affitta) & nessuno in particolare & l'ISP \\
+Capacità garantita & sì & no & secondo contratto \\
+Costo & alto & basso & medio \\
+Flessibilità & bassa & alta & media \\
+\bottomrule
+\end{tabular}
+\caption{I tre modi di realizzare una WAN.}
+\end{table}
+
+\subsection{WAN eterogenee e internetwork}
+
+Una WAN grande raramente usa una sola tecnologia: nello stesso disegno convivono dorsali
+commutate, collegamenti punto-punto, hub e LAN.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.55\linewidth]{cap01/wan_eterogenea.png}
+    \caption{Una WAN eterogenea: WAN commutata, WAN punto-punto, LAN e i nodi di interscambio che le raccordano.}
+\end{figure}
+
+\dfn{Internetwork, gateway e router}{
+    Un insieme di \textbf{reti distinte}, gestite in modo \textbf{indipendente} e collegate tra loro è
+    una \textbf{internetwork}. Il dispositivo che unisce due reti di tipo diverso, e ``traduce'' tra
+    loro, è un \textbf{gateway}; quando il gateway opera al livello di rete si chiama \textbf{router}.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Internet Service Provider}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Internet Service Provider (ISP)}{
+    Un \textbf{ISP} è un'organizzazione che fornisce i servizi per \textbf{accedere}, usare o
+    partecipare a Internet. Può essere commerciale, di proprietà di una comunità, no-profit, oppure
+    privato (per esempio un'azienda o un'università).
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.45\linewidth]{cap01/isp_struttura.png}
+    \caption{(a) Struttura di un ISP nazionale: ISP regionali e locali appesi a quello nazionale. (b) ISP nazionali interconnessi attraverso un NAP/IXP.}
+\end{figure}
+
+La rete di un ISP è organizzata in modo \textbf{gerarchico}:
+
+\begin{itemize}
+    \item un \textbf{PoP} (\emph{Point of Presence}) è il punto, uno o più router, in cui i clienti si
+          collegano al fornitore: il vostro router di casa si collega a un PoP del vostro ISP, da cui
+          partono collegamenti più capaci;
+    \item gli \textbf{ISP di accesso} coprono aree locali;
+    \item gli \textbf{ISP regionali} coprono aree più grandi;
+    \item gli \textbf{ISP nazionali} coprono intere nazioni;
+    \item gli ISP si scambiano traffico negli \textbf{IXP} (\emph{Internet Exchange Point}), detti anche
+          \textbf{NAP} (\emph{Network Access Point}): punti di incontro, spesso gestiti da un soggetto
+          terzo neutrale.
+\end{itemize}
+
+\subsection{Chi si collega con chi, e chi paga}
+
+\begin{itemize}
+    \item Collegare ogni ISP a ogni altro formerebbe una \textbf{full mesh}: con migliaia di ISP,
+          servirebbero milioni di collegamenti. Impossibile.
+    \item Quindi un ISP \textbf{cliente} paga un ISP \textbf{fornitore} per il transito del traffico, a
+          ogni livello della gerarchia (l'ISP di accesso paga il regionale, il regionale paga il
+          nazionale).
+    \item Due ISP \textbf{allo stesso livello} possono invece fare \textbf{peering}: si collegano
+          direttamente e si scambiano il traffico reciproco, di solito senza pagarsi.
+    \item Un \textbf{IXP} è un edificio con l'hardware necessario perché molti ISP facciano peering
+          contemporaneamente.
+    \item Un ISP può fare \textbf{multi-homing}: comprare connettività da due fornitori diversi, così
+          da continuare a funzionare se uno dei due si guasta.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+  isp/.style={ellipse, draw=netblue!70, fill=cloudbg, minimum width=2.2cm, minimum height=0.8cm, align=center},
+  ixp/.style={rectangle, rounded corners=2pt, draw=netorange, fill=netorange!20, minimum width=1cm, minimum height=0.55cm, align=center}]
+  \node[isp, fill=netblue!30] (t1a) at (-3,3) {ISP globale A};
+  \node[isp, fill=netblue!30] (t1b) at (3,3) {ISP globale B};
+  \node[ixp] (ixp1) at (0,3) {IXP};
+  \node[isp] (ra) at (-4.5,1.2) {ISP regionale};
+  \node[isp] (rb) at (-1.2,1.2) {ISP regionale};
+  \node[isp] (rc) at (3.2,1.2) {ISP regionale};
+  \node[ixp] (ixp2) at (-2.85,0.2) {IXP};
+  \node[isp] (a1) at (-5.5,-0.8) {accesso};
+  \node[isp] (a2) at (-3.3,-1.1) {accesso};
+  \node[isp] (a3) at (-0.8,-0.8) {accesso};
+  \node[isp] (a4) at (2.2,-0.8) {accesso};
+  \node[isp] (a5) at (4.6,-0.8) {accesso};
+  \node[isp, draw=netgreen!70!black, fill=netgreen!15, minimum width=3cm] (cp) at (6.2,2.2) {rete privata del\\content provider};
+  \foreach \c/\p in {ra/t1a, rb/t1a, rb/t1b, rc/t1b, a1/ra, a2/ra, a3/rb, a4/rc, a5/rc}
+     \draw[-{Stealth}, thick, netblue] (\c) -- (\p);
+  \draw[thick, netorange, dashed] (t1a) -- (ixp1) -- (t1b);
+  \draw[thick, netorange, dashed] (ra) -- (ixp2) -- (rb);
+  \draw[thick, netgreen!70!black, dashed] (cp) -- (a5); \draw[thick, netgreen!70!black, dashed] (cp) -- (a4); \draw[thick, netgreen!70!black, dashed] (cp) -- (t1b);
+  \draw[-{Stealth}, thick, netblue] (-6.8,-2) -- ++(0.8,0) node[right] {cliente $\rightarrow$ fornitore (il cliente paga)};
+  \draw[thick, netorange, dashed] (-1.6,-2) -- ++(0.8,0) node[right] {peering (di solito gratuito)};
+  \draw[thick, netgreen!70!black, dashed] (2.6,-2) -- ++(0.8,0) node[right] {peering del content provider};
+  \node[lbl, text=netblue] at (0.2,1.95) {multi-homing:\\\scriptsize due fornitori};
+\end{tikzpicture}
+\caption{La struttura economica di Internet: gerarchia di clienti e fornitori, peering negli IXP e reti private dei content provider.}
+\end{figure}
+
+\info{I content provider}{
+    I grandi fornitori di contenuti (Google, Netflix, Meta, \dots) costruiscono \textbf{reti private
+    globali} e fanno peering \textbf{direttamente con gli ISP di livello basso}, scavalcando i livelli
+    superiori. Così spendono meno (non pagano il transito) e controllano direttamente come i loro
+    contenuti arrivano agli utenti.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Collegarsi a un ISP}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.45\linewidth]{cap01/connessione_isp.png}
+    \caption{In alto una connessione privata attraverso la rete telefonica; in basso un'azienda con un collegamento dedicato all'ISP.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Accesso residenziale}: un \textbf{modem} (o un \textbf{ONT}, per la fibra) raggiunge
+          il fornitore sfruttando l'infrastruttura esistente, cioè la rete telefonica o quella via cavo.
+    \item \textbf{Accesso aziendale}: un'azienda medio-grande ha molto più traffico, quindi compra un
+          \textbf{collegamento dedicato} direttamente verso l'ISP e collega la propria rete dietro un
+          \textbf{router} aziendale, che dialoga con un router dell'ISP.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (l) at (0,0.7) {\icon[0.8cm]{laptop}};
+  \node (s) at (0,-0.7) {\icon[0.6cm]{smartphone}};
+  \node (r) at (2.6,0) {\icon[1.1cm]{accesspoint}};
+  \node[below=-2pt of r] {router di casa};
+  \node[box, fill=lphy!40, minimum width=1.6cm, font=\scriptsize\sffamily] (m) at (5.0,0) {modem\\o ONT};
+  \node[box, fill=cloudbg, minimum width=1.8cm, font=\scriptsize\sffamily] (pop) at (10.4,0) {PoP\\dell'ISP};
+  \node[netcloud, minimum width=2.4cm] (inet) at (13.6,0) {Internet};
+  \draw[wireless] (l) -- (r); \draw[wireless] (s) -- (r);
+  \draw[wired] (r) -- (m);
+  \draw[wired, netorange, line width=1.8pt] (m) -- node[above, lbl] {rete di accesso} node[below, lbl] {doppino, cavo, fibra, 5G} (pop);
+  \draw[wired, line width=2.5pt] (pop) -- (inet);
+  \draw[decorate, decoration={brace, amplitude=6pt}] (-0.5,1.5) -- (5.9,1.5) node[midway, above=7pt] {la vostra rete (LAN)};
+  \draw[decorate, decoration={brace, amplitude=6pt}] (6.1,1.5) -- (14.9,1.5) node[midway, above=7pt] {di qualcun altro};
+\end{tikzpicture}
+\caption{Il percorso da casa a Internet: il primo salto fuori da casa appartiene già all'ISP.}
+\end{figure}
+
+In entrambi i casi, \textbf{il primo salto fuori dall'edificio appartiene a qualcun altro}: subito
+fuori dalla rete di casa o dell'azienda c'è un ISP, che va pagato per i servizi che fornisce.
+
+\subsection{Tecnologie di accesso residenziale}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{2.7cm}p{5cm}p{6.3cm}}
+\toprule
+\textbf{Tecnologia} & \textbf{Su cosa viaggia} & \textbf{Da ricordare} \\
+\midrule
+DSL / ADSL & il doppino telefonico esistente & la velocità \textbf{cala con la distanza} dalla centrale \\
+Cavo (HFC) & fibra fino alla strada, cavo coassiale fino in casa & l'ultimo tratto è \textbf{condiviso} con i vicini \\
+FTTH & fibra fino in casa, ONT in casa & centinaia di Mb/s, fino al gigabit e oltre \\
+Wireless fisso & radio 5G da una stazione base & nessun cavo da posare \\
+\bottomrule
+\end{tabular}
+\caption{Le tecnologie di accesso residenziale oggi.}
+\end{table}
+
+\begin{itemize}
+    \item Sono tutte \textbf{asimmetriche}: la velocità in \emph{download} (verso casa) è maggiore di
+          quella in \emph{upload} (verso Internet), perché da casa si scarica molto più di quanto si invii.
+    \item Le cifre pubblicizzate sono un \textbf{tetto}; e su un mezzo condiviso, quel tetto è condiviso.
+    \item Nella fibra non c'è (de)modulazione del segnale come nel modem tradizionale: per questo
+          l'apparecchio si chiama \textbf{ONT} (\emph{Optical Network Terminal}) e non modem.
+\end{itemize}
+
+\info{Un po' di storia delle velocità di accesso}{
+    \begin{tabular}{ll}
+    Modem analogico & 56 kb/s \\
+    ISDN (\emph{Integrated Services Digital Network}) & 128 kb/s \\
+    ADSL (\emph{Asymmetric Digital Subscriber Line}) & da 1 a 20 Mb/s \\
+    Doppino in rame di nuova generazione & da 10 a 100 Mb/s \\
+    Fibra ottica (tramite ONT) & da 50 Mb/s a decine di Gb/s \\
+    \end{tabular}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Una rete è una collezione di dispositivi \textbf{autonomi} che possono \textbf{scambiarsi
+          informazione}: \textbf{host} ai bordi, \textbf{commutatori di pacchetto} (router e switch) in mezzo.
+    \item Comunicano \textbf{processi}: un client chiede, un server risponde; nel P2P ogni peer fa entrambe le cose.
+    \item \textbf{Internet} è una rete di reti indipendenti, integrate attraverso gli ISP e tenute insieme da \textbf{IP}.
+    \item I dati viaggiano in \textbf{pacchetti}, memorizzati e inoltrati (\emph{store-and-forward}),
+          che si accodano quando il collegamento è occupato e vengono persi quando la coda è piena.
+    \item Internet usa la \textbf{commutazione di pacchetto} perché il traffico è a raffica.
+    \item La \textbf{topologia} dice chi è collegato con chi; la \textbf{scala} dice se la rete è PAN, LAN, MAN o WAN.
+    \item Gli ISP formano una gerarchia di clienti e fornitori, con \textbf{peering} negli IXP.
+\end{itemize}
+}
+
+Una sola richiesta Web attraversa decine di queste reti, con tecnologie e gestori diversi. Come
+si tiene sotto controllo una tale complessità? La risposta è l'argomento del prossimo capitolo:
+la \textbf{stratificazione}.

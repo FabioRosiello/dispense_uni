@@ -1,0 +1,739 @@
+\chapter{TypeScript}
+
+JavaScript ha un sistema di tipi peculiare, che abbiamo imparato ad
+\sout{amare} accettare.
+
+È \term{tipizzato dinamicamente}:
+
+\begin{lstlisting}[style=js]
+let x;
+console.log(typeof(x));   // undefined
+x = 1.25e7;
+console.log(typeof(x));   // number
+x = "Hello Web Technologies!";
+console.log(typeof(x));   // string
+\end{lstlisting}
+
+Ed è anche \term{tipizzato debolmente}, con una spiccata predilezione per le
+conversioni implicite:
+
+\begin{lstlisting}[style=js]
+let y = "100" - 1 + "42";
+// string - number -> number, poi number + string -> string
+console.log(`${y}: ${typeof(y)}`);   // 9942: string
+\end{lstlisting}
+
+\section{Il problema}
+
+Queste caratteristiche rendono il linguaggio pratico per piccole manipolazioni
+di pagine web: funziona e basta, senza bisogno di essere prolissi dichiarando
+tipi o conversioni esplicite.
+
+Man mano che la complessità dei programmi cresce, però:
+
+\begin{itemize}
+  \item è più facile introdurre bug insidiosi;
+  \item l'esperienza di sviluppo peggiora: poco supporto dall'IDE, pochissimi
+        errori individuati prima dell'esecuzione;
+  \item il codice diventa meno manutenibile e più difficile da capire.
+\end{itemize}
+
+\begin{esempio}{Bug che si scoprono solo a runtime}
+\begin{lstlisting}[style=js, name=bugs.js]
+let message = "Hello Web Technologies!";
+console.log(message.toLowerCase());   // hello web technologies!
+message();       // TypeError: message is not a function (a runtime)
+
+let employee = { name: "Jordan Belfort", role: "Stockbroker" };
+employee.nome = "The Wolf of Wall Street";   // nessun errore!
+console.log(employee.name);                  // Jordan Belfort
+
+let team = ["Jordan Belfort", "Donnie Azoff", "Chester Ming"];
+team.add("Nicky Koskoff");   // TypeError: team.add is not a function
+\end{lstlisting}
+
+Il secondo caso è il più insidioso: un refuso in un nome di proprietà
+(\code{nome} invece di \code{name}) non produce \textbf{alcun} errore. Sarebbe
+bello intercettare questi bug \textbf{prima} dell'esecuzione.
+\end{esempio}
+
+\section{I transpiler}
+
+JavaScript ha cominciato a essere usato per programmi sempre più complessi, e
+gli sviluppatori hanno sentito il bisogno di superare questi limiti. Sostituire
+JavaScript con un linguaggio nuovo non era praticabile: era già supportato
+ovunque.
+
+Sono così nati molti linguaggi che \textbf{compilano verso JavaScript
+standard}: CoffeeScript, TypeScript, Dart, Elm e circa altri 350.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      n/.style={wtnode, minimum width=3.4cm, minimum height=1.3cm},
+      a/.style={-{Stealth[length=6pt,width=5pt]}, line width=1pt,
+                draw=neutral!45!black}]
+    \node[n] (src) at (0,0)
+      {codice in un nuovo\\ linguaggio, con\\ funzionalità in più};
+    \node[n, draw=orange-gradient-6, fill=orange-gradient-1!40!white]
+      (tr) at (5.0,0) {\textbf{Transpiler}};
+    \node[n] (js) at (10.0,0)
+      {codice JavaScript\\ (gira ovunque giri\\ JavaScript)};
+    \draw[a] (src) -- (tr);
+    \draw[a] (tr) -- (js);
+  \end{tikzpicture}
+  \caption{Un transpiler traduce da un linguaggio a un altro, non a codice
+           macchina.}
+  \label{fig:transpiler}
+\end{figure}
+
+\dfn{TypeScript}{
+  \term{TypeScript} nasce nel 2012, progettato e sviluppato da Microsoft (lo
+  sviluppatore principale è Anders Hejlsberg). È un \textbf{superset} di
+  JavaScript con tipizzazione statica, interfacce, enumerazioni e generici, e
+  \textbf{compila verso JavaScript}. È di gran lunga la variante di JavaScript
+  più diffusa.}
+
+Essendo un superset, \textbf{qualunque codice JavaScript valido è anche codice
+TypeScript valido}: si può adottare gradualmente, un file alla volta.
+
+\section{Primi passi}
+
+TypeScript si installa come pacchetto npm:
+
+\begin{lstlisting}[style=shell]
+npm install -g typescript
+\end{lstlisting}
+
+Il comando rende disponibile globalmente il compilatore \code{tsc}. I file
+TypeScript hanno tipicamente estensione \code{.ts}.
+
+\begin{esempio}{Il compilatore trova un bug nel JavaScript puro}
+\begin{lstlisting}[style=ts, name=hello.ts]
+function greet(entity, date) {
+  console.log(`Hello ${entity}, today is ${date}!`);
+}
+
+greet("Web Technologies");
+\end{lstlisting}
+
+Eseguito con Node, il file funziona (è JavaScript valido) ma stampa un risultato
+sbagliato:
+
+\begin{console}[Terminale]
+$ node hello.ts
+Hello Web Technologies, today is undefined!
+\end{console}
+
+Provando invece a compilarlo:
+
+\begin{console}[Terminale]
+$ tsc hello.ts
+hello.ts:6:1 - error TS2554: Expected 2 arguments, but got 1.
+
+6 greet("Web Technologies");
+  ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  hello.ts:2:24
+    2 function greet(entity, date) {
+                             ~~~~
+    An argument for 'date' was not provided.
+
+Found 1 error in hello.ts:6
+\end{console}
+
+Il compilatore ha individuato il bug \textbf{pur avendo scritto soltanto
+JavaScript standard}, senza una sola annotazione di tipo.
+\end{esempio}
+
+\subsection{Downleveling}
+
+Corretto il bug e compilato il file, \code{tsc} produce un \code{hello.js}
+eseguibile con Node. Il codice generato conserva commenti e indentazione, e
+sembra scritto da una persona. Un dettaglio però cambia:
+
+\begin{lstlisting}[style=ts, name=hello.ts]
+console.log(`Hello ${entity}, today is ${date}!`);
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=hello.js]
+console.log("Hello ".concat(entity, ", today is ").concat(date, "!"));
+\end{lstlisting}
+
+I template literal sono una funzionalità di ES6 e, per impostazione predefinita,
+TypeScript ha come bersaglio ES3 (del 1999). TypeScript sa \textbf{riscrivere}
+il codice da versioni più recenti a versioni più vecchie: è il
+\term{downleveling}. Possiamo usare le funzionalità moderne e far girare il
+risultato anche su browser antichi.
+
+Il bersaglio si può specificare:
+
+\begin{lstlisting}[style=shell]
+tsc --target es6 hello.ts
+\end{lstlisting}
+
+\section{Dichiarare i tipi}
+
+I tipi primitivi più comuni sono \code{string}, \code{number} e
+\code{boolean}.
+
+\begin{lstlisting}[style=ts, name=primitive_types.ts]
+let courseName: string = "Web Technologies";
+let credits: number = 6;
+let isGreat: boolean = true;
+\end{lstlisting}
+
+A questo punto il file \textbf{non è più JavaScript valido}: eseguirlo
+direttamente con Node produce un \code{SyntaxError}. Va compilato prima.
+
+\begin{lstlisting}[style=ts]
+credits = "9 CFU";   // in JavaScript puro sarebbe legittimo
+\end{lstlisting}
+
+\begin{console}[Terminale]
+$ tsc primitive_types.ts
+primitive_types.ts:5:1 - error TS2322: Type 'string' is not assignable to
+type 'number'.
+\end{console}
+
+\subsection{Array}
+
+Il tipo di un array si indica con la sintassi \code{tipo[]}.
+
+\begin{lstlisting}[style=ts, name=array.ts]
+let langs: string[] = ["TypeScript", "JavaScript", "PHP", "Java"];
+let primes: number[] = [2, 5, 7, 97, 829, 839];
+
+langs.push({ name: "C#" });
+// error TS2345: Argument of type '{ name: string; }' is not assignable
+// to parameter of type 'string'.
+\end{lstlisting}
+
+\subsection{Il tipo any}
+
+TypeScript include un tipo speciale: \code{any}. Quando un valore è di tipo
+\code{any} possiamo farci qualunque cosa e il compilatore non protesterà.
+
+\begin{lstlisting}[style=ts]
+let x: any;
+x = { name: "Angular", lang: "TypeScript" };
+x.foo();              // compila, ma solleva TypeError a runtime
+
+x = "Hello!";
+let n: number = x;    // compila: stiamo mettendo una stringa in un number
+\end{lstlisting}
+
+\warning{\code{any} disattiva i controlli}{
+  Usare \code{any} equivale a rinunciare a tutto ciò per cui si è adottato
+  TypeScript. È talvolta inevitabile (per esempio interfacciandosi con librerie
+  non tipizzate), ma va considerato un'eccezione consapevole, non una scorciatoia
+  di comodo.}
+
+\subsection{Funzioni}
+
+Si possono specificare i tipi sia degli ingressi sia del valore restituito.
+
+\begin{lstlisting}[style=ts]
+function greet(name: string): string {
+  return `Hello ${name.toUpperCase()}`;
+}
+
+console.log(greet(42));
+// error TS2345: Argument of type 'number' is not assignable to
+// parameter of type 'string'
+\end{lstlisting}
+
+\subsection{Inferenza automatica}
+
+Quando non si fornisce un'annotazione esplicita, TypeScript prova a
+\textbf{dedurre} il tipo dal contesto.
+
+\begin{lstlisting}[style=ts]
+function greet(name) {         // function greet(name: any): string
+  return `Hello ${name}`;
+}
+
+let arr = [1, 2, 3, 4, 5];     // let arr: number[]
+let course = "Web Technologies";   // let course: string
+
+course = { name: "Web Technologies", credits: 6 };
+// TS2322: Type '{name: string; credits: number;}' is not assignable
+// to type 'string'
+\end{lstlisting}
+
+Quando non si specifica un tipo e TypeScript non riesce a dedurlo, il
+compilatore ripiega di norma su \code{any}. Il flag \code{noImplicitAny}
+permette di segnalare come errore ogni \code{any} implicito.
+
+\begin{console}[Terminale]
+$ tsc --noImplicitAny implicit_any.ts
+implicit_any.ts:3:16 - error TS7006: Parameter 'name' implicitly has an
+'any' type.
+\end{console}
+
+\section{Tipi oggetto}
+
+Un tipo oggetto si definisce elencando le sue proprietà e i loro tipi.
+
+\begin{lstlisting}[style=ts, name=object_types.ts]
+function printCourse(course: { name: string, credits: number }) {
+  console.log(`Course name: ${course.name}`);
+  console.log(`Course credits: ${course.credits}`);
+}
+
+printCourse({ name: "Web Technologies", credits: 6 });   // ok
+
+printCourse({ name: "Software Engineering" });
+// TS2453: Property 'credits' is missing
+
+printCourse({ name: "Algebra", credits: 6, year: "First" });
+// TS2353: Object literal may only specify known properties
+\end{lstlisting}
+
+Una proprietà si può dichiarare \textbf{opzionale} aggiungendo un \code{?} dopo
+il nome.
+
+\begin{lstlisting}[style=ts]
+function printCourse(course: { name: string, credits?: number }) {
+  console.log(`Course name: ${course.name}`);
+  console.log(`Course credits: ${course.credits}`);
+  // andrebbe verificato se course.credits e' undefined!
+}
+
+printCourse({ name: "Software Engineering" });   // ok: stampa "undefined"
+\end{lstlisting}
+
+\section{Tipi unione}
+
+I \term{tipi unione} si ottengono combinando due o più tipi, elencati e separati
+da \code{|}. Rappresentano valori che possono appartenere a uno qualunque dei
+tipi combinati.
+
+\begin{lstlisting}[style=ts, name=union.ts]
+function printError(code: number | string) {
+  console.log(`Error code: ${code}`);
+}
+
+printError(404);                 // ok
+printError("401 Unauthorized");  // ok
+printError({ code: "403" });     // errore di compilazione
+\end{lstlisting}
+
+TypeScript garantisce che le operazioni su un tipo unione siano valide per
+\textbf{ciascuno} dei tipi possibili:
+
+\begin{lstlisting}[style=ts]
+function printError(code: number | string) {
+  console.log(`Error code: ${code.toUpperCase()}`);
+  // TS2339: Property 'toUpperCase' does not exist on type 'string | number'
+}
+\end{lstlisting}
+
+In questi casi bisogna \term{restringere} il tipo con controlli espliciti (per
+esempio \code{typeof} o \code{Array.isArray()}); TypeScript sa dedurre tipi
+specifici nei singoli rami.
+
+\begin{lstlisting}[style=ts]
+function printError(code: number | string) {
+  if (typeof code === "string") {
+    console.log(`Error: ${code.toUpperCase()}`);   // qui code: string
+  } else {
+    console.log(`Error: ${code}`);                 // qui code: number
+  }
+}
+\end{lstlisting}
+
+\section{Alias di tipo e interfacce}
+
+Volendo riusare lo stesso tipo più volte, si può assegnargli un nome con la
+parola chiave \code{type}.
+
+\begin{lstlisting}[style=ts, name=aliases.ts]
+type Credits = number | string;
+
+type Course = {
+  name: string,
+  credits: Credits
+}
+
+function printCourse(course: Course) {
+  console.log(`Name: ${course.name}, Credits: ${course.credits}`);
+}
+
+let webtech: Course = { name: "Web Technologies", credits: 6 };
+let softeng: Course = { name: "Software Engineering", credits: "10 CFU" };
+\end{lstlisting}
+
+Le \term{interfacce} sono un altro modo di dare un nome ai tipi oggetto.
+
+\begin{lstlisting}[style=ts, name=interfaces.ts]
+interface Course {
+  name: string;
+  credits: number;
+}
+
+function printCourse(course: Course) {
+  console.log(`Name: ${course.name}, Credits: ${course.credits}`);
+}
+\end{lstlisting}
+
+\subsection{Tipizzazione strutturale}
+
+\dfn{Tipizzazione strutturale}{
+  TypeScript è un linguaggio a \term{tipizzazione strutturale}: per stabilire la
+  compatibilità fra tipi guarda soltanto alla \textbf{struttura} e alle
+  capacità, non ai \textbf{nomi}. Java, al contrario, ha un sistema di tipi
+  \textit{nominativo}.}
+
+\begin{lstlisting}[style=ts, name=structural.ts]
+interface Person { name: string; age: number; }
+interface Pet    { name: string; age: number; }
+
+function printPerson(p: Person) {
+  console.log(`Name: ${p.name}, age: ${p.age}`);
+}
+
+let person: Person = { name: "Janet", age: 20 };
+let pet: Pet       = { name: "Chuck", age: 3 };
+
+printPerson(person);   // Name: Janet, age: 20
+printPerson(pet);      // Name: Chuck, age: 3   (!)
+\end{lstlisting}
+
+Un \code{Pet} viene accettato dove è atteso un \code{Person} perché ne ha la
+stessa forma. In Java sarebbe un errore di compilazione.
+
+\subsection{Estendere interfacce e tipi}
+
+\begin{lstlisting}[style=ts]
+interface Pet {
+  name: string
+}
+
+interface Bird extends Pet {
+  flies: boolean
+}
+
+let chuck: Bird = { name: "Chuck", flies: true };
+let quentin: Bird = { flies: false };
+// TS2322: Property 'name' is missing
+\end{lstlisting}
+
+Alias di tipo e interfacce sono molto simili e spesso intercambiabili. Una
+distinzione chiave: i \code{type} \textbf{non possono essere riaperti} per
+aggiungere proprietà, mentre le interfacce sono sempre estendibili.
+
+\begin{lstlisting}[style=ts]
+interface Pet { name: string }
+interface Pet { age: number }     // ok: le due dichiarazioni si fondono
+
+type Pet2 = { name: string }
+type Pet2 = { age: number }       // TS2300: Duplicate identifier
+\end{lstlisting}
+
+Gli alias si estendono con i \term{tipi intersezione}, creati con \code{\&}:
+
+\begin{lstlisting}[style=ts]
+type Pet = { name: string }
+
+type Bird = Pet & {
+  flies: boolean
+}
+
+let chuck: Bird = { name: "Chuck", flies: true };
+\end{lstlisting}
+
+\section{Asserzioni di tipo}
+
+Talvolta lo sviluppatore ne sa più del compilatore. Per esempio, usando
+\code{document.getElementById()} TypeScript può dedurre soltanto che la chiamata
+restituirà un \code{HTMLElement}, mentre noi sappiamo che quell'elemento è di un
+tipo più specifico.
+
+\begin{lstlisting}[style=ts]
+const nameInput = document.getElementById("name") as HTMLInputElement;
+\end{lstlisting}
+
+\warning{Non è un'asserzione nel senso dei test}{
+  Il termine è fuorviante: non viene verificato nulla a runtime. È soltanto
+  un'indicazione al compilatore, valida a tempo di compilazione. Se ci
+  sbagliamo, l'errore si manifesterà comunque durante l'esecuzione.}
+
+\section{Tipi letterali ed enumerazioni}
+
+Oltre ai tipi \code{string} e \code{number}, si può fare riferimento a stringhe
+e numeri \textbf{specifici} in posizione di tipo.
+
+\begin{lstlisting}[style=ts]
+let alignment: "center";
+alignment = "center";
+alignment = "left";
+// TS2322: Type '"left"' is not assignable to type '"center"'
+\end{lstlisting}
+
+Da solo non è molto utile, ma combinato con i tipi unione esprime un concetto
+molto potente: tipi che corrispondono a un \textbf{insieme di valori noti}.
+
+\begin{lstlisting}[style=ts]
+type Alignment = "center" | "left" | "right";
+
+let alignment: Alignment;
+alignment = "left";    // ok
+alignment = "right";   // ok
+alignment = "centre";
+// TS2820: Type '"centre"' is not assignable to type 'Alignment'.
+// Did you mean '"center"'?
+\end{lstlisting}
+
+Le \term{enumerazioni} permettono di definire un insieme di costanti con un
+nome.
+
+\begin{lstlisting}[style=ts, name=enums.ts]
+interface Order { isPremium: boolean }
+
+enum Priority {
+  Low,
+  Medium,
+  High
+}
+
+function computePriority(s: Order): Priority {
+  if (s.isPremium)
+    return Priority.High;
+  return Priority.Low;
+}
+
+console.log(Priority.Medium);   // 1
+\end{lstlisting}
+
+\section{Tipi funzione}
+
+Come si dichiara che una funzione riceve una \textbf{callback} con certi
+parametri e un certo risultato? Con le \term{espressioni di tipo funzione}.
+
+\begin{lstlisting}[style=ts]
+type stringDecoratorFunction = (x: string, mode: boolean) => string;
+
+let fn: () => string;                  // funzione senza argomenti, ritorna string
+fn = () => { return "Hello Web Tech" };       // ok
+fn = (x: string) => { return `Hello ${x}` };  // errore di tipo
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts, name=function_types.ts]
+enum Case { Uppercase, Lowercase }
+
+function GREET(name: string, decorator: (x: string, mode: Case) => string) {
+  return decorator(name, Case.Uppercase);
+}
+
+function stringDecorator(x: string, mode: Case) {
+  if (mode === Case.Lowercase)
+    return `>>> Hello ${x} <<<`.toLowerCase();
+  else
+    return `>>> Hello ${x} <<<`.toUpperCase();
+}
+
+console.log(GREET("Web Technologies", stringDecorator));
+\end{lstlisting}
+
+\section{Generici}
+
+Buona parte dell'ingegneria del software mira a costruire software
+\textbf{riusabile}: sviluppare componenti capaci di operare su dati presenti e
+futuri è essenziale per i sistemi di grandi dimensioni. I \term{generici} sono
+uno degli strumenti principali per scrivere codice che funzioni con una varietà
+di tipi.
+
+\begin{esempio}{La funzione identità}
+Supponiamo di dover realizzare una funzione che restituisce ciò che riceve.
+
+\begin{lstlisting}[style=ts]
+function identity(x) {        // function identity(x: any): any
+  return x;
+}
+
+let y: string = "Hello";
+let z = identity(y);          // z: any (!)
+\end{lstlisting}
+
+Usare \code{any} è abbastanza generico, ma \textbf{perdiamo l'informazione} sul
+tipo al ritorno. Dare un tipo specifico risolve il problema ma funzionerebbe
+solo con le stringhe.
+
+TypeScript permette di definire \term{variabili di tipo}, dichiarate dopo il
+nome della funzione fra \code{<} e \code{>}.
+
+\begin{lstlisting}[style=ts, name=generics.ts]
+function identity<Type>(x: Type): Type {
+  return x;
+}
+
+let s: string = identity<string>("Hello");   // Type impostato esplicitamente
+let n: number = identity(42);                // dedotto automaticamente
+let o: { title: string, artist: string } = identity({
+  title: "Sultans of swing",
+  artist: "Dire Straits"
+});
+\end{lstlisting}
+
+Non è la stessa cosa di usare \code{any}: qui l'informazione sul tipo di
+ingresso viene \textbf{preservata}.
+\end{esempio}
+
+Le variabili di tipo possono essere più di una, e funzionano anche con gli
+array:
+
+\begin{lstlisting}[style=ts]
+function merge<T1, T2>(x: T1, y: T2): { field: T2, otherField: T1 } {
+  return { field: y, otherField: x };
+}
+
+let x = merge("Sultans of Swing", 42);
+// x ha tipo { field: number, otherField: string }
+
+function getFirst<T>(arr: T[]): T {
+  return arr[0];
+}
+
+let first: string = getFirst(["hello", "web", "technologies"]);
+\end{lstlisting}
+
+\subsection{Classi generiche}
+
+\begin{lstlisting}[style=ts, name=generic_class.ts]
+class CustomCollection<T> {
+  list: T[] = [];
+
+  addElement(element: T): number {
+    return this.list.push(element);
+  }
+
+  getRandomElement(): T {
+    let selectedIndex: number = Math.floor(Math.random() * this.list.length);
+    return this.list[selectedIndex];
+  }
+}
+
+let c = new CustomCollection<string>();
+c.addElement("hello");
+c.addElement("web");
+console.log(c.getRandomElement());
+\end{lstlisting}
+
+\subsection{Vincoli sui generici}
+
+\begin{lstlisting}[style=ts, name=constraints.ts]
+class Animal { species: string; }
+class Bird extends Animal  { canFly: boolean; }
+class Snake extends Animal { isVenomous: boolean; }
+
+function animalInfo<T extends Animal>(animal: T): void {
+  console.log(animal.species);
+}
+
+animalInfo(new Bird());              // ok
+animalInfo({ species: "Spider" });   // ok anche questo (!)
+\end{lstlisting}
+
+L'ultima riga funziona per via della tipizzazione strutturale: l'oggetto
+letterale ha la stessa forma di \code{Animal}, quindi soddisfa il vincolo.
+
+\section{Altri tipi da conoscere}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.45}
+\begin{tabular}{@{}l@{\hspace{1.2cm}}>{\raggedright\arraybackslash}p{8.6cm}@{}}
+  \textbf{Tipo} & \textbf{Significato} \\
+  \code{void}    & tipo di ritorno delle funzioni che non restituiscono un
+                   valore \\
+  \code{unknown} & rappresenta qualunque valore possibile: simile ad
+                   \code{any}, ma \textbf{più sicuro}, perché non consente
+                   alcuna operazione senza prima restringere il tipo \\
+  \code{never}   & rappresenta valori che non vengono mai osservati: il tipo di
+                   una funzione che non ritorna mai, o di un ramo irraggiungibile \\
+\end{tabular}
+\end{center}
+
+\begin{lstlisting}[style=ts, name=unknown.ts]
+function greet(a: any) {
+  console.log(a.name);       // compila, ma possibile errore a runtime
+}
+
+function saferGreet(a: unknown) {
+  console.log(a.name);       // TS18046: 'a' is of type unknown
+}
+
+type namedObject = { name: string };
+
+function notSoSafeGreet(a: unknown) {
+  console.log((a as namedObject).name);   // asserzione esplicita
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts, name=never.ts]
+function f(x: string | number) {
+  if (typeof x === "string") {
+    return x.toLowerCase();
+  } else if (typeof x === "number") {
+    return x.toPrecision(2);
+  } else {
+    return x;   // qui x ha tipo never: nessun altro caso e' possibile
+  }
+}
+
+function g(x: any): never {   // g non ritorna mai: solleva sempre un errore
+  throw new Error("Oops!");
+}
+\end{lstlisting}
+
+\section{Livelli di severità}
+
+Utenti diversi si aspettano cose diverse da TypeScript. Per impostazione
+predefinita offre un'esperienza \textbf{opzionale}: i tipi non sono obbligatori
+e si ricorre ad \code{any} quando non è possibile dedurre un tipo preciso. Il
+flag \code{noImplicitAny} rende più severo questo comportamento.
+
+Per non essere troppo invasivo, alcuni controlli sono disattivati di
+partenza. Per esempio \code{null} e \code{undefined} possono essere assegnati a
+qualunque tipo: dimenticarsi di gestirli esplicitamente è la causa di
+innumerevoli bug, tanto che il concetto è stato definito \guillemotleft l'errore da un
+miliardo di dollari\guillemotright.
+
+Il flag \code{strictNullChecks} impone che \code{null} e \code{undefined} siano
+gestiti in modo esplicito.
+
+\begin{lstlisting}[style=ts, name=strict.ts]
+let character = x.list.find((val: string) => {
+  return val === "Amelie"
+});
+
+console.log(character.toUpperCase());   // character potrebbe essere undefined!
+\end{lstlisting}
+
+\begin{console}[Terminale]
+$ tsc -target es6 strict.ts
+$ tsc -target es6 -strictNullChecks strict.ts
+strict.ts:13:13 - error TS18048: 'character' is possibly 'undefined'.
+\end{console}
+
+Senza il flag il codice compila e il bug esplode a runtime; con il flag viene
+intercettato subito. È il motivo per cui nei progetti nuovi conviene attivare
+fin dall'inizio la modalità severa.
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{The TypeScript Handbook}. \\
+        \urlx{https://www.typescriptlang.org/docs/handbook/intro.html} \\
+        Non serve conoscerlo per intero: va usato come riferimento per le parti
+        discusse in questo capitolo.
+  \item \textbf{Lecture Notes for the Comparative Studies of Programming
+        Languages Course}, Paquet e Mokhov (2010). \\
+        \urlx{https://arxiv.org/pdf/1007.2123.pdf} \\
+        Sezione 3.3 per approfondire i sistemi di tipi (duck typing, sistemi
+        strutturali contro nominativi). Non richiesto per il corso.
+  \item \textbf{To Type or Not to Type? A Systematic Comparison of the Software
+        Quality of JavaScript and TypeScript Applications on GitHub}, Justus
+        Bogner e Manuel Merkel (2022). \\
+        \urlx{https://dl.acm.org/doi/pdf/10.1145/3524842.3528454}
+\end{itemize}

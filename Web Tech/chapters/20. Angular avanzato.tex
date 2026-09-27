@@ -1,0 +1,844 @@
+\chapter{Angular avanzato}
+
+Sappiamo che cosa sono i componenti, come si usa il Router integrato e come
+gestire \code{@Input} e \code{@Output}. In questo capitolo vediamo altre
+funzionalità importanti del framework: i \textbf{form}, i \textbf{servizi} e
+l'iniezione delle dipendenze, la \textbf{protezione delle rotte}, il
+\textbf{client HTTP} e i \textbf{signal}.
+
+\section{I form}
+
+I form sono in molti casi il modo preferito per raccogliere l'input
+dell'utente. In Angular si possono gestire in due modi:
+
+\begin{itemize}
+  \item \term{form guidati dal template}: le associazioni fra i dati del
+        componente e il form sono definite \textbf{implicitamente}, tramite
+        direttive nel template;
+  \item \term{form reattivi}: le associazioni sono definite
+        \textbf{esplicitamente} nel componente.
+\end{itemize}
+
+\subsection{Form guidati dal template}
+
+\begin{lstlisting}[style=ts, name=login.component.ts]
+import { Component } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+
+@Component({
+  selector: 'app-login',
+  standalone: true,
+  imports: [FormsModule],
+  templateUrl: './login.component.html',
+  styleUrl: './login.component.scss'
+})
+export class LoginComponent {
+  user: string = "";
+  pass: string = "";
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=html, name=login.component.html]
+<h1>Login</h1>
+<form>
+  <label for="usr">Username:</label>
+  <input id="usr" name="usr" [(ngModel)]="user"/>
+
+  <label for="pwd">Password:</label>
+  <input id="pwd" name="pwd" type="password" [(ngModel)]="pass"/>
+</form>
+<p>
+  Username is <strong>{{user}}</strong>;
+  Password is <strong>{{pass}}</strong>
+</p>
+\end{lstlisting}
+
+La direttiva \code{[(ngModel)]="pass"} specifica che il valore di un campo del
+form è legato a una proprietà del componente.
+
+\info{La \guillemotleft banana nella scatola\guillemotright}{
+  La notazione \code{[()]} è nota scherzosamente come \textit{banana in a box} e
+  rappresenta un \term{legame bidirezionale}: combina il property binding
+  (parentesi quadre, dati che scendono) con l'event binding (parentesi tonde,
+  eventi che salgono).
+
+  Il risultato è che, digitando nel campo, i dati del componente si aggiornano
+  automaticamente e il template si aggiorna di conseguenza; e se una proprietà
+  cambia nel componente, il campo del form si aggiorna da sé. Per verificarlo
+  basta inizializzare \code{user} a un valore diverso dalla stringa vuota.}
+
+\subsection{Form reattivi}
+
+\begin{lstlisting}[style=ts, name=login.component.ts]
+import { Component } from '@angular/core';
+import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
+
+@Component({
+  selector: 'app-login',
+  standalone: true,
+  imports: [ReactiveFormsModule],
+  templateUrl: './login.component.html',
+  styleUrl: './login.component.scss'
+})
+export class LoginComponent {
+  loginForm = new FormGroup({
+    user: new FormControl(''),    // l'argomento e' il valore iniziale
+    pass: new FormControl('')
+  });
+
+  onSubmit() {
+    alert(`Username: ${this.loginForm.value.user}
+           Password: ${this.loginForm.value.pass}`);
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=html, name=login.component.html]
+<h1>Login</h1>
+<form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+  <label for="usr">Username:</label>
+  <input id="usr" formControlName="user"/>
+
+  <label for="pwd">Password:</label>
+  <input id="pwd" formControlName="pass" type="password"/>
+
+  <button type="submit">Submit</button>
+</form>
+<p>
+  Username is <strong>{{loginForm.value.user}}</strong>;
+  Password is <strong>{{loginForm.value.pass}}</strong>
+</p>
+\end{lstlisting}
+
+Qui la struttura del form è dichiarata esplicitamente nella classe: è più
+verboso, ma rende il form ispezionabile e testabile dal codice, e permette di
+aggiungere validatori in modo strutturato.
+
+\section{Servizi e iniezione delle dipendenze}
+
+Sappiamo che le classi del nostro software dovrebbero fare \textbf{una cosa
+sola} e farla bene: aumenta modularità e riusabilità. I componenti Angular
+dovrebbero occuparsi soltanto dell'esperienza utente: template, stili e la
+logica che fa da mediatore fra la vista e la logica applicativa.
+
+\dfn{Servizio}{
+  I \term{servizi} sono classi che forniscono funzionalità utilizzabili in più
+  parti dell'applicazione. Non sono associati direttamente all'esperienza
+  utente: niente template, niente stili, solo logica invocabile all'occorrenza.}
+
+Sono ideali per compiti come recuperare dati da una API REST, registrare log o
+validare dati: attività che con ogni probabilità serviranno in punti diversi
+dell'applicazione.
+
+\dfn{Dependency Injection}{
+  Angular sfrutta il pattern della \term{iniezione delle dipendenze} per
+  permettere al codice di ottenere facilmente istanze delle proprie dipendenze.
+  L'obiettivo è \textbf{separare} la responsabilità di costruire le dipendenze
+  da quella di usarle, riducendo l'accoppiamento.}
+
+Nel sistema di iniezione di Angular esistono due ruoli: il \textbf{consumatore}
+di dipendenze (il codice che scriviamo noi) e il \textbf{fornitore} di
+dipendenze (gestito generalmente da Angular).
+
+\subsection{Creare un servizio}
+
+\begin{lstlisting}[style=shell]
+ng generate service calculator
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts, name=calculator.service.ts]
+import { Injectable } from '@angular/core';
+
+@Injectable({
+  providedIn: 'root'   // disponibile ovunque nell'applicazione
+})
+export class CalculatorService {
+  sum(x: number, y: number): number { return x + y; }
+}
+\end{lstlisting}
+
+Il decoratore \code{@Injectable} marca la classe come qualcosa che può essere
+iniettato in un componente come dipendenza.
+
+\subsection{Iniettare un servizio}
+
+Ci sono due modi. Con la funzione \code{inject()}:
+
+\begin{lstlisting}[style=ts, name=home-page.component.ts]
+import { Component, inject } from '@angular/core';
+import { CalculatorService } from '../calculator.service';
+
+@Component({
+  selector: 'app-home-page',
+  standalone: true,
+  template: "<p>The sum is <strong>{{sum}}</strong></p>",
+})
+export class HomePageComponent {
+  private calculatorService = inject(CalculatorService);
+  sum = this.calculatorService.sum(1234, 4321);
+}
+\end{lstlisting}
+
+Oppure dichiarandolo nel costruttore della classe:
+
+\begin{lstlisting}[style=ts, name=home-page.component.ts]
+export class HomePageComponent {
+  constructor(private calculatorService: CalculatorService) {}
+  sum = this.calculatorService.sum(1234, 4321);
+}
+\end{lstlisting}
+
+In nessuno dei due casi il componente costruisce il servizio con \code{new}: è
+precisamente questo il punto dell'iniezione delle dipendenze, e ciò che rende il
+componente facilmente testabile sostituendo il servizio con una versione finta.
+
+\section{Proteggere le rotte}
+
+Un compito frequente è assicurarsi che solo gli utenti autorizzati accedano a
+certe rotte. Con il Router di Angular si usano le \term{Route Guard}: funzioni
+invocate da Angular per determinare se l'utente possa compiere certe operazioni
+su una rotta (\code{canActivate}, \code{canMatch}, \code{canLoad},
+\code{canDeactivate}).
+
+Le guardie si indicano come proprietà degli oggetti \code{Route}. Se ne possono
+specificare più di una: Angular le esegue \textbf{in parallelo}, e l'azione è
+consentita solo se tutte restituiscono \code{true}.
+
+\begin{lstlisting}[style=shell]
+ng generate guard authorization
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts, name=authorization.guard.ts]
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+import { AuthService } from './auth.service';
+
+export const authorizationGuard: CanActivateFn = (route, state) => {
+  const router = inject(Router);
+  const authService = inject(AuthService);
+
+  if (authService.isUserLoggedIn()) {
+    return true;                      // utente autorizzato
+  } else {
+    router.navigateByUrl("/login");   // reindirizza al login
+    return false;
+  }
+};
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts, name=app.routes.ts]
+{
+  path: "counter",
+  title: "Counter",
+  component: CounterPageComponent,
+  canActivate: [authorizationGuard]
+}
+\end{lstlisting}
+
+Una guardia può restituire un valore booleano oppure un oggetto \code{UrlTree}:
+
+\begin{itemize}
+  \item \code{true}: la guardia è soddisfatta, la navigazione può proseguire;
+  \item \code{false}: la guardia non è soddisfatta, l'azione non è consentita;
+  \item un \code{UrlTree}: il Router deve reindirizzare a quella URL.
+\end{itemize}
+
+\warning{Con più guardie, restituire un UrlTree}{
+  Quando si impostano più guardie bisogna sempre restituire un \code{UrlTree}
+  per reindirizzare, e \textbf{non} invocare direttamente
+  \code{Router.navigate()} come nell'esempio precedente. Con più guardie
+  eseguite in parallelo, se due di esse reindirizzano si possono avere
+  \textit{race condition}.}
+
+\error{Le guardie non sono sicurezza}{
+  Una Route Guard gira \textbf{nel browser}, cioè su una macchina interamente
+  sotto il controllo dell'utente. Serve a migliorare l'esperienza (non mostrare
+  pagine inutilizzabili), non a proteggere i dati. La vera autorizzazione va
+  sempre imposta \textbf{sul server}, come abbiamo fatto nel capitolo sulle API
+  REST.}
+
+\section{HttpClient}
+
+Angular fornisce una API per effettuare richieste HTTP, implementata nella
+classe di servizio \code{HttpClient}. Va configurata tramite iniezione delle
+dipendenze.
+
+\begin{lstlisting}[style=ts, name=app.config.ts]
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideHttpClient(),
+    provideRouter(routes)
+  ]
+};
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts, name=rest-backend.service.ts]
+import { HttpClient } from '@angular/common/http';
+import { Injectable } from '@angular/core';
+
+@Injectable({ providedIn: 'root' })
+export class RestBackendService {
+  constructor(private http: HttpClient) {}
+  // il servizio puo' ora effettuare richieste tramite `this.http`
+}
+\end{lstlisting}
+
+\begin{esempio}{Una richiesta HTTP}
+\begin{lstlisting}[style=ts, name=cat-facts.component.ts]
+@Component({
+  selector: 'app-cat-facts',
+  standalone: true,
+  template: `
+    <h1>Cat Facts</h1>
+    <button (click)="loadCatFact()">Click here to load a cat fact</button>
+    <p>{{catFact}}</p>
+  `
+})
+export class CatFactsComponent {
+  constructor(private http: HttpClient) {}
+
+  catFact: string = "";
+
+  loadCatFact() {
+    let url = "https://cat-fact.herokuapp.com/facts/random";
+    this.http.get<{ text: string }>(url).subscribe(data => {
+      this.catFact = data.text;
+    });
+  }
+}
+\end{lstlisting}
+\end{esempio}
+
+\section{Observable}
+
+\code{HttpClient} fornisce metodi corrispondenti ai vari verbi HTTP, e ciascuno
+restituisce un \term{Observable} della libreria RxJS (\textit{Reactive
+Extensions Library for JavaScript}). Angular usa gli Observable per gestire
+molte operazioni asincrone.
+
+\dfn{Observable}{
+  Un \term{Observable} è per certi versi simile a una Promise, con una
+  differenza essenziale: una \textbf{Promise} può risolversi (o essere
+  rifiutata) \textbf{una volta sola}, cioè emette in modo asincrono un
+  \textbf{singolo} valore o un errore; un \textbf{Observable} può emettere in
+  modo asincrono \textbf{più valori nel tempo}.}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.3cm}@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{6.3cm}@{}}
+  \textbf{Promise} & \textbf{Observable} \\
+  Un solo valore, una sola volta. & Zero, uno o molti valori nel tempo. \\
+  Si consuma con \code{.then()} / \code{.catch()}. & Si consuma
+    \term{sottoscrivendosi} con \code{.subscribe()}. \\
+  Parte subito, alla creazione. & Parte alla sottoscrizione. \\
+\end{tabular}
+\end{center}
+
+\subsection{Sottoscriversi a un Observable}
+
+Come con le Promise, bisogna fornire le callback da eseguire al verificarsi
+degli eventi. Lo si fa \textbf{sottoscrivendosi}.
+
+\begin{lstlisting}[style=ts, name=subscribe.ts]
+observable.subscribe({
+  next(value) {   // eseguita quando l'Observable emette un valore
+    console.log(`Observable emitted value ${value}`);
+  },
+  error(err) {    // eseguita quando l'Observable emette un errore
+    console.log(`Observable emitted an Error: ${err}`);
+  },
+  complete() {    // eseguita quando l'Observable ha finito
+    console.log("Observable finished emitting values");
+  }
+});
+\end{lstlisting}
+
+\subsection{Creare un Observable}
+
+L'argomento passato al costruttore è la funzione da eseguire al momento della
+sottoscrizione.
+
+\begin{lstlisting}[style=ts, name=observables_example.ts]
+import { Observable } from "rxjs";
+
+const observable = new Observable<number>((subscriber) => {
+  setTimeout(() => {
+    let num = Math.random();
+    if (num < 0.5) {
+      subscriber.next(num);
+    } else {
+      subscriber.error(new Error(`You were unlucky! ${num}`));
+    }
+    subscriber.complete();
+  }, 2000);
+});
+\end{lstlisting}
+
+\begin{console}[Terminale]
+$ node observables_example.js
+Observer emitted value 0.33397894647355697
+Observer finished emitting values
+
+$ node observables_example.js
+Observer emitted an Error: You were unlucky! 0.620240538767127
+\end{console}
+
+\warning{Un errore è una conclusione}{
+  Nella seconda esecuzione \code{complete()} \textbf{non} viene invocata: un
+  errore termina l'Observable, e le due callback si escludono a vicenda. È lo
+  stesso comportamento di un'eccezione che interrompe un flusso.}
+
+\subsection{Emettere più valori}
+
+\begin{lstlisting}[style=ts, name=multiple_values.ts]
+import { Observable, Subscriber } from "rxjs";
+
+const observable = new Observable<number>(subscriber => {
+  helper(subscriber, 1);
+});
+
+function helper(subscriber: Subscriber<number>, level: number) {
+  setTimeout(() => {
+    let num = Math.random();
+    if (level > 3) { subscriber.complete(); return; }
+
+    if (num < 0.8) {
+      subscriber.next(num);
+      helper(subscriber, level + 1);   // ricorsione
+    } else {
+      subscriber.error(new Error(`You were unlucky! ${num}`));
+    }
+  }, 1000);
+}
+\end{lstlisting}
+
+\begin{console}[Terminale]
+$ node observables_example.js
+Observer emitted value 0.6982903488018062
+Observer emitted value 0.5713928193844571
+Observer emitted value 0.005029574874092724
+Observer finished emitting values
+\end{console}
+
+\section{Interceptor}
+
+\code{HttpClient} si può configurare in molti modi: per esempio con
+\code{withFetch()} per usare la \code{fetch} API al posto di
+\code{XMLHttpRequest}, oppure aggiungendo \term{interceptor}.
+
+\begin{lstlisting}[style=ts, name=app.config.ts]
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideHttpClient(
+      withFetch(),
+      withInterceptors([loggingInterceptor, authInterceptor])
+    ),
+    provideRouter(routes)
+  ]
+};
+\end{lstlisting}
+
+Gli interceptor sono una forma di \textbf{middleware} supportata da
+\code{HttpClient}: stesso concetto dei middleware di Express visti nel capitolo
+13, ma applicato alle richieste \textbf{in uscita}. Sono funzioni che ricevono
+la richiesta corrente e una funzione \code{next}, che rappresenta il passo
+successivo della catena.
+
+\begin{lstlisting}[style=ts, name=interceptors.ts]
+function log(req: HttpRequest<unknown>, next: HttpHandlerFn) {
+  console.log(req.url);
+  return next(req);
+}
+\end{lstlisting}
+
+Casi d'uso tipici:
+
+\begin{itemize}
+  \item aggiungere header di autenticazione alle richieste (per esempio i token
+        JWT del capitolo 15);
+  \item mettere in cache le risposte per un certo tempo;
+  \item registrare le richieste in uscita.
+\end{itemize}
+
+\section{Change detection}
+
+Quando una proprietà di un componente cambia, il suo template viene aggiornato
+automaticamente da Angular. Aggiornare i template \textbf{solo quando serve} e
+farlo in modo efficiente (aggiornando solo le parti necessarie) è essenziale per
+le prestazioni di una SPA.
+
+Come fa Angular a sapere quando deve aggiornare la vista?
+
+In sostanza, quando accade qualcosa nell'applicazione (eventi del DOM,
+operazioni asincrone) si attiva il meccanismo di \term{change detection}.
+Angular percorre tutti i componenti della gerarchia e, per ciascuno, verifica se
+il suo stato è cambiato e se il cambiamento influisce sulla vista; in tal caso
+aggiorna la porzione di DOM corrispondente al template del componente.
+
+\section{Signal}
+
+I \term{signal} sono stati introdotti in Angular 17. Tracciano in modo
+\textbf{granulare} come e dove lo stato viene usato nell'applicazione,
+permettendo ad Angular di ottimizzare ulteriormente gli aggiornamenti.
+
+\dfn{Signal}{
+  Si può pensare a un \term{signal} come a una variabile capace anche di
+  \textbf{notificare} i consumatori interessati quando il proprio valore cambia.
+  È un modo di realizzare la \term{programmazione reattiva}, una forma di
+  programmazione dichiarativa basata sull'elaborazione asincrona degli eventi.}
+
+Usare i signal permette ad Angular di evitare controlli di change detection non
+necessari e di aggiornare solo le parti del DOM effettivamente cambiate.
+
+\subsection{Creare e aggiornare}
+
+I signal possono essere scrivibili o in sola lettura. Quelli scrivibili si
+creano con la funzione \code{signal()}, passando un valore iniziale, e offrono
+\code{.set()} per impostare un nuovo valore e \code{.update()} per calcolarlo a
+partire dal precedente.
+
+\begin{lstlisting}[style=ts, name=counter-signal.component.ts]
+import { Component, signal } from '@angular/core';
+
+@Component({
+  selector: 'app-counter-signal',
+  standalone: true,
+  template: `
+    <h1>Counter with Signals</h1>
+    <button (click)="handleClick()">Click to Increment</button>
+    <button (click)="handleReset()">Click to Reset</button>
+    <p>{{count()}}</p>   <!-- si notino le parentesi! -->
+  `
+})
+export class CounterSignalComponent {
+  count = signal(0);
+
+  handleClick() { this.count.update(value => value + 1); }
+  handleReset() { this.count.set(0); }
+}
+\end{lstlisting}
+
+Nel template il signal si legge \textbf{invocandolo}: \code{count()}, non
+\code{count}.
+
+\subsection{Signal calcolati}
+
+I \term{signal calcolati} sono in sola lettura e derivano il proprio valore da
+quello di altri signal. Si definiscono con la funzione \code{computed()} e una
+funzione di derivazione; Angular li mantiene aggiornati automaticamente, in modo
+reattivo. Invocare \code{.set()} o \code{.update()} su di essi produce un
+errore.
+
+\begin{lstlisting}[style=ts]
+export class CounterSignalComponent {
+  count = signal(0);
+  double = computed(() => this.count() * 2);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=html]
+<p>Count: {{count()}} - Double: {{double()}}</p>
+\end{lstlisting}
+
+\subsection{Effetti}
+
+Un \term{effetto} è una funzione che viene eseguita ogni volta che certi signal
+cambiano. Si crea con la funzione \code{effect()}.
+
+\begin{lstlisting}[style=ts, name=counter-signal.component.ts]
+export class CounterSignalComponent {
+  count = signal(0);
+  double = computed(() => this.count() * 2);
+
+  constructor() {
+    effect(() => {
+      console.log(`Count value changed: ${this.count()}`);
+    });
+  }
+
+  handleClick() { this.count.update(value => value + 1); }
+  handleReset() { this.count.set(0); }
+}
+\end{lstlisting}
+
+\begin{console}
+Count value changed: 0
+Count value changed: 1
+Count value changed: 2
+\end{console}
+
+Gli effetti vengono eseguiti \textbf{almeno una volta}: è per questo che la
+prima riga compare senza che nessuno abbia premuto il pulsante. Quando vengono
+eseguiti, tengono traccia di tutti i signal che leggono, e ogni volta che uno di
+questi cambia l'effetto viene rieseguito.
+
+\section{Mettere tutto insieme: la lista come SPA}
+
+Chiudiamo il percorso riscrivendo la nostra applicazione come Single Page App in
+Angular, appoggiandosi al \textbf{backend REST} sviluppato nel capitolo 15. È
+l'occasione per vedere come i pezzi studiati finora si incastrano.
+
+\subsection{Le rotte}
+
+\begin{lstlisting}[style=ts, name=app.routes.ts]
+export const routes: Routes = [
+  {
+    path: "home", component: HomepageComponent,
+    title: "To-do List Angular App"
+  }, {
+    path: "login", component: LoginComponent,
+    title: "Login | To-do List Angular App"
+  }, {
+    path: "todos", component: TodoPageComponent,
+    title: "To-do List | To-do List Angular App",
+    canActivate: [authGuard]              // rotta protetta
+  }, {
+    path: "todos/:id", component: TodoDetailComponent,
+    title: "To-do Detail | To-do List Angular App",
+    canActivate: [authGuard]              // rotta protetta E parametrica
+  }
+];
+\end{lstlisting}
+
+\subsection{La guardia}
+
+\begin{lstlisting}[style=ts, name=auth.guard.ts]
+export const authGuard: CanActivateFn = (route, state) => {
+  const authService = inject(AuthService);
+  const toastr = inject(ToastrService);
+  const router = inject(Router);
+
+  if (authService.isUserAuthenticated()) {
+    return true;
+  } else {
+    toastr.warning("Effettua l'accesso per usare questa funzione",
+                   "Non autorizzato!");
+    return router.parseUrl("/login");     // restituisce un UrlTree
+  }
+};
+\end{lstlisting}
+
+Si noti \code{router.parseUrl()}: è la forma corretta di reindirizzamento
+discussa poco fa, quella che evita le \textit{race condition} con più guardie.
+
+\subsection{Il componente di login}
+
+\begin{lstlisting}[style=ts, name=login.component.ts]
+export class LoginComponent {
+  toastr      = inject(ToastrService);
+  router      = inject(Router);
+  restService = inject(RestBackendService);
+  authService = inject(AuthService);
+
+  submitted = false;
+
+  loginForm = new FormGroup({
+    user: new FormControl('', [Validators.required]),
+    pass: new FormControl('', [
+      Validators.required,
+      Validators.minLength(4),
+      Validators.maxLength(16)
+    ])
+  });
+
+  handleLogin() {
+    this.submitted = true;
+
+    if (this.loginForm.invalid) {
+      this.toastr.error("Dati non validi!", "Attenzione");
+      return;
+    }
+
+    this.restService.login({
+      usr: this.loginForm.value.user as string,
+      pwd: this.loginForm.value.pass as string,
+    }).subscribe({
+      next:  (token) => { this.authService.updateToken(token as string); },
+      error: (err)   => { this.toastr.error("Credenziali non valide"); },
+      complete: () => {
+        this.toastr.success(`Benvenuto ${this.loginForm.value.user}!`);
+        this.router.navigateByUrl("/todos");
+      }
+    });
+  }
+}
+\end{lstlisting}
+
+Nel template, gli errori di validazione si mostrano solo quando servono, con la
+sintassi di controllo di flusso di Angular 17:
+
+\begin{lstlisting}[style=html, name=login.component.html]
+<label for="pass">Password</label>
+<input type="password" formControlName="pass" id="pass" required>
+
+@if (submitted && loginForm.controls.pass.errors) {
+  @if (loginForm.controls.pass.errors['required']) {
+    <p class="form-error">La password e' obbligatoria.</p>
+  }
+  @if (loginForm.controls.pass.errors['minlength']) {
+    <p class="form-error">La password deve contenere almeno 4 caratteri.</p>
+  }
+}
+\end{lstlisting}
+
+\subsection{Il servizio di autenticazione, con i signal}
+
+\begin{lstlisting}[style=ts, name=auth.service.ts]
+type AuthState = {
+  user: string | null,
+  token: string | null,
+  isAuthenticated: boolean
+}
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+
+  authState: WritableSignal<AuthState> = signal<AuthState>({
+    user:  this.getUser(),
+    token: this.getToken(),                        // dal localStorage, se c'e'
+    isAuthenticated: this.verifyToken(this.getToken())   // non scaduto?
+  });
+
+  user            = computed(() => this.authState().user);
+  token           = computed(() => this.authState().token);
+  isAuthenticated = computed(() => this.authState().isAuthenticated);
+
+  constructor() {
+    // un effetto tiene allineati i dati con il localStorage
+    effect(() => {
+      const token = this.authState().token;
+      const user  = this.authState().user;
+
+      if (token !== null) localStorage.setItem("token", token);
+      else                localStorage.removeItem("token");
+
+      if (user !== null)  localStorage.setItem("user", user);
+      else                localStorage.removeItem("user");
+    });
+  }
+}
+\end{lstlisting}
+
+Qui i signal danno il meglio: lo stato di autenticazione è un solo signal
+scrivibile, da cui derivano tre signal calcolati, e un \textbf{effetto} tiene
+sincronizzato il \code{localStorage} senza che nessuno debba ricordarsi di
+chiamarlo.
+
+\subsection{Il servizio REST e l'interceptor}
+
+\begin{lstlisting}[style=ts, name=rest-backend.service.ts]
+export interface AuthRequest {
+  usr: string,
+  pwd: string
+}
+
+@Injectable({ providedIn: 'root' })
+export class RestBackendService {
+  url = "http://localhost:3000";
+
+  constructor(private http: HttpClient) {}
+
+  httpOptions = {
+    headers: new HttpHeaders({ 'Content-Type': 'application/json' })
+  };
+
+  login(loginRequest: AuthRequest) {
+    const url = `${this.url}/auth`;
+    return this.http.post<string>(url, loginRequest, this.httpOptions);
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts, name=auth.interceptor.ts]
+function authInterceptor(request: HttpRequest<unknown>, next: HttpHandlerFn) {
+  const authService = inject(AuthService);
+  const token = authService.getToken();
+
+  if (token) {
+    // clona la richiesta aggiungendo l'header Authorization
+    request = request.clone({
+      setHeaders: {
+        Authorization: 'Bearer ' + token
+      }
+    });
+  }
+
+  return next(request);
+}
+\end{lstlisting}
+
+L'interceptor è il pezzo che chiude il cerchio con il capitolo 15: il token JWT
+viene allegato \textbf{automaticamente} a ogni richiesta uscente, e nessun
+componente deve occuparsene.
+
+\subsection{La lista e i suoi elementi}
+
+\begin{lstlisting}[style=ts, name=todo-page.component.ts]
+export class TodoPageComponent {
+  createTodoSubmitted = false;
+
+  restService = inject(RestBackendService);
+  toastr      = inject(ToastrService);
+  router      = inject(Router);
+
+  todos: TodoItem[] = [];
+
+  newTodoForm = new FormGroup({
+    todo: new FormControl('', [Validators.required])
+  });
+
+  ngOnInit() { this.fetchTodos(); }
+
+  fetchTodos() { /* ... */ }
+  handleTodoSubmit() { /* ... */ }
+  handleDelete(id: number | undefined) { /* ... */ }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=html, name=todo-page.component.html]
+<ul>
+  @for (item of todos; track item.id) {
+    <app-todo-item [todoItem]="item" (delete)="handleDelete($event)"/>
+  } @empty {
+    <li>Nessun elemento da mostrare.</li>
+  }
+</ul>
+\end{lstlisting}
+
+\begin{lstlisting}[style=ts, name=todo-item.component.ts]
+export class TodoItemComponent {
+  @Input({ required: true }) todoItem: TodoItem;
+  @Output() delete: EventEmitter<number | undefined> = new EventEmitter();
+
+  editLink = "";
+  restBackend = inject(RestBackendService);
+  toastr      = inject(ToastrService);
+
+  ngOnInit() { this.editLink = "/todos/" + this.todoItem?.id; }
+
+  handleToggleDoneStatus() { /* ... */ }
+  handleDelete() { /* ... */ }
+}
+\end{lstlisting}
+
+\code{<app-todo-item>} è un componente a sé, responsabile di mostrare un singolo
+elemento: riceve il dato tramite \code{@Input} e comunica al padre la richiesta
+di cancellazione tramite \code{@Output}. È esattamente lo schema di
+comunicazione descritto nel capitolo precedente, applicato a un caso reale.
+
+\info{Il percorso completo}{
+  Vale la pena fermarsi un momento a osservare che cosa abbiamo costruito: un
+  backend Express con ORM che espone una API REST protetta da JWT (capitoli
+  13--15), e un frontend Angular che la consuma con servizi iniettati, signal,
+  guardie, interceptor e componenti (capitoli 19--20). Sono le stesse
+  funzionalità della lista di cose da fare scritta in Bash e CGI nel capitolo 9:
+  è cambiato tutto tranne il problema.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Angular Docs}. \\
+        \urlx{https://angular.dev/overview} \\
+        Parti rilevanti: \textit{Introduction: Essentials}; \textit{In-depth
+        Guides: Forms, Dependency Injection, Router, HTTP Client, Signals}.
+\end{itemize}

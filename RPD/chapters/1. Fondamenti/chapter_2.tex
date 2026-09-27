@@ -1,0 +1,1225 @@
+\chapter{Stratificazione, modelli di riferimento e incapsulamento}
+
+Questo è forse il capitolo più importante di tutto il corso: introduce il \textbf{modello a
+strati}, la chiave di lettura di tutto ciò che verrà dopo. Ogni parte successiva della dispensa si
+occuperà di uno strato preciso.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il Web è un'applicazione}
+% ══════════════════════════════════════════════════════════════
+
+Partiamo da un chiarimento: \textbf{il Web non è Internet}. Il Web è \emph{una} delle applicazioni
+che girano sopra Internet; la posta elettronica, lo streaming, la messaggistica, il trasferimento di
+file e i giochi sono altre applicazioni, e ciascuna chiede alla rete qualcosa di leggermente diverso.
+Nel capitolo precedente abbiamo visto di cosa è fatta una rete e come i pezzi sono collegati. Ora
+la domanda è:
+
+\begin{center}
+\large\itshape Che cosa deve esistere, e funzionare, perché una pagina compaia nel browser?
+\end{center}
+
+La risposta a questa domanda è la struttura di tutto il resto del corso.
+
+\subsection{Cosa attraversa una singola richiesta HTTP}
+
+Un browser sull'host A chiede una pagina al server Web B. Tra i due c'è un bel po' di roba:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (A) at (0,0) {\icon[1.2cm]{pc}};
+  \node[below=-2pt of A] {A (browser)};
+  \node (R) at (3.6,0) {\icon[1.4cm]{router}};
+  \node[below=0pt of R] {router di casa};
+  \node[box, fill=cloudbg, minimum width=1.4cm] (isp) at (8,0) {ISP};
+  \node[netcloud, minimum width=3.2cm, minimum height=1.8cm] (inet) at (10.2,-2.5) {Internet};
+  \node (B) at (13.3,-2.5) {\icon[0.8cm]{server}};
+  \node[below=-2pt of B] {B (server Web)};
+  \draw[wired] (A) -- node[above, lbl] {cavo Ethernet} (R);
+  \draw[wired, netorange, line width=1.6pt] (R) -- node[above, lbl, text=netorange] {doppino telefonico} node[below, lbl, text=netorange] {e rete telefonica} (isp);
+  \draw[wired, line width=2pt] (isp) -- (inet);
+  \draw[wired, line width=2pt] (inet) -- (B);
+  \draw[msg, netred, dashed] (0.3,1.0) .. controls (5,2.6) and (11,2.2) .. node[pos=0.45, above, lbl, text=netred] {richiesta HTTP di A verso B} (13,-1.6);
+\end{tikzpicture}
+\caption{Una richiesta HTTP attraversa mezzi diversi, apparati diversi e una maglia di reti di cui nessuno dei soggetti coinvolti conosce l'interno.}
+\end{figure}
+
+\begin{itemize}
+    \item Ogni apparato sul cammino è \textbf{hardware più software}, costruito da un produttore diverso.
+    \item Ogni tratto è un \textbf{mezzo diverso}, con i propri errori e la propria velocità.
+    \item Nessuno può progettare, o anche solo descrivere, un sistema del genere \textbf{tutto in una volta}.
+\end{itemize}
+
+\dfn{Divide et impera}{
+    Si spezza il sistema complesso in \textbf{sottosistemi}, ciascuno con un compito proprio e un
+    modo ben definito di chiedere aiuto al successivo; poi si progetta un sottosistema alla volta.
+    Nelle reti questa scomposizione ha un nome: \textbf{stratificazione} (\emph{layering}).
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Internet vista “dai bulloni” e come servizio}
+% ══════════════════════════════════════════════════════════════
+
+Prima di entrare negli strati, ricapitoliamo i due modi complementari di guardare Internet.
+
+\subsection{La vista “nuts and bolts”}
+
+Dal punto di vista dei suoi componenti fisici (i ``dadi e bulloni''), Internet è fatta di:
+
+\begin{itemize}
+    \item \textbf{miliardi di dispositivi di calcolo} connessi, gli \textbf{host} o \emph{end system},
+          che eseguono applicazioni di rete e stanno ai \textbf{bordi} (\emph{edge}) di Internet;
+    \item \textbf{commutatori di pacchetto} (\emph{packet switch}), che inoltrano pacchetti (blocchi di
+          dati): router e switch;
+    \item \textbf{collegamenti di comunicazione}: fibra, rame, radio, satellite, ciascuno con il
+          proprio \emph{transmission rate};
+    \item \textbf{reti}: collezioni di dispositivi, router e collegamenti gestite da una singola organizzazione.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\linewidth]{cap02/dispositivi_iot.png}
+    \caption{Non solo computer: frigoriferi, cornici digitali, telecamere, pacemaker, materassi sensorizzati, orologi\dots{} sono tutti host di Internet.}
+\end{figure}
+
+In questa vista i \textbf{protocolli sono ovunque}: controllano l'invio e la ricezione dei messaggi
+(HTTP per il Web, TCP, IP, Wi-Fi, 4G, Ethernet, i protocolli proprietari di Skype, \dots).
+
+\subsection{Internet come infrastruttura di servizi}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.42\linewidth}\centering
+  \includegraphics[width=\linewidth]{cap02/internet_servizi.png}
+\end{minipage}\hfill
+\begin{minipage}{0.54\linewidth}
+Vista dall'alto, Internet non è fatta di cavi: è un'\textbf{infrastruttura che fornisce servizi alle
+applicazioni} (Web, video, posta, videoconferenza, commercio elettronico, social media, elettrodomestici
+connessi).
+\begin{itemize}
+  \item Fornisce anche un'\textbf{interfaccia di programmazione}: i ``ganci'' (\emph{hooks}) con cui
+        un'applicazione si aggancia a Internet per inviare e ricevere dati.
+  \item Come il servizio postale (posta ordinaria, raccomandata, espresso), offre \textbf{opzioni di
+        servizio}: veloce o economico, garantito o no.
+\end{itemize}
+Sono proprio quei ganci che programmeremo, in C, con i socket.
+\end{minipage}
+\caption{Protocolli e servizi in azione sulla rete di reti.}
+\end{figure}
+
+\info{L'applicazione vede solo un servizio}{
+    Le applicazioni non devono preoccuparsi di come i dati attraversano la rete: il flusso dei dati
+    viene offerto loro \textbf{come servizio} dallo strato inferiore (il trasporto). È esattamente
+    questo il senso della stratificazione.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Protocolli e standard}
+% ══════════════════════════════════════════════════════════════
+
+Ricordiamo la definizione del capitolo precedente: un \textbf{protocollo} fissa il \textbf{formato}
+e l'\textbf{ordine} dei messaggi, e le \textbf{azioni} da compiere quando un messaggio viene inviato o
+ricevuto. Vale per le persone come per le macchine.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\linewidth]{cap02/protocollo_umano_rete.png}
+    \caption{Stessa forma: un saluto, una risposta, poi la richiesta vera e propria.}
+\end{figure}
+
+\subsection{Chi scrive gli standard}
+
+\begin{itemize}
+    \item L'\textbf{IETF} (\emph{Internet Engineering Task Force}) è una comunità aperta di esperti che
+          definisce gli standard e i protocolli di Internet.
+    \item Lavora in \textbf{working group aperti}, ciascuno dedicato a un aspetto di Internet.
+    \item Ogni gruppo pubblica documenti numerati detti \textbf{RFC} (\emph{Request For Comments}), che
+          descrivono e definiscono protocolli, formati e metodi. Per esempio IPv4 è definito
+          nell'\textbf{RFC 791}, del 1981. Il nome è rimasto per ragioni storiche: nascevano come inviti
+          alla discussione e sono diventati gli standard di Internet.
+    \item L'\textbf{ISO} (\emph{International Standards Organization}) funziona in modo molto diverso: è
+          un'organizzazione non basata su trattati internazionali, i cui membri sono gli enti nazionali
+          di standardizzazione. È da qui che nasce il modello \textbf{OSI}.
+\end{itemize}
+
+\info{Come decide Internet}{
+    Gli standard di Internet non nascono da un voto in commissione, ma dal principio
+    \emph{rough consensus and running code}: consenso di massima e codice che funziona. Una specifica
+    che nessuno implementa non diventa uno standard.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{La stratificazione}
+% ══════════════════════════════════════════════════════════════
+
+Le reti sono complesse e fatte di molti pezzi: host, router, collegamenti su mezzi diversi,
+applicazioni, protocolli, hardware, software. C'è speranza di organizzarne la struttura? Sì:
+la risposta architetturale è una \textbf{pila di strati}, ciascuno costruito su quello sottostante.
+
+\dfn{Modello a strati}{
+    Un approccio architetturale in cui la comunicazione è realizzata da una pila di \textbf{strati}
+    (\emph{layer}) tali che:
+    \begin{itemize}
+      \item ogni strato è un \textbf{livello di astrazione}: nasconde \emph{come} svolge il proprio compito;
+      \item ogni strato \textbf{usa i servizi dello strato inferiore} e \textbf{fornisce servizi allo
+            strato superiore};
+      \item tra due strati adiacenti c'è un'\textbf{interfaccia}: l'insieme delle operazioni che lo
+            strato inferiore mette a disposizione di quello superiore.
+    \end{itemize}
+    La cima della pila è rivolta alle applicazioni (alto livello), il fondo all'hardware (basso livello).
+}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.33\linewidth}\centering
+  \includegraphics[width=0.85\linewidth]{cap02/stratificazione.png}
+\end{minipage}
+\begin{minipage}{0.55\linewidth}\centering
+\begin{tikzpicture}[every node/.style={font=\small\sffamily}]
+  \node[lay app, minimum width=3.4cm] (n1) at (0,1.4) {strato $n+1$};
+  \node[lay tra, minimum width=3.4cm] (n) at (0,0) {strato $n$};
+  \node[lay net, minimum width=3.4cm] (n0) at (0,-1.4) {strato $n-1$};
+  \draw[{Stealth}-{Stealth}, thick] (n1) -- node[right, lbl] {interfaccia $n/n+1$} (n);
+  \draw[{Stealth}-{Stealth}, thick] (n) -- node[right, lbl] {interfaccia $n-1/n$} (n0);
+  \node[lbl, text width=3cm, align=left] at (-4,0.7) {lo strato $n$ \textbf{fornisce} servizi allo strato $n+1$\dots};
+  \node[lbl, text width=3cm, align=left] at (-4,-0.7) {\dots\ \textbf{usando} i servizi dello strato $n-1$};
+  \draw[-{Stealth}, primary, thick] (2.6,2) -- node[right, lbl] {verso le applicazioni} (2.6,2.6);
+  \draw[-{Stealth}, primary, thick] (2.6,-2) -- node[right, lbl] {verso l'hardware} (2.6,-2.6);
+\end{tikzpicture}
+\end{minipage}
+\caption{Ogni strato si appoggia a quello sotto e serve quello sopra, attraverso un'interfaccia.}
+\end{figure}
+
+\subsection{Moduli, interfacce e incapsulamento delle funzioni}
+
+L'idea non è nuova: è la stessa che si usa per progettare qualunque software di una certa dimensione. Quando
+un sistema viene diviso in sottosistemi, per ciascuno si stabilisce un'\textbf{interfaccia}, cioè l'insieme
+dei servizi che il modulo offre all'esterno; \emph{come} quei servizi siano realizzati resta nascosto dentro
+il modulo. È l'\textbf{incapsulamento delle funzioni}: ogni modulo può chiamare i servizi di un altro per il
+proprio funzionamento, senza sapere nulla della sua implementazione. Chi ha scritto classi in C++ o in Java
+ha già fatto esattamente questo: metodi pubblici all'esterno, dettagli privati all'interno.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  % modulo A (offre servizi)
+  \node[draw=netblue, thick, minimum width=2.8cm, minimum height=1.6cm, fill=netblue!5] (A) at (0,0) {};
+  \node[text=netblue!70!black, font=\small\bfseries\sffamily] at (0,0.45) {Modulo A};
+  \node[draw=black!30, dashed, fill=black!5, minimum width=2.2cm, minimum height=0.6cm, font=\scriptsize\sffamily] at (0,-0.25) {implementazione};
+  \foreach \y/\n [count=\i] in {0.5/apri, 0/scrivi, -0.5/chiudi} {
+    \draw[thick, netblue] (1.4,\y) -- (1.85,\y) node[pinint, draw=netblue] (pa\i) {};
+    \node[anchor=west, text=netblue!70!black] at (1.95,\y) {\texttt{\n()}};
+  }
+  % modulo B (usa i servizi)
+  \node[draw=netgreen!70!black, thick, minimum width=2.8cm, minimum height=1.6cm, fill=netgreen!5] (B) at (8,0) {};
+  \node[text=netgreen!50!black, font=\small\bfseries\sffamily] at (8,0.45) {Modulo B};
+  \node[draw=black!30, dashed, fill=black!5, minimum width=2.2cm, minimum height=0.6cm, font=\scriptsize\sffamily] at (8,-0.25) {implementazione};
+  \draw[-{Stealth}, thick, netgreen!60!black] ([yshift=0.1cm]B.west) -- node[above, lbl] {chiama \texttt{scrivi()}} (3.5,0);
+  \draw[decorate, decoration={brace, amplitude=4pt}] (1.85,-0.85) -- (1.85,0.85);
+  \node[lbl, text=netblue!70!black, anchor=north] at (2.4,-0.95) {interfaccia: i ``piedini'' del modulo};
+  \node[lbl, text width=4.2cm, anchor=north] at (8,-1.0) {B conosce solo i piedini di A, non ciò che c'è dentro};
+\end{tikzpicture}
+\caption{Ogni modulo espone all'esterno i propri servizi (i ``piedini'') e nasconde l'implementazione: è il disegno fatto alla lavagna per introdurre gli strati.}
+\end{figure}
+
+Nell'architettura a strati questa idea diventa più \textbf{rigida}: i moduli sono impilati, e ogni strato
+offre i propri servizi allo strato \textbf{immediatamente superiore} e usa quelli dello strato
+\textbf{immediatamente inferiore} per implementarli. Lo strato in cima è quello delle applicazioni (o offerto
+alle applicazioni); quello più in basso è l'hardware, lo strato fisico.
+
+\info{Architetture chiuse e aperte}{
+    Nella concezione di base l'architettura a strati è \textbf{chiusa}: uno strato può rivolgersi soltanto a
+    quello subito sotto. In alcuni casi, per efficienza o per necessità, la si \textbf{apre}, permettendo a uno
+    strato di usare direttamente servizi di strati non adiacenti. È un'eccezione, e ha un prezzo: i moduli
+    diventano meno indipendenti.
+}
+
+\subsection{La stratificazione non è un'idea delle reti}
+
+Pile di strati le usate già, ovunque un sistema sia diventato troppo grande per essere progettato
+in un pezzo solo.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\small\sffamily}]
+  \begin{scope}
+    \node[font=\bfseries\sffamily] at (0,3.1) {Un sistema operativo};
+    \node[layer, fill=lapp!60, minimum width=3.6cm] (a) at (0,2.2) {Applicazioni};
+    \node[layer, fill=ltra!60, minimum width=3.6cm] (o) at (0,1.2) {Sistema operativo};
+    \node[layer, fill=lnet!60, minimum width=3.6cm] (d) at (0,0.2) {Driver};
+    \node[layer, fill=lphy, minimum width=3.6cm] (h) at (0,-0.8) {Hardware};
+    \node[font=\ttfamily\small] (vim) at (3.2,2.9) {vim};
+    \draw[-{Stealth}, netred, thick] (vim) to[out=-90, in=0] node[right, lbl, text=netred] {\texttt{write}} (a.east);
+    \draw[-{Stealth}, netred, thick] ([xshift=1.2cm]a.south) -- ([xshift=1.2cm]o.north);
+    \draw[-{Stealth}, netred, thick] ([xshift=1.2cm]o.south) -- ([xshift=1.2cm]d.north);
+    \draw[-{Stealth}, netred, thick] ([xshift=1.2cm]d.south) -- ([xshift=1.2cm]h.north);
+    \node[lbl, text width=4cm] at (0,-1.7) {una sola \texttt{write} attraversa quattro interfacce};
+  \end{scope}
+  \begin{scope}[xshift=8.5cm]
+    \node[font=\bfseries\sffamily] at (0,3.1) {Un sistema informativo};
+    \node[layer, fill=lapp!60, minimum width=3.6cm] (ui) at (0,2.2) {Interfaccia utente};
+    \node[layer, fill=ltra!60, minimum width=3.6cm] (la) at (0,1.2) {Logica applicativa};
+    \node[layer, fill=lnet!60, minimum width=3.6cm] (gd) at (0,0.2) {Gestione dei dati};
+    \node[cylinder, shape border rotate=90, aspect=0.25, draw, fill=lphy, minimum height=0.9cm, minimum width=0.8cm] (db) at (2.8,0.2) {DB};
+    \draw[thick] (gd) -- (db);
+    \node at (-2.8,2.8) {\icon[0.7cm]{laptop}};
+    \draw[thick, -{Stealth}] (-2.6,2.5) -- (ui.west);
+    \node[lbl, text width=4.4cm] at (0,-0.9) {architettura a tre strati: l'utente non tocca mai direttamente il database};
+  \end{scope}
+\end{tikzpicture}
+\caption{Due pile di strati che conoscete già.}
+\end{figure}
+
+Le reti sono semplicemente il caso più grande di tutti.
+
+\subsection{Cosa guadagniamo, e cosa paghiamo}
+
+\begin{itemize}
+    \item \textbf{Struttura}: una struttura esplicita permette di \textbf{dare un nome} ai pezzi del
+          sistema e alle loro relazioni; è un \emph{modello di riferimento} di cui discutere.
+    \item \textbf{Modularità}: l'implementazione di uno strato può cambiare senza che nient'altro si
+          muova, \textbf{purché il servizio offerto resti lo stesso}. Sostituire tutte le linee
+          telefoniche con canali satellitari è una modifica interna a un solo strato: gli strati
+          superiori non se ne accorgono.
+\end{itemize}
+
+\begin{esempio}{La modularità nella vita di tutti i giorni}
+\begin{itemize}
+    \item Cambiate stampante, e con lei il \textbf{driver}: il sistema operativo continua a mandare le stampe
+          esattamente come prima, e le applicazioni non si accorgono di nulla.
+    \item State scrivendo un messaggio collegati al Wi-Fi di casa, poi uscite e il telefono passa alla
+          \textbf{rete cellulare}. L'applicazione di messaggistica si rivolge sempre al sistema operativo nello
+          stesso modo: del cambio di tecnologia si occupano gli strati inferiori.
+\end{itemize}
+\end{esempio}
+
+\info{L'analogia del viaggio aereo}{
+    Un viaggio in aereo è una pila di servizi: biglietto (acquisto / reclamo), bagagli (imbarco /
+    ritiro), gate (imbarco / sbarco), pista (decollo / atterraggio), rotta dell'aereo. Ogni ``strato''
+    dell'aeroporto di partenza ha il suo corrispondente in quello di arrivo, e se cambia la procedura
+    ai gate il resto del sistema non se ne accorge.
+}
+
+\warning{Il prezzo dell'architettura a strati}{
+    La domanda ``\emph{layering considered harmful?}'' non è retorica. Alla lavagna il prezzo è stato riassunto
+    in tre voci:
+    \begin{itemize}
+      \item \textbf{maggiore complessità}: tutte le \textbf{interfacce} tra gli strati vanno progettate e
+            implementate, e ogni strato aggiunge le proprie informazioni di controllo (\textbf{overhead});
+      \item \textbf{eventuali ridondanze}: uno strato può rifare qualcosa che uno strato inferiore fa già, per
+            esempio la rilevazione e la correzione degli errori, svolta sia su ogni singolo collegamento sia da
+            un estremo all'altro. Più calcolo, a volte inutile;
+      \item \textbf{rigidità}: le informazioni interne di ogni strato sono \textbf{nascoste}. Quando poi uno
+            strato ha bisogno di un'informazione che sta in un altro (succede spesso nelle reti), le strade sono
+            due: \textbf{riprogettare} gli strati, oppure adottare soluzioni ``\emph{quick and dirty}'', rapide,
+            efficaci e un po' sporche, come vedremo per esempio con l'uso delle porte.
+    \end{itemize}
+    È un compromesso: si accetta un po' di inefficienza in cambio di un'enorme semplicità di progetto.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Servizio, interfaccia e protocollo}
+% ══════════════════════════════════════════════════════════════
+
+Tre concetti da tenere rigorosamente separati.
+
+\dfn{Servizio e protocollo}{
+    Un \textbf{servizio} è l'insieme delle operazioni che uno strato offre allo strato superiore: dice
+    \textbf{che cosa} fa lo strato, mai \textbf{come} lo fa.
+
+    Un \textbf{protocollo} è l'insieme delle regole sul formato e sul significato dei messaggi
+    scambiati con l'\textbf{entità paritaria} (\emph{peer entity}), cioè lo stesso strato sull'altra
+    macchina.
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\linewidth]{cap02/servizio_protocollo.png}
+    \caption{I servizi stanno sulle interfacce verticali, i protocolli sullo scambio orizzontale.}
+\end{figure}
+
+L'\textbf{interfaccia} è il punto in cui il servizio viene offerto: l'insieme delle operazioni che
+lo strato inferiore rende disponibili a quello superiore. In sintesi:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Concetto} & \textbf{Direzione} & \textbf{Risponde alla domanda} \\
+\midrule
+Servizio & verticale (tra strati adiacenti) & \emph{che cosa} offre lo strato? \\
+Interfaccia & verticale & \emph{come si chiede} il servizio? \\
+Protocollo & orizzontale (tra strati omologhi) & \emph{come} lo strato realizza il servizio? \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\dfn{Entità e protocolli}{
+    Le \textbf{entità} (gli elementi attivi di uno strato, hardware o software) \textbf{usano i
+    protocolli per implementare i servizi} che offrono.
+}
+
+\warning{Servizio e protocollo sono indipendenti}{
+    Uno strato può cambiare completamente protocollo senza che gli strati superiori se ne accorgano,
+    purché il servizio offerto resti lo stesso. Confondere servizio e protocollo è un errore tipico.
+}
+
+\begin{esempio}{Un messaggio alla zia}
+Premete ``invia'' sulla vostra applicazione di messaggistica. L'applicazione non trasmette nulla da sé: chiama
+il servizio di invio che il \textbf{livello di trasporto} del telefono offre attraverso la propria interfaccia,
+e da quel momento se ne disinteressa. Il livello di trasporto dialoga, con il \textbf{protocollo di trasporto},
+con l'entità di trasporto sul telefono della zia; per farlo usa i servizi del \textbf{livello di rete}, che a
+sua volta dialoga con il livello di rete dall'altra parte, occupandosi di attraversare la topologia di Internet.
+\begin{center}
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  % mittente
+  \pic[black!80] at (-2.6,1.55) {persona};
+  \node[anchor=east] at (-2.9,1.6) {voi};
+  \node[lay app, minimum width=2.3cm] (a1) at (0,1.8) {Applicazione};
+  \node[lay tra, minimum width=2.3cm] (t1) at (0,0.3) {Trasporto};
+  \node[lay net, minimum width=2.3cm] (n1) at (0,-1.2) {Rete};
+  \draw[-{Stealth}, thick] (-2.2,1.8) -- node[above, lbl] {``invia''} (a1.west);
+  % destinataria
+  \pic[black!80] at (11.9,1.55) {personacapelli};
+  \node[anchor=west] at (12.2,1.6) {la zia};
+  \node[lay app, minimum width=2.3cm] (a2) at (9.3,1.8) {Applicazione};
+  \node[lay tra, minimum width=2.3cm] (t2) at (9.3,0.3) {Trasporto};
+  \node[lay net, minimum width=2.3cm] (n2) at (9.3,-1.2) {Rete};
+  \draw[-{Stealth}, thick] (a2.east) -- node[above, lbl] {legge} (11.5,1.8);
+  % piedini delle interfacce
+  \foreach \st in {t1,n1,t2,n2} \foreach \dx in {-0.4,0,0.4} \draw[thick] ([xshift=\dx cm]\st.north) -- ++(0,0.22) node[pinint] {};
+  \draw[-{Stealth}, very thick, netred] ([xshift=0.8cm]a1.south) -- node[right, lbl, text=netred] {invio messaggio} ([xshift=0.8cm]t1.north);
+  \draw[-{Stealth}, very thick, netred] ([xshift=0.8cm]t1.south) -- ([xshift=0.8cm]n1.north);
+  \draw[-{Stealth}, very thick, netgreen!60!black] ([xshift=-0.8cm]n2.north) -- ([xshift=-0.8cm]t2.south);
+  \draw[-{Stealth}, very thick, netgreen!60!black] ([xshift=-0.8cm]t2.north) -- ([xshift=-0.8cm]a2.south);
+  % protocolli
+  \node[cloud, cloud puffs=12, aspect=3.2, draw=netorange, fill=netorange!10, thick, minimum width=2.6cm, minimum height=0.8cm, inner sep=1pt] (pr) at (4.65,0.3) {protocollo di trasporto};
+  \draw[{Stealth}-{Stealth}, dashed, thick, netblue] (t1.east) -- (pr.west);
+  \draw[{Stealth}-{Stealth}, dashed, thick, netblue] (pr.east) -- (t2.west);
+  \draw[{Stealth}-{Stealth}, dashed, thick, netgreen!60!black] (n1.east) -- node[above, lbl] {protocollo di rete (attraverso la topologia di Internet)} (n2.west);
+  \node[lbl, text=black!60, anchor=north] at (0,-1.65) {interfaccia = servizi dello strato sotto};
+\end{tikzpicture}
+\end{center}
+Tra uno strato e quello sotto, \textbf{nello stesso telefono}, c'è un'\textbf{interfaccia} (i piedini); tra due
+entità dello stesso strato, \textbf{su telefoni diversi}, c'è un \textbf{protocollo} (le frecce tratteggiate).
+\end{esempio}
+
+\subsection{Strati omologhi: comunicazione virtuale e fisica}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\linewidth]{cap02/strati_omologhi.png}
+    \caption{Lo strato $n$ del mittente dialoga logicamente con lo strato $n$ del destinatario.}
+\end{figure}
+
+\dfn{Comunicazione orizzontale}{
+    Quando due dispositivi comunicano, \textbf{ogni strato del mittente comunica con lo stesso strato
+    del destinatario}, e con nient'altro, per mezzo di uno specifico protocollo.
+}
+
+\begin{itemize}
+    \item Quella freccia orizzontale \textbf{non è un cavo}: è una conversazione \emph{logica}.
+    \item I dati \textbf{scendono} realmente lungo la pila del mittente e \textbf{risalgono} quella del
+          destinatario. Solo al livello fisico qualcosa viaggia davvero.
+    \item La catena si ripete a ogni strato: per fornire i propri servizi uno strato deve comunicare con il suo
+          pari, e per farlo chiama i servizi dello strato inferiore, che a sua volta comunica con il proprio pari
+          usando un protocollo \textbf{diverso}, e così via fino al protocollo fisico, che manda segnali su un mezzo.
+\end{itemize}
+
+\warning{Tutte queste trasmissioni sono virtuali}{
+    Nelle reti c'è comunicazione tra due macchine a \textbf{ogni} strato, con i relativi protocolli. Ma
+    tutte queste trasmissioni sono \textbf{virtuali}, salvo quella a livello fisico, che è l'unica a
+    comportare effettivi fenomeni fisici. Il livello di trasporto del mittente ``crede'' di parlare
+    direttamente con il trasporto del destinatario, ma i suoi dati scendono lungo tutta la pila,
+    viaggiano sul filo e risalgono dall'altra parte.
+}
+
+\begin{esempio}{L'analogia postale}
+Il modello a strati funziona come il servizio postale: ogni strato fa un solo lavoro, si affida allo strato
+sotto e parla il proprio ``linguaggio''; ogni indirizzo è letto dallo strato per cui è stato scritto, e da
+nessun altro.
+\begin{center}
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily},
+    pbox/.style={draw=black!60, rounded corners=2pt, minimum width=3.3cm, minimum height=0.95cm, align=center}]
+  % colonna sinistra
+  \node[pbox, fill=lapp!60] (m) at (0,0) {\textbf{Mittente}\\scrive la lettera};
+  \node[pbox, fill=ltra!60] (u1) at (0,-1.9) {\textbf{Ufficio postale}\\raccolta e smistamento};
+  \node[pbox, fill=lnet!60] (x1) at (0,-3.8) {\textbf{Centro di trasporto}\\treni, aerei, navi};
+  % colonna destra
+  \node[pbox, fill=lapp!60] (d) at (11,0) {\textbf{Destinatario}\\legge la lettera};
+  \node[pbox, fill=ltra!60] (u2) at (11,-1.9) {\textbf{Ufficio postale}\\postino (bici, motorino, auto)};
+  \node[pbox, fill=lnet!60] (x2) at (11,-3.8) {\textbf{Centro di trasporto}\\treni, aerei, navi};
+  % interfacce verticali
+  \draw[-{Stealth}, thick, netred] (m) -- node[left, lbl, text=netred] {buca delle lettere} (u1);
+  \draw[-{Stealth}, thick, netred] (u1) -- node[left, lbl, text=netred] {spedizione} (x1);
+  \draw[-{Stealth}, thick, netgreen!60!black] (x2) -- node[right, lbl, text=netgreen!50!black] {arrivo} (u2);
+  \draw[-{Stealth}, thick, netgreen!60!black] (u2) -- node[right, lbl, text=netgreen!50!black] {cassetta del destinatario} (d);
+  % dialoghi orizzontali
+  \draw[{Stealth}-{Stealth}, dashed, thick] (m) -- node[above, lbl] {scrivere e leggere una lettera} (d);
+  \draw[{Stealth}-{Stealth}, dashed, thick] (u1) -- node[above, lbl] {usano l'\textbf{indirizzo} di mittente e destinatario} (u2);
+  \draw[very thick, black!70] (x1) -- node[above, lbl, text width=6.5cm] {trasporto fisico, che ragiona sugli indirizzi dei \textbf{due uffici postali}} (x2);
+\end{tikzpicture}
+\end{center}
+\begin{itemize}
+    \item \textbf{Strato superiore}: mittente e destinatario vedono soltanto due buche per le lettere, una in cui
+          infilare la lettera e una da cui ritirarla. I loro ``protocolli'' sono scrivere e leggere una lettera.
+    \item \textbf{Strato intermedio}: gli uffici postali raccolgono la lettera e, dall'altra parte, la fanno
+          consegnare dal postino. Il loro linguaggio sono gli \textbf{indirizzi} del mittente e del destinatario.
+    \item \textbf{Strato inferiore}: treni, aerei e navi portano fisicamente la posta da un ufficio all'altro, e
+          ragionano solo in termini di uffici di provenienza e di destinazione.
+\end{itemize}
+Tanenbaum propone un'analogia altrettanto efficace: un filosofo che detta una lettera a un traduttore, il
+quale la passa a una segretaria che la spedisce; dall'altra parte la catena si ripercorre al contrario, e ogni
+figura ``parla'' solo con la figura corrispondente.
+\end{esempio}
+
+% ══════════════════════════════════════════════════════════════
+\section{Servizi con e senza connessione}
+% ══════════════════════════════════════════════════════════════
+
+Prima di vedere gli strati concreti, serve una distinzione \textbf{ortogonale} a quella degli strati:
+quella tra servizi \textbf{orientati alla connessione} e servizi \textbf{senza connessione}.
+
+\subsection{Servizio orientato alla connessione}
+
+\dfn{Servizio orientato alla connessione}{
+    Modellato sul \textbf{sistema telefonico}: l'utente del servizio prima \textbf{stabilisce} una
+    connessione, poi la \textbf{usa}, infine la \textbf{rilascia}.
+}
+
+\begin{itemize}
+    \item La connessione si comporta come un \textbf{tubo}: ciò che entra da un'estremità esce
+          dall'altra, normalmente \textbf{nello stesso ordine}.
+    \item L'apertura permette una \textbf{negoziazione} dei parametri (dimensione massima dei messaggi,
+          qualità del servizio, \dots): una parte propone, l'altra accetta o fa una controproposta.
+    \item Una connessione che riserva anche delle \textbf{risorse}, per esempio una velocità fissa, si
+          chiama \textbf{circuito}: un cammino sulla rete su cui viaggiano tutti i dati della sessione.
+    \item Conviene quando c'è una quantità significativa di dati da scambiare.
+\end{itemize}
+
+E se si ha un solo messaggio breve da inviare, vale la pena aprire e chiudere una connessione?
+
+\subsection{Servizio senza connessione}
+
+\dfn{Servizio senza connessione (connectionless)}{
+    Modellato sul \textbf{sistema postale}: non si stabilisce nulla prima di trasmettere. Ogni
+    messaggio porta con sé l'\textbf{indirizzo completo} di destinazione e viene \textbf{gestito
+    individualmente} dai nodi intermedi.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (A) at (0,0) {\icon[0.9cm]{pc}}; \node[below=-2pt of A] {A};
+  \node (B) at (10,0) {\icon[1cm]{laptop}}; \node[below=-2pt of B] {B};
+  \node[cloud, cloud puffs=14, aspect=2.6, draw=netblue!50, fill=cloudbg, minimum width=6.2cm, minimum height=3cm] at (5,0) {};
+  \node[gnode] (n1) at (3,0.5) {}; \node[gnode] (n2) at (4.5,1) {}; \node[gnode] (n3) at (4.3,-0.8) {};
+  \node[gnode] (n4) at (6,0.1) {}; \node[gnode] (n5) at (7,0.9) {}; \node[gnode] (n6) at (6.9,-0.8) {};
+  \foreach \a/\b in {n1/n2, n1/n3, n2/n4, n3/n4, n2/n5, n4/n5, n4/n6, n3/n6, n5/n6} \draw[black!40, thick] (\a) -- (\b);
+  \draw[wired] (A) -- (n1); \draw[wired] (n5) -- (B); \draw[wired] (n6) -- (B);
+  \draw[netred, very thick, -{Stealth}] (n1) -- (n2) -- (n5);
+  \draw[netgreen, very thick, -{Stealth}] (n1) -- (n3) -- (n6);
+  \node[text=netred] at (3.4,1.55) {pacchetto 1};
+  \node[text=netgreen] at (5.3,-1.45) {pacchetto 2};
+  \fill[netred] (1.2,0.35) rectangle (1.6,0.6); \fill[netgreen] (1.8,0.35) rectangle (2.2,0.6);
+  \node at (5,-2.1) {ogni pacchetto è gestito individualmente: può seguire un cammino diverso e arrivare fuori ordine};
+\end{tikzpicture}
+\caption{In un servizio senza connessione i pacchetti tra gli stessi due estremi possono seguire strade diverse.}
+\end{figure}
+
+\begin{itemize}
+    \item Tra gli stessi due estremi la rete offre più cammini, quindi due messaggi possono seguirne
+          di diversi e \textbf{arrivare fuori ordine}.
+    \item Nella commutazione \textbf{store-and-forward} un nodo riceve un messaggio \textbf{per intero}
+          prima di inoltrarlo al nodo successivo.
+    \item Nella commutazione \textbf{cut-through} un nodo comincia a inoltrare il messaggio \textbf{prima}
+          di averlo ricevuto completamente (appena ha letto l'indirizzo di destinazione).
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \begin{scope}
+    \node[font=\bfseries\sffamily] at (2.5,0.7) {Store-and-forward};
+    \foreach \x/\n in {0/in, 2.5/nodo, 5/out} { \draw[thick] (\x,0) -- (\x,-4); }
+    \node at (0,0.25) {ingresso}; \node at (2.5,0.25) {nodo}; \node at (5,0.25) {uscita};
+    \fill[netblue!40] (0,0) -- (2.5,-0.4) -- (2.5,-1.6) -- (0,-1.2) -- cycle;
+    \fill[netblue!40] (2.5,-1.6) -- (5,-2.0) -- (5,-3.2) -- (2.5,-2.8) -- cycle;
+    \node[lbl, text width=2cm, fill=white, inner sep=1pt] at (3.8,-0.8) {aspetta l'ultimo bit};
+  \end{scope}
+  \begin{scope}[xshift=8cm]
+    \node[font=\bfseries\sffamily] at (2.5,0.7) {Cut-through};
+    \foreach \x in {0,2.5,5} { \draw[thick] (\x,0) -- (\x,-4); }
+    \node at (0,0.25) {ingresso}; \node at (2.5,0.25) {nodo}; \node at (5,0.25) {uscita};
+    \fill[netblue!40] (0,0) -- (2.5,-0.4) -- (2.5,-1.6) -- (0,-1.2) -- cycle;
+    \fill[netblue!40] (2.5,-0.6) -- (5,-1.0) -- (5,-2.2) -- (2.5,-1.8) -- cycle;
+    \draw[netred, thick] (2.35,-0.6) -- (2.65,-0.6);
+    \node[lbl, text width=2.3cm, fill=white, inner sep=1pt, text=netred] at (3.9,-2.9) {inizia a inoltrare appena letta l'intestazione};
+  \end{scope}
+\end{tikzpicture}
+\caption{Store-and-forward contro cut-through: il secondo riduce il ritardo, ma può inoltrare anche messaggi che si riveleranno danneggiati.}
+\end{figure}
+
+\dfn{Datagram}{
+    Un servizio \textbf{senza connessione e inaffidabile}, cioè senza conferma di ricezione
+    (\emph{unacknowledged}). Il nome richiama il \emph{telegramma}, che anch'esso non prevedeva
+    ricevuta di ritorno.
+}
+
+\subsection{Affidabilità}
+
+\dfn{Affidabilità}{
+    Un servizio è \textbf{affidabile} se il ricevente \textbf{conferma} (\emph{acknowledgement}, ACK)
+    ciò che ha ricevuto, così che il mittente sappia che è arrivato. L'affidabilità è
+    \textbf{ortogonale} alla connessione: sia i servizi con connessione sia quelli senza possono essere
+    affidabili o no.
+}
+
+Perché mai si dovrebbe rinunciare all'affidabilità?
+
+\begin{itemize}
+    \item Le conferme costano \textbf{overhead e ritardo}, e a volte il prezzo è troppo alto.
+    \item L'affidabilità può semplicemente \textbf{non essere disponibile}: Ethernet non la fornisce, e
+          sono gli strati superiori a dover recuperare gli errori.
+    \item Nel \textbf{Voice over IP} confermare ogni pacchetto e ripristinarne l'ordine sarebbe non solo inutile ma
+          dannoso: un ritardo di tre o quattro secondi rende una telefonata inutilizzabile, mentre una breve
+          interruzione dell'audio si rimedia ripetendo una frase. Tutte le applicazioni VoIP cercano di
+          \textbf{ridurre il ritardo} e accettano i buchi: l'inaffidabilità è la scelta \emph{giusta}, non un
+          compromesso. I parametri della comunicazione vanno adattati alle esigenze dell'applicazione.
+\end{itemize}
+
+\info{Affidabile sopra inaffidabile}{
+    La maggior parte dei servizi affidabili che vedremo nel corso è costruita \textbf{sopra} un servizio
+    inaffidabile: TCP (affidabile) sopra IP (inaffidabile) ne è l'esempio principale.
+}
+
+\subsection{Sei tipi di servizio}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Tipo} & \textbf{Servizio} & \textbf{Esempio} \\
+\midrule
+\multirow{3}{*}{Orientato alla connessione}
+  & Flusso di messaggi affidabile & Sequenza di pagine \\
+  & Flusso di byte affidabile & Download di un film \\
+  & Connessione inaffidabile & Voice over IP \\
+\midrule
+\multirow{3}{*}{Senza connessione}
+  & Datagram inaffidabile & Posta elettronica ``spazzatura'' \\
+  & Datagram con conferma & Messaggi con le ``spunte'' di consegna \\
+  & Richiesta-risposta (\emph{request-reply}) & Interrogazione a un database \\
+\bottomrule
+\end{tabular}
+\caption{Sei servizi comuni, con e senza connessione.}
+\end{table}
+
+\info{Le due righe da ricordare}{
+    Il \textbf{flusso di byte affidabile} è il servizio che ci darà \textbf{TCP}; il \textbf{datagram
+    inaffidabile} è quello che ci darà \textbf{UDP}.
+}
+
+\subsection{Le primitive di servizio}
+
+Un servizio si specifica formalmente tramite le \textbf{primitive}, cioè le operazioni con cui un
+processo lo richiede. Quando la pila protocollare è implementata nel sistema operativo, le primitive
+sono \textbf{chiamate di sistema} (\emph{system call}).
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Primitiva} & \textbf{Significato} \\
+\midrule
+\texttt{LISTEN} & si blocca in attesa di una connessione in ingresso \\
+\texttt{CONNECT} & stabilisce una connessione con un peer in attesa \\
+\texttt{ACCEPT} & accetta una connessione in ingresso da un peer \\
+\texttt{RECEIVE} & si blocca in attesa di un messaggio in ingresso \\
+\texttt{SEND} & invia un messaggio al peer \\
+\texttt{DISCONNECT} & termina la connessione \\
+\bottomrule
+\end{tabular}
+\caption{Le primitive di un semplice servizio orientato alla connessione.}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.8, every node/.style={font=\footnotesize\sffamily}]
+  \timeline{c}{0}{Client}{7.3}
+  \timeline{s}{8}{Server}{7.3}
+  \node[right, font=\ttfamily\footnotesize] at (8,-0.35) {LISTEN};
+  \draw[msg] (0,-0.8) node[left, font=\ttfamily\footnotesize] {CONNECT} -- node[above, sloped] {1. richiesta di connessione} (8,-1.6);
+  \draw[msg] (8,-2.0) node[right, font=\ttfamily\footnotesize] {ACCEPT} -- node[above, sloped] {2. connessione accettata} (0,-2.8);
+  \draw[msg, netblue] (0,-3.2) node[left, font=\ttfamily\footnotesize] {SEND} -- node[above, sloped] {3. richiesta di dati} (8,-4.0) node[right, font=\ttfamily\footnotesize] {RECEIVE};
+  \draw[msg, netgreen] (8,-4.4) node[right, font=\ttfamily\footnotesize] {SEND} -- node[above, sloped] {4. risposta} (0,-5.2) node[left, font=\ttfamily\footnotesize] {RECEIVE};
+  \draw[msg, netred] (0,-5.6) node[left, font=\ttfamily\footnotesize] {DISCONNECT} -- node[above, sloped] {5. rilascio} (8,-6.4);
+  \draw[msg, netred] (8,-6.6) node[right, font=\ttfamily\footnotesize] {DISCONNECT} -- node[above, sloped] {6. rilascio confermato} (0,-7.2);
+\end{tikzpicture}
+\caption{Un'interazione client-server realizzata con le sei primitive.}
+\end{figure}
+
+\info{Le ritroveremo in C}{
+    Guardatele bene: sono esattamente l'interfaccia su cui scriveremo i programmi in C nel capitolo
+    sui socket: \texttt{listen()}, \texttt{connect()}, \texttt{accept()}, \texttt{send()},
+    \texttt{read()}, \texttt{close()}.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il modello di riferimento ISO/OSI}
+% ══════════════════════════════════════════════════════════════
+
+Negli anni '80 l'\textbf{ISO} definì un modello a strati di riferimento per le reti di calcolatori: il
+modello \textbf{OSI} (\emph{Open Systems Interconnection}), cioè sistemi \emph{aperti} alla
+comunicazione con altri sistemi.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.42\linewidth}\centering
+  \includegraphics[width=\linewidth]{cap02/osi_sette_strati.png}
+\end{minipage}\hfill
+\begin{minipage}{0.54\linewidth}
+\begin{itemize}
+  \item \textbf{Sette strati}, ciascuno creato dove serviva un'\textbf{astrazione diversa}.
+  \item Il suo contributo più importante è aver reso \textbf{servizi}, \textbf{interfacce} e
+        \textbf{protocolli} tre concetti \textbf{esplicitamente separati}.
+  \item Il mittente scende lungo la pila, il destinatario la risale.
+\end{itemize}
+\end{minipage}
+\caption{I sette strati del modello ISO/OSI.}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{clp{9.5cm}}
+\toprule
+\textbf{\#} & \textbf{Strato} & \textbf{Compito} \\
+\midrule
+7 & Applicazione & servizi all'utente: login remoto, trasferimento file, posta, Web \\
+6 & Presentazione & rappresentazione dei dati: traduzione tra codifiche, cifratura, compressione \\
+5 & Sessione & controllo del dialogo (chi parla, quando e per quanto) e checkpoint \\
+4 & Trasporto & consegna end-to-end al processo giusto (porte), segmentazione, controllo di flusso e degli errori \\
+3 & Rete & consegna dei pacchetti dall'host sorgente all'host destinazione: indirizzamento logico e routing \\
+2 & Collegamento & consegna dei frame da un nodo al successivo (un hop), controllo degli errori e accesso al mezzo \\
+1 & Fisico & trasmissione dei singoli bit sul mezzo \\
+\bottomrule
+\end{tabular}
+\caption{I sette strati OSI, dall'alto verso il basso.}
+\end{table}
+
+\info{Un trucco mnemonico}{
+    Dal basso verso l'alto: \textbf{F}isico, \textbf{C}ollegamento, \textbf{R}ete, \textbf{T}rasporto,
+    \textbf{S}essione, \textbf{P}resentazione, \textbf{A}pplicazione. In inglese si usa la frase
+    ``\emph{\textbf{P}lease \textbf{D}o \textbf{N}ot \textbf{T}hrow \textbf{S}ausage \textbf{P}izza
+    \textbf{A}way}'' (Physical, Data link, Network, Transport, Session, Presentation, Application).
+}
+
+\subsection{Non tutti i nodi implementano tutti gli strati}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\linewidth]{cap02/osi_nodi_intermedi.png}
+    \caption{I nodi intermedi implementano solo i primi tre strati; solo gli host implementano l'intera pila.}
+\end{figure}
+
+\begin{itemize}
+    \item Solo i \textbf{sistemi terminali} (host) implementano l'intera pila, fino all'applicazione.
+    \item I \textbf{nodi intermedi} (switch, router) implementano solo due o tre strati, i cosiddetti
+          \emph{media layer}.
+    \item Niente sopra il livello di rete: un router non ha alcun motivo di leggere il vostro messaggio.
+\end{itemize}
+
+\warning{Trasporto e rete: dove gira il software}{
+    A livello di \textbf{trasporto} la comunicazione è tra \textbf{processi}, dal punto di vista logico è
+    punto-punto, e il software è eseguito \textbf{sugli host}. A livello di \textbf{rete} la comunicazione
+    è tra \textbf{host}: si risolve il problema dell'instradamento dei pacchetti attraverso la
+    topologia della rete, e il software è eseguito prevalentemente \textbf{sui nodi della rete}. Un
+    router non ha bisogno del trasporto perché non gli interessa a quale processo sia destinato il
+    pacchetto: gli basta sapere a quale host deve arrivare.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Incapsulamento e decapsulamento}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{cap02/incapsulamento.png}
+    \caption{Ogni strato del mittente aggiunge un header (e a volte un trailer); ogni strato del destinatario toglie il proprio.}
+\end{figure}
+
+\dfn{Incapsulamento e decapsulamento}{
+    \begin{itemize}
+      \item \textbf{Incapsulamento} (scendendo, \emph{top-down}): ogni strato del mittente aggiunge a ciò
+            che riceve dallo strato superiore un proprio campo di controllo, sotto forma di un
+            \textbf{header} (H) in testa e talvolta di un \textbf{trailer} (T) in coda.
+      \item \textbf{Decapsulamento} (salendo, \emph{bottom-up}): ogni strato del destinatario rimuove e
+            interpreta \textbf{esattamente} il campo aggiunto dal suo pari, e passa il resto verso l'alto.
+    \end{itemize}
+    Un'unità di dati, a qualunque strato, è quindi sempre \textbf{header + payload}, e il
+    \textbf{payload} è l'unità dello strato superiore.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node[field, fill=lapp, minimum width=4cm, minimum height=0.6cm] (m) at (0,0) {M};
+  \node[anchor=west, lbl, text width=4.6cm, align=left] at (2.3,0) {messaggio \textbf{ricevuto} dal livello $k+1$, che deve essere inviato};
+  \draw[-{Stealth}, very thick, netorange] (-2.4,-0.1) to[bend right=40] node[left, lbl] {livello $k$} (-2.4,-1.3);
+  \node[field, fill=lapp, minimum width=4cm, minimum height=0.6cm] (m2) at (0,-1.4) {M};
+  \node[field, fill=netorange!40, minimum width=0.8cm, minimum height=0.6cm, left=0pt of m2] {$H_k$};
+  \node[anchor=west, lbl, text width=4.6cm, align=left] at (2.3,-1.4) {il livello $k$ aggiunge in testa il \textbf{proprio} header e passa tutto al livello $k-1$};
+\end{tikzpicture}
+\caption{Il passo elementare dell'incapsulamento, come alla lavagna: $M$ arriva dall'alto e diventa il payload di $H_k + M$.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  % mittente
+  \node[font=\small\bfseries\sffamily] at (2.2,1.6) {Mittente};
+  \node[field, fill=lapp, minimum width=2cm] (m1) at (2.6,0) {M};
+  \node[field, fill=ltra, minimum width=0.6cm, left=0pt of m1] (ht) {$H_t$};
+  \node[field, fill=lapp, minimum width=2cm] (m2) at (2.6,-0.9) {M};
+  \node[field, fill=ltra, minimum width=0.6cm, left=0pt of m2] (ht2) {$H_t$};
+  \node[field, fill=lnet, minimum width=0.6cm, left=0pt of ht2] (hn2) {$H_n$};
+  \node[field, fill=lapp, minimum width=2cm] (m3) at (2.6,-1.8) {M};
+  \node[field, fill=ltra, minimum width=0.6cm, left=0pt of m3] (ht3) {$H_t$};
+  \node[field, fill=lnet, minimum width=0.6cm, left=0pt of ht3] (hn3) {$H_n$};
+  \node[field, fill=llink, minimum width=0.6cm, left=0pt of hn3] (hl3) {$H_l$};
+  \node[field, fill=llink, minimum width=0.6cm, right=0pt of m3] (tl3) {$T_l$};
+  \node[field, fill=lapp, minimum width=2cm, draw=none] (m0) at (2.6,0.9) {};
+  % labels levels
+  \foreach \y/\t/\u in {0.9/Applicazione/messaggio, 0/Trasporto/segmento, -0.9/Rete/datagramma, -1.8/Collegamento/frame, -2.7/Fisico/bit} {
+     \node[anchor=east] at (-0.8,\y) {\t};
+     \node[anchor=west, text=primary] at (4.4,\y) {\u};
+  }
+  \node[field, fill=lapp, minimum width=2cm] at (2.6,0.9) {M};
+  \node at (2.2,-2.7) {0110100101110\dots};
+  \draw[-{Stealth}, thick, netred] (-0.3,1.1) -- (-0.3,-2.9);
+  % destinatario
+  \begin{scope}[xshift=8.5cm]
+    \node[font=\small\bfseries\sffamily] at (2.2,1.6) {Destinatario};
+    \node[field, fill=lapp, minimum width=2cm] at (2.6,0.9) {M};
+    \node[field, fill=lapp, minimum width=2cm] (d1) at (2.6,0) {M};
+    \node[field, fill=ltra, minimum width=0.6cm, left=0pt of d1] {$H_t$};
+    \node[field, fill=lapp, minimum width=2cm] (d2) at (2.6,-0.9) {M};
+    \node[field, fill=ltra, minimum width=0.6cm, left=0pt of d2] (e2) {$H_t$};
+    \node[field, fill=lnet, minimum width=0.6cm, left=0pt of e2] {$H_n$};
+    \node[field, fill=lapp, minimum width=2cm] (d3) at (2.6,-1.8) {M};
+    \node[field, fill=ltra, minimum width=0.6cm, left=0pt of d3] (e3) {$H_t$};
+    \node[field, fill=lnet, minimum width=0.6cm, left=0pt of e3] (f3) {$H_n$};
+    \node[field, fill=llink, minimum width=0.6cm, left=0pt of f3] {$H_l$};
+    \node[field, fill=llink, minimum width=0.6cm, right=0pt of d3] {$T_l$};
+    \node at (2.2,-2.7) {0110100101110\dots};
+    \draw[-{Stealth}, thick, netgreen] (4.6,-2.9) -- (4.6,1.1);
+  \end{scope}
+  \draw[-{Stealth}, very thick, black!60, decorate, decoration={snake, amplitude=1.2pt, segment length=6pt, post length=2mm}] (5.4,-2.7) -- node[below=3pt] {mezzo fisico} (9.5,-2.7);
+\end{tikzpicture}
+\caption{Incapsulamento nella pila a cinque strati: ogni strato tratta tutto ciò che riceve dall'alto come un blocco unico a cui aggiungere il proprio header.}
+\end{figure}
+
+\subsection{Sotto il proprio strato, il payload è opaco}
+
+Quando il messaggio di livello 7 scende, tutto ciò che viene dall'alto (header e contenuto insieme)
+diventa il \textbf{payload} del livello 6.
+
+\begin{itemize}
+    \item Il livello 6 aggiunge il proprio header e passa tutto al livello 5, che fa lo stesso, e così via.
+    \item Il livello 6 \textbf{non sa} di trasportare HTML, e non deve interessargli: per lui il payload è
+          una \textbf{sequenza di byte opaca}.
+    \item È proprio questo che rende gli strati \textbf{indipendenti}: uno strato che ispezionasse il
+          proprio payload smetterebbe di funzionare appena cambia lo strato superiore.
+\end{itemize}
+
+Il destinatario ripercorre la sequenza al contrario, e ogni strato toglie soltanto il proprio header.
+
+\info{Lo tocchiamo con mano}{
+    Quando nel capitolo sui socket scriveremo a mano una richiesta HTTP, vedremo che un messaggio a
+    livello di applicazione viene semplicemente inviato come \textbf{payload} di un messaggio di
+    trasporto, il cui contenuto è del tutto irrilevante (``trasparente'') per il livello di trasporto.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{I sette strati, uno per uno}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{1. Livello fisico (Physical)}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.48\linewidth}\centering
+  \includegraphics[width=\linewidth]{cap02/osi_fisico.png}
+\end{minipage}\hfill
+\begin{minipage}{0.48\linewidth}
+È responsabile di \textbf{spostare i singoli bit} da un nodo al successivo lungo il mezzo. Si occupa di:
+\begin{itemize}
+  \item caratteristiche fisiche di interfacce e mezzi (connettori, cavi, segnali elettrici);
+  \item configurazione della linea (punto-punto o multipunto) e topologia fisica;
+  \item modalità di trasmissione (simplex, half-duplex, full-duplex);
+  \item rappresentazione dei bit, velocità (data rate) e sincronizzazione dei bit tra i due estremi.
+\end{itemize}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node (t1) at (0,0.9) {\icon[0.8cm]{pc}}; \node[above=-1pt of t1, text=netblue, font=\small\bfseries\sffamily] {T1};
+  \node (t2) at (10,0.9) {\icon[0.8cm]{pc}}; \node[above=-1pt of t2, text=netblue, font=\small\bfseries\sffamily] {T2};
+  \node[font=\ttfamily\footnotesize, text=netblue] (b1) at (0,0) {0001100110000110};
+  \node[font=\ttfamily\footnotesize, text=netblue] (b2) at (10,0) {0001100110000110};
+  \node[draw, fill=lphy, minimum width=1.2cm, minimum height=0.5cm] (p1) at (1.2,-1) {PHYS};
+  \node[draw, fill=lphy, minimum width=1.2cm, minimum height=0.5cm] (p2) at (8.8,-1) {PHYS};
+  \node[cylinder, shape border rotate=0, draw, thick, fill=black!5, aspect=0.25, minimum height=4.8cm, minimum width=0.55cm] (c) at (5,-1) {};
+  \node[below=2pt of c, lbl] {mezzo fisico: cavo, fibra, onde radio};
+  \draw[-{Stealth}, thick, netorange] (b1.south) to[bend right=20] (p1.north);
+  \draw[-{Stealth}, thick, netorange] (p1) -- (c.west);
+  \draw[-{Stealth}, thick, netorange] (c.east) -- (p2);
+  \draw[-{Stealth}, thick, netorange] (p2.north) to[bend right=20] (b2.south);
+  \foreach \x in {3.3,3.9,4.5,5.1,5.7,6.3} \draw[netorange!80!black, thick, decorate, decoration={snake, amplitude=1.2pt, segment length=4pt}] (\x,-1) -- ++(0.4,0);
+\end{tikzpicture}
+\caption{Il livello fisico: la sequenza di bit di T1 diventa un segnale sul mezzo e ricompare identica (se tutto va bene) in T2.}
+\end{figure}
+
+\subsection{2. Livello di collegamento (Data Link)}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.48\linewidth}\centering
+  \includegraphics[width=\linewidth]{cap02/osi_collegamento.png}
+\end{minipage}\hfill
+\begin{minipage}{0.48\linewidth}
+È responsabile di \textbf{spostare i frame da un nodo al successivo}: un solo salto (\emph{hop}),
+non l'intero cammino. Si occupa di:
+\begin{itemize}
+  \item organizzare i dati in \textbf{frame}, blocchi di dimensione limitata (tipicamente qualche
+        centinaio di byte), con header $H_2$ e trailer $T_2$;
+  \item \textbf{controllo di flusso} e \textbf{controllo degli errori}, tramite la \emph{frame check
+        sequence} (FCS) nel trailer;
+  \item \textbf{controllo dell'accesso} al mezzo quando è condiviso.
+\end{itemize}
+\end{minipage}
+\end{figure}
+
+\dfn{Sottostrato MAC}{
+    Il livello di collegamento contiene il \textbf{sottostrato MAC} (\emph{Medium Access Control}), che si occupa
+    della \textbf{gestione dell'accesso a un unico mezzo di trasmissione} da parte di più stazioni \textbf{in
+    competizione} tra loro. Ethernet ne è l'esempio più noto.
+}
+
+\subsection{3. Livello di rete (Network)}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.48\linewidth}\centering
+  \includegraphics[width=\linewidth]{cap02/osi_rete.png}
+\end{minipage}\hfill
+\begin{minipage}{0.48\linewidth}
+È responsabile di \textbf{consegnare i pacchetti dall'host sorgente all'host destinazione}, lungo
+l'intero cammino. Si occupa di:
+\begin{itemize}
+  \item attraversare la \textbf{topologia}: la rete è un grafo di nodi con più di una strada possibile;
+  \item \textbf{indirizzamento logico} (gli indirizzi IP);
+  \item \textbf{routing}: decidere, nodo per nodo, da quale collegamento far uscire il pacchetto
+        (tabelle di instradamento).
+\end{itemize}
+\end{minipage}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \begin{scope}
+    \node[font=\small\bfseries\sffamily, fill=llink!70, rounded corners] at (1.6,1.5) {ISO-2: collegamento};
+    \node[draw=netred, thick, minimum width=0.9cm, minimum height=0.55cm] (a) at (0,0) {};
+    \node[draw=netred, thick, minimum width=0.9cm, minimum height=0.55cm] (b) at (3.2,0) {};
+    \draw[{Stealth}-{Stealth}, dashed, thick, netred] (a) -- (b);
+    \node[field, fill=llink, minimum width=0.9cm] at (1.6,0.45) {frame};
+    \node[lbl, text width=4.2cm] at (1.6,-1) {ci sono \textbf{solo due nodi} che comunicano tra loro; viaggiano frame di qualche centinaio di byte};
+  \end{scope}
+  \begin{scope}[xshift=7.2cm]
+    \node[font=\small\bfseries\sffamily, fill=lnet!70, rounded corners] at (1.8,1.5) {ISO-3: rete};
+    \node[gnode] (s) at (0,0.3) {}; \node[left=1pt of s] {S};
+    \node[gnode] (r1) at (1.2,0.9) {}; \node[gnode] (r2) at (1.3,-0.5) {};
+    \node[gnode] (r3) at (2.5,0.4) {}; \node[gnode] (r4) at (2.7,-0.9) {};
+    \node[gnode] (d) at (3.8,0) {}; \node[right=1pt of d] {D};
+    \foreach \x/\y in {s/r1, s/r2, r1/r3, r2/r3, r2/r4, r3/d, r4/d, r1/r2} \draw[black!40, thick] (\x) -- (\y);
+    \draw[pathhl, opacity=0.6] (s) -- (r2) -- (r3) -- (d);
+    \node[lbl, text width=5.2cm, anchor=north] at (1.9,-1.25) {chi trasmette attraverso una \textbf{topologia complessa}? Il livello di rete, usando i servizi del collegamento su ogni salto};
+  \end{scope}
+\end{tikzpicture}
+\caption{Il collegamento lavora su un solo salto tra due nodi; la rete compone i salti in un cammino dalla sorgente alla destinazione.}
+\end{figure}
+
+\subsection{4. Livello di trasporto (Transport)}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.48\linewidth}\centering
+  \includegraphics[width=\linewidth]{cap02/osi_trasporto.png}
+\end{minipage}\hfill
+\begin{minipage}{0.48\linewidth}
+È responsabile di \textbf{consegnare un messaggio da un estremo all'altro} e al \textbf{programma
+giusto} sull'host di destinazione. Si occupa di:
+\begin{itemize}
+  \item \textbf{indirizzamento tramite porte}: il livello di rete trova l'\emph{host}, il trasporto
+        trova il \emph{processo};
+  \item controllo della connessione (con o senza connessione);
+  \item \textbf{segmentazione e riassemblaggio} dei messaggi in segmenti;
+  \item controllo di flusso e degli errori, da un estremo all'altro.
+\end{itemize}
+\end{minipage}
+\end{figure}
+
+\subsection{5. Livello di sessione (Session)}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.48\linewidth}\centering
+  \includegraphics[width=\linewidth]{cap02/osi_sessione.png}
+\end{minipage}\hfill
+\begin{minipage}{0.48\linewidth}
+È responsabile del \textbf{controllo del dialogo}: stabilisce, mantiene e sincronizza l'interazione
+tra i due sistemi.
+\begin{itemize}
+  \item \textbf{chi parla, quando e per quanto};
+  \item \textbf{punti di sincronizzazione} (\emph{checkpoint}, i \texttt{syn} della figura): uno scambio
+        interrotto riprende dall'ultimo checkpoint invece che dall'inizio.
+\end{itemize}
+\end{minipage}
+\end{figure}
+
+\subsection{6. Livello di presentazione (Presentation)}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.48\linewidth}\centering
+  \includegraphics[width=\linewidth]{cap02/osi_presentazione.png}
+\end{minipage}\hfill
+\begin{minipage}{0.48\linewidth}
+È responsabile della \textbf{rappresentazione dei dati}, perché ciò che scrive una parte sia ciò che
+legge l'altra:
+\begin{itemize}
+  \item \textbf{traduzione} tra codifiche diverse (il caso storico è ASCII contro EBCDIC);
+  \item \textbf{cifratura} e decifratura;
+  \item \textbf{compressione}.
+\end{itemize}
+\end{minipage}
+\end{figure}
+
+\subsection{7. Livello applicativo (Application)}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.48\linewidth}\centering
+  \includegraphics[width=\linewidth]{cap02/osi_applicazione.png}
+\end{minipage}\hfill
+\begin{minipage}{0.48\linewidth}
+È responsabile di \textbf{fornire servizi all'utente} (una persona o un programma), ed è dove vivono i
+protocolli che già conoscete per nome:
+\begin{itemize}
+  \item login remoto (terminale virtuale di rete);
+  \item trasferimento e accesso ai file;
+  \item posta elettronica;
+  \item accesso al World Wide Web.
+\end{itemize}
+È lo strato che apriremo per primo, perché è quello che si vede.
+\end{minipage}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Perché OSI non ha vinto}
+% ══════════════════════════════════════════════════════════════
+
+Il modello OSI è lo standard \emph{de iure}, ma i suoi protocolli non hanno avuto successo. Le
+ragioni sono quattro:
+
+\begin{itemize}
+    \item \textbf{Cattivo tempismo} (\emph{bad timing}): quando comparvero i protocolli OSI, TCP/IP era
+          già diffuso nelle università di ricerca, e nessun produttore voleva sostenere un secondo stack.
+    \item \textbf{Cattiva progettazione} (\emph{bad design}): sia il modello sia i protocolli avevano
+          difetti. Sette strati erano un numero ``politico'': sessione e presentazione sono quasi vuoti,
+          collegamento e rete sono sovraccarichi.
+    \item \textbf{Cattive implementazioni} (\emph{bad implementations}): le prime erano enormi, goffe e
+          lente, e la cattiva reputazione è rimasta anche dopo che i prodotti erano migliorati.
+    \item \textbf{Cattiva politica} (\emph{bad politics}): era percepito come una creatura dei ministeri
+          delle telecomunicazioni europei, della Comunità Europea e poi del governo statunitense,
+          mentre TCP/IP arrivava gratis insieme a Berkeley UNIX.
+\end{itemize}
+
+Il \textbf{modello} OSI è sopravvissuto ed è ancora il modo in cui si parla di reti; i suoi
+\textbf{protocolli} no.
+
+\subsection{L'apocalisse dei due elefanti}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{cap02/due_elefanti.png}
+    \caption{L'attività su un argomento: prima la ricerca, poi il miliardo di dollari di investimenti.}
+\end{figure}
+
+Quando nasce un nuovo argomento, l'attività ha due ``gobbe'' (i due elefanti): prima un picco di
+\textbf{ricerca}, poi, anni dopo, un picco di \textbf{investimenti industriali}. Tra le due c'è una conca.
+
+\begin{itemize}
+    \item Uno standard scritto \textbf{troppo presto} congela un argomento che nessuno ha ancora capito.
+    \item Uno standard scritto \textbf{troppo tardi} viene ignorato da chi ha già investito in altro.
+\end{itemize}
+
+Per evitare il cattivo tempismo, gli standard vanno scritti \textbf{nella conca tra le due gobbe}.
+OSI non ci riuscì: arrivò quando TCP/IP aveva già occupato il secondo elefante.
+
+% ══════════════════════════════════════════════════════════════
+\section{Cosa non va nel modello TCP/IP}
+% ══════════════════════════════════════════════════════════════
+
+Per correttezza, anche il \emph{modello} TCP/IP ha i suoi difetti:
+
+\begin{itemize}
+    \item \textbf{non distingue chiaramente} i concetti di servizio, interfaccia e protocollo, cioè
+          proprio ciò che OSI aveva fatto bene;
+    \item \textbf{non è generale}: non si riesce a usarlo per descrivere altre pile di protocolli
+          (provate a descrivere Bluetooth con il modello TCP/IP);
+    \item il suo \textbf{livello di collegamento non è un vero strato}, ma un'interfaccia tra l'host e il
+          collegamento trasmissivo;
+    \item \textbf{non distingue} tra livello fisico e livello di collegamento, che sono due compiti
+          completamente diversi.
+\end{itemize}
+
+I suoi \textbf{protocolli}, però, erano progettati con cura, ben implementati e distribuiti
+\textbf{gratuitamente}.
+
+% ══════════════════════════════════════════════════════════════
+\section{De iure e de facto}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.45\linewidth}\centering
+  \includegraphics[width=\linewidth]{cap02/de_iure_de_facto.png}
+\end{minipage}\hfill
+\begin{minipage}{0.5\linewidth}
+\begin{itemize}
+  \item \textbf{De iure}: ISO/OSI è il modello standard per le reti di calcolatori: completo,
+        dettagliato e complesso.
+  \item \textbf{De facto}: i protocolli che girano davvero su Internet e sulle reti locali sono
+        \textbf{TCP}, \textbf{UDP} e \textbf{IP} (la \emph{Internet Protocol Suite}):
+        \begin{itemize}
+          \item \textbf{TCP}: \emph{Transmission Control Protocol};
+          \item \textbf{UDP}: \emph{User Datagram Protocol};
+          \item \textbf{IP}: \emph{Internet Protocol}.
+        \end{itemize}
+\end{itemize}
+In pratica non sono rivali: teniamo il \textbf{modello} per ragionare e i \textbf{protocolli} per lavorare.
+\end{minipage}
+\caption{Corrispondenza tra la pila ISO/OSI e la pila TCP/IP.}
+\end{figure}
+
+\info{IP è il collante}{
+    Il protocollo IP è il ``collante'' di tutta la rete di reti che chiamiamo Internet. È l'unico punto
+    in cui tutti sono obbligati a mettersi d'accordo: sopra IP ci possono essere TCP o UDP, sotto IP
+    Ethernet, Wi-Fi o qualunque altra cosa. È la ``vita stretta'' della clessidra vista nel capitolo 1.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{I cinque strati usati nel resto del corso}
+% ══════════════════════════════════════════════════════════════
+
+Da qui in avanti il corso conta \textbf{cinque strati}, non sette: è il modello OSI senza sessione e
+presentazione, i cui pochi compiti reali vengono svolti direttamente dalle applicazioni. I nomi sono
+quelli del Kurose.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\small\sffamily}]
+  \node[lay app, minimum width=3.4cm, minimum height=0.8cm] (a) at (0,2.4) {Applicazione};
+  \node[lay tra, minimum width=3.4cm, minimum height=0.8cm] (t) at (0,1.6) {Trasporto};
+  \node[lay net, minimum width=3.4cm, minimum height=0.8cm] (n) at (0,0.8) {Rete};
+  \node[lay link, minimum width=3.4cm, minimum height=0.8cm] (l) at (0,0) {Collegamento};
+  \node[lay phy, minimum width=3.4cm, minimum height=0.8cm] (p) at (0,-0.8) {Fisico};
+  \foreach \n/\osi/\u/\ex in {a/{OSI 7, 6, 5}/messaggio/{HTTP, SMTP, DNS}, t/{OSI 4}/segmento/{TCP, UDP}, n/{OSI 3}/datagramma/{IP}, l/{OSI 2}/frame/{Ethernet, Wi-Fi}, p/{OSI 1}/bit/{rame, fibra, radio}} {
+     \node[anchor=east, lbl] at ([xshift=-0.3cm]\n.west) {\osi};
+     \node[anchor=west, text=primary!85!black, font=\small\bfseries\sffamily] at ([xshift=0.3cm]\n.east) {\u};
+     \node[anchor=west, lbl, text=black!60] at ([xshift=2.4cm]\n.east) {\ex};
+  }
+  \node[font=\footnotesize\bfseries\sffamily] at (2.7,3.2) {unità di dati};
+  \node[font=\footnotesize\bfseries\sffamily] at (4.7,3.2) {esempi};
+\end{tikzpicture}
+\caption{La pila a cinque strati: corrispondenza con OSI, nome dell'unità di dati ed esempi di protocolli.}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcl}
+\toprule
+\textbf{Strato} & \textbf{Corrisponde a OSI} & \textbf{Unità di dati} \\
+\midrule
+Applicazione & 7, 6 e 5 & messaggio \\
+Trasporto & 4 & segmento \\
+Rete & 3 & datagramma \\
+Collegamento & 2 & frame \\
+Fisico & 1 & bit \\
+\bottomrule
+\end{tabular}
+\caption{I cinque strati del corso.}
+\end{table}
+
+\warning{Numeri OSI e nomi del corso}{
+    I numeri OSI (``livello 3'', ``livello 2'') restano in uso perché li usano tutti nel settore, e li
+    useremo anche noi quando serve. Ma la pila che studiamo, dall'alto verso il basso, è quella a
+    cinque strati.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{La stratificazione oltre Internet}
+% ══════════════════════════════════════════════════════════════
+
+Esistono altre pile di protocolli, scelte a seconda del contesto: \textbf{RS-232} per una linea
+seriale, \textbf{CAN} all'interno di un veicolo o in automazione industriale. Sono molto più semplici,
+e sono comunque stratificate.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{cap02/altri_modelli.png}
+    \caption{Modelli a strati in altri contesti (standard industriali, automazione, IoT).}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{cccc}
+\toprule
+\textbf{Strato OSI} & \textbf{TCP/IP o UDP/IP} & \textbf{RS-232} & \textbf{CAN} \\
+\midrule
+7--5 & Applicazione & \multirow{3}{*}{Applicazione} & \multirow{3}{*}{\makecell{CANopen, CANopen FD,\\ J1939, \dots}} \\
+4 & TCP/UDP & & \\
+3 & IP & & \\
+\midrule
+2 & \multirow{2}{*}{Link + Fisico} & UART & CAN 2.0 A/B \\
+1 & & Rx, Tx, GND & CAN-H, CAN-L \\
+\bottomrule
+\end{tabular}
+\caption{In RS-232 e CAN i livelli di collegamento e fisico sono distinti, e tutto il resto è ``applicazione''.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Una richiesta attraversa troppi pezzi per essere progettata tutta insieme: il sistema si divide
+          in \textbf{strati} (\emph{divide et impera}).
+    \item Uno strato offre un \textbf{servizio} verso l'alto attraverso un'\textbf{interfaccia}, e usa un
+          \textbf{protocollo} in orizzontale con il suo pari. Le due cose sono indipendenti.
+    \item La comunicazione tra pari è \textbf{logica}: i dati scendono una pila e risalgono l'altra, e solo
+          il livello fisico sposta davvero qualcosa.
+    \item I servizi possono essere \textbf{con} o \textbf{senza connessione}, \textbf{affidabili} o no:
+          TCP darà un flusso di byte affidabile, UDP un datagram inaffidabile.
+    \item L'\textbf{incapsulamento} rende possibile tutto questo: ogni strato tratta ciò che trasporta come
+          byte opachi.
+    \item OSI ci ha dato sette strati con cui ragionare, TCP/IP i protocolli; nel corso usiamo
+          \textbf{cinque strati} con i nomi del Kurose: messaggio, segmento, datagramma, frame, bit.
+\end{itemize}
+}
+
+Nella prossima parte apriamo la cima della pila, dove stanno le applicazioni.

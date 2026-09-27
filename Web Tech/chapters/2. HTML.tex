@@ -1,0 +1,2037 @@
+\chapter{HTML}
+
+\section{Dentro un server HTTP}
+
+Nel capitolo precedente abbiamo visto che il Web è un sistema di documenti
+ipertestuali collegati fra loro, e che i client usano HTTP per recuperarli.
+Prima di scrivere il nostro primo documento, chiariamo che cosa c'è dall'altra
+parte del filo.
+
+Un \term{server HTTP} è, molto semplicemente, un \textbf{programma}. Le sue
+responsabilità sono tre:
+
+\begin{itemize}
+  \item si mette in \textbf{ascolto} di richieste HTTP su una certa porta (per
+        esempio la 80);
+  \item può gestire \textbf{più host} contemporaneamente: è esattamente per
+        questo che nelle richieste HTTP esiste l'header \code{Host}, che dice al
+        server \textit{quale} dei siti ospitati stiamo cercando;
+  \item risponde alle connessioni servendo file prelevati dalla propria
+        \term{document root} nel filesystem.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      host/.style={rounded corners=4pt, draw=primary!55!black, line width=0.8pt,
+                   fill=primary!5!white},
+      f/.style={wtnodeplain, font=\FiraCode\scriptsize, minimum height=0.5cm},
+      d/.style={f, draw=orange-gradient-6, fill=orange-gradient-1!40!white}]
+
+    \node[font=\Lato\bfseries, text=primary!75!black] (t) at (0,3.3) {SERVER HTTP};
+
+    % --- host 1 ---
+    \node[font=\Lato\scriptsize, anchor=west, text=primary!45!black] (h1t)
+      at (-5.1,2.45) {Host: \textbf{tecweb.net} \quad Root: \code{/var/www/tw}};
+    \node[f] (i1) at (-2.6,1.75) {index.html};
+    \node[f, right=4pt of i1] (l1) {list.html};
+    \node[f, right=4pt of l1] (e1) {example.html};
+    \begin{scope}[on background layer]
+      \node[host, fit=(h1t)(i1)(l1)(e1), inner sep=8pt] (h1) {};
+    \end{scope}
+
+    % --- host 2 ---
+    \node[font=\Lato\scriptsize, anchor=west, text=primary!45!black] (h2t)
+      at (-5.1,0.35) {Host: \textbf{bookofprogramming.com} \quad Root: \code{/var/www/book}};
+    \node[f] (i2) at (-2.9,-0.35) {index.html};
+    \node[d, right=4pt of i2] (p2) {pics/};
+    \node[f, right=4pt of p2] (j2) {pics/fu-tzu.jpg};
+    \begin{scope}[on background layer]
+      \node[host, fit=(h2t)(i2)(p2)(j2), inner sep=8pt] (h2) {};
+    \end{scope}
+
+    \begin{scope}[on background layer]
+      \node[rounded corners=5pt, draw=primary!70!black, line width=1pt,
+            fill=primary!2!white, fit=(t)(h1)(h2), inner sep=10pt] {};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Un solo server HTTP può ospitare più host, ciascuno con la propria
+           document root.}
+  \label{fig:http-server}
+\end{figure}
+
+\warning{Solo ciò che sta nella document root}{
+  Il server serve esclusivamente i file contenuti nella document root. Tutto il
+  resto del filesystem (il codice sorgente dell'applicazione, i file di
+  configurazione con le password del database, le chiavi private) resta
+  invisibile dall'esterno. È una regola semplice ma fondamentale: quando si
+  pubblica un sito, \textbf{tutto ciò che finisce nella document root è
+  pubblico}, compresi i file che pensavamo nessuno avrebbe indovinato.}
+
+\section{Che cos'è HTML}
+
+\dfn{HTML}{
+  \term{HTML} (\textit{HyperText Markup Language}) è il linguaggio con cui si
+  descrivono i documenti che i browser visualizzano. Una web app è costituita da
+  uno o più documenti, detti anche \textit{pagine web}.}
+
+Il concetto chiave è quello di \term{linguaggio di marcatura} (\textit{markup
+language}): i documenti vengono \textbf{arricchiti} con un insieme di
+annotazioni che ne controllano la struttura, la formattazione o la relazione fra
+le loro parti.
+
+Detto altrimenti: in un file HTML convivono due cose, il \textbf{contenuto} (il
+testo che l'utente leggerà) e la \textbf{marcatura} (le annotazioni che dicono al
+browser che cosa quel testo rappresenta: un titolo, un paragrafo, un
+collegamento).
+
+\subsection{Un po' di storia}
+
+HTML ha attraversato diverse versioni dal 1993 a oggi. In questo corso ci
+concentreremo sull'\term{HTML Living Standard}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\footnotesize,
+      ver/.style={rounded corners=3pt, draw=primary!60!black, line width=0.8pt,
+                  fill=primary!8!white, inner sep=4pt, align=center,
+                  font=\Lato\scriptsize},
+      cur/.style={ver, draw=accent!65!black, fill=accent!12!white,
+                  font=\Lato\scriptsize\bfseries},
+      tick/.style={draw=neutral!45!white, line width=0.6pt}]
+
+    \draw[-{Stealth[length=7pt]}, line width=1pt, draw=neutral!45!black]
+      (-0.7,0) -- (13.6,0);
+
+    \foreach \x/\lbl in {0/{HTML 1.0\\1993}, 4.3/{HTML 3\\1997}, 8.6/{HTML 5\\2014}} {
+      \draw[tick] (\x,0) -- (\x,0.45);
+      \node[ver, anchor=south] at (\x,0.5) {\lbl};
+      \fill[primary!70!black] (\x,0) circle (2.2pt);
+    }
+    \foreach \x/\lbl in {2.15/{HTML 2\\1995}, 6.45/{HTML 4\\1999}} {
+      \draw[tick] (\x,0) -- (\x,-0.45);
+      \node[ver, anchor=north] at (\x,-0.5) {\lbl};
+      \fill[primary!70!black] (\x,0) circle (2.2pt);
+    }
+
+    \draw[tick] (11.6,0) -- (11.6,-0.45);
+    \node[cur, anchor=north] at (11.6,-0.5) {HTML Living Standard\\dal 2019};
+    \fill[accent!70!black] (11.6,0) circle (2.6pt);
+  \end{tikzpicture}
+  \caption{Le versioni di HTML.}
+  \label{fig:html-timeline}
+\end{figure}
+
+\info{Che cosa significa \guillemotleft Living Standard\guillemotright}{
+  Fino a HTML5 lo standard veniva pubblicato \textit{a versioni}: si congelava
+  una specifica, le si dava un numero e si ricominciava. Dal 2019 il WHATWG ha
+  adottato il modello di \textit{standard vivente}: esiste una sola specifica,
+  sempre valida, aggiornata in continuazione. Non esiste (e non esisterà) un
+  \guillemotleft HTML 6\guillemotright. Questo è il motivo per cui conviene consultare sempre la
+  documentazione online e non un libro stampato.}
+
+\section{Tag, elementi e attributi}
+
+In HTML le annotazioni si chiamano \term{tag} e si scrivono racchiuse fra
+parentesi angolari.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      part/.style={font=\FiraCode\large, inner sep=1pt, outer sep=0pt},
+      lab/.style={font=\Lato\scriptsize, align=center, inner sep=2pt}]
+    \node[part, text=codetag]                          (op) {<tagName>};
+    \node[part, text=neutral!20!black, right=5pt of op] (ct) {contenuto del tag};
+    \node[part, text=codetag, right=5pt of ct]         (cl) {</tagName>};
+
+    \node[lab, text=codetag,         above=17pt of op] (lop) {Tag di apertura};
+    \node[lab, text=neutral!20!black, above=17pt of ct] (lct) {Contenuto\\(opzionale)};
+    \node[lab, text=codetag,         above=17pt of cl] (lcl) {Tag di chiusura};
+    \draw[wtdash] (lop.south) -- (op.north);
+    \draw[wtdash] (lct.south) -- (ct.north);
+    \draw[wtdash] (lcl.south) -- (cl.north);
+
+    \draw[decorate, decoration={brace, amplitude=5pt, mirror},
+          draw=accent!70!black, line width=0.8pt]
+      ([yshift=-5pt]op.south west) -- ([yshift=-5pt]cl.south east);
+    \node[lab, text=accent!70!black, font=\Lato\small\bfseries]
+      at ($(op.south west)!0.5!(cl.south east) + (0,-0.75)$) {Elemento HTML};
+  \end{tikzpicture}
+  \caption{Anatomia di un elemento HTML.}
+  \label{fig:tag}
+\end{figure}
+
+Il tag di apertura può contenere anche \term{attributi}, coppie
+\textbf{chiave-valore} (il valore è opzionale):
+
+\begin{center}
+  \code{<tagName attributo1="valore" attributo2>}
+\end{center}
+
+\subsection{Struttura di un documento}
+
+Un documento HTML deve iniziare con la dichiarazione \code{<!DOCTYPE HTML>}. Non
+è un tag: serve soltanto a comunicare al client quale tipo di documento
+aspettarsi. Il tag \tg{html} rappresenta l'intero documento e contiene un
+\tg{head} e un \tg{body}.
+
+\begin{esempio}{Lo scheletro minimo di una pagina}
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=hello.html]
+<!DOCTYPE HTML>
+<html lang="it">
+  <head>
+    <title>Ciao mondo!</title>
+  </head>
+  <body>
+    <!-- questo e' un commento -->
+    <p>Ciao mondo!</p>
+  </body>
+</html>
+\end{lstlisting}
+\risultato
+\begin{browser}[Ciao mondo!]
+  Ciao mondo!
+\end{browser}
+\wtnota{Il contenuto di \code{<title>} compare nella linguetta del browser,
+        non nella pagina. Il commento non compare affatto.}
+\end{affianco}
+
+\begin{itemize}
+  \item l'attributo \attr{lang} è fortemente consigliato per motivi di
+        \textbf{accessibilità}: dice al browser e ai lettori di schermo in che
+        lingua è scritto il contenuto, informazione fondamentale per la sintesi
+        vocale e per la sillabazione;
+  \item \tg{head} contiene i \textbf{metadati} del documento;
+  \item \tg{body} contiene il \textbf{contenuto vero e proprio}, cioè quello che
+        l'utente vedrà.
+\end{itemize}
+\end{esempio}
+
+\section{L'elemento head}
+
+L'elemento \tg{head} è un contenitore di \term{metadati}, cioè \guillemotleft dati sui
+dati\guillemotright: informazioni sul documento corrente. Spesso non vengono mostrati
+all'utente, ma sono utilissimi ai browser e ai motori di ricerca. È obbligatorio
+che contenga un \tg{title}.
+
+\begin{esempio}{Un head realistico}
+\begin{lstlisting}[style=html, name=head.html]
+<head>
+  <title>Il Libro della Programmazione</title>
+  <meta charset="UTF-8">
+  <meta name="description" content="Frammenti dal Libro della Programmazione">
+  <meta name="keywords" content="saggezza, programmazione">
+  <meta name="author" content="L. L. L. Starace">
+  <meta http-equiv="refresh" content="30">
+</head>
+\end{lstlisting}
+
+\begin{itemize}
+  \item \tg{title} è il titolo della pagina: compare nella linguetta del browser,
+        nei segnalibri e come titolo nei risultati dei motori di ricerca;
+  \item \attr{charset} dichiara la \textbf{codifica dei caratteri}, praticamente
+        sempre \code{UTF-8};
+  \item \attr{description} e \attr{keywords} sono metadati usati (con qualche
+        cautela) dai motori di ricerca;
+  \item \attr{http-equiv="refresh"} chiede al browser di ricaricare la pagina
+        ogni 30 secondi.
+\end{itemize}
+\end{esempio}
+
+\warning{Se manca il charset}{
+  Se si dimentica \code{<meta charset="UTF-8">}, il browser deve
+  \textit{indovinare} la codifica. Il risultato tipico è la comparsa di
+  caratteri strani al posto delle lettere accentate: un problema che in italiano
+  si nota immediatamente. La riga del charset va messa \textbf{il più in alto
+  possibile} dentro \tg{head}.}
+
+\subsection{La favicon}
+
+Accanto al titolo, nella linguetta del browser, compare quasi sempre una piccola
+icona: è la \term{favicon} (da \textit{favorite icon}), che il browser mostra
+anche nei segnalibri, nella cronologia e nell'elenco delle schede aperte. Si
+dichiara nell'\tg{head} con un elemento \tg{link}:
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=index.html]
+<head>
+  <meta charset="UTF-8">
+  <title>Il Libro della Programmazione</title>
+  <link rel="icon" href="/favicon.ico">
+</head>
+\end{lstlisting}
+\risultato
+\begin{center}
+\begin{tikzpicture}[font=\Lato\scriptsize]
+  % barra delle schede
+  \fill[neutral!12!white, rounded corners=3pt] (0,0) rectangle (7.6,1.55);
+  \fill[white, rounded corners=3pt] (0.15,0.78) rectangle (5.3,1.42);
+  \node[anchor=west] (ico) at (0.3,1.1)
+    {\tikz{\fill[primary!80!black, rounded corners=1pt] (0,0) rectangle (0.28,0.28);
+           \node[text=white, font=\Lato\bfseries\tiny, inner sep=0pt] at (0.14,0.14) {F};}};
+  \node[anchor=west, text=neutral!15!black] (tit) at (0.75,1.1)
+    {Il Libro della Programmazione};
+  \node[text=neutral!45!black] at (5.05,1.1) {$\times$};
+  % barra dell'indirizzo
+  \fill[white] (0,0) rectangle (7.6,0.72);
+  \draw[neutral!35!white, rounded corners=5pt] (0.9,0.14) rectangle (7.4,0.58);
+  \node[text=neutral!45!black] at (0.28,0.36) {$\leftarrow$};
+  \node[anchor=west, text=neutral!40!black, font=\FiraCodeNL\tiny] at (1.05,0.36)
+    {127.0.0.1:3000/index.html};
+  \draw[neutral!35!white] (0,0) rectangle (7.6,1.55);
+  % etichette
+  \draw[wtarrowacc] (0.46,2.2) -- (0.46,1.35);
+  \node[wtlab, anchor=south] at (0.46,2.2) {favicon\\\code{<link rel="icon">}};
+  \draw[wtarrow] (3.2,2.2) -- (3.2,1.35);
+  \node[wtlab, anchor=south] at (3.2,2.2) {titolo\\\code{<title>}};
+\end{tikzpicture}
+\end{center}
+\end{affianco}
+
+\begin{itemize}
+  \item \attr{rel="icon"} dice che la risorsa collegata è l'\textbf{icona} del
+        documento (lo stesso attributo \attr{rel} che, con valore
+        \code{stylesheet}, vedremo servire a collegare i fogli di stile);
+  \item \attr{href} indica la URL dell'immagine. Il formato storico è
+        \code{.ico}, ma oggi si usano senza problemi anche \code{.png} e
+        \code{.svg}, eventualmente indicando il tipo con
+        \code{type="image/png"}.
+\end{itemize}
+
+La cosa più interessante è ciò che accade dietro le quinte: la favicon
+\textbf{non è contenuta} nel documento HTML, quindi il browser deve effettuare
+una \textbf{richiesta HTTP aggiuntiva} per scaricarla, esattamente come vedremo
+per le immagini. C'è di più: anche se la pagina \textit{non} dichiara alcuna
+icona, la maggior parte dei browser prova comunque a chiedere al server il file
+\code{/favicon.ico} nella radice del sito. Se il file non esiste, il server
+risponde \code{404 Not Found}: la pagina funziona lo stesso, ma quella richiesta
+fallita compare nei log del server e nella scheda \textit{Rete} dei DevTools,
+come vedremo alla fine del capitolo (figura~\ref{fig:devtools-rete}).
+
+\info{Perché la favicon «non si aggiorna»}{
+  I browser conservano le favicon nella propria \textbf{cache} in modo molto
+  tenace: sostituito il file sul server, capita di continuare a vedere per un
+  po' l'icona vecchia. Di solito basta una ricarica forzata della pagina
+  (\code{Ctrl+Shift+R}) o aprire direttamente la URL dell'icona. Del
+  funzionamento della cache parliamo alla fine del capitolo.}
+
+\section{Elementi fondamentali}
+
+\subsection{Intestazioni}
+
+Gli elementi da \code{<h1>} a \code{<h6>} rappresentano \term{titoli} e
+sottotitoli, dal più importante al meno importante.
+
+\begin{esempio}{I sei livelli di intestazione}
+\begin{affianco}[0.46]
+\begin{lstlisting}[style=html, name=headings.html]
+<body>
+  <h1>Titolo di primo livello</h1>
+  <h2>Titolo di secondo livello</h2>
+  <h3>Titolo di terzo livello</h3>
+  <h4>Titolo di quarto livello</h4>
+  <h5>Titolo di quinto livello</h5>
+  <h6>Titolo di sesto livello</h6>
+</body>
+\end{lstlisting}
+\risultato
+\begin{browser}[headings.html]
+  {\Lora\bfseries\Huge Titolo di primo livello}\\[5pt]
+  {\Lora\bfseries\LARGE Titolo di secondo livello}\\[5pt]
+  {\Lora\bfseries\large Titolo di terzo livello}\\[5pt]
+  {\Lora\bfseries\normalsize Titolo di quarto livello}\\[5pt]
+  {\Lora\bfseries\small Titolo di quinto livello}\\[5pt]
+  {\Lora\bfseries\footnotesize Titolo di sesto livello}
+\end{browser}
+\end{affianco}
+\end{esempio}
+
+\warning{Le intestazioni non servono a fare il testo grande}{
+  Un errore molto comune fra i principianti è scegliere \code{<h3>} invece di
+  \code{<h1>} \guillemotleft perché la dimensione mi piace di più\guillemotright. Le intestazioni
+  esprimono la \textbf{gerarchia} del documento, non il suo aspetto: i motori di
+  ricerca le usano per capire di che cosa parla la pagina, e i lettori di schermo
+  per permettere agli utenti non vedenti di navigarla saltando di sezione in
+  sezione. Per cambiare la dimensione del testo esiste il CSS.}
+
+\subsection{Paragrafi}
+
+L'elemento \tg{p} rappresenta un \term{paragrafo}. I paragrafi iniziano
+tipicamente su una nuova riga.
+
+\begin{esempio}{Due paragrafi}
+\begin{affianco}[0.46]
+\begin{lstlisting}[style=html, name=paragrafi.html]
+<h1>Il Libro della Programmazione</h1>
+<p>
+  Questa pagina contiene alcuni frammenti
+  del grande Libro della Programmazione,
+  un antico manoscritto perduto nel tempo.
+</p>
+<p>
+  Si dice che il libro sia stato scritto da
+  uno degli studenti del leggendario maestro
+  Fu-Tzu.
+</p>
+\end{lstlisting}
+\risultato
+\begin{browser}[paragrafi.html]
+  {\Lora\bfseries\LARGE Il Libro della Programmazione}\\[6pt]
+  Questa pagina contiene alcuni frammenti del grande Libro della Programmazione,
+  un antico manoscritto perduto nel tempo.\\[6pt]
+  Si dice che il libro sia stato scritto da uno degli studenti del leggendario
+  maestro Fu-Tzu.
+\end{browser}
+\end{affianco}
+
+Si noti una cosa importante: nel sorgente il testo va a capo più volte e
+contiene molti spazi di indentazione, ma nel risultato tutto ciò è
+\textbf{scomparso}. HTML \term{collassa gli spazi bianchi}: qualunque sequenza di
+spazi, tabulazioni e a-capo consecutivi viene trattata come un \textbf{unico
+spazio}. Se serve andare a capo davvero, occorre dirlo esplicitamente con
+\tg{br}.
+\end{esempio}
+
+\subsection{Commenti}
+
+I \term{commenti} sono delimitati da \code{<!-{}-} e \code{-{}->} e vengono
+ignorati dai browser. Sono utili per aggiungere note o per nascondere
+temporaneamente del contenuto.
+
+\begin{esempio}{Commenti singoli e multi-riga}
+\begin{affianco}[0.54]
+\begin{lstlisting}[style=html, name=commenti.html]
+<h1>I due aspetti</h1>
+<!-- TODO: aggiungere altra saggezza -->
+<p>
+  Sotto la superficie della macchina,
+  il programma si muove. Senza sforzo,
+  si espande e si contrae.
+</p>
+<!--
+<p>
+  Le forme sul monitor non sono che
+  increspature sull'acqua. L'essenza
+  resta invisibile, al di sotto.
+</p> -->
+\end{lstlisting}
+\risultato
+\begin{browser}[commenti.html]
+  {\Lora\bfseries\Huge I due aspetti}\\[6pt]
+  Sotto la superficie della macchina, il programma si muove. Senza sforzo, si
+  espande e si contrae.
+\end{browser}
+\wtnota{Il secondo paragrafo è dentro un commento: non viene mostrato.}
+\end{affianco}
+\end{esempio}
+
+\error{I commenti non sono un nascondiglio}{
+  Il contenuto commentato \textbf{non} viene mostrato, ma viene comunque
+  \textbf{inviato al browser}: basta guardare il sorgente della pagina per
+  leggerlo. Non commentare mai credenziali, chiavi API, note interne o indirizzi
+  di ambienti di test: chiunque può leggerli con due clic.}
+
+\subsection{Semantica del testo}
+
+Alcuni tag specificano la \term{semantica} di porzioni di testo.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.1cm}}>{\raggedright\arraybackslash}p{9.4cm}@{}}
+  \textbf{Tag} & \textbf{Significato} \\
+  \code{<em>}     & Enfatizza il contenuto. \\
+  \code{<strong>} & Indica \textit{forte importanza}. \\
+  \code{<br/>}    & Interruzione di riga. È un \term{tag vuoto}, quindi può
+                    essere auto-chiuso. \\
+  \code{<abbr>}   & Definisce acronimi e abbreviazioni; il testo esteso va
+                    nell'attributo \attr{title}. \\
+  \code{<del>}    & Contenuto che è stato \textit{rimosso} dal documento. \\
+  \code{<ins>}    & Contenuto che è stato \textit{inserito} nel documento. \\
+\end{tabular}
+\end{center}
+
+\begin{esempio}{Semantica testuale in azione}
+\begin{affianco}[0.55]
+\begin{lstlisting}[style=html, name=semantica.html]
+<p>
+  I tag
+  <abbr title="HyperText Markup Language">HTML</abbr>
+  possono essere usati con semantica a livello
+  di testo.<br/> Alcuni tag conferiscono
+  <strong>importanza</strong> al loro contenuto,
+  altri lo <em>enfatizzano</em>. Alcuni servono
+  a evidenziare contenuto <del>rimosso</del>
+  <ins>aggiunto</ins>.
+</p>
+\end{lstlisting}
+\risultato
+\begin{browser}[semantica.html]
+  I tag \dotuline{HTML} possono essere usati con semantica a livello di testo.\\
+  Alcuni tag conferiscono \textbf{importanza} al loro contenuto, altri lo
+  \textit{enfatizzano}. Alcuni servono a evidenziare contenuto \sout{rimosso}
+  \uline{aggiunto}.
+\end{browser}
+\end{affianco}
+
+Il testo esteso dell'abbreviazione (\textit{HyperText Markup Language}) compare
+come suggerimento quando il puntatore si ferma sopra la sigla, che il browser
+sottolinea con una linea punteggiata.
+\end{esempio}
+
+\info{Semantica, non aspetto}{
+  Esistono anche \code{<i>} (corsivo) e \code{<b>} (grassetto), che descrivono
+  soltanto l'\textit{aspetto}. Si preferiscono \code{<em>} e \code{<strong>}
+  perché descrivono il \textit{significato}: un lettore di schermo cambia
+  intonazione su \code{<strong>}, mentre su \code{<b>} non ha nulla da dire. La
+  regola generale in HTML è sempre la stessa: \textbf{descrivi che cosa è, non
+  come deve apparire}. Come deve apparire lo dirà il CSS.}
+
+\section{Collegamenti ipertestuali}
+
+I collegamenti si definiscono con il tag \term{anchor} \tg{a}. L'attributo
+\attr{href} indica la URL di destinazione.
+
+\begin{esempio}{Un collegamento}
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=link.html]
+<p>
+  <a href="/fu-tzu.html">Fu-Tzu</a> una volta disse:
+  <em>
+    Quando il saggio indica la luna,
+    lo sciocco fissa il dito e si chiede
+    da quale libreria provenga.
+  </em>
+</p>
+\end{lstlisting}
+\risultato
+\begin{browser}[link.html]
+  \wtlink{Fu-Tzu} una volta disse: \textit{Quando il saggio
+  indica la luna, lo sciocco fissa il dito e si chiede da quale libreria
+  provenga.}
+\end{browser}
+\end{affianco}
+\end{esempio}
+
+\subsection{URL relative e assolute}
+
+Le URL indicate in \attr{href} possono essere \term{assolute} o \term{relative}.
+
+\begin{itemize}
+  \item Le \textbf{URL assolute} includono schema e nome di host, e contengono
+        tutte le informazioni necessarie a raggiungere la risorsa: \\
+        \code{<a href="http://tecweb.com/course/intro.html">}
+  \item Le \textbf{URL relative} indicano solo un percorso; schema e host vengono
+        dedotti dal contesto corrente: \\
+        \code{<a href="page.html">} \quad oppure \quad
+        \code{<a href="/course/react.html">}
+\end{itemize}
+
+La regola di risoluzione dipende dal fatto che la URL relativa cominci o meno
+con una barra.
+
+\begin{esempio}{URL relativa che inizia con la barra}
+Quando una URL relativa inizia con \code{/}, l'\textbf{intero percorso} viene
+sostituito.
+
+\begin{itemize}
+  \item Contesto corrente:
+        \code{http://bookofprogramming.com/fu-tzu/fu-tzu.html}
+  \item Un'ancora \code{<a href="/index.html">} punta a:
+        \code{http://bookofprogramming.com/index.html}
+\end{itemize}
+\end{esempio}
+
+\begin{esempio}{URL relativa che non inizia con la barra}
+Quando una URL relativa \textbf{non} inizia con \code{/}, viene sostituito solo
+l'\textbf{ultimo segmento} del percorso, cioè quello dopo l'ultima barra (qui,
+il nome del file).
+
+\begin{itemize}
+  \item Contesto corrente:
+        \code{http://bookofprogramming.com/fu-tzu/fu-tzu.html}
+  \item Un'ancora \code{<a href="pic.jpg">} punta a:
+        \code{http://bookofprogramming.com/fu-tzu/pic.jpg}
+\end{itemize}
+\end{esempio}
+
+\subsection{I segmenti punto}
+
+Le URL relative possono contenere anche i cosiddetti \term{segmenti punto}:
+
+\begin{itemize}
+  \item il punto singolo (\code{.}) rappresenta la \textbf{directory corrente};
+  \item il punto doppio (\code{..}) rappresenta la \textbf{directory padre}.
+\end{itemize}
+
+Supponendo che il percorso corrente sia \code{/a/b/c/hello.html}:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.5cm}}l@{}}
+  \textbf{href} & \textbf{Percorso risultante} \\
+  \code{./index.html}    & \code{/a/b/c/index.html} \\
+  \code{../foo.html}     & \code{/a/b/foo.html} \\
+  \code{../../pic.jpg}   & \code{/a/pic.jpg} \\
+  \code{./../../pic.jpg} & \code{/a/pic.jpg} \quad (identico al precedente) \\
+\end{tabular}
+\end{center}
+
+\subsection{Meglio relative o assolute?}
+
+\begin{itemize}
+  \item Le \textbf{URL relative} vanno preferite quando si collegano risorse
+        \textbf{interne} alla stessa applicazione web. In questo modo, se cambia
+        il nome di host (per esempio passando dall'ambiente di sviluppo a quello
+        di produzione), non c'è alcun bisogno di modificare le pagine HTML.
+  \item Per collegare pagine o risorse \textbf{esterne} non c'è scelta: si devono
+        usare URL assolute.
+\end{itemize}
+
+\subsection{L'attributo target}
+
+L'attributo \attr{target} specifica \textit{dove} aprire la risorsa collegata:
+
+\begin{itemize}
+  \item \code{<a target="\_self" href="pic.jpg">} apre la risorsa nella stessa
+        finestra o scheda del browser (è il comportamento predefinito, quando
+        \attr{target} non viene specificato);
+  \item \code{<a target="\_blank" href="pic.jpg">} apre la risorsa in una
+        \textbf{nuova} finestra o scheda.
+\end{itemize}
+
+\section{URL che puntano a una directory}
+
+Che cosa succede quando una URL punta a una \textbf{directory} e non a un file?
+
+I server web rispondono tipicamente con il contenuto del file \code{index.html},
+se esiste nella directory richiesta. Questo comportamento è configurabile:
+
+\begin{itemize}
+  \item altri nomi predefiniti comunemente usati sono \code{home.html} e
+        \code{default.html};
+  \item se non esiste alcun file predefinito, i server HTTP possono essere
+        configurati per generare automaticamente un \term{indice} della
+        directory, cioè un elenco navigabile dei file che contiene.
+\end{itemize}
+
+\warning{L'indice automatico è comodo e pericoloso}{
+  L'elenco automatico dei file è utilissimo in sviluppo, ma su un server di
+  produzione espone la struttura interna del sito: backup dimenticati, archivi
+  \code{.zip}, vecchie versioni delle pagine. È buona norma disattivarlo e
+  mettere sempre un \code{index.html}, anche vuoto.}
+
+\section{Tabelle}
+
+Una \term{tabella} \tg{table} contiene un insieme di righe \tg{tr}
+(\textit{table row}). Ogni riga può contenere una o più celle:
+
+\begin{itemize}
+  \item \tg{td} (\textit{table data}), le celle di dati;
+  \item \tg{th} (\textit{table header}), le celle di intestazione.
+\end{itemize}
+
+Una tabella può contenere anche un elemento \tg{caption} che la descrive.
+
+\begin{esempio}{Una tabella di esami}
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=tabella.html]
+<table>
+  <caption>Esami</caption>
+  <tr>
+    <th>Esame</th><th>Voto</th>
+  </tr>
+  <tr>
+    <td>A</td><td>30</td>
+  </tr>
+  <tr>
+    <td>B</td><td>28</td>
+  </tr>
+</table>
+\end{lstlisting}
+\risultato
+\begin{browser}[tabella.html]
+  \begin{center}
+    {\Lora Esami}\\[3pt]
+    {\Lora
+    \begin{tabular}{|l|l|}
+      \hline
+      \textbf{Esame} & \textbf{Voto} \\ \hline
+      A & 30 \\ \hline
+      B & 28 \\ \hline
+    \end{tabular}}
+  \end{center}
+\end{browser}
+\end{affianco}
+
+Senza CSS il browser disegna la tabella in modo molto spartano: nessun bordo
+(nell'esempio i bordi sono aggiunti per chiarezza), intestazioni in grassetto e
+centrate, celle larghe quanto basta.
+\end{esempio}
+
+\error{Le tabelle non servono a impaginare}{
+  Negli anni Novanta e Duemila era prassi comune costruire l'\textit{intero
+  layout} di un sito con tabelle annidate. Oggi è un grave errore: rende la
+  pagina incomprensibile ai lettori di schermo, impossibile da rendere
+  \textit{responsive} e difficilissima da manutenere. Le tabelle servono a
+  presentare \textbf{dati tabellari}. Per l'impaginazione esistono i CSS, che
+  vedremo nel prossimo capitolo.}
+
+\section{Liste}
+
+HTML definisce tre tipi di lista:
+
+\begin{itemize}
+  \item liste \term{ordinate} \tg{ol}, usate per le enumerazioni;
+  \item liste \term{non ordinate} \tg{ul}, usate per gli elenchi puntati;
+  \item liste di \term{descrizione} \tg{dl}, costituite da termini e relative
+        descrizioni, spesso usate per i glossari.
+\end{itemize}
+
+\subsection{Liste ordinate e non ordinate}
+
+Le liste ordinate e non ordinate contengono una sequenza di elementi di lista
+\tg{li} (\textit{list item}).
+
+\begin{esempio}{Le due liste a confronto}
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=liste.html]
+<ol>
+  <li>Anna</li>
+  <li>Bruno</li>
+  <li>Carlo</li>
+</ol>
+
+<ul>
+  <li>TecWeb</li>
+  <li><a href="/">Fu-Tzu</a></li>
+</ul>
+\end{lstlisting}
+\risultato
+\begin{browser}[liste.html]
+  \begin{enumerate}[leftmargin=1.8em, itemsep=0pt, topsep=2pt, parsep=0pt]
+    \item Anna
+    \item Bruno
+    \item Carlo
+  \end{enumerate}
+  \vspace{4pt}
+  \begin{itemize}[leftmargin=1.8em, itemsep=0pt, topsep=2pt, parsep=0pt]
+    \item TecWeb
+    \item \wtlink{Fu-Tzu}
+  \end{itemize}
+\end{browser}
+\end{affianco}
+\end{esempio}
+
+\subsection{Liste di descrizione}
+
+Le liste di descrizione contengono una sequenza di termini \tg{dt}
+(\textit{description term}) e di descrizioni \tg{dd} (\textit{description
+details}) relative ai termini che le precedono.
+
+\begin{esempio}{Un piccolo glossario}
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=glossario.html]
+<dl>
+  <dt>Dati</dt>
+  <dd>
+    Sono fatti di bit,
+    eppure assumono forme complesse.
+  </dd>
+  <dt>Controllo</dt>
+  <dd>
+    Consiste di istruzioni semplici,
+    eppure svolge compiti difficili.
+  </dd>
+</dl>
+\end{lstlisting}
+\risultato
+\begin{browser}[glossario.html]
+  \textbf{Dati}\\
+  \hspace*{2em}Sono fatti di bit, eppure assumono forme complesse.\\[3pt]
+  \textbf{Controllo}\\
+  \hspace*{2em}Consiste di istruzioni semplici, eppure svolge compiti difficili.
+\end{browser}
+\end{affianco}
+\end{esempio}
+
+\section{Riferimenti a caratteri (entità)}
+
+Alcuni caratteri sono \term{riservati} in HTML. Che cosa succede se vogliamo
+scrivere in un documento \code{<p>3<x e y>6</p>}?
+
+Il browser rischia di confondere i simboli con i tag: incontrando \code{<x} si
+aspetta l'inizio di un tag chiamato \code{x}. Per visualizzare i caratteri
+riservati bisogna usare i \term{riferimenti a caratteri} (\textit{character
+references}, chiamati spesso anche \term{entità}), che si scrivono in due modi:
+
+\begin{center}
+  \code{\&nome\_entita;} \qquad oppure \qquad \code{\&\#numero\_entita;}
+\end{center}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}c@{\hspace{1.2cm}}l@{\hspace{1.2cm}}l@{}}
+  \textbf{Risultato} & \textbf{Descrizione} & \textbf{Riferimento} \\
+             & Spazio non divisibile           & \code{\&nbsp;}  \\
+  \code{<}   & Minore di                       & \code{\&lt;}    \\
+  \code{>}   & Maggiore di                     & \code{\&gt;}    \\
+  \code{\&}  & E commerciale                   & \code{\&amp;}   \\
+  \code{"}   & Virgolette doppie               & \code{\&quot;}  \\
+  \code{'}   & Virgolette singole (apostrofo)  & \code{\&apos;}  \\
+  \copyright & Copyright                       & \code{\&copy;}  \\
+\end{tabular}
+\end{center}
+
+L'esempio visto sopra andrebbe quindi scritto così:
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=riferimenti.html]
+<p>3&lt;x e y&gt;6</p>
+<p>3&#60;x e y&#62;6</p>
+\end{lstlisting}
+\risultato
+\begin{browser}[riferimenti.html]
+  3<x e y>6\\[4pt]
+  3<x e y>6
+\end{browser}
+\end{affianco}
+
+Le due righe sono equivalenti: \code{\&lt;} è il riferimento per
+\textbf{nome} e \code{\&\#60;} quello per \textbf{numero} (60 è il codice del
+carattere \code{<}). La tabella completa dei riferimenti si trova nella
+specifica HTML.
+
+\info{Lo spazio non divisibile}{
+  \code{\&nbsp;} (\textit{non-breaking space}) è particolarmente utile: essendo
+  un carattere \guillemotleft vero\guillemotright\ non viene collassato con gli spazi adiacenti e
+  impedisce al browser di andare a capo in quel punto. Serve, per esempio, a
+  tenere unite espressioni come \guillemotleft 10 kg\guillemotright\ o \guillemotleft Fig. 3\guillemotright.}
+
+\section{Immagini}
+
+L'elemento \tg{img} serve a incorporare un'immagine in un documento HTML.
+
+\begin{itemize}
+  \item È un \term{elemento vuoto}: non deve contenere altri elementi;
+  \item l'attributo \attr{src} specifica la URL dell'immagine da includere;
+  \item l'attributo \attr{alt} specifica un testo alternativo che la descrive;
+  \item gli attributi \attr{width} e \attr{height} permettono di specificarne le
+        dimensioni in pixel all'interno della pagina.
+\end{itemize}
+
+\begin{esempio}{Inserire un'immagine}
+\begin{affianco}[0.46]
+\begin{lstlisting}[style=html, name=image.html]
+<h1>Fu-Tzu</h1>
+<p>
+  Un ritratto del maestro,
+  generato da DALL-E, e' disponibile
+  qui di seguito:
+</p>
+<img src="pic.jpg"
+     alt="ritratto di Fu-Tzu"
+     width="200"/>
+\end{lstlisting}
+\risultato
+\begin{browser}[image.html]
+  {\Lora\bfseries\Huge Fu-Tzu}\\[6pt]
+  Un ritratto del maestro, generato da DALL-E, è disponibile qui di
+  seguito:\\[6pt]
+  \includegraphics[width=3.4cm]{sources/fu-tzu.jpg}
+\end{browser}
+\end{affianco}
+\end{esempio}
+
+\warning{L'attributo alt non è facoltativo}{
+  Il testo alternativo viene letto dai lettori di schermo agli utenti non
+  vedenti, viene mostrato se l'immagine non si carica ed è usato dai motori di
+  ricerca per capire che cosa raffigura. Ometterlo significa rendere una parte
+  del contenuto invisibile a una parte degli utenti. Fa eccezione il caso delle
+  immagini puramente decorative, per le quali si usa \code{alt=""} (vuoto), che
+  dice esplicitamente ai lettori di schermo di ignorarle.}
+
+\subsection{Dietro le quinte}
+
+Con le immagini succede qualcosa di nuovo, e piuttosto interessante.
+
+Fino a questo momento i documenti HTML erano \textbf{autocontenuti}: tutti i dati
+del documento stavano \textit{dentro} il documento. C'erano dei collegamenti, ma
+eravamo liberi di non seguirli.
+
+L'ultima pagina d'esempio, invece, include un contenuto esterno (l'immagine)
+fornendone soltanto la URL. L'immagine \textbf{non è} inclusa nel documento HTML:
+per visualizzare la pagina il browser deve procurarsi risorse aggiuntive.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      hdr/.style={wtnode, minimum width=3.0cm, minimum height=0.9cm},
+      life/.style={draw=neutral!45!white, line width=0.7pt, dashed},
+      msg/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=primary!70!black},
+      rsp/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+                  draw=accent!70!black},
+      ml/.style={font=\Lato\scriptsize, midway, above, inner sep=2.5pt,
+                 fill=white, text=neutral!15!black},
+      act/.style={font=\Lato\scriptsize\itshape, text=neutral!30!black,
+                  align=left, anchor=west},
+      num/.style={circle, fill=accent!75!black, text=white, inner sep=1.5pt,
+                  font=\Lato\bfseries\tiny}]
+
+    \def\xb{0} \def\xs{9.6}
+    \node[hdr] (B) at (\xb,0) {\textbf{Browser}};
+    \node[hdr] (S) at (\xs,0) {\textbf{Server HTTP}};
+    \draw[life] (B.south) -- (\xb,-5.5);
+    \draw[life] (S.south) -- (\xs,-5.5);
+
+    \draw[msg] (\xb,-0.9) -- (\xs,-0.9) node[ml]{\code{GET /02-HTML/image.html}};
+    \node[num] at (-0.5,-0.9) {1};
+
+    \draw[rsp] (\xs,-1.8) -- (\xb,-1.8) node[ml]{\code{200 OK} + documento HTML};
+    \node[num] at (-0.5,-1.8) {2};
+
+    \node[act] at (0.25,-2.7)
+      {il browser analizza il documento dall'alto verso il basso\\
+       e incontra \code{<img src="pic.jpg">}};
+    \node[num] at (-0.5,-2.7) {3};
+
+    \draw[msg] (\xb,-3.7) -- (\xs,-3.7) node[ml]{\code{GET /02-HTML/pic.jpg}};
+    \node[num] at (-0.5,-3.7) {4};
+
+    \draw[rsp] (\xs,-4.6) -- (\xb,-4.6) node[ml]{\code{200 OK} + dati dell'immagine};
+    \node[num] at (-0.5,-4.6) {5};
+
+    \node[act] at (0.25,-5.3) {la pagina viene mostrata completa};
+    \node[num] at (-0.5,-5.3) {6};
+  \end{tikzpicture}
+  \caption{Una singola pagina con un'immagine richiede due richieste HTTP.}
+  \label{fig:img-fetch}
+\end{figure}
+
+\info{Una pagina, tante richieste}{
+  Questo meccanismo si applica a \textbf{tutte} le risorse esterne: immagini,
+  fogli di stile CSS, script JavaScript, font, video. Una pagina moderna può
+  facilmente generare cinquanta o cento richieste HTTP. È per questo che il
+  numero e la dimensione delle risorse esterne incidono così tanto sulla
+  velocità percepita di un sito, ed è per questo che la scheda \textit{Network}
+  dei DevTools è uno strumento diagnostico tanto importante.}
+
+\section{Attributi globali}
+
+Abbiamo incontrato diversi attributi (\attr{href}, \attr{target}, \attr{src},
+\attr{alt}). Questi attributi hanno senso solo per alcuni elementi:
+\code{<strong src="pic.jpg">Ciao!</strong>} non significherebbe nulla.
+
+Alcuni attributi sono invece \term{globali}, cioè utilizzabili con
+\textbf{qualunque} elemento HTML.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.1cm}}>{\raggedright\arraybackslash}p{9.4cm}@{}}
+  \textbf{Attributo} & \textbf{Descrizione} \\
+  \attr{id}    & Specifica un identificatore \textbf{univoco} nel documento. \\
+  \attr{lang}  & Specifica la lingua del contenuto dell'elemento. \\
+  \attr{style} e \attr{class} & Usati per la presentazione grafica (li vedremo
+                                nel prossimo capitolo). \\
+\end{tabular}
+\end{center}
+
+\subsection{Ancore nelle URL}
+
+L'attributo \attr{id} può essere usato anche nelle \term{ancore} delle URL.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      part/.style={font=\FiraCode\large, inner sep=1pt, outer sep=0pt},
+      lab/.style={font=\Lato\scriptsize, align=center, inner sep=2pt}]
+    \node[part, text=codekey]                       (sch) {https://};
+    \node[part, text=codetag,    right=0pt of sch]  (dom) {app.com};
+    \node[part, text=codestring, right=0pt of dom]  (pth) {/foo/bar.html};
+    \node[part, text=codeattr,   right=0pt of pth]  (anc) {\#some-id};
+
+    \node[lab, text=codekey,  above=17pt of sch] (l1) {Schema};
+    \node[lab, text=codeattr, above=17pt of anc] (l4) {Ancora};
+    \draw[wtdash] (l1.south) -- (sch.north);
+    \draw[wtdash] (l4.south) -- (anc.north);
+
+    \node[lab, text=codetag,    below=17pt of dom] (l2) {Nome di dominio};
+    \node[lab, text=codestring, below=17pt of pth] (l3) {Percorso};
+    \draw[wtdash] (l2.north) -- (dom.south);
+    \draw[wtdash] (l3.north) -- (pth.south);
+  \end{tikzpicture}
+  \caption{Un'ancora punta a un punto preciso \textit{dentro} la risorsa.}
+  \label{fig:url-anchor}
+\end{figure}
+
+Un'ancora rappresenta una sorta di \guillemotleft segnalibro\guillemotright\ interno alla risorsa: dice
+al browser di mostrare direttamente il contenuto che si trova in quel punto.
+Nell'esempio, \code{\#some-id} punta all'elemento il cui attributo \attr{id} vale
+\code{some-id}. Un caso reale è
+\code{https://luistar.github.io/publications/\#conference}.
+
+\section{Form}
+
+Gli elementi \tg{form} servono a raccogliere \term{input dell'utente}. L'input
+viene tipicamente inviato a un server per l'elaborazione.
+
+I form contengono elementi come \tg{input}, \tg{label}, \tg{textarea} e
+\tg{select}.
+
+\begin{esempio}{Un form minimale}
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=form.html]
+<form>
+  Messaggio:
+  <input type="text"><br><br>
+  <input type="submit">
+</form>
+\end{lstlisting}
+\risultato
+\begin{browser}[form.html]
+  Messaggio: \wtcampo[3.5cm]{}\\[8pt]
+  \wtbottone{Invia}
+\end{browser}
+\end{affianco}
+Il pulsante \code{submit} non ha un'etichetta nel codice: il testo
+«Invia» lo sceglie il browser, nella lingua dell'utente.
+\end{esempio}
+
+\subsection{Tipi di input}
+
+Tipi diversi di elemento \tg{input} sono disponibili tramite l'attributo
+\attr{type}.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.1cm}}>{\raggedright\arraybackslash}p{8.6cm}@{}}
+  \textbf{Tipo} & \textbf{Descrizione} \\
+  \code{text}     & Campo di testo su una sola riga. \\
+  \code{password} & Campo per password (l'input è nascosto con asterischi). \\
+  \code{number}   & Campo per numeri. \\
+  \code{radio}    & Pulsante radio, per scegliere \textbf{una} fra molte opzioni. \\
+  \code{checkbox} & Casella di spunta, per sceglierne \textbf{zero o più}. \\
+  \code{button}   & Pulsante cliccabile. \\
+\end{tabular}
+\end{center}
+
+\subsection{Etichette}
+
+L'elemento \tg{label} serve a \term{etichettare} ciascun input. Usare le
+etichette è una buona pratica di usabilità e accessibilità. L'attributo
+\attr{for} della label deve essere uguale all'\attr{id} dell'input
+corrispondente.
+
+\begin{esempio}{Un form di login}
+\begin{affianco}[0.55]
+\begin{lstlisting}[style=html, name=login.html]
+<form>
+  <label for="id_usr">Nome utente: </label>
+  <input type="text" name="usr" id="id_usr">
+  <br/>
+  <label for="id_pwd">Password: </label>
+  <input type="password" name="pwd" id="id_pwd">
+  <br/>
+  <input type="submit">
+</form>
+\end{lstlisting}
+
+\risultato
+\begin{browser}[login.html]
+  Nome utente: \wtcampo[3cm]{fu-tzu}\\[4pt]
+  Password: \wtcampo[3cm]{\textbullet\textbullet\textbullet\textbullet\textbullet\textbullet}\\[8pt]
+  \wtbottone{Invia}
+\end{browser}
+\end{affianco}
+
+Oltre al vantaggio per i lettori di schermo, le etichette collegate rendono
+cliccabile il testo stesso: fare clic su \guillemotleft Nome utente\guillemotright\ porta il cursore
+dentro il campo. È un dettaglio che migliora molto l'usabilità, soprattutto su
+schermi piccoli.
+\end{esempio}
+
+\subsection{Invio del form}
+
+I form possono essere \term{inviati} (\textit{submit}) per trasmettere i dati
+raccolti a un gestore (\textit{form-handler}). Al momento dell'invio viene
+tipicamente effettuata una nuova richiesta HTTP.
+
+\begin{itemize}
+  \item La URL del gestore a cui la richiesta viene inviata è specificata
+        dall'attributo \attr{action} del form (per impostazione predefinita, la
+        stessa pagina su cui si trova il form).
+  \item È possibile specificare anche il metodo HTTP da usare, tramite
+        l'attributo \attr{method} (per impostazione predefinita, \code{GET}).
+\end{itemize}
+
+\begin{lstlisting}[style=html]
+<form action="/handler.html" method="GET">
+  <!-- qui gli elementi del form -->
+</form>
+\end{lstlisting}
+
+Al momento dell'invio, l'input raccolto viene rappresentato come una serie di
+coppie \textbf{nome/valore} nella forma:
+
+\begin{center}
+  \code{nome1=valore1\&...\&nomeN=valoreN}
+\end{center}
+
+Ogni \textit{nome} è il valore dell'attributo \attr{name} di un elemento di
+input, e il \textit{valore} corrispondente è il suo contenuto al momento
+dell'invio.
+
+\warning{name e id non sono la stessa cosa}{
+  L'attributo \attr{id} identifica l'elemento \textbf{dentro il documento} e
+  serve al CSS, a JavaScript e alle etichette. L'attributo \attr{name} è il nome
+  con cui il valore viene \textbf{inviato al server}. Un input privo di
+  \attr{name} viene semplicemente \textbf{ignorato} al momento dell'invio: è uno
+  degli errori più frequenti e più difficili da individuare, perché la pagina
+  sembra funzionare perfettamente.}
+
+\subsection{Invio con GET}
+
+Se il metodo è \code{GET}, gli input vengono \textbf{accodati alla URL} del
+gestore.
+
+\begin{esempio}{Invio con il metodo GET}
+\begin{affianco}[0.53]
+\begin{lstlisting}[style=html, name=form-get.html]
+<form action="/handler.html" method="GET">
+  Messaggio: <input type="text" name="msg"><br>
+  Numero: <input type="number" name="num"><br>
+  <input type="submit">
+</form>
+\end{lstlisting}
+\risultato
+\begin{browser}[form-get.html]
+  Messaggio: \wtcampo[2.6cm]{Hello!}\\[3pt]
+  Numero: \wtcampo[2.6cm]{42}\\[5pt]
+  \wtbottone{Invia}
+\end{browser}
+\wtnota{Premendo \textit{Invia} $\downarrow$}
+\begin{lstlisting}[style=http, name=Richiesta generata]
+GET /handler.html?msg=Hello!&num=42 HTTP/1.1
+Host: example.com
+User-Agent: Mozilla/5.0
+Accept: text/plain
+Accept-Language: en-us
+Connection: keep-alive
+\end{lstlisting}
+\end{affianco}
+
+Se l'utente scrive \code{Hello!} e \code{42}, la URL della richiesta diventa:
+
+\begin{center}
+  \code{/handler.html?msg=Hello!\&num=42}
+\end{center}
+
+La parte dopo il punto interrogativo si chiama \term{query string}, e
+\code{msg} e \code{num} si dicono \term{parametri di query}.
+\end{esempio}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      part/.style={font=\FiraCode\large, inner sep=1pt, outer sep=0pt},
+      lab/.style={font=\Lato\scriptsize, align=center, inner sep=2pt}]
+    \node[part, text=codekey]                       (sch) {https://};
+    \node[part, text=codetag,    right=0pt of sch]  (dom) {app.com};
+    \node[part, text=codestring, right=0pt of dom]  (pth) {/foo/bar.html};
+    \node[part, text=codeattr,   right=0pt of pth]  (qry) {?key1=val1};
+    \node[part, text=codenum,    right=0pt of qry]  (amp) {\&};
+    \node[part, text=codeattr,   right=0pt of amp]  (qr2) {key2=val2};
+
+    \node[lab, text=codekey,  above=30pt of sch] (l1) {Schema};
+    \node[lab, text=codeattr, above=17pt of qry] (l4) {Parametri di query};
+    \node[lab, text=codenum,  above=30pt of amp] (l5) {Separatore};
+    \draw[wtdash] (l1.south) -- (sch.north);
+    \draw[wtdash] (l4.south) -- (qry.north);
+    \draw[wtdash] (l5.south) -- (amp.north);
+
+    \node[lab, text=codetag,    below=17pt of dom] (l2) {Nome di dominio};
+    \node[lab, text=codestring, below=17pt of pth] (l3) {Percorso};
+    \draw[wtdash] (l2.north) -- (dom.south);
+    \draw[wtdash] (l3.north) -- (pth.south);
+  \end{tikzpicture}
+  \caption{Una URL con parametri di query.}
+  \label{fig:url-query}
+\end{figure}
+
+I parametri di query sono informazioni aggiuntive fornite al server, sotto forma
+di coppie chiave/valore separate da \code{\&}. Il server può usarli per svolgere
+elaborazioni prima di restituire la risorsa. Un esempio reale è la URL
+\urlx{https://motore-di-ricerca.com/search?q=web+technologies&lang=it}.
+
+\subsection{Invio con POST}
+
+Se il metodo è \code{POST}, gli input vengono inviati nel \term{corpo} della
+richiesta, e la URL della richiesta resta semplicemente \code{/handler.html}.
+
+\begin{esempio}{La stessa richiesta, con il metodo POST}
+\begin{affianco}[0.53]
+\begin{lstlisting}[style=html, name=form-post.html]
+<form action="/handler.html" method="POST">
+  Messaggio: <input type="text" name="msg"><br>
+  Numero: <input type="number" name="num"><br>
+  <input type="submit">
+</form>
+\end{lstlisting}
+\begin{browser}[form-post.html]
+  Messaggio: \wtcampo[2.6cm]{Hello!}\\[3pt]
+  Numero: \wtcampo[2.6cm]{42}\\[5pt]
+  \wtbottone{Invia}
+\end{browser}
+\risultato
+\begin{lstlisting}[style=http, name=Richiesta generata]
+POST /handler.html HTTP/1.1
+Host: example.com
+User-Agent: Mozilla/5.0
+Accept: text/plain
+Accept-Language: en-us
+Connection: keep-alive
+
+msg=Hello!&num=42
+\end{lstlisting}
+\wtnota{I dati non sono più nella URL, ma nel \textbf{corpo},\\dopo la riga
+        vuota che chiude le intestazioni.}
+\end{affianco}
+\end{esempio}
+
+\warning{Meglio GET o POST?}{
+  Con \code{GET} i dati finiscono nella URL: restano nella cronologia del
+  browser, nei segnalibri, nei log del server e nell'header \code{Referer}
+  inviato ai siti esterni. Non va quindi \textbf{mai} usato \code{GET} per
+  password o dati personali. \code{GET} è indicato per ricerche e filtri, cioè
+  quando avere una URL condivisibile che riproduce lo stesso risultato è un
+  vantaggio; \code{POST} è indicato quando l'invio \textbf{modifica} qualcosa sul
+  server.
+
+  Attenzione però: \code{POST} non è \guillemotleft più sicuro\guillemotright\ in senso stretto. Il
+  corpo della richiesta viaggia in chiaro esattamente come la URL. Ciò che
+  protegge davvero i dati è HTTPS.}
+
+\subsection{Codifica delle URL}
+
+L'input di un form viene codificato come una stringa di coppie chiave-valore
+separate da \code{\&}. Che cosa succede se un utente inserisce proprio dei
+caratteri speciali, come \code{\&}?
+
+Questi caratteri vengono sostituiti da terne del tipo \code{\%XX}, dove
+\code{XX} sono due cifre esadecimali che rappresentano il carattere sostituito
+nella tabella ASCII. Gli spazi possono essere sostituiti da \code{\%20} oppure
+dal simbolo \code{+}.
+
+\begin{esempio}{Percent encoding}
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=encoding.html]
+<form>
+  <label for="msg">Messaggio:</label>
+  <input id="msg" name="msg" type="text">
+  <input type="submit">
+</form>
+\end{lstlisting}
+\risultato
+\begin{browser}[encoding.html]
+  Messaggio: \wtcampo[2.8cm]{Tom \& Jerry} \wtbottone{Invia}
+\end{browser}
+\wtnota{Dato inviato: \code{msg=Tom+\%26+Jerry}}
+\end{affianco}
+
+Lo spazio è diventato \code{+} e la \code{\&} è diventata \code{\%26}, perché
+\code{\&} vale \code{26} in esadecimale nella tabella ASCII.
+\end{esempio}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+{\small
+\begin{tabular}{@{}rrcl@{\hspace{1.2cm}}rrcl@{}}
+  \textbf{Dec} & \textbf{Hex} & \textbf{Car.} & \textbf{Descrizione} &
+  \textbf{Dec} & \textbf{Hex} & \textbf{Car.} & \textbf{Descrizione} \\
+  32 & 20 &           & spazio              & 43 & 2B & \code{+} & più \\
+  33 & 21 & \code{!}  & punto esclamativo   & 44 & 2C & \code{,} & virgola \\
+  34 & 22 & \code{"}  & virgolette doppie   & 45 & 2D & \code{-} & meno \\
+  35 & 23 & \code{\#} & cancelletto         & 46 & 2E & \code{.} & punto \\
+  36 & 24 & \code{\$} & dollaro             & 47 & 2F & \code{/} & barra \\
+  37 & 25 & \code{\%} & percento            & 91 & 5B & \code{[} & quadra aperta \\
+  38 & 26 & \code{\&} & e commerciale       & 92 & 5C & \code{\textbackslash} & barra rovesciata \\
+  39 & 27 & \code{'}  & apostrofo           & 93 & 5D & \code{]} & quadra chiusa \\
+  40 & 28 & \code{(}  & tonda aperta        & 94 & 5E & \code{\textasciicircum} & circonflesso \\
+  41 & 29 & \code{)}  & tonda chiusa        & 95 & 5F & \code{\_} & trattino basso \\
+  42 & 2A & \code{*}  & asterisco           & 96 & 60 & \code{`} & accento grave \\
+\end{tabular}}
+\end{center}
+
+\subsection{Caselle di spunta}
+
+Le \term{checkbox} permettono di selezionare zero o più opzioni. Il
+comportamento all'invio dipende da quante ne sono state spuntate.
+
+\begin{esempio}{Comportamento delle checkbox all'invio}
+\begin{affianco}[0.58]
+\codicepiccolo
+\begin{lstlisting}[style=html, name=checkbox.html]
+<form>
+  <p>Quali esami sosterrai?</p>
+  <input type="checkbox" name="exams" value="web" id="web_tech">
+  <label for="web_tech">Tecnologie Web</label><br>
+  <input type="checkbox" name="exams" value="pl2" id="pl2">
+  <label for="pl2">Linguaggi di Programmazione II</label><br><br>
+  <input type="submit">
+</form>
+\end{lstlisting}
+\risultato
+\begin{browser}[checkbox.html]
+  Quali esami sosterrai?\\[2pt]
+  \wtcasella{1} Tecnologie Web\\
+  \wtcasella{0} Linguaggi di Programmazione II\\[3pt]
+  \wtbottone{Invia}
+\end{browser}
+\wtnota{All'invio: \code{exams=web}}
+\begin{browser}[checkbox.html]
+  Quali esami sosterrai?\\[2pt]
+  \wtcasella{1} Tecnologie Web\\
+  \wtcasella{1} Linguaggi di Programmazione II\\[3pt]
+  \wtbottone{Invia}
+\end{browser}
+\wtnota{All'invio: \code{exams=web\&exams=pl2}}
+\begin{browser}[checkbox.html]
+  Quali esami sosterrai?\\[2pt]
+  \wtcasella{0} Tecnologie Web\\
+  \wtcasella{0} Linguaggi di Programmazione II\\[3pt]
+  \wtbottone{Invia}
+\end{browser}
+\wtnota{All'invio: \code{""} (stringa vuota)}
+\end{affianco}
+
+Da notare: più caselle possono condividere lo \textbf{stesso} \attr{name}. In tal
+caso il nome compare più volte nei dati inviati, una per ogni casella spuntata. E
+se l'utente non spunta nulla, il parametro \textbf{non viene inviato affatto}: il
+server deve essere preparato a non trovarlo.
+\end{esempio}
+
+\subsection{Pulsanti radio}
+
+I \term{radio button} permettono di scegliere \textbf{una sola} fra più opzioni.
+Le opzioni che condividono lo stesso \attr{name} formano un gruppo mutuamente
+esclusivo.
+
+\begin{esempio}{Un gruppo di radio button}
+\begin{affianco}[0.58]
+\codicepiccolo
+\begin{lstlisting}[style=html, name=radio.html]
+<form>
+  <p>Qual e' il tuo corso preferito?</p>
+  <input type="radio" name="fav" value="web" id="web_tech">
+  <label for="web_tech">Tecnologie Web</label><br>
+  <input type="radio" name="fav" value="net" id="net">
+  <label for="net">Reti di Calcolatori</label><br>
+  <input type="radio" name="fav" value="se" id="se">
+  <label for="se">Ingegneria del Software</label><br><br>
+  <input type="submit" value="Invia la tua opinione">
+</form>
+\end{lstlisting}
+\risultato
+\begin{browser}[radio.html]
+  Qual è il tuo corso preferito?\\[2pt]
+  \wtradio{1} Tecnologie Web\\
+  \wtradio{0} Reti di Calcolatori\\
+  \wtradio{0} Ingegneria del Software\\[4pt]
+  \wtbottone{Invia la tua opinione}
+\end{browser}
+\wtnota{All'invio: \code{fav=web}}
+\end{affianco}
+
+Selezionando la prima opzione, all'invio si ottiene \code{fav=web}. Selezionarne
+un'altra \textbf{deseleziona} automaticamente la precedente, perché le tre
+opzioni condividono lo stesso \attr{name}.
+
+Si noti anche che l'attributo \attr{value} su un \code{input type="submit"}
+cambia l'\textbf{etichetta del pulsante}, mentre sugli altri input rappresenta il
+valore inviato.
+\end{esempio}
+
+\subsection{Date e orari}
+
+Esistono tipi di input dedicati alle date e agli orari.
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=date.html]
+<form>
+  <input type="date"><br>
+  <input type="week"><br>
+  <input type="month"><br>
+  <input type="time"><br>
+  <input type="datetime-local"><br>
+</form>
+\end{lstlisting}
+\risultato
+\begin{browser}[date.html]
+  \wtcampo[3.4cm]{17/09/2026 \hfill\tiny$\square$}\\[2pt]
+  \wtcampo[3.4cm]{Settimana 38, 2026 \hfill\tiny$\square$}\\[2pt]
+  \wtcampo[3.4cm]{settembre 2026 \hfill\tiny$\square$}\\[2pt]
+  \wtcampo[3.4cm]{11:42 \hfill\tiny$\circ$}\\[2pt]
+  \wtcampo[3.4cm]{17/09/2026, 09:45 \hfill\tiny$\square$}
+\end{browser}
+\wtnota{Valori già inseriti dall'utente; l'aspetto varia da browser a browser.}
+\end{affianco}
+
+\info{Il browser fa il lavoro sporco}{
+  Usando \code{type="date"} il browser fornisce gratuitamente un calendario a
+  comparsa, la validazione del formato e la localizzazione (un utente italiano
+  vedrà \code{gg/mm/aaaa}, uno statunitense \code{mm/dd/yyyy}), mentre al server
+  arriva sempre il formato normalizzato \code{aaaa-mm-gg}. Scrivere a mano lo
+  stesso comportamento con un \code{type="text"} richiederebbe molto codice, e
+  funzionerebbe peggio.}
+
+\subsection{Menu a tendina}
+
+L'elemento \tg{select} definisce un \term{menu a tendina}. L'attributo
+\attr{multiple} permette di selezionare più di un'opzione.
+
+\begin{esempio}{Un menu a tendina}
+\begin{affianco}[0.55]
+\begin{lstlisting}[style=html, name=select.html]
+<form>
+  <label for="dest">Seleziona la destinazione:</label>
+  <select name="destination" id="dest">
+    <option value="Rome">Roma</option>
+    <option value="Naples">Napoli</option>
+    <option value="Paris">Parigi</option>
+  </select><br><br>
+  <input type="submit">
+</form>
+\end{lstlisting}
+
+\risultato
+\begin{browser}[select.html]
+  Seleziona la destinazione:\\[2pt]
+  \wttendina[1.8cm]{Roma}\\[-3.2pt]
+  {\setlength{\fboxsep}{0.6pt}\fcolorbox{neutral!55!white}{white}{%
+    \parbox{\dimexpr1.8cm+6pt\relax}{\setlength{\fboxsep}{1.5pt}%
+      \colorbox{white}{\makebox[\dimexpr1.8cm+3pt\relax][l]{\rule{0pt}{8pt}\wtuifont Roma}}\\[-1pt]
+      \colorbox{dtblue}{\makebox[\dimexpr1.8cm+3pt\relax][l]{\rule{0pt}{8pt}\wtuifont\color{white}Napoli}}\\[-1pt]
+      \colorbox{white}{\makebox[\dimexpr1.8cm+3pt\relax][l]{\rule{0pt}{8pt}\wtuifont Parigi}}}}}\\[5pt]
+  \wtbottone{Invia}
+\end{browser}
+\wtnota{Il menu aperto: il mouse è su \textit{Napoli}.}
+\end{affianco}
+
+Da notare la differenza fra il testo mostrato all'utente (\textit{Roma}) e il
+valore inviato al server (\code{Rome}), specificato tramite \attr{value}.
+\end{esempio}
+
+\subsection{E molto altro}
+
+Esistono numerosi altri tipi di input: selettore di colore, selettore di file,
+liste di suggerimenti (\code{datalist}), campi per e-mail, URL e numeri di
+telefono, cursori a scorrimento.
+
+\begin{affianco}[0.55]
+\begin{lstlisting}[style=html, name=colore.html]
+<form method="POST">
+  <label for="col">Scegli il tuo colore preferito:</label>
+  <input name="color" id="col" type="color"><br><br>
+  <input type="submit">
+</form>
+\end{lstlisting}
+\risultato
+\begin{browser}[colore.html]
+  Scegli il tuo colore preferito:
+  \fcolorbox{neutral!55!white}{neutral!8!white}{%
+    \textcolor[HTML]{1D8FA8}{\rule[-1.5pt]{0.9cm}{8pt}}}\\[8pt]
+  \wtbottone{Invia}
+\end{browser}
+\wtnota{Cliccando sul campione si apre il selettore di colore del sistema;\\
+        il valore inviato è in esadecimale, per esempio \code{color=\%231d8fa8}.}
+\end{affianco}
+
+Per un riferimento completo conviene consultare la documentazione MDN.
+
+\subsection{Raggruppare gli input}
+
+Gli elementi \tg{fieldset} e \tg{legend} permettono di raggruppare logicamente
+gli input di un form e di dare un titolo a ciascun gruppo.
+
+\begin{esempio}{Un form suddiviso in sezioni}
+\begin{affianco}[0.55]
+\begin{lstlisting}[style=html, name=fieldset.html]
+<form>
+  <fieldset>
+    <legend>Dati anagrafici:</legend>
+    <label for="fname">Nome:</label><br>
+    <input type="text" id="fname" name="fname"><br>
+    <label for="lname">Cognome:</label><br>
+    <input type="text" id="lname" name="lname">
+  </fieldset>
+  <fieldset>
+    <legend>Registrazione esame:</legend>
+    <label for="grade">Voto:</label><br>
+    <input type="number" id="grade" name="grade"><br>
+    <label for="date">Data:</label><br>
+    <input type="date" id="date" name="date">
+  </fieldset><br>
+  <input type="submit" value="Invia">
+</form>
+\end{lstlisting}
+\risultato
+\begin{browser}[fieldset.html]
+  \begin{wtfieldset}{Dati anagrafici:}
+    Nome:\\ \wtcampo[3cm]{John}\\
+    Cognome:\\ \wtcampo[3cm]{Doe}
+  \end{wtfieldset}
+  \begin{wtfieldset}{Registrazione esame:}
+    Voto:\\ \wtcampo[3cm]{30}\\
+    Data:\\ \wtcampo[3cm]{30/09/2024}
+  \end{wtfieldset}
+  \vspace{4pt}\wtbottone{Invia}
+\end{browser}
+\wtnota{All'invio: \code{fname=John\&lname=Doe\&grade=30\&date=2024-09-30}}
+\end{affianco}
+
+Il \tg{fieldset} raggruppa gli input \textit{visivamente} e
+\textit{semanticamente}, ma non ha alcun effetto sui dati inviati: questi
+restano una lista piatta di coppie nome/valore.
+\end{esempio}
+
+\section{Organizzare il contenuto}
+
+Il contenuto di una pagina web può essere organizzato (raggruppato) in parti.
+Questo si può fare in due modi:
+
+\begin{itemize}
+  \item con le \term{divisioni} \tg{div};
+  \item con i \term{tag semantici} come \tg{header}, \tg{nav}, \tg{main},
+        \tg{article}, \tg{section}, \tg{aside} e \tg{footer}.
+\end{itemize}
+
+\subsection{Divisioni}
+
+Le divisioni \tg{div} erano il principale strumento di raggruppamento nelle
+versioni più vecchie di HTML, prima dell'introduzione dei tag semantici. Non
+hanno alcuna semantica particolare, se non quella di raggruppare contenuti in
+qualche modo correlati fra loro.
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=html, name=divisioni.html]
+<div>
+  <h1>Sezione 1</h1>
+  <p>Contenuto della Sezione 1</p>
+</div>
+<div>
+  <h1>Sezione 2</h1>
+  <p>Contenuto della Sezione 2</p>
+</div>
+\end{lstlisting}
+\risultato
+\begin{browser}[divisioni.html]
+  {\Lora\bfseries\LARGE Sezione 1}\\[4pt]
+  Contenuto della Sezione 1\\[8pt]
+  {\Lora\bfseries\LARGE Sezione 2}\\[4pt]
+  Contenuto della Sezione 2
+\end{browser}
+\wtnota{Le \code{<div>} non si vedono: raggruppano senza cambiare l'aspetto.}
+\end{affianco}
+
+\subsection{Lo span}
+
+La \tg{div} ha un equivalente per il testo: l'elemento \term{span}. Anche
+\tg{span} è un contenitore \textbf{generico e privo di significato}, con una
+sola differenza, ma decisiva: \tg{div} è un elemento di tipo \textbf{blocco}
+(occupa una riga tutta sua), mentre \tg{span} è \textbf{inline}, cioè resta nel
+flusso del testo come una parola qualsiasi.
+
+Serve quando si vuole identificare una \textbf{porzione di testo} all'interno di
+un elemento più grande, per darle uno stile o per manipolarla con JavaScript,
+e non esiste alcun tag che ne descriva il significato.
+
+\begin{affianco}[0.55]
+\begin{lstlisting}[style=html, name=span.html]
+<p>
+  Il totale è <span class="prezzo">19,99 €</span>,
+  spedizione <span class="gratis">inclusa</span>.
+</p>
+<p>
+  Un <span>span senza classe</span> non cambia nulla.
+</p>
+\end{lstlisting}
+\risultato
+\begin{browser}[span.html]
+  Il totale è {\bfseries\color{css-red}19,99 €}, spedizione
+  {\color{css-green}inclusa}.\\[6pt]
+  Un span senza classe non cambia nulla.
+\end{browser}
+\wtnota{I primi due \tg{span} sono colorati dal CSS (che vedremo nel prossimo
+        capitolo); il terzo, senza stile, è invisibile.}
+\end{affianco}
+
+Di per sé \tg{span} non produce \textbf{alcun} effetto visibile: è un gancio a
+cui appendere una classe o un identificatore.
+
+\warning{Prima cerca un tag che dica qualcosa}{
+  \tg{span} e \tg{div} sono privi di semantica: per un lettore di schermo o per
+  un motore di ricerca non significano nulla. Vanno quindi usati soltanto
+  quando nessun altro elemento è adatto. Se il testo va \textbf{enfatizzato}
+  esiste \tg{em}, se è \textbf{importante} esiste \tg{strong}, per una sigla
+  esiste \tg{abbr}, per una data \tg{time}, per il codice \tg{code}. La regola
+  è sempre la stessa: prima il significato, poi l'aspetto.}
+
+\subsection{Tag semantici}
+
+I \term{tag semantici} descrivono il significato del loro contenuto ai browser,
+agli sviluppatori e ai programmi che analizzano la pagina.
+
+Le slide del corso li riassumono così: \tg{nav} contiene i collegamenti di
+navigazione, \tg{main} il contenuto principale, \tg{article} contenuto
+indipendente e autocontenuto, \tg{aside} contenuto solo tangenzialmente
+correlato, mentre \tg{header}, \tg{footer} e \tg{section} «si spiegano da soli».
+Vale la pena, invece, spiegarli tutti con un po' più di precisione.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.45}
+\begin{tabular}{@{}l@{\hspace{0.8cm}}>{\raggedright\arraybackslash}p{7.3cm}@{\hspace{0.6cm}}>{\raggedright\arraybackslash}p{6.2cm}@{}}
+  \textbf{Tag} & \textbf{Che cosa rappresenta} & \textbf{Contenuto tipico} \\
+  \tg{header} & L'\textbf{intestazione} introduttiva della pagina, oppure di un
+                \tg{article} o di una \tg{section}. &
+                Logo, titolo del sito, titolo e autore di un articolo, a volte
+                il menu. \\
+  \tg{nav}    & Un blocco di \textbf{collegamenti di navigazione} principali. &
+                Menu del sito, indice di una pagina lunga, briciole di pane.
+                Non ogni gruppo di link: solo quelli per muoversi nel sito. \\
+  \tg{main}   & Il \textbf{contenuto principale} e specifico della pagina.
+                Ne esiste \textbf{uno solo} per pagina. &
+                Tutto ciò che non si ripete uguale su ogni pagina: esclusi
+                intestazione, menu e piè di pagina del sito. \\
+  \tg{article}& Un contenuto \textbf{autocontenuto}, che avrebbe senso anche
+                preso da solo, fuori dalla pagina. &
+                Un post di un blog, una notizia, un commento, la scheda di un
+                prodotto. \\
+  \tg{section}& Un \textbf{raggruppamento tematico} di contenuti, parte di un
+                insieme più grande; di norma ha un proprio titolo. &
+                I capitoli di un documento, le sezioni «Pro» e «Contro» di un
+                articolo. \\
+  \tg{aside}  & Contenuto \textbf{correlato solo di lato} al contenuto
+                principale: toglierlo non ne cambia il senso. &
+                Barra laterale, box di approfondimento, glossario, pubblicità. \\
+  \tg{footer} & Il \textbf{piè di pagina} della pagina, o di un \tg{article}
+                o di una \tg{section}. &
+                Copyright, autore, contatti, link a informazioni legali. \\
+\end{tabular}
+\end{center}
+
+Tre osservazioni aiutano a non confonderli.
+
+\begin{itemize}
+  \item \tg{header} e \tg{footer} \textbf{non} sono per forza unici: la pagina ha
+        la sua intestazione, ma ogni \tg{article} può avere la propria. Il nome
+        non indica una posizione sullo schermo, ma un \textbf{ruolo} rispetto al
+        contenuto che li contiene.
+  \item La differenza fra \tg{article} e \tg{section} si decide con una domanda:
+        \textit{questo pezzo avrebbe senso pubblicato da solo, altrove?} Se sì è
+        un \tg{article}; se è solo una parte di un discorso più ampio è una
+        \tg{section}. Un articolo può contenere sezioni, e (più raramente) una
+        sezione può contenere articoli, come l'elenco delle notizie di una
+        homepage.
+  \item Se serve un contenitore soltanto per applicare uno stile, senza alcun
+        significato particolare, la scelta giusta resta \tg{div}: una
+        \tg{section} senza titolo è quasi sempre una \tg{div} travestita.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCode\footnotesize,
+      b/.style={rounded corners=2pt, line width=0.8pt, anchor=north west}]
+    \node[b, draw=primary!70!black, fill=primary!4!white,
+          minimum width=10.4cm, minimum height=6.7cm] (body) at (0,0) {};
+    \node[anchor=north west, text=primary!70!black] at (0.1,-0.08) {<body>};
+
+    \node[b, draw=accent!60!black, fill=accent!8!white,
+          minimum width=9.6cm, minimum height=1.0cm] at (0.4,-0.6) {};
+    \node[anchor=north west, text=accent!60!black] at (0.5,-0.68) {<header>};
+
+    \node[b, draw=orange-gradient-6, fill=orange-gradient-1!35!white,
+          minimum width=9.6cm, minimum height=0.85cm] at (0.4,-1.7) {};
+    \node[anchor=north west, text=orange-gradient-6!70!black] at (0.5,-1.78) {<nav>};
+
+    \node[b, draw=primary!60!black, fill=primary!8!white,
+          minimum width=9.6cm, minimum height=3.05cm] at (0.4,-2.65) {};
+    \node[anchor=north west, text=primary!60!black] at (0.5,-2.73) {<main>};
+
+    \node[b, draw=green-gradient-6, fill=green-gradient-1!45!white,
+          minimum width=6.2cm, minimum height=2.15cm] at (0.8,-3.3) {};
+    \node[anchor=north west, text=green-gradient-6!55!black] at (0.9,-3.38) {<article>};
+
+    \node[b, draw=green-gradient-6, fill=white,
+          minimum width=5.6cm, minimum height=0.6cm] at (1.1,-3.9) {};
+    \node[anchor=north west, text=green-gradient-6!55!black] at (1.2,-3.96) {<section>};
+    \node[b, draw=green-gradient-6, fill=white,
+          minimum width=5.6cm, minimum height=0.6cm] at (1.1,-4.6) {};
+    \node[anchor=north west, text=green-gradient-6!55!black] at (1.2,-4.66) {<section>};
+
+    \node[b, draw=azure-gradient-6, fill=azure-gradient-1!45!white,
+          minimum width=2.7cm, minimum height=2.15cm] at (7.3,-3.3) {};
+    \node[anchor=north west, text=azure-gradient-6!55!black] at (7.4,-3.38) {<aside>};
+
+    \node[b, draw=accent!60!black, fill=accent!8!white,
+          minimum width=9.6cm, minimum height=0.85cm] at (0.4,-5.85) {};
+    \node[anchor=north west, text=accent!60!black] at (0.5,-5.93) {<footer>};
+  \end{tikzpicture}
+  \caption{Un tipico impianto di pagina realizzato con tag semantici.}
+  \label{fig:semantic}
+\end{figure}
+
+\begin{esempio}{Una pagina strutturata semanticamente}
+\begin{affianco}[0.55]
+\codicepiccolo
+\begin{lstlisting}[style=html, name=semantica-completa.html]
+<header>
+  <h1>Tecnologie Web!</h1>
+  <p>Questa pagina contiene contenuti sulle Tecnologie Web.</p>
+</header>
+<main>
+  <article>
+    <h2>Gli elementi semantici sono una buona cosa</h2>
+    <p>Parliamo degli elementi semantici.</p>
+    <section>
+      <h3>Pro</h3>
+      <p>Veicolano piu' informazione.</p>
+    </section>
+    <section>
+      <h3>Contro</h3>
+      <p>Letteralmente nessuno.</p>
+    </section>
+  </article>
+  <article>
+    <h2>HTML e' bello</h2>
+    <p>E non hai ancora visto lo stile e gli script!</p>
+  </article>
+</main>
+<footer> &copy; Corso di Tecnologie Web, 2024. </footer>
+\end{lstlisting}
+\risultato
+\begin{browser}[semantica-completa.html]
+  {\Lora\bfseries\LARGE Tecnologie Web!}\\[3pt]
+  {\small Questa pagina contiene contenuti sulle Tecnologie Web.}\\[6pt]
+  {\Lora\bfseries\Large Gli elementi semantici sono una buona cosa}\\[3pt]
+  {\small Parliamo degli elementi semantici.}\\[5pt]
+  {\Lora\bfseries\large Pro}\\[2pt]
+  {\small Veicolano più informazione.}\\[5pt]
+  {\Lora\bfseries\large Contro}\\[2pt]
+  {\small Letteralmente nessuno.}\\[6pt]
+  {\Lora\bfseries\Large HTML è bello}\\[3pt]
+  {\small E non hai ancora visto lo stile e gli script!}\\[6pt]
+  {\small \copyright\ Corso di Tecnologie Web, 2024.}
+\end{browser}
+\end{affianco}
+
+Nel risultato non c'è traccia di \tg{header}, \tg{article} o \tg{footer}: senza
+CSS i tag semantici non cambiano l'aspetto della pagina (si vedono solo i titoli
+e i paragrafi). Il loro valore sta tutto nell'informazione che aggiungono, come
+spiega il riquadro seguente.
+\end{esempio}
+
+\info{Perché preferire i tag semantici alle divisioni}{
+  Visivamente \tg{div} e \tg{section} sono identici: nessuno dei due, di per sé,
+  cambia l'aspetto della pagina. La differenza sta nell'\textbf{informazione}. Un
+  lettore di schermo può offrire il comando \guillemotleft vai al contenuto principale\guillemotright\
+  solo se esiste un \tg{main}; un motore di ricerca capisce che cosa indicizzare
+  come articolo solo se esiste un \tg{article}; la modalità lettura del browser
+  funziona per la stessa ragione. Una pagina fatta solo di \tg{div} funziona, ma
+  è muta.}
+
+\section{Il documento come albero}
+
+Gli elementi HTML sono \textbf{annidati} l'uno dentro l'altro: un \tg{body}
+contiene un \tg{main}, che contiene un \tg{article}, che contiene un \tg{h1} e un
+\tg{p}. Questa struttura di contenimento è, formalmente, un \term{albero}.
+
+\begin{figure}[H]
+  \centering
+  \begin{minipage}[c]{0.40\linewidth}
+\begin{lstlisting}[style=html, basicstyle=\linespread{1.1}\scriptsize\FiraCode]
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <title>Il Libro</title>
+    <meta charset="UTF-8">
+  </head>
+  <body>
+    <main>
+      <article>
+        <h1>Titolo</h1>
+        <p>Corpo</p>
+      </article>
+    </main>
+    <footer>
+      <p>&copy; TecWeb</p>
+    </footer>
+  </body>
+</html>
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[c]{0.57\linewidth}
+    \centering
+    \begin{tikzpicture}[font=\FiraCode\scriptsize,
+        level distance=0.9cm,
+        n/.style={rounded corners=2pt, draw=primary!60!black, line width=0.7pt,
+                  fill=primary!8!white, inner sep=2.5pt},
+        edge from parent/.style={draw=neutral!50!black, line width=0.6pt,
+                                 edge from parent path=
+                                 {(\tikzparentnode.south) -- (\tikzchildnode.north)}},
+        level 1/.style={sibling distance=3.5cm},
+        level 2/.style={sibling distance=1.8cm},
+        level 3/.style={sibling distance=1.25cm}]
+      \node[n] {<html>}
+        child { node[n] {<head>}
+          child { node[n] {<title>} }
+          child { node[n] {<meta>} } }
+        child { node[n] {<body>}
+          child { node[n] {<main>}
+            child { node[n] {<article>}
+              child { node[n] {<h1>} }
+              child { node[n] {<p>} } } }
+          child { node[n] {<footer>}
+            child { node[n] {<p>} } } };
+    \end{tikzpicture}
+  \end{minipage}
+  \caption{Lo stesso documento visto come sorgente e come albero.}
+  \label{fig:dom-tree}
+\end{figure}
+
+Questa non è una curiosità teorica: è il modello su cui si fonda tutto il resto
+del corso. Il browser, quando analizza il documento, costruisce esattamente
+questo albero in memoria, e lo chiama \term{DOM} (\textit{Document Object
+Model}). I selettori CSS servono a individuare nodi in questo albero, e
+JavaScript lo modifica per rendere la pagina dinamica.
+
+\error{Annidamento sbagliato}{
+  Se si scrive \code{<p>testo <strong>importante</p></strong>}, i tag si
+  \guillemotleft incrociano\guillemotright\ e la struttura non è più un albero. I browser non segnalano
+  l'errore: cercano di indovinare che cosa intendevamo, e ognuno può indovinare
+  in modo diverso. Il risultato è una pagina che appare corretta su un browser e
+  sbagliata su un altro. I tag vanno sempre chiusi nell'ordine inverso rispetto a
+  quello di apertura.}
+
+\section{Gli strumenti per sviluppatori del browser}
+
+I browser moderni includono numerose funzionalità pensate per chi sviluppa. Si
+accede a questi \term{DevTools} premendo il tasto \code{F12}.
+
+Le funzionalità principali sono:
+
+\begin{itemize}
+  \item \textbf{ispezione} dei documenti HTML: si vede l'albero del DOM così come
+        il browser lo ha effettivamente costruito, e lo si può modificare dal
+        vivo;
+  \item \textbf{analisi di rete}: il dettaglio di tutte le richieste e risposte
+        HTTP coinvolte, con header, corpo, codice di stato e tempi;
+  \item \textbf{profilazione}: misura delle prestazioni e dei tempi di
+        caricamento;
+  \item \textbf{debug} sia della presentazione grafica sia degli script.
+\end{itemize}
+
+\subsection{Ispezionare la pagina}
+
+La scheda \textit{Analisi pagina} (in Chrome \textit{Elements}) mostra l'albero
+del DOM costruito dal browser. Passando con il mouse su un nodo, l'elemento
+corrispondente si evidenzia nella pagina; nella parte bassa del pannello si
+vedono gli stili che gli vengono applicati, che impareremo a leggere nel
+prossimo capitolo. Il DOM mostrato qui è quello \textbf{effettivo}: se il
+browser ha dovuto correggere un annidamento sbagliato, l'albero mostra la sua
+correzione, non il sorgente originale.
+
+\subsection{Analisi di rete}
+
+La scheda \textit{Rete} (in Chrome \textit{Network}) registra \textbf{tutte le
+richieste HTTP} effettuate dalla pagina. La figura riproduce ciò che mostra
+Firefox caricando la pagina \code{image.html} dell'esempio sulle immagini.
+
+\begin{figure}[H]
+  \centering
+  \begin{minipage}[t]{3.6cm}\vspace{0pt}
+    \begin{browser}[Fu-Tzu]
+      {\Lora\bfseries\large Fu-Tzu}\\[3pt]
+      {\scriptsize Un ritratto del maestro, generato da DALL-E, è disponibile
+      qui di seguito:}\\[3pt]
+      \includegraphics[width=2.4cm]{sources/fu-tzu.jpg}
+    \end{browser}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{15.4cm}\vspace{0pt}
+  \begin{devtools}{Rete}
+    {\Lato\scriptsize\setlength{\tabcolsep}{5pt}%
+    \colorbox{dtbar}{\makebox[\dimexpr\linewidth-2\fboxsep][l]{%
+      \color{neutral!45!black}\quad Filtra URL\hfill
+      \color{neutral!20!black}\wtcasella{1}\ Disattiva cache\quad Nessun limite\quad}}\par
+    \noindent\hspace*{6pt}{\color{neutral!30!black}Tutti\quad
+      \colorbox{dtline}{HTML}\quad CSS\quad JS\quad XHR\quad Caratteri\quad
+      \colorbox{dtline}{Immagini}\quad Media\quad WS\quad Altro}\par\vspace{2pt}
+    {\color{dtline}\hrule}
+    \noindent\begin{tabular*}{\linewidth}{@{\hspace{8pt}}l@{\extracolsep{\fill}}llllll@{\hspace{8pt}}}
+      \rule{0pt}{10pt}\textbf{Stato} & \textbf{Metodo} & \textbf{Dominio} &
+      \textbf{File} & \textbf{Iniziatore} & \textbf{Tipo} & \textbf{Dimensione} \\ \hline
+      \rule{0pt}{10pt}\dtstato{200} & GET & 127.0.0.1:3000 & image.html & document & html & 373 B \\
+      \dtstato{200} & GET & 127.0.0.1:3000 & pic.jpg & img & jpeg & 109,90 kB \\
+      \dtstato{200} & GET & 127.0.0.1:3000 & favicon.ico &
+        \textcolor{dtblue}{\uline{FaviconLoader.sys.mjs}} & vnd.microsoft.icon & 15,41 kB \\
+    \end{tabular*}\par\vspace{10pt}
+    {\color{dtline}\hrule}\vspace{2pt}
+    \noindent\hspace*{6pt}{\color{neutral!25!black}3 richieste\quad$\vert$\quad
+      125,68 kB di 126,25 kB trasferiti\quad$\vert$\quad Completato: 109 ms\quad$\vert$\quad
+      \textcolor{dtblue}{DOMContentLoaded: 57 ms}\quad$\vert$\quad
+      \textcolor{dtsel}{load: 61 ms}}\par\vspace{3pt}}
+  \end{devtools}
+  \end{minipage}
+  \caption{La scheda \textit{Rete} di Firefox durante il caricamento di
+           \code{image.html}: tre richieste per una sola pagina.}
+  \label{fig:devtools-rete}
+\end{figure}
+
+Ogni riga è una richiesta, e le colonne raccontano che cosa è successo:
+
+\begin{itemize}
+  \item \textbf{Stato} e \textbf{Metodo}: il codice di stato della risposta e il
+        verbo HTTP usato (qui sempre \code{GET}, tutto a buon fine con
+        \code{200});
+  \item \textbf{Dominio} e \textbf{File}: a chi è stata fatta la richiesta e
+        quale risorsa è stata chiesta;
+  \item \textbf{Iniziatore}: \textbf{chi} ha causato la richiesta. Il documento
+        è stato richiesto dalla navigazione (\code{document}), l'immagine dal tag
+        \tg{img} (\code{img}); la favicon, invece, l'ha chiesta il
+        \textbf{browser di sua iniziativa} (\code{FaviconLoader}), pur non
+        essendo dichiarata da nessuna parte nella pagina;
+  \item \textbf{Tipo} e \textbf{Dimensione}: il tipo di contenuto ricevuto (dal
+        \code{Content-Type} della risposta) e il suo peso.
+\end{itemize}
+
+La barra in fondo riassume il caricamento: numero di richieste, byte trasferiti
+e tre tempi. \code{DOMContentLoaded} indica quando il browser ha finito di
+analizzare l'HTML; \code{load} quando sono arrivate anche tutte le risorse
+esterne, immagini comprese; \textit{Completato} quando è terminata l'ultima
+richiesta. Facendo clic su una riga si aprono i dettagli: intestazioni di
+richiesta e risposta, corpo, tempi di ciascuna fase.
+
+La fila di pulsanti \textit{Tutti, HTML, CSS, JS, Immagini, \ldots} filtra le
+richieste per tipo: su un sito reale, con decine di richieste, è indispensabile.
+
+\subsubsection{La cache del browser}
+
+Nella barra degli strumenti della figura c'è una casella spuntata:
+\textit{Disattiva cache}. Per capire a che cosa serve bisogna sapere che il
+browser, dopo aver scaricato una risorsa, ne conserva una copia in una memoria
+locale, la \term{cache}, per non doverla scaricare di nuovo alla visita
+successiva.
+
+\dfn{Cache HTTP}{
+  La \term{cache HTTP} è la copia locale delle risposte già ricevute che il
+  browser conserva per riusarle. Quanto a lungo una risposta possa essere
+  riusata, e a quali condizioni, lo decide il server tramite le intestazioni
+  della risposta (per esempio \code{Cache-Control}, \code{ETag},
+  \code{Last-Modified}).}
+
+Ricaricando la pagina con la cache attiva, i casi tipici sono tre.
+
+\begin{itemize}
+  \item La risorsa è ancora \textbf{fresca}: il browser la prende dalla cache
+        \textbf{senza fare alcuna richiesta}. Nella scheda \textit{Rete} la riga
+        compare comunque, ma come trasferito è indicata la cache (Chrome scrive
+        \textit{memory cache} o \textit{disk cache}) e il tempo è quasi nullo.
+  \item La risorsa va \textbf{riconvalidata}: il browser chiede al server
+        \guillemotleft è cambiata dall'ultima volta?\guillemotright\ con una
+        \term{richiesta condizionale}. Se non è cambiata, il server risponde
+        \code{304 Not Modified} con un corpo \textbf{vuoto}, e il browser usa la
+        copia che ha già: viaggiano poche centinaia di byte invece dell'intero
+        file.
+  \item La risorsa è cambiata (o non è in cache): risposta \code{200} con il
+        contenuto completo, come al primo caricamento.
+\end{itemize}
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=http, name=richiesta condizionale]
+GET /02-HTML/pic.jpg HTTP/1.1
+Host: 127.0.0.1:3000
+If-None-Match: "1ad3e-18a9c2f0b40"
+If-Modified-Since: Tue, 15 Sep 2026 10:12:08 GMT
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=http, name=risposta del server]
+HTTP/1.1 304 Not Modified
+ETag: "1ad3e-18a9c2f0b40"
+Last-Modified: Tue, 15 Sep 2026 10:12:08 GMT
+\end{lstlisting}
+\wtnota{Nessun corpo: l'immagine non viene trasmessa di nuovo.}
+\end{affianco}
+
+Il meccanismo si regge su due coppie di intestazioni. Alla prima risposta il
+server allega un'impronta della risorsa (\code{ETag}) e la data dell'ultima
+modifica (\code{Last-Modified}); alla richiesta successiva il browser le rimanda
+indietro in \code{If-None-Match} e \code{If-Modified-Since}, e il server
+confronta.
+
+\begin{figure}[H]
+  \centering
+  \begin{devtools}[width=15.4cm]{Rete}
+    {\Lato\scriptsize\setlength{\tabcolsep}{6pt}%
+    \colorbox{dtbar}{\makebox[\dimexpr\linewidth-2\fboxsep][l]{%
+      \color{neutral!45!black}\quad Filtra URL\hfill
+      \color{neutral!20!black}\wtcasella{0}\ Disattiva cache\quad Nessun limite\quad}}\par
+    \noindent\begin{tabular*}{\linewidth}{@{\hspace{8pt}}l@{\extracolsep{\fill}}lllll@{\hspace{8pt}}}
+      \rule{0pt}{10pt}\textbf{Stato} & \textbf{Metodo} & \textbf{File} &
+      \textbf{Iniziatore} & \textbf{Trasferito} & \textbf{Dimensione} \\ \hline
+      \rule{0pt}{10pt}\dtstato[dtwarn]{304} & GET & image.html & document & 212 B & 373 B \\
+      \dtstato[dtwarn]{304} & GET & pic.jpg & img & 214 B & 109,90 kB \\
+      \dtstato{200} & GET & favicon.ico & FaviconLoader.sys.mjs &
+        \textit{in cache} & 15,41 kB \\
+    \end{tabular*}\par\vspace{8pt}
+    {\color{dtline}\hrule}\vspace{2pt}
+    \noindent\hspace*{6pt}{\color{neutral!25!black}3 richieste\quad$\vert$\quad
+      126,25 kB / 426 B trasferiti\quad$\vert$\quad Completato: 21 ms}\par\vspace{3pt}}
+  \end{devtools}
+  \caption{La stessa pagina ricaricata con la cache attiva (valori indicativi):
+           documento e immagine vengono riconvalidati con \code{304}, la favicon
+           non viene nemmeno richiesta.}
+  \label{fig:devtools-cache}
+\end{figure}
+
+\warning{Perché durante lo sviluppo si disattiva la cache}{
+  Mentre si scrive una pagina, la cache è più un ostacolo che un aiuto: si
+  modifica il CSS, si ricarica, e il browser mostra ancora la versione vecchia
+  presa dalla cache. Ci sono due rimedi.
+  \begin{itemize}
+    \item Spuntare \textit{Disattiva cache} nella scheda \textit{Rete}: finché i
+          DevTools restano aperti, il browser ignora la cache e riscarica tutto.
+    \item Eseguire una \textbf{ricarica forzata} con \code{Ctrl+Shift+R} (oppure
+          \code{Ctrl+F5}; su macOS \code{Cmd+Shift+R}), che scavalca la cache
+          per quel singolo caricamento.
+  \end{itemize}
+  In entrambi i casi nella scheda \textit{Rete} tutte le righe tornano a
+  \code{200}, con i file trasferiti per intero.}
+
+\info{I DevTools saranno il tuo migliore amico}{
+  Chi sviluppa per il Web li tiene aperti quasi sempre. Vale la pena spendere
+  mezz'ora a esplorarli con calma su un sito qualunque: cambiare un colore dal
+  vivo nella scheda \textit{Inspector}, guardare l'ordine e i tempi delle
+  richieste nella scheda \textit{Network}, provare a leggere una risposta HTTP
+  reale con i suoi header. Molti problemi che sembrano misteriosi diventano
+  evidenti dopo dieci secondi passati nel pannello giusto.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Learn HTML} --- web.dev. Sezioni da 1 a 10 e da 12 a 14. \\
+        \urlx{https://web.dev/learn/html}
+  \item \textbf{Learn Forms} --- web.dev. Sezioni da 1 a 3. \\
+        \urlx{https://web.dev/learn/forms}
+  \item \textbf{The Input (Form Input) element} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input}
+  \item \textbf{HTML Forms (overview)} --- W3Schools. \\
+        \urlx{https://www.w3schools.com/html/html_forms.asp}
+  \item \textbf{HTML Living Standard} --- WHATWG. \\
+        \urlx{https://html.spec.whatwg.org/} \\
+        Non è richiesto di imparare l'intera specifica: è sufficiente sapere che
+        esiste e farsi un'idea di come è strutturata.
+  \item \textbf{Browser DevTools} \\
+        Firefox: \urlx{https://firefox-source-docs.mozilla.org/devtools-user/} \\
+        Chrome: \urlx{https://developer.chrome.com/docs/devtools} \\
+        Conviene prendere confidenza con i DevTools del browser che si preferisce.
+\end{itemize}

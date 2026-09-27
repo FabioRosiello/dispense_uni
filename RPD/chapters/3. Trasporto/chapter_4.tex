@@ -1,0 +1,307 @@
+\chapter{TCP: la gestione della connessione}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il problema}
+% ══════════════════════════════════════════════════════════════
+
+Poiché TCP è orientato alla connessione, i due host devono mettersi d'accordo sia quando la connessione
+si \textbf{apre} sia quando si \textbf{chiude}. Ma i messaggi possono perdersi o danneggiarsi, e trovare un
+accordo è tutt'altro che banale: se un messaggio si perde, un lato può ritenere la connessione aperta (o
+chiusa) mentre l'altro no.
+
+Per evitare, o meglio per \textbf{mitigare}, il problema TCP usa una procedura detta \textbf{three-way
+handshake} (stretta di mano a tre vie): le richieste di apertura e di chiusura devono essere
+\textbf{confermate} prima che la connessione sia considerata stabilita o rilasciata.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il problema dei due eserciti}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \fill[green!15] (-1,-1.2) -- (1.2,1.6) -- (3,0.4) -- (5,1.7) -- (7.4,-1.2) -- cycle;
+  \fill[green!30] (-1,-1.2) -- (0.6,0.4) -- (2,-0.3) -- (3.2,-0.9) -- (4.8,-0.2) -- (6.2,0.5) -- (7.4,-1.2) -- cycle;
+  \node[draw, fill=blue!40, rounded corners, minimum width=1.5cm] (b1) at (0.4,0.9) {blu \#1};
+  \node[draw, fill=blue!40, rounded corners, minimum width=1.5cm] (b2) at (6,1.0) {blu \#2};
+  \node[draw, fill=white, rounded corners, minimum width=2.6cm, minimum height=0.8cm] (w) at (3.2,-0.6) {esercito bianco};
+  \draw[msg, dashed, netred, thick] (b1) to[bend right=15] node[below, sloped, text=netred] {messaggero} (b2);
+  \node[text width=6.5cm, anchor=west] at (8,0.2) {Il bianco è più forte di ciascun esercito blu, ma più debole dei due insieme: i blu vincono solo se attaccano \textbf{nello stesso momento}. Per accordarsi possono mandare messaggeri attraverso la valle, dove possono essere catturati.};
+\end{tikzpicture}
+\caption{Il problema dei due eserciti: comunicare attraverso un canale inaffidabile.}
+\end{figure}
+
+Un esercito bianco è accampato in una valle; sulle due colline ai lati ci sono due eserciti blu. Il
+bianco è più grande di ciascuno dei due eserciti blu, ma insieme i blu sono più numerosi: vincono
+\textbf{solo se attaccano contemporaneamente}. Per sincronizzarsi devono mandare messaggeri attraverso la
+valle, dove possono essere catturati (comunicazione \textbf{inaffidabile}). Esiste un protocollo che permetta
+ai blu di vincere?
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.8, every node/.style={font=\scriptsize\sffamily}]
+  \begin{scope}
+    \node[font=\footnotesize\bfseries\sffamily] at (1.9,1.1) {Due vie};
+    \timeline{a}{0}{blu \#1}{3.4}
+    \timeline{b}{3.8}{blu \#2}{3.4}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {``attacchiamo oggi, ok?''} (3.8,-1.1);
+    \draw[msg, netgreen] (3.8,-1.4) -- node[above, sloped] {``d'accordo!''} (0,-2.2);
+    \node[text=netred, anchor=west] at (3.9,-2.3) {sarà arrivato?};
+  \end{scope}
+  \begin{scope}[xshift=7.5cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (1.9,1.1) {Tre vie};
+    \timeline{a}{0}{blu \#1}{3.4}
+    \timeline{b}{3.8}{blu \#2}{3.4}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {``attacchiamo oggi, ok?''} (3.8,-1.1);
+    \draw[msg, netgreen] (3.8,-1.4) -- node[above, sloped] {``d'accordo!''} (0,-2.2);
+    \draw[msg] (0,-2.4) -- node[above, sloped] {``d'accordo!''} (3.8,-3.2);
+    \node[text=netred, anchor=east] at (-0.1,-2.9) {e il mio, sarà arrivato?};
+  \end{scope}
+\end{tikzpicture}
+\caption{Aggiungere conferme sposta solo il dubbio sull'ultimo messaggio.}
+\end{figure}
+
+\begin{itemize}
+    \item Il comandante del blu \#1 manda: ``\emph{Propongo di attaccare oggi, va bene?}''. Il messaggio arriva, il
+          blu \#2 è d'accordo e la sua risposta torna sana e salva. L'attacco ci sarà? Probabilmente no: il
+          comandante \#2 \textbf{non sa} se la sua risposta è arrivata, e se non fosse arrivata il \#1 non attaccherebbe.
+    \item Proviamo con tre vie: il \#1 conferma la risposta. Se nessun messaggio si perde, il \#2 riceve la conferma,
+          ma ora è il \#1 a esitare: non sa se la sua conferma è arrivata.
+    \item Con quattro vie non cambia nulla. Si può \textbf{dimostrare} che \textbf{non esiste alcun protocollo} che
+          risolva il problema con certezza.
+\end{itemize}
+
+\info{Imperfetto ma adeguato}{
+    Il three-way handshake \textbf{non è perfetto}, ma nella pratica è di solito \textbf{più che adeguato}: le
+    situazioni residue vengono gestite con timer e ritrasmissioni.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{L'apertura della connessione}
+% ══════════════════════════════════════════════════════════════
+
+\begin{enumerate}
+    \item Il client invia una richiesta di connessione: un segmento \textbf{SYN}.
+    \item Il server risponde con una conferma speciale: un segmento \textbf{SYN-ACK} (o SYNACK).
+    \item Il client invia la conferma finale: un segmento \textbf{ACK}.
+\end{enumerate}
+
+\subsection{I dettagli}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.9, every node/.style={font=\footnotesize\sffamily}]
+  \timeline{c}{0}{Client}{5.2}
+  \timeline{s}{8}{Server}{5.2}
+  \node[anchor=east, text=black!60] at (-0.2,0) {\texttt{connect()}};
+  \node[anchor=west, text=black!60] at (8.2,0) {\texttt{listen()}, \texttt{accept()}};
+  \draw[msg, very thick, netblue] (0,-0.5) -- node[above, sloped, align=center] {SYN = 1, Seq = client\_isn\\(nessun dato)} (8,-1.7);
+  \node[anchor=west, text width=3.4cm, align=left] at (8.2,-1.9) {alloca buffer e variabili};
+  \draw[msg, very thick, netgreen] (8,-2.2) -- node[above, sloped, align=center] {SYN = 1, ACK = 1, Seq = server\_isn\\Ack = client\_isn + 1} (0,-3.4);
+  \node[anchor=east, text width=3cm, align=right] at (-0.2,-3.6) {alloca buffer e variabili};
+  \draw[msg, very thick, netblue] (0,-3.9) -- node[above, sloped, align=center] {SYN = 0, ACK = 1, Seq = client\_isn + 1\\Ack = server\_isn + 1 (può contenere dati)} (8,-5.1);
+  \node[anchor=west, text=netgreen!60!black, font=\footnotesize\bfseries\sffamily] at (8.2,-5.1) {connessione stabilita};
+\end{tikzpicture}
+\caption{Il three-way handshake nel dettaglio.}
+\end{figure}
+
+\begin{enumerate}
+    \item Il client invia un segmento \textbf{SYN} che ha:
+    \begin{itemize}
+      \item \textbf{nessun dato} applicativo;
+      \item il bit \textbf{SYN a 1};
+      \item come numero di sequenza un \textbf{numero iniziale casuale} (\texttt{client\_isn}, \emph{initial sequence number}).
+    \end{itemize}
+    \item Quando il SYN arriva (si spera), il server \textbf{alloca buffer e variabili} TCP e risponde con un segmento
+          \textbf{SYNACK} che ha:
+    \begin{itemize}
+      \item nessun dato applicativo;
+      \item i bit \textbf{SYN e ACK a 1};
+      \item numero di acknowledgment \texttt{client\_isn + 1};
+      \item come numero di sequenza un proprio numero iniziale casuale (\texttt{server\_isn}).
+    \end{itemize}
+    \item Quando il SYNACK arriva (si spera), anche il client alloca buffer e variabili e invia un segmento
+          \textbf{ACK} finale che ha:
+    \begin{itemize}
+      \item eventualmente \textbf{dati} applicativi (per esempio la richiesta HTTP);
+      \item il bit \textbf{SYN a 0} (la connessione ora è stabilita) e il bit \textbf{ACK a 1};
+      \item numero di acknowledgment \texttt{server\_isn + 1}.
+    \end{itemize}
+\end{enumerate}
+
+\warning{Perché il SYN ``consuma'' un numero di sequenza}{
+    Il SYN non porta dati, eppure l'ACK di risposta vale \texttt{client\_isn + 1}: per convenzione SYN (e FIN)
+    contano come un byte, così possono essere confermati come qualsiasi altro dato. I numeri iniziali sono
+    \textbf{casuali} per evitare che segmenti di una vecchia connessione, ancora in giro per la rete, vengano
+    scambiati per segmenti della nuova.
+}
+
+\warning{Un momento delicato}{
+    L'apertura della connessione è delicata e può aggiungere ritardi significativi. Di solito c'è un
+    \textbf{timeout} (30--60 secondi) per completare l'handshake, dopo il quale la procedura viene abbandonata. Qui
+    avvengono anche alcuni attacchi: nel \textbf{SYN flood} l'attaccante invia moltissimi SYN senza mai completare
+    l'handshake, costringendo il server ad allocare risorse per migliaia di connessioni ``mezze aperte''.
+}
+
+\subsection{Diagramma degli stati (apertura)}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, st/.style={draw, rounded corners=6pt, fill=cloudbg, thick, minimum width=2.4cm, minimum height=0.75cm, font=\footnotesize\bfseries\sffamily}]
+  \node[st] (closed) at (0,0) {CLOSED};
+  \node[st] (listen) at (-4,-2) {LISTEN};
+  \node[st] (synsent) at (4,-2) {SYN SENT};
+  \node[st] (synrcvd) at (-4,-4.3) {SYN RECEIVED};
+  \node[st, fill=netgreen!20] (est) at (0,-6.3) {ESTABLISHED};
+  \draw[-{Stealth}, thick] (closed) -- node[above, sloped, align=center] {apertura passiva\\\texttt{listen()}} (listen);
+  \draw[-{Stealth}, thick] (closed) -- node[above, sloped, align=center] {apertura attiva: \texttt{connect()}\\invia SYN} (synsent);
+  \draw[-{Stealth}, thick] (listen) -- node[left, align=right] {ricevuto SYN\\invia SYN+ACK} (synrcvd);
+  \draw[-{Stealth}, thick] (synsent) -- node[right, align=left] {ricevuto SYN+ACK\\invia ACK} (est);
+  \draw[-{Stealth}, thick] (synrcvd) -- node[below left, align=right] {ricevuto ACK} (est);
+  \node[text=netblue, font=\footnotesize\bfseries\sffamily] at (-4,-0.9) {server};
+  \node[text=netred, font=\footnotesize\bfseries\sffamily] at (4,-0.9) {client};
+\end{tikzpicture}
+\caption{Diagramma degli stati semplificato per l'apertura della connessione.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{La chiusura della connessione}
+% ══════════════════════════════════════════════════════════════
+
+La chiusura (\emph{teardown}) può essere avviata da \textbf{uno qualsiasi} dei due host. Supponiamo che a
+chiudere sia il client:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.85, every node/.style={font=\footnotesize\sffamily}]
+  \timeline{c}{0}{Client}{5.8}
+  \timeline{s}{7}{Server}{5.8}
+  \node[anchor=east, text=black!60] at (-0.2,-0.4) {\texttt{close()}};
+  \draw[msg, very thick, netred] (0,-0.5) -- node[above, sloped] {FIN = 1} (7,-1.4);
+  \draw[msg, very thick, netgreen] (7,-1.7) -- node[above, sloped] {ACK = 1} (0,-2.6);
+  \node[anchor=west, text=black!60] at (7.2,-2.9) {\texttt{close()}};
+  \draw[msg, very thick, netred] (7,-3.0) -- node[above, sloped] {FIN = 1} (0,-3.9);
+  \draw[msg, very thick, netgreen] (0,-4.2) -- node[above, sloped] {ACK = 1} (7,-5.1);
+  \node[anchor=west, text=netgreen!60!black, font=\footnotesize\bfseries\sffamily] at (7.2,-5.1) {chiusa};
+  \draw[netorange, very thick] (-0.3,-4.2) -- (-0.3,-5.8);
+  \node[anchor=east, text=netorange, text width=2.6cm, align=right] at (-0.4,-5.0) {attesa (TIME WAIT), poi chiusa};
+\end{tikzpicture}
+\caption{La chiusura della connessione: ACK e FIN del server possono viaggiare nello stesso segmento o in due segmenti separati.}
+\end{figure}
+
+\begin{enumerate}
+    \item Il client invia un segmento speciale di chiusura: un segmento \textbf{FIN}, con il bit FIN a 1.
+    \item Quando lo riceve, il server invia una conferma e, quando anche lui ha finito, un proprio segmento di
+          chiusura, con ACK a 1 e FIN a 1. ACK e FIN possono viaggiare nello stesso segmento o in due separati:
+          nel mezzo il server può ancora inviare dati (la connessione è chiusa solo in una direzione).
+    \item Infine il client conferma il FIN del server.
+\end{enumerate}
+
+\subsection{Diagramma degli stati (chiusura)}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, st/.style={draw, rounded corners=6pt, fill=cloudbg, thick, minimum width=2.3cm, minimum height=0.7cm, font=\footnotesize\bfseries\sffamily}]
+  \node[st, fill=netgreen!20] (est) at (0,0) {ESTABLISHED};
+  \node[st] (fw1) at (-4,-1.8) {FIN WAIT 1};
+  \node[st] (fw2) at (-4,-3.8) {FIN WAIT 2};
+  \node[st] (closing) at (-0.6,-3.8) {CLOSING};
+  \node[st] (tw) at (-4,-5.8) {TIME WAIT};
+  \node[st] (cw) at (4,-1.8) {CLOSE WAIT};
+  \node[st] (la) at (4,-3.8) {LAST ACK};
+  \node[st, fill=lphy] (closed) at (0,-7.4) {CLOSED};
+  \draw[-{Stealth}, thick] (est) -- node[above, sloped, align=center] {\texttt{close()}\\invia FIN} (fw1);
+  \draw[-{Stealth}, thick] (fw1) -- node[left, align=right] {ricevuto ACK} (fw2);
+  \draw[-{Stealth}, thick] (fw1) -- node[above, sloped, align=center] {ricevuto FIN\\invia ACK} (closing);
+  \draw[-{Stealth}, thick] (fw2) -- node[left, align=right] {ricevuto FIN\\invia ACK} (tw);
+  \draw[-{Stealth}, thick] (closing) -- node[right, align=left] {ricevuto ACK} (tw);
+  \draw[-{Stealth}, thick] (tw) -- node[below left, align=right] {scade il timeout} (closed);
+  \draw[-{Stealth}, thick] (est) -- node[above, sloped, align=center] {ricevuto FIN\\invia ACK} (cw);
+  \draw[-{Stealth}, thick] (cw) -- node[right, align=left] {\texttt{close()}\\invia FIN} (la);
+  \draw[-{Stealth}, thick] (la) -- node[below right, align=left] {ricevuto ACK} (closed);
+  \node[text=netred, font=\footnotesize\bfseries\sffamily] at (-4,-0.8) {chi chiude per primo};
+  \node[text=netblue, font=\footnotesize\bfseries\sffamily] at (4,-0.8) {chi chiude per secondo};
+\end{tikzpicture}
+\caption{Diagramma degli stati semplificato per il rilascio della connessione. CLOSING corrisponde al caso raro in cui i due lati chiudono contemporaneamente.}
+\end{figure}
+
+\info{A cosa serve TIME WAIT}{
+    Chi chiude per primo non passa subito a CLOSED: resta in \textbf{TIME WAIT} per un tempo pari a due volte la
+    vita massima di un segmento in rete (da 30 secondi a qualche minuto). Così, se l'ultimo ACK si perde e il pari
+    ritrasmette il suo FIN, c'è ancora qualcuno che può riconfermarlo; e i segmenti vecchi della connessione
+    hanno il tempo di sparire prima che la stessa coppia di porte venga riusata. È il motivo per cui, nel capitolo
+    sui socket, un server chiuso male poteva lasciare la porta occupata per alcuni minuti.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Come TCP si salva dalla perdita di pacchetti}
+% ══════════════════════════════════════════════════════════════
+
+Poiché il three-way handshake non è perfetto, TCP si affida ai \textbf{timer} per chiudere comunque le
+connessioni o per ripetere le richieste. Alcuni esempi durante il rilascio:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.72, every node/.style={font=\scriptsize\sffamily}]
+  \begin{scope}
+    \node[font=\footnotesize\bfseries\sffamily] at (1.6,1.1) {(a) si perde l'ACK finale};
+    \timeline{c}{0}{Client}{7}
+    \timeline{s}{3.2}{Server}{7}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {FIN} (3.2,-1.0);
+    \draw[msg, netgreen] (3.2,-1.2) -- node[above, sloped] {ACK + FIN} (0,-1.9);
+    \draw[msglost] (0,-2.1) -- (1.7,-2.5); \node[text=netred] at (2.1,-2.2) {ACK perso};
+    \draw[netorange, thick] (3.45,-1.2) -- (3.45,-3.6); \node[text=netorange, rotate=90] at (3.7,-2.4) {timeout};
+    \draw[msg] (3.2,-3.6) -- node[above, sloped] {FIN (di nuovo)} (0,-4.3);
+    \draw[msg, netgreen] (0,-4.5) -- node[above, sloped] {ACK} (3.2,-5.2);
+    \node at (1.6,-6.2) {chiusa su entrambi i lati};
+  \end{scope}
+  \begin{scope}[xshift=5.6cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (1.6,1.1) {(b) si perde il FIN del server};
+    \timeline{c}{0}{Client}{7}
+    \timeline{s}{3.2}{Server}{7}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {FIN} (3.2,-1.0);
+    \draw[msglost] (3.2,-1.2) -- (1.5,-1.6); \node[text=netred] at (1.1,-1.3) {perso};
+    \draw[netorange, thick] (-0.25,-0.3) -- (-0.25,-2.6); \node[text=netorange, rotate=90] at (-0.5,-1.45) {timeout};
+    \draw[msg] (0,-2.6) -- node[above, sloped] {FIN (rinviato)} (3.2,-3.3);
+    \draw[msg, netgreen] (3.2,-3.5) -- node[above, sloped] {ACK + FIN} (0,-4.2);
+    \draw[msg, netgreen] (0,-4.4) -- node[above, sloped] {ACK} (3.2,-5.1);
+    \node at (1.6,-6.2) {chiusa su entrambi i lati};
+  \end{scope}
+  \begin{scope}[xshift=11.2cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (1.6,1.1) {(c) perdite ripetute};
+    \timeline{c}{0}{Client}{7}
+    \timeline{s}{3.2}{Server}{7}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {FIN} (3.2,-1.0);
+    \draw[msglost] (3.2,-1.2) -- (1.5,-1.6);
+    \draw[msg] (0,-2.4) -- node[above, sloped] {FIN} (3.2,-3.1);
+    \draw[msglost] (3.2,-3.3) -- (1.5,-3.7);
+    \node[text width=2.8cm, align=center] at (1.6,-5.0) {dopo $N$ timeout ciascun lato chiude comunque};
+    \node[text=netred] at (0,-6.5) {chiusa}; \node[text=netred] at (3.2,-6.5) {chiusa};
+  \end{scope}
+\end{tikzpicture}
+\caption{Timer e ritrasmissioni permettono di chiudere la connessione anche quando si perdono segmenti; dopo un certo numero di tentativi falliti la connessione viene chiusa d'ufficio.}
+\end{figure}
+
+\warning{RST: il rifiuto}{
+    Se arriva un SYN per una porta su cui nessun processo è in ascolto, l'host risponde con un segmento con il bit
+    \textbf{RST} a 1 (\emph{reset}): ``qui non c'è nessuno''. Lo stesso bit serve a interrompere bruscamente una
+    connessione in uno stato anomalo. Nel caso di UDP, invece, a una porta chiusa si risponde con un messaggio ICMP
+    ``port unreachable'' (lo vedremo con traceroute).
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Accordarsi su un canale inaffidabile con certezza è impossibile (\textbf{problema dei due eserciti}): il
+          three-way handshake è imperfetto ma adeguato.
+    \item \textbf{Apertura}: SYN (Seq = client\_isn), SYNACK (Seq = server\_isn, Ack = client\_isn+1), ACK (Ack =
+          server\_isn+1, può contenere dati). Numeri iniziali casuali.
+    \item Stati di apertura: CLOSED, LISTEN / SYN SENT, SYN RECEIVED, ESTABLISHED.
+    \item \textbf{Chiusura}: FIN, ACK, FIN, ACK (ACK e FIN possono essere uniti); stati FIN WAIT 1/2, CLOSE WAIT,
+          LAST ACK, CLOSING, TIME WAIT, CLOSED.
+    \item I \textbf{timer} risolvono le perdite residue; RST rifiuta o interrompe le connessioni.
+\end{itemize}
+}

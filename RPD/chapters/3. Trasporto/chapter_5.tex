@@ -1,0 +1,483 @@
+\chapter{Controllo di flusso e controllo di congestione}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il problema comune: i buffer che traboccano}
+% ══════════════════════════════════════════════════════════════
+
+Oltre all'affidabilità, TCP offre rispetto a UDP il \textbf{controllo di flusso} e il \textbf{controllo di
+congestione}. Entrambi nascono dallo stesso fatto: la perdita di pacchetti è spesso dovuta al
+\textbf{traboccare di un buffer}.
+
+\begin{itemize}
+    \item Il \textbf{buffer di ricezione} del destinatario trabocca se l'applicazione non legge i dati abbastanza
+          in fretta $\Rightarrow$ problema di \textbf{flusso}.
+    \item I \textbf{buffer dei dispositivi di rete} (i router) traboccano se i nodi sono congestionati
+          $\Rightarrow$ problema di \textbf{congestione}.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \draw[thick] (0,0) -- (0,1.4) -- (1.4,1.4) -- (1.4,0); \fill[netblue!50] (0.02,0.02) rectangle (1.38,1.1);
+  \node at (0.7,-0.3) {mittente};
+  \draw[thick, netblue!70, line width=4pt] (1.4,0.4) -- (4.2,0.4);
+  \draw[thick] (4.2,0.6) -- (4.2,1.8) -- (5.6,1.8) -- (5.6,0.6) -- cycle; \fill[netblue!50] (4.22,0.62) rectangle (5.58,1.8);
+  \foreach \x in {4.4,4.9,5.3} \fill[netblue!60] (\x,1.85) circle (2pt);
+  \node[text=netred] at (4.9,2.3) {trabocca!};
+  \node at (4.9,0.3) {router (congestione)};
+  \draw[thick, netblue!70, line width=4pt] (5.6,0.9) -- (8.2,0.9);
+  \draw[thick] (8.2,0.5) -- (8.2,1.9) -- (9.6,1.9) -- (9.6,0.5) -- cycle; \fill[netblue!50] (8.22,0.52) rectangle (9.58,1.7);
+  \draw[thick, netblue!70, line width=1.2pt] (9.6,0.7) -- (10.6,0.7);
+  \node[align=center] at (8.9,0.1) {buffer di ricezione\\(flusso)};
+  \node[align=center] at (11.2,0.7) {applicazione\\lenta};
+\end{tikzpicture}
+\caption{L'analogia dell'acqua: i buffer sono secchi intermedi che traboccano se entra più acqua di quanta ne esca.}
+\end{figure}
+
+Se i pacchetti si perdono, gli host devono affidarsi a ritrasmissioni e timeout, che peggiorano
+drasticamente le prestazioni della rete. Meglio evitare di arrivarci.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il controllo di flusso}
+% ══════════════════════════════════════════════════════════════
+
+Quando TCP riceve byte corretti e in sequenza, li mette nel \textbf{buffer di ricezione}. L'applicazione li
+legge da lì, ma non necessariamente nell'istante in cui arrivano (può essere occupata). Se l'applicazione è
+lenta a leggere, il mittente può facilmente far traboccare il buffer inviando troppi dati troppo in fretta.
+
+\dfn{Controllo di flusso}{
+    Il \textbf{controllo di flusso} di TCP è un servizio di \textbf{adeguamento della velocità}
+    (\emph{speed-matching}): cerca di adeguare (ridurre) il ritmo di invio del mittente al ritmo con cui
+    l'\textbf{applicazione ricevente} legge i dati. Si basa sulla \textbf{finestra di ricezione}
+    (\emph{receive window}, rwnd), il campo dell'header TCP con cui il ricevente comunica al mittente quanto
+    spazio libero gli resta nel buffer.
+}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.55\linewidth]{cap12/rwnd_buffer.png}
+    \caption{Il buffer di ricezione: la parte grigia contiene dati non ancora letti dall'applicazione, la parte bianca (rwnd) è lo spazio libero.}
+\end{figure}
+
+\subsection{Le formule}
+
+Supponiamo per semplicità che il ricevente scarti i segmenti fuori ordine, così che tutti i dati nel buffer
+siano in ordine. Sul \textbf{ricevente} (host B) si definiscono:
+
+\begin{itemize}
+    \item \texttt{RcvBuffer}: la dimensione del buffer di ricezione (in byte);
+    \item \texttt{LastByteRead}: l'ultimo byte del flusso letto dall'applicazione;
+    \item \texttt{LastByteRcvd}: l'ultimo byte del flusso arrivato e messo nel buffer.
+\end{itemize}
+
+\dfn{Finestra di ricezione}{
+    $$\text{rwnd} = \text{RcvBuffer} - (\text{LastByteRcvd} - \text{LastByteRead})$$
+    cioè lo spazio totale meno i byte ricevuti ma non ancora letti.
+}
+
+Sul \textbf{mittente} (host A) si tengono \texttt{LastByteSent} (l'ultimo byte inviato) e \texttt{LastByteAcked}
+(l'ultimo byte confermato dal ricevente). Conoscendo la finestra comunicata da B, il mittente garantisce in
+ogni istante:
+
+$$\text{LastByteSent} - \text{LastByteAcked} \leq \text{rwnd}$$
+
+cioè i byte ``in volo'' (inviati ma non confermati) non superano mai lo spazio libero del ricevente.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \foreach \i in {0,...,15} {
+    \pgfmathsetmacro{\c}{\i<5 ? "lnet" : (\i<9 ? "llink" : (\i<12 ? "white" : "lphy"))}
+    \node[draw, fill=\c, minimum width=0.7cm, minimum height=0.6cm] at (\i*0.7,0) {};
+  }
+  \draw[decorate, decoration={brace, amplitude=5pt}] (-0.35,0.4) -- (3.15,0.4) node[midway, above=6pt] {inviati e confermati};
+  \draw[decorate, decoration={brace, amplitude=5pt}] (3.15,0.4) -- (5.95,0.4) node[midway, above=6pt, align=center] {inviati, non confermati};
+  \draw[decorate, decoration={brace, amplitude=5pt}] (5.95,0.4) -- (8.05,0.4) node[midway, above=6pt, align=center] {inviabili};
+  \draw[decorate, decoration={brace, amplitude=5pt}] (8.05,0.4) -- (11.2,0.4) node[midway, above=6pt] {non ancora inviabili};
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (3.15,-0.4) -- (8.05,-0.4) node[midway, below=6pt, text=netred] {rwnd};
+  \node[below=16pt] at (3.15,-0.2) {LastByteAcked};
+  \node[below=16pt] at (5.95,-0.9) {LastByteSent};
+  \draw[-{Stealth}] (5.95,-1.15) -- (5.95,-0.35);
+\end{tikzpicture}
+\caption{Lato mittente: il flusso di byte e la finestra consentita dal ricevente.}
+\end{figure}
+
+\begin{esempio}{Calcolare la finestra}
+B ha un buffer da 4000 byte. Ha ricevuto fino al byte 3000 (\texttt{LastByteRcvd} = 3000) e l'applicazione ha letto
+fino al byte 1000 (\texttt{LastByteRead} = 1000). Allora:
+$$\text{rwnd} = 4000 - (3000 - 1000) = 2000 \text{ byte}$$
+B scrive 2000 nel campo finestra dei segmenti che invia ad A. Se A ha già inviato fino al byte 3500 e ha ricevuto
+conferma fino al 3000, ha 500 byte in volo e può inviarne ancora al massimo $2000 - 500 = 1500$.
+\end{esempio}
+
+\warning{Finestra a zero}{
+    Se il buffer di B si riempie, B comunica $\text{rwnd} = 0$ e A si ferma. Ma se B non ha dati da inviare, non
+    manderà più segmenti, e A non saprebbe mai che si è liberato spazio! Per evitare il blocco, quando la finestra è
+    zero il mittente continua a inviare periodicamente segmenti di \textbf{un byte} (\emph{zero window probe}): le
+    risposte di B contengono il valore aggiornato della finestra.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il problema della congestione}
+% ══════════════════════════════════════════════════════════════
+
+Il problema della congestione è simile a quello del flusso, ma riguarda l'\textbf{infrastruttura di rete}
+invece del ricevente.
+
+\subsection{Scenario 1: buffer infinito}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.55\linewidth]{cap12/scenario1.png}
+    \caption{Due connessioni condividono un solo router con buffer infinito e un collegamento in uscita di capacità $R$.}
+\end{figure}
+
+Due host (A e B) hanno ciascuno una connessione che attraversa lo stesso router e lo stesso collegamento
+in uscita di capacità $R$. Il router ha dei buffer che conservano i pacchetti quando la velocità di arrivo
+supera la capacità del collegamento. Entrambe le applicazioni inviano dati alla stessa velocità media di
+$\lambda_{in}$ byte/s.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth]{cap12/scenario1_grafici.png}
+    \caption{(a) Throughput per connessione in funzione della velocità di invio: non supera $R/2$. (b) Ritardo: cresce senza limite avvicinandosi a $R/2$.}
+\end{figure}
+
+\begin{itemize}
+    \item Se $\lambda_{in} < R/2$, tutto ciò che il mittente invia arriva al ricevente con un ritardo finito.
+    \item Se $\lambda_{in} = R/2$, il collegamento lavora a piena capacità ($R$), e i pacchetti in eccesso finiscono nel buffer.
+    \item Finché si supera la capacità, i pacchetti si accumulano nel buffer in attesa del loro turno.
+    \item Anche un buffer \textbf{infinito} non basta: i pacchetti non vengono persi, ma il \textbf{ritardo} cresce
+          continuamente; se si supera la capacità per sempre, il ritardo tende all'infinito, e i pacchetti sono come persi.
+\end{itemize}
+
+\subsection{Scenario 2: buffer finito e ritrasmissioni}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.55\linewidth]{cap12/scenario2.png}
+    \caption{Lo stesso scenario con un buffer finito: i pacchetti in eccesso vengono scartati e i mittenti ritrasmettono.}
+\end{figure}
+
+Poiché il buffer è finito, i pacchetti accumulati prima o poi vengono \textbf{scartati}, e gli host devono
+\textbf{ritrasmetterli}: altro traffico che si aggiunge a quello già eccessivo. Ora la velocità offerta alla rete
+$\lambda'_{in}$ comprende dati originali e ritrasmissioni.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\linewidth]{cap12/scenario2_grafici.png}
+    \caption{(a) Ritrasmissioni solo dei pacchetti davvero persi: si arriva a $R/2$. (b) Parte della capacità va in ritrasmissioni: il throughput utile scende (per esempio a $R/3$). (c) Con timeout prematuri si ritrasmettono anche pacchetti non persi: il throughput utile scende ancora (per esempio a $R/4$).}
+\end{figure}
+
+\warning{I costi della congestione}{
+    \begin{itemize}
+      \item \textbf{Ritardi} di accodamento elevati quando la velocità di arrivo si avvicina alla capacità.
+      \item Il mittente deve \textbf{ritrasmettere} i pacchetti scartati, sprecando capacità.
+      \item Timeout prematuri causano ritrasmissioni di pacchetti \textbf{non persi}: altro spreco.
+      \item Un pacchetto scartato a metà cammino ha sprecato la capacità di tutti i collegamenti già attraversati.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{I due approcci al controllo di congestione}
+% ══════════════════════════════════════════════════════════════
+
+\begin{enumerate}
+    \item \textbf{Controllo end-to-end}: è l'approccio standard di TCP. La congestione è \textbf{dedotta} dai sistemi
+          terminali osservando il comportamento della rete (perdite, ritardi), senza alcun aiuto dal livello di rete.
+          La perdita di un segmento (timeout o 3 ACK duplicati) è presa come segnale di congestione, e TCP riduce la
+          velocità di invio.
+    \item \textbf{Controllo assistito dalla rete}: approccio più recente e facoltativo, in cui trasporto e rete
+          collaborano. I \textbf{router} forniscono un riscontro esplicito sullo stato di congestione a mittente e/o
+          ricevente. Si usano i flag \textbf{CWR} ed \textbf{ECE} dell'header TCP (\emph{Explicit Congestion
+          Notification}). Il riscontro può essere un semplice bit che indica congestione su un collegamento, o qualcosa
+          di più sofisticato.
+\end{enumerate}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il controllo di congestione di TCP}
+% ══════════════════════════════════════════════════════════════
+
+TCP usa soprattutto il controllo \textbf{end-to-end}: ogni mittente adatta la propria velocità alla
+congestione che percepisce. I problemi da risolvere sono tre:
+
+\begin{enumerate}
+    \item \textbf{Regolazione del ritmo}: come fa il mittente a limitare la velocità a cui immette traffico nella connessione?
+    \item \textbf{Rilevazione della congestione}: come fa ad accorgersi che c'è congestione tra sé e la destinazione?
+    \item \textbf{Aggiustamento del ritmo}: con quale algoritmo cambia la velocità in funzione della congestione percepita?
+\end{enumerate}
+
+\subsection{1. Regolazione del ritmo: la congestion window}
+
+Nel controllo di flusso il ritmo è regolato dallo spazio del ricevente
+($\text{LastByteSent} - \text{LastByteAcked} \leq \text{rwnd}$). Nel controllo di congestione il mittente
+tiene anche una \textbf{finestra di congestione} (\emph{congestion window}, cwnd).
+
+\dfn{Congestion window}{
+    $$\text{LastByteSent} - \text{LastByteAcked} \leq \min\{\text{cwnd},\ \text{rwnd}\}$$
+    Il ritmo di invio viene regolato \textbf{aumentando o diminuendo cwnd}: più grande è la finestra, più byte si
+    possono avere in volo, più veloce è la trasmissione.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \fill[lnet] (0,0) rectangle (3,0.6); \fill[llink] (3,0) rectangle (6,0.6); \fill[white] (6,0) rectangle (8,0.6); \fill[lphy] (8,0) rectangle (12,0.6);
+  \foreach \x in {0,0.5,...,12} \draw (\x,0) -- (\x,0.6);
+  \draw (0,0) rectangle (12,0.6);
+  \node[above] at (1.5,0.6) {inviati e confermati}; \node[above] at (4.5,0.6) {inviati, non confermati};
+  \node[above] at (7,0.6) {inviabili}; \node[above] at (10,0.6) {non inviabili};
+  \draw[{Stealth}-{Stealth}, very thick, netred] (3,-0.3) -- node[below, text=netred] {cwnd} (8,-0.3);
+  \draw[{Stealth}-{Stealth}, very thick, netblue] (3,-0.9) -- node[below, text=netblue] {rwnd} (10,-0.9);
+  \node[anchor=west, text width=4cm] at (12.3,-0.6) {la finestra effettiva è la più piccola delle due};
+\end{tikzpicture}
+\caption{Congestion window e receive window: comanda la più restrittiva.}
+\end{figure}
+
+\subsection{2. Rilevazione della congestione: i loss event}
+
+\dfn{Loss event}{
+    Il mittente TCP percepisce la congestione attraverso gli \textbf{eventi di perdita} (\emph{loss event}):
+    \begin{itemize}
+      \item la scadenza di un \textbf{timeout};
+      \item la ricezione di \textbf{3 ACK duplicati}.
+    \end{itemize}
+    Entrambi indicano che un pacchetto precedente non è arrivato, probabilmente per il traboccare di un buffer in rete.
+}
+
+\begin{itemize}
+    \item Se \textbf{non} ci sono eventi di perdita, cioè gli ACK arrivano come previsto, TCP assume che la rete non
+          sia congestionata e \textbf{aumenta} cwnd. Gli ACK che arrivano fanno da ``orologio'': più arrivano in
+          fretta, più in fretta cresce la finestra (TCP è \emph{self-clocking}).
+    \item Se ci sono eventi di perdita, cwnd va \textbf{diminuita}.
+\end{itemize}
+
+\subsection{3. Aggiustamento del ritmo: l'algoritmo di Jacobson}
+
+L'aggiustamento avviene tramite il \textbf{sondaggio della banda} (\emph{bandwidth probing}): il ritmo
+cresce finché gli ACK arrivano correttamente (si ``tasta'' la rete), e quando si rileva congestione
+(eventi di perdita) il ritmo viene ridotto. Il processo si ripete all'infinito.
+
+TCP usa l'algoritmo di controllo di congestione di \textbf{Jacobson} (1988), con tre fasi:
+
+\begin{enumerate}
+    \item \textbf{Slow start}: si parte da 1 MSS e la velocità cresce \textbf{esponenzialmente}.
+    \item \textbf{Additive increase} (o \emph{congestion avoidance}): la velocità cresce \textbf{linearmente}.
+    \item \textbf{Fast recovery} (facoltativa): dopo 3 ACK duplicati si \textbf{dimezza} la velocità invece di
+          ripartire da capo, e si prosegue con l'incremento lineare.
+\end{enumerate}
+
+% ══════════════════════════════════════════════════════════════
+\section{Le fasi dell'algoritmo}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Slow start}
+
+\dfn{Slow start}{
+    All'inizio della connessione $\text{cwnd} = 1$ MSS. Per ogni ACK ricevuto cwnd aumenta di 1 MSS: così la finestra
+    \textbf{raddoppia a ogni RTT} (1, 2, 4, 8, \dots). Nonostante il nome, la crescita è esponenziale: ``lento'' è solo il
+    punto di partenza.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.62, every node/.style={font=\scriptsize\sffamily}]
+  \timeline{a}{0}{Host A}{8.2}
+  \timeline{b}{4}{Host B}{8.2}
+  \draw[msg, netblue] (0,-0.2) -- node[above, sloped] {1 segmento} (4,-0.9);
+  \draw[msg, netgreen] (4,-1.0) -- (0,-1.7);
+  \draw[msg, netblue] (0,-1.9) -- (4,-2.6); \draw[msg, netblue] (0,-2.2) -- node[below, sloped] {2 segmenti} (4,-2.9);
+  \draw[msg, netgreen] (4,-3.0) -- (0,-3.7); \draw[msg, netgreen] (4,-3.3) -- (0,-4.0);
+  \foreach \k in {0,1,2,3} \draw[msg, netblue] (0,-4.2-\k*0.3) -- (4,-4.9-\k*0.3);
+  \node[text=netblue] at (2.5,-6.3) {4 segmenti};
+  \node[anchor=east] at (-0.3,-0.2) {cwnd = 1}; \node[anchor=east] at (-0.3,-1.9) {cwnd = 2}; \node[anchor=east] at (-0.3,-4.2) {cwnd = 4};
+  \draw[decorate, decoration={brace, amplitude=4pt}] (4.3,-0.2) -- (4.3,-1.9) node[midway, right=5pt] {1 RTT};
+\end{tikzpicture}
+\caption{Slow start: ogni ACK fa crescere cwnd di 1 MSS, quindi la finestra raddoppia a ogni RTT.}
+\end{figure}
+
+La crescita esponenziale termina quando:
+
+\begin{itemize}
+    \item si verifica un \textbf{timeout}: si pone $\text{ssthresh} = \text{cwnd}/2$ (la \emph{slow start threshold},
+          soglia di slow start), $\text{cwnd} = 1$ MSS, e si ricomincia lo slow start;
+    \item cwnd raggiunge \textbf{ssthresh}: si passa in \textbf{congestion avoidance}, perché continuare a raddoppiare
+          sarebbe imprudente;
+    \item arrivano \textbf{3 ACK duplicati}: si esegue la ritrasmissione veloce e si entra in \textbf{fast recovery}.
+\end{itemize}
+
+\subsection{Congestion avoidance}
+
+\dfn{Congestion avoidance (additive increase)}{
+    Invece di raddoppiare, cwnd cresce di \textbf{1 MSS per ogni RTT} (in pratica, di
+    $\text{MSS}\cdot\frac{\text{MSS}}{\text{cwnd}}$ per ogni ACK ricevuto). La crescita è \textbf{lineare}.
+}
+
+\begin{itemize}
+    \item Se scade un \textbf{timeout}: come nello slow start, $\text{ssthresh} = \text{cwnd}/2$, $\text{cwnd} = 1$ MSS, e si torna in slow start.
+    \item Se arrivano \textbf{3 ACK duplicati}: la rete riesce ancora a consegnare qualche segmento (gli ACK arrivano),
+          quindi la reazione è meno drastica: $\text{ssthresh} = \text{cwnd}/2$, $\text{cwnd} = \text{ssthresh} + 3$ MSS
+          (i tre segmenti che hanno generato i duplicati sono usciti dalla rete), e si entra in \textbf{fast recovery}.
+\end{itemize}
+
+\subsection{Fast recovery}
+
+\dfn{Fast recovery}{
+    In \textbf{fast recovery} cwnd aumenta di 1 MSS per ogni ulteriore ACK duplicato ricevuto per il segmento
+    mancante. Quando arriva l'ACK del segmento perso, si pone $\text{cwnd} = \text{ssthresh}$ e si torna in
+    \textbf{congestion avoidance}. Se invece scade un timeout, si torna in slow start con $\text{cwnd} = 1$ MSS.
+}
+
+\info{Tahoe e Reno}{
+    La prima versione di TCP con controllo di congestione, \textbf{TCP Tahoe}, non aveva la fast recovery: dopo
+    \emph{qualsiasi} evento di perdita ripartiva da $\text{cwnd} = 1$ MSS. \textbf{TCP Reno} ha introdotto la fast
+    recovery, che dopo 3 ACK duplicati dimezza la finestra invece di azzerarla.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \begin{axis}[width=12cm, height=6.2cm, xlabel={tempo (RTT)}, ylabel={cwnd (in MSS)}, xmin=0.5, xmax=15.5, ymin=0, ymax=16,
+      xtick={1,...,15}, ytick={0,2,...,16}, grid=major, grid style={gray!20}, legend pos=north west,
+      legend style={font=\scriptsize\sffamily}, tick label style={font=\scriptsize}, label style={font=\footnotesize\sffamily}]
+    \addplot[very thick, netred, mark=*, mark size=1.5pt] coordinates {(1,1) (2,2) (3,4) (4,8) (5,9) (6,10) (7,11) (8,12) (9,1) (10,2) (11,4) (12,6) (13,7) (14,8) (15,9)};
+    \addlegendentry{TCP Tahoe}
+    \addplot[very thick, netblue, mark=square*, mark size=1.5pt] coordinates {(1,1) (2,2) (3,4) (4,8) (5,9) (6,10) (7,11) (8,12) (9,9) (10,10) (11,11) (12,12) (13,13) (14,14) (15,15)};
+    \addlegendentry{TCP Reno}
+    \addplot[dashed, black!60, domain=0.5:8.5] {8};
+    \addplot[dashed, black!60, domain=8.5:15.5] {6};
+    \node[font=\scriptsize\sffamily, anchor=south west] at (axis cs:0.6,8) {ssthresh = 8};
+    \node[font=\scriptsize\sffamily, anchor=north east] at (axis cs:15.4,6) {ssthresh = 6};
+    \draw[-{Stealth}, thick] (axis cs:8,14.5) -- (axis cs:8,12.6);
+    \node[font=\scriptsize\sffamily, anchor=south] at (axis cs:8,14.5) {3 ACK duplicati};
+  \end{axis}
+\end{tikzpicture}
+\caption{Evoluzione di cwnd. Slow start fino a ssthresh = 8, poi crescita lineare. All'RTT 8 (cwnd = 12) arrivano 3 ACK duplicati: ssthresh diventa 6. Tahoe riparte da 1 MSS; Reno riparte da $6 + 3 = 9$ MSS e prosegue linearmente.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{La macchina a stati del controllo di congestione}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, st/.style={circle, draw, thick, fill=cloudbg, minimum size=2.2cm, align=center, font=\footnotesize\bfseries\sffamily}]
+  \node[st] (ss) at (0,0) {slow\\start};
+  \node[st] (ca) at (9,0) {congestion\\avoidance};
+  \node[st] (fr) at (4.5,-5.2) {fast\\recovery};
+  \draw[-{Stealth}, very thick] (-2.6,1.4) node[above, align=center] {inizio:\\cwnd = 1 MSS, ssthresh = 64 kB} -- (ss);
+  \draw[-{Stealth}, thick] (ss) to[loop above, looseness=5] node[above, align=center] {nuovo ACK: cwnd = cwnd + MSS} (ss);
+  \draw[-{Stealth}, thick] (ca) to[loop above, looseness=5] node[above, align=center] {nuovo ACK: cwnd = cwnd + MSS$\cdot$(MSS/cwnd)} (ca);
+  \draw[-{Stealth}, thick] (fr) to[loop below, looseness=5] node[below, align=center] {ACK duplicato: cwnd = cwnd + MSS} (fr);
+  \draw[-{Stealth}, thick, netgreen!60!black] ([yshift=0.3cm]ss.east) -- node[above, align=center] {cwnd $\geq$ ssthresh} ([yshift=0.3cm]ca.west);
+  \draw[-{Stealth}, thick, netred] ([yshift=-0.3cm]ca.west) -- node[below, align=center] {timeout: ssthresh = cwnd/2,\\cwnd = 1 MSS} ([yshift=-0.3cm]ss.east);
+  \draw[-{Stealth}, thick, netorange] (ss.south) -- node[left, align=right] {3 ACK duplicati:\\ssthresh = cwnd/2,\\cwnd = ssthresh + 3 MSS,\\ritrasmette il segmento} (fr.north west);
+  \draw[-{Stealth}, thick, netorange] ([xshift=-0.3cm]ca.south) -- node[left, align=right, pos=0.35] {3 ACK duplicati:\\ssthresh = cwnd/2,\\cwnd = ssthresh + 3 MSS} (fr.north east);
+  \draw[-{Stealth}, thick, netgreen!60!black] (fr.east) to[out=0, in=-90] node[right, align=left] {nuovo ACK:\\cwnd = ssthresh} ([xshift=0.4cm]ca.south);
+  \draw[-{Stealth}, thick, netred] (fr.west) to[out=180, in=-90] node[left, align=right] {timeout:\\ssthresh = cwnd/2,\\cwnd = 1 MSS} ([xshift=-0.4cm]ss.south);
+\end{tikzpicture}
+\caption{Macchina a stati semplificata del controllo di congestione di TCP Reno.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.62\linewidth]{cap12/fsm_congestione.png}
+    \caption{La macchina a stati completa (Kurose), come mostrata a lezione.}
+\end{figure}
+
+\subsection{Il quadro completo delle transizioni}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{2.6cm}p{3.4cm}p{4.3cm}p{3.6cm}}
+\toprule
+\textbf{Stato} & \textbf{Evento} & \textbf{Azione} & \textbf{Nuovo stato} \\
+\midrule
+Slow start & nuovo ACK & cwnd += MSS & slow start (o CA se cwnd $\geq$ ssthresh) \\
+Slow start & 3 ACK duplicati & ssthresh = cwnd/2; cwnd = ssthresh + 3 MSS; ritrasmissione & fast recovery \\
+Slow start & timeout & ssthresh = cwnd/2; cwnd = 1 MSS; ritrasmissione & slow start \\
+Congestion avoid. & nuovo ACK & cwnd += MSS$\cdot$MSS/cwnd & congestion avoidance \\
+Congestion avoid. & 3 ACK duplicati & ssthresh = cwnd/2; cwnd = ssthresh + 3 MSS; ritrasmissione & fast recovery \\
+Congestion avoid. & timeout & ssthresh = cwnd/2; cwnd = 1 MSS; ritrasmissione & slow start \\
+Fast recovery & ACK duplicato & cwnd += MSS & fast recovery \\
+Fast recovery & nuovo ACK & cwnd = ssthresh & congestion avoidance \\
+Fast recovery & timeout & ssthresh = cwnd/2; cwnd = 1 MSS & slow start \\
+\bottomrule
+\end{tabular}
+\caption{Tutte le transizioni del controllo di congestione di TCP Reno.}
+\end{table}
+
+\info{AIMD e il dente di sega}{
+    Ignorando lo slow start iniziale e supponendo le perdite segnalate da 3 ACK duplicati, TCP aumenta cwnd di 1 MSS
+    per RTT e la dimezza a ogni perdita: è l'approccio \textbf{AIMD} (\emph{Additive Increase, Multiplicative
+    Decrease}). Il grafico di cwnd nel tempo ha la tipica forma a \textbf{dente di sega}. Se $W$ è la finestra a cui
+    avviene la perdita, il throughput medio di una connessione è circa $\dfrac{0{,}75\cdot W}{\text{RTT}}$.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \begin{axis}[width=11cm, height=4.6cm, xlabel={tempo}, ylabel={cwnd}, xmin=0, xmax=24, ymin=0, ymax=26, xtick=\empty, ytick={12,24}, yticklabels={$W/2$, $W$},
+      tick label style={font=\scriptsize}, label style={font=\footnotesize\sffamily}]
+    \addplot[very thick, netblue] coordinates {(0,12) (6,24) (6,12) (12,24) (12,12) (18,24) (18,12) (24,24)};
+    \addplot[dashed, netred, domain=0:24] {18};
+    \node[font=\scriptsize\sffamily, text=netred, anchor=south east] at (axis cs:24,18) {media $\approx 0{,}75\,W$};
+  \end{axis}
+\end{tikzpicture}
+\caption{Il dente di sega di AIMD: crescita lineare, dimezzamento a ogni perdita.}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Analizzare il traffico TCP con Wireshark}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Una connessione TCP con netcat}
+\texttt{netcat} (\texttt{nc}) apre connessioni TCP o UDP ``a mano'', ed è ideale per osservare TCP con Wireshark sulla
+propria macchina (interfaccia di \emph{loopback}, \texttt{127.0.0.1}).
+\begin{lstlisting}[language=bash]
+$ nc -l 5001                 # terminale 1: server in ascolto sulla porta 5001
+$ nc localhost 5001          # terminale 2: client; ogni riga digitata viene inviata
+\end{lstlisting}
+In Wireshark, sull'interfaccia \texttt{lo}, si usa il filtro \texttt{tcp \&\& tcp.port==5001 \&\& ip}.
+\begin{itemize}
+    \item Si osservano il \textbf{three-way handshake} (SYN, SYN-ACK, ACK), i segmenti con le stringhe ASCII e gli
+          \textbf{ACK senza dati} del server, e alla chiusura lo scambio di FIN.
+    \item Si può poi inviare un file: \texttt{nc -l 12332 > real.doc} sul server e
+          \texttt{nc 127.0.0.1 12332 < real.doc} sul client, osservando come il file viene spezzato in segmenti e come
+          crescono numeri di sequenza e di acknowledgment.
+\end{itemize}
+\end{esercizio}
+
+\begin{esercizio}{Uno scaricamento reale}
+Si avvia la cattura e si scarica un file di prova, per esempio con
+\texttt{wget http://speedtest.tele2.net/10MB.zip}.
+\begin{itemize}
+    \item Clic destro su un segmento dello scaricamento, \emph{Follow $\rightarrow$ TCP Stream}, per isolare la connessione.
+    \item Filtri utili (svolgimento completo nella Parte VII):
+          \begin{itemize}
+            \item \texttt{tcp}: tutto il traffico TCP;
+            \item \texttt{tcp.analysis.bytes\_in\_flight}: i byte in volo, legati alla finestra di congestione;
+            \item \texttt{tcp.analysis.duplicate\_ack}: gli ACK duplicati;
+            \item \texttt{tcp.analysis.window\_update}: gli aggiornamenti della finestra di ricezione.
+          \end{itemize}
+    \item Il menu \emph{Statistics $\rightarrow$ TCP Stream Graphs} mostra l'andamento dei numeri di sequenza nel tempo:
+          si riconoscono lo slow start iniziale e i rallentamenti dopo le perdite.
+\end{itemize}
+\end{esercizio}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item \textbf{Flusso}: proteggere il ricevente. $\text{rwnd} = \text{RcvBuffer} - (\text{LastByteRcvd} - \text{LastByteRead})$;
+          il mittente mantiene $\text{LastByteSent} - \text{LastByteAcked} \leq \text{rwnd}$.
+    \item \textbf{Congestione}: proteggere la rete. Buffer infiniti $\Rightarrow$ ritardi infiniti; buffer finiti $\Rightarrow$
+          perdite e ritrasmissioni che sprecano capacità.
+    \item TCP usa il controllo \textbf{end-to-end}: $\text{LastByteSent} - \text{LastByteAcked} \leq \min\{\text{cwnd}, \text{rwnd}\}$.
+    \item \textbf{Loss event}: timeout o 3 ACK duplicati.
+    \item \textbf{Slow start} (cwnd raddoppia per RTT fino a ssthresh), \textbf{congestion avoidance} (+1 MSS per RTT),
+          \textbf{fast recovery} (dopo 3 duplicati: ssthresh = cwnd/2, cwnd = ssthresh + 3); timeout $\Rightarrow$ cwnd = 1 MSS.
+\end{itemize}
+}

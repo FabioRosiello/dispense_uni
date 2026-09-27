@@ -1,0 +1,454 @@
+\chapter{Extra: CMS e GraphQL}
+
+\begin{errorbox}{{Contenuti extra, fuori programma}}
+  Il contenuto di questo capitolo \textbf{non fa parte del programma} di
+  Tecnologie Web: corrisponde a una lezione bonus tenuta dal docente. Questi
+  argomenti \textbf{non compaiono nelle prove scritte} né vengono chiesti
+  durante la discussione del progetto.
+
+  Per quanto riguarda il progetto, si ricordi che la traccia
+  \textbf{vieta esplicitamente} l'uso di CMS, mentre \textbf{ammette} l'uso di
+  GraphQL.
+
+  Il capitolo è incluso per completezza, ma può essere saltato senza
+  conseguenze ai fini dell'esame.
+\end{errorbox}
+
+\section{Il problema di gestire i contenuti}
+
+L'obiettivo principale di molte applicazioni web è \textbf{mostrare contenuti}
+agli utenti. Questi contenuti possono cambiare molto di frequente e crescere in
+modo esponenziale: Wikipedia ne conta circa sette milioni di pagine.
+
+Da qui alcune difficoltà:
+
+\begin{itemize}
+  \item scrivere a mano intere pagine web per aggiornare i contenuti richiede
+        competenze tecniche e rallenta il lavoro;
+  \item chi si occupa dei contenuti tipicamente \textbf{non} è chi sviluppa;
+  \item gestire versioni diverse del contenuto pubblicato non è banale;
+  \item garantire l'adozione di un flusso di lavoro strutturato è complicato.
+\end{itemize}
+
+\dfn{Content Management System}{
+  Un \term{CMS} è un'applicazione web progettata per consentire la modifica
+  collaborativa, l'organizzazione e la pubblicazione di contenuti
+  \textbf{senza scrivere una riga di codice}, usando l'interfaccia fornita dal
+  CMS stesso. Permette a utenti non tecnici di gestire e aggiornare i contenuti
+  senza dipendere continuamente dagli sviluppatori.}
+
+I CMS sono spesso usati per blog, siti di notizie e siti di commercio
+elettronico. Le funzionalità tipiche comprendono:
+
+\begin{itemize}
+  \item pubblicazione web dei contenuti;
+  \item formattazione, tipicamente con un editor grafico WYSIWYG;
+  \item controllo di versione dei contenuti;
+  \item indicizzazione, ricerca e recupero;
+  \item autenticazione e autorizzazione con un sistema di permessi per gruppi;
+  \item gestore di contenuti multimediali integrato;
+  \item estensibilità e personalizzazione tramite temi ed estensioni.
+\end{itemize}
+
+\section{Architetture}
+
+\subsection{CMS tradizionali}
+
+Un CMS tradizionale è composto da due parti:
+
+\begin{itemize}
+  \item la \term{Content Management Application} (CMA), che permette agli
+        utenti non tecnici di gestire i contenuti;
+  \item la \term{Content Delivery Application} (CDA), che rende i contenuti
+        aggiornati disponibili agli utenti finali, per esempio come pagine web.
+\end{itemize}
+
+L'architettura è \textbf{monolitica}: CMA e CDA sono strettamente integrate. Il
+vantaggio è la facilità di distribuzione e di gestione (una sola applicazione).
+Gli svantaggi sono la scarsa flessibilità in alcuni scenari e la limitazione dei
+canali di distribuzione: i CMS tradizionali privilegiano l'output web, e non è
+immediato esporre una API REST.
+
+\subsection{CMS headless e disaccoppiati}
+
+\dfn{CMS headless}{
+  Un \term{CMS headless} separa la CMA (il \textit{corpo}, che si occupa
+  dell'organizzazione dei contenuti) dalla CDA (la \textit{testa}, che si occupa
+  della presentazione). È un CMS \textbf{senza testa}: non gestisce la
+  presentazione ed espone soltanto una API. In questo modo i contenuti possono
+  essere distribuiti su qualunque canale.}
+
+I \term{CMS disaccoppiati} sono CMS tradizionali in cui CMA e CDA sono
+separate: si può usare la CDA inclusa oppure realizzare modalità di
+distribuzione diverse tramite le API esposte dalla CMA. Oggi la maggior parte
+dei CMS tradizionali è disaccoppiata, WordPress compreso.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      b/.style={rounded corners=3pt, line width=0.8pt, align=center,
+                minimum width=2.7cm, minimum height=0.6cm},
+      db/.style={b, draw=neutral!55!white, fill=neutral!8!white},
+      be/.style={b, draw=primary!65!black, fill=primary!10!white},
+      fe/.style={b, draw=accent!60!black, fill=accent!10!white},
+      api/.style={b, draw=green-gradient-6, fill=green-gradient-1!45!white},
+      a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt,
+                draw=neutral!45!black}]
+
+    \foreach \x/\ttl in {0/{Tradizionale}, 4.6/{Disaccoppiato}, 9.2/{Headless}} {
+      \node[font=\Lato\scriptsize\bfseries, text=neutral!25!black]
+        at (\x,2.5) {\ttl};
+      \node[db] at (\x,1.9) {DBMS};
+      \node[be] at (\x,1.1) {UI di back-end};
+    }
+
+    % tradizionale
+    \node[fe] (f0) at (0,0.3) {front-end\\ (template)};
+    \node[db, draw=neutral!45!white] at (0,-0.7) {HTML};
+    \draw[a] (0,0.0) -- (0,-0.45);
+
+    % disaccoppiato
+    \node[fe] (f1) at (4.6,0.3) {front-end};
+    \node[api] (a1) at (4.6,-0.6) {API};
+    \node[db, draw=neutral!45!white] at (3.6,-1.5) {HTML};
+    \node[db, draw=neutral!45!white] at (5.7,-1.5) {app};
+    \draw[a] (4.0,-0.9) -- (3.7,-1.25);
+    \draw[a] (5.2,-0.9) -- (5.6,-1.25);
+
+    % headless
+    \node[api] (a2) at (9.2,0.3) {API};
+    \node[db, draw=neutral!45!white] at (8.2,-0.7) {web app};
+    \node[db, draw=neutral!45!white] at (10.3,-0.7) {app mobile};
+    \draw[a] (8.7,0.0) -- (8.3,-0.45);
+    \draw[a] (9.7,0.0) -- (10.2,-0.45);
+  \end{tikzpicture}
+  \caption{Le tre architetture a confronto.}
+  \label{fig:cms-arch}
+\end{figure}
+
+\error{I CMS sono bersagli privilegiati}{
+  Lo stesso CMS è usato su un numero enormi di siti: una vulnerabilità in un CMS
+  può essere sfruttata su moltissimi siti contemporaneamente. È quindi
+  imperativo \textbf{tenerli aggiornati} per applicare le correzioni al più
+  presto.
+
+  Un esempio concreto: la vulnerabilità \code{CVE-2022-21661} rendeva WordPress
+  vulnerabile a SQL injection nelle versioni dalla 3.7.37 alla 5.8.3.}
+
+\section{CMS tradizionali}
+
+Fra i CMS più noti: \term{WordPress} (il più diffuso, usato da circa il 43\% di
+tutti i siti web), \term{Joomla} (che alimenta il sito dei corsi di Informatica
+della Federico II), \term{WooCommerce} (per il commercio elettronico) e
+\term{MediaWiki} (che alimenta Wikipedia, Fandom, WikiHow).
+
+Un CMS tradizionale è un'applicazione web come le altre:
+
+\begin{itemize}
+  \item nella fase di installazione chiede i dati per connettersi a un database
+        relazionale (URL, nome utente, password) e crea le tabelle necessarie;
+  \item chiede le credenziali per l'account di amministrazione;
+  \item dopo l'installazione, l'amministratore può creare e organizzare
+        contenuti, aggiungere utenti, definire i template e personalizzare
+        l'aspetto del sito.
+\end{itemize}
+
+\section{Strapi, un CMS headless}
+
+Fra i CMS headless più diffusi: \term{Strapi} (basato su Node.js),
+\term{Wagtail} (basato su Django, per Python), \term{Ghost} (Node.js) e
+\term{CrafterCMS} (Java).
+
+\begin{lstlisting}[style=shell]
+npx create-strapi-app@latest project-name
+cd project-name
+npm run develop
+\end{lstlisting}
+
+\begin{console}[Terminale]
+> todo-api@0.1.0 develop
+> strapi develop
+
+Building build context (577ms)
+Creating admin (16224ms)
+Loading Strapi (1505ms)
+Generating types (1413ms)
+
+Welcome back!
+To manage your project, go to the administration panel at:
+http://localhost:1337/admin
+To access the server, go to:
+http://localhost:1337
+\end{console}
+
+Dall'interfaccia di amministrazione si definisce la \guillemotleft forma\guillemotright\ delle
+risorse (i loro campi e i loro tipi), si stabiliscono le \textbf{relazioni} fra
+risorse con un editor visuale, e infine si creano i contenuti veri e propri.
+
+\subsection{La API REST generata}
+
+Per ogni risorsa, Strapi genera automaticamente gli endpoint REST.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{0.8cm}}l@{\hspace{0.8cm}}>{\raggedright\arraybackslash}p{5.0cm}@{}}
+  \textbf{Metodo} & \textbf{URL} & \textbf{Descrizione} \\
+  \code{GET}    & \code{/api/:pluralApiId}             & elenco delle voci \\
+  \code{POST}   & \code{/api/:pluralApiId}             & crea una voce \\
+  \code{GET}    & \code{/api/:pluralApiId/:resourceId} & una voce specifica \\
+  \code{PUT}    & \code{/api/:pluralApiId/:resourceId} & aggiorna una voce \\
+  \code{DELETE} & \code{/api/:pluralApiId/:resourceId} & elimina una voce \\
+\end{tabular}
+\end{center}
+
+Dall'interfaccia si creano token di autorizzazione (\textit{Settings > API
+Tokens}), specificando per ciascuno un nome, una durata e i permessi di lettura
+e scrittura per ogni risorsa. Gli utenti devono passare il token nell'header
+\code{Authorization}, esattamente come nello schema JWT visto nel capitolo 15.
+
+\begin{lstlisting}[style=http, name=Richiesta]
+GET http://localhost:1337/api/professors
+Authorization: Bearer 97060c911...e12
+\end{lstlisting}
+
+\begin{lstlisting}[style=json, name=Risposta]
+{
+  "data": [
+    {
+      "id": 1,
+      "attributes": {
+        "firstName": "Luigi Libero Lucio",
+        "lastName": "Starace",
+        "email": "luigiliberolucio.starace@unina.it",
+        "createdAt": "2023-12-29T07:19:19.746Z",
+        "updatedAt": "2023-12-29T07:25:16.666Z",
+        "publishedAt": "2023-12-29T07:20:35.307Z"
+      }
+    }
+  ]
+}
+\end{lstlisting}
+
+\subsection{Parametri di query}
+
+Gli endpoint di Strapi supportano numerosi parametri nella query string per
+filtrare, ordinare e paginare i risultati, selezionare campi e popolare le
+relazioni.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.2cm}}>{\raggedright\arraybackslash}p{8.6cm}@{}}
+  \textbf{Parametro} & \textbf{Effetto} \\
+  \code{populate}   & quali risorse collegate includere nei risultati \\
+  \code{fields}     & quali campi includere, e in quale ordine \\
+  \code{filters}    & interrogazioni personalizzate per filtrare i dati \\
+  \code{sort}       & come ordinare i risultati \\
+  \code{pagination} & la paginazione dei risultati \\
+\end{tabular}
+\end{center}
+
+\begin{lstlisting}[style=http, name=Esempi]
+GET /api/professors?populate=courses
+GET /api/professors?fields[0]=lastName&fields[1]=firstName
+
+# corsi da 6 crediti
+GET /api/courses?filters[credits][$eq]=6
+
+# corsi da almeno 6 crediti il cui titolo contiene "Web"
+GET /api/courses?filters[credits][$gte]=6&filters[title][$contains]=Web
+
+# professori il cui nome contiene "Luigi" (senza distinzione di maiuscole)
+GET /api/professors?filters[firstName][$containsi]=Luigi
+\end{lstlisting}
+
+\section{GraphQL}
+
+\subsection{I limiti di REST}
+
+REST è un modo pratico e diffusissimo di esporre dati da un server. In alcuni
+scenari, però, può risultare inefficiente.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.45}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{8.8cm}@{}}
+  \textbf{Problema} & \textbf{In che consiste} \\
+  \term{Over-fetching}
+    & talvolta non ci servono tutti i campi di una risorsa, ma li scarichiamo
+      comunque \\
+  \term{Under-fetching}
+    & talvolta ci servono risorse collegate, e servono richieste aggiuntive per
+      ottenerle: prima l'utente, poi i suoi post, poi per ogni post i commenti\ldots \\
+  \textbf{Evoluzione dell'API}
+    & le API cambiano nel tempo: vanno versionate, va mantenuta una certa
+      retro-compatibilità, alcune funzionalità vanno deprecate \\
+\end{tabular}
+\end{center}
+
+Entrambi i primi due degradano le prestazioni e aumentano il traffico: nel primo
+caso si scaricano dati inutili, nel secondo servono molte richieste aggiuntive.
+
+\dfn{GraphQL}{
+  \term{GraphQL} è un linguaggio di interrogazione per API, sviluppato da
+  Facebook e pubblicato in versione open source nel 2015. Invece di appoggiarsi
+  a endpoint predefiniti come in REST, permette a chi consuma l'API di
+  \textbf{specificare in modo dichiarativo quali dati gli servono}, tramite
+  interrogazioni.}
+
+\subsection{GraphQL con Strapi}
+
+\begin{lstlisting}[style=shell]
+npm install @strapi/plugin-graphql
+\end{lstlisting}
+
+Dopo il riavvio, un \textit{playground} GraphQL è disponibile su
+\code{http://localhost:1337/graphql}.
+
+\begin{esempio}{Solo i campi che servono}
+Supponiamo di dover mostrare soltanto il cognome di ciascun professore.
+
+\begin{lstlisting}[style=plain, name=query]
+query {
+  professors {
+    data {
+      attributes {
+        lastName
+      }
+    }
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=json, name=risposta]
+{
+  "data": {
+    "professors": {
+      "data": [
+        { "attributes": { "lastName": "Starace" } },
+        { "attributes": { "lastName": "Abelson" } }
+      ]
+    }
+  }
+}
+\end{lstlisting}
+
+Nessun campo superfluo: è la risposta all'over-fetching.
+\end{esempio}
+
+\begin{esempio}{Risorse collegate in una sola richiesta}
+Cognome di ciascun professore \textbf{e} titolo dei suoi corsi:
+
+\begin{lstlisting}[style=plain, name=query]
+query {
+  professors {
+    data {
+      attributes {
+        lastName,
+        courses {
+          data {
+            attributes {
+              title
+            }
+          }
+        }
+      }
+    }
+  }
+}
+\end{lstlisting}
+
+Una sola richiesta al posto di $1 + n$: è la risposta all'under-fetching.
+\end{esempio}
+
+\begin{esempio}{Filtri}
+L'equivalente GraphQL di
+
+\begin{lstlisting}[style=sql]
+SELECT title, credits FROM courses
+WHERE credits >= 6
+  AND (title CONTAINS 'Web' OR title CONTAINS 'TypeScript')
+\end{lstlisting}
+
+è:
+
+\begin{lstlisting}[style=plain, name=query]
+query {
+  courses(filters: {
+    credits: { gte: 6 },
+    or: [
+      { title: { containsi: "Web" } },
+      { title: { containsi: "TypeScript" } }
+    ]
+  }) {
+    data {
+      attributes {
+        title, credits
+      }
+    }
+  }
+}
+\end{lstlisting}
+\end{esempio}
+
+\section{Generazione automatica di siti statici}
+
+A volte usare un CMS completo è eccessivo. In alcuni scenari i dati non cambiano
+spesso: si pensi a un ristorante che aggiorna il menu sul proprio sito circa una
+volta al mese.
+
+Per un mese intero, ogni caricamento di pagina provoca un'interrogazione al
+database, che restituisce sempre la stessa lista, dopodiché il CMS mostra
+sempre lo stesso contenuto. Il CMS sta sprecando cicli di calcolo --- cioè
+denaro ed emissioni --- per generare ripetutamente le stesse pagine. I
+meccanismi di caching aiutano, ma restano un sovraccarico e la necessità di
+tenere il CMS aggiornato.
+
+Un approccio più efficiente è:
+
+\begin{enumerate}
+  \item generare le pagine \textbf{una volta sola}, quando i dati cambiano;
+  \item servire agli utenti le pagine \textbf{statiche} già compilate.
+\end{enumerate}
+
+È la \term{generazione automatica di siti statici}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      n/.style={wtnode, minimum width=2.4cm, minimum height=1.0cm},
+      f/.style={wtnodeplain, minimum width=2.2cm, minimum height=1.0cm},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                draw=neutral!45!black}]
+
+    \node[f] (c) at (0,0.6)  {contenuti};
+    \node[f] (t) at (0,-0.7) {template};
+    \node[n, draw=orange-gradient-6, fill=orange-gradient-1!40!white]
+      (g) at (3.6,0) {\textbf{generatore}};
+    \node[f] (s) at (7.2,0) {sito statico\\ \scriptsize HTML, CSS, JS};
+    \node[n] (w) at (10.8,0) {\textbf{web server}};
+
+    \draw[a] (c.east) -- (g.west |- c);
+    \draw[a] (t.east) -- (g.west |- t);
+    \draw[a] (g) -- node[wtlab, above]{build} (s);
+    \draw[a] (s) -- node[wtlab, above]{deploy} (w);
+  \end{tikzpicture}
+  \caption{Il flusso di un generatore di siti statici.}
+  \label{fig:ssg}
+\end{figure}
+
+Fra i generatori più noti: \term{Hugo} (scritto in Go), \term{Gatsby} (genera
+siti statici con React), \term{Jekyll} (basato su Ruby), \term{Pelican}
+(Python) e \term{Zola} (Rust).
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Definition of CMS} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Glossary/CMS}
+  \item \textbf{What is Headless CMS?} --- AWS docs. \\
+        \urlx{https://aws.amazon.com/what-is/headless-cms/}
+  \item \textbf{The Fullstack Tutorial for GraphQL}. \\
+        \urlx{https://www.howtographql.com/} \\
+        Parti rilevanti: \textit{GraphQL Fundamentals}.
+  \item \textbf{What is a static site generator?} --- Cloudflare Learning. \\
+        \urlx{https://www.cloudflare.com/learning/performance/static-site-generator/}
+\end{itemize}

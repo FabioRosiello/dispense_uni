@@ -1,0 +1,290 @@
+\chapter{ICMP, ping e traceroute}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il protocollo ICMP}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{ICMP}{
+    L'\textbf{Internet Control Message Protocol} (ICMP) è un protocollo diagnostico e di controllo usato da host e
+    router per scambiarsi informazioni sul livello di rete: segnalazioni di errore (destinazione irraggiungibile,
+    TTL scaduto) e richieste di verifica (\emph{echo}). I messaggi ICMP viaggiano come \textbf{payload di datagrammi
+    IP} (campo protocollo = 1), ma ICMP è considerato parte del livello di rete.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[field, fill=lnet, minimum width=2.4cm] (ip) at (0,0) {header IP (protocollo = 1)};
+  \node[field, fill=netred!25, minimum width=1cm, right=0pt of ip] (ty) {tipo};
+  \node[field, fill=netred!25, minimum width=1cm, right=0pt of ty] (co) {codice};
+  \node[field, fill=netred!25, minimum width=1.4cm, right=0pt of co] (ck) {checksum};
+  \node[field, fill=netred!10, minimum width=5.2cm, right=0pt of ck] {resto del messaggio (dipende dal tipo)};
+  \draw[decorate, decoration={brace, amplitude=5pt}] ([yshift=2pt]ty.north west) -- ([yshift=2pt]12.2,0.33) node[midway, above=6pt] {messaggio ICMP, payload del datagramma IP};
+\end{tikzpicture}
+\caption{Un messaggio ICMP dentro un datagramma IP.}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ccl}
+\toprule
+\textbf{Tipo} & \textbf{Codice} & \textbf{Significato} \\
+\midrule
+0 & 0 & echo reply (risposta a ping) \\
+3 & 0 & destinazione irraggiungibile: rete irraggiungibile \\
+3 & 1 & destinazione irraggiungibile: host irraggiungibile \\
+3 & 3 & destinazione irraggiungibile: \textbf{porta} irraggiungibile \\
+3 & 4 & frammentazione necessaria ma vietata (``packet too big'') \\
+8 & 0 & echo request (richiesta di ping) \\
+11 & 0 & \textbf{TTL scaduto} (\emph{time exceeded}) \\
+12 & 0 & header IP errato \\
+\bottomrule
+\end{tabular}
+\caption{Alcuni tipi di messaggi ICMP.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{ping}
+% ══════════════════════════════════════════════════════════════
+
+ICMP è un protocollo con cui, sostanzialmente, un client invia pacchetti a un server che risponde: dai
+\textbf{timestamp} si ricava il tempo di risposta, e si verifica anche se ci sono \textbf{perdite} di pacchetti.
+
+\dfn{ping}{
+    \textbf{ping} (\emph{Packet Internet Groper}) invia a un host messaggi ICMP \textbf{echo request} (tipo 8), a cui l'host
+    risponde automaticamente con \textbf{echo reply} (tipo 0). Per ogni coppia mostra il tempo trascorso, cioè
+    l'\textbf{RTT}, e alla fine le statistiche sulle perdite.
+}
+
+\begin{lstlisting}[language=bash]
+$ ping iana.org
+PING iana.org (192.0.43.8) 56(84) bytes of data.
+64 bytes from 192.0.43.8: icmp_seq=1 ttl=51 time=178 ms
+64 bytes from 192.0.43.8: icmp_seq=2 ttl=51 time=176 ms
+...
+--- iana.org ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss
+\end{lstlisting}
+
+\warning{ping non usa il livello di trasporto}{
+    ping non usa né TCP né UDP: costruisce e riceve direttamente pacchetti ICMP usando un \emph{raw socket}, un socket che
+    permette a un programma di scrivere pacchetti a livello di rete. Per questo non ha numeri di porta; al loro posto usa un
+    \textbf{identificatore} e un \textbf{numero di sequenza} nel messaggio ICMP, per associare ogni risposta alla sua richiesta.
+}
+
+\subsection{Cosa osservare in Wireshark}
+
+\begin{esercizio}{ping con Wireshark}
+Si avvia la cattura, si esegue \texttt{ping iana.org} e si filtra con \texttt{icmp}.
+\begin{enumerate}
+    \item Individuare i pacchetti ICMP \textbf{echo request} inviati dal proprio computer, annotando indirizzi IP sorgente e destinazione.
+    \item Trovare i corrispondenti \textbf{echo reply} dal server.
+    \item Esaminare un echo request:
+    \begin{itemize}
+      \item nella sezione IP, osservare il campo \textbf{TTL};
+      \item nella sezione ICMP, trovare il campo \textbf{Type} (8 per echo request);
+      \item annotare \textbf{identificatore} e \textbf{numero di sequenza};
+      \item misurare l'\textbf{RTT} tra echo request ed echo reply.
+    \end{itemize}
+\end{enumerate}
+\end{esercizio}
+
+% ══════════════════════════════════════════════════════════════
+\section{traceroute}
+% ══════════════════════════════════════════════════════════════
+
+\textbf{traceroute} scopre la sequenza di router attraversati per raggiungere una destinazione. Sfrutta in modo
+astuto il campo \textbf{TTL} del datagramma IP.
+
+\subsection{Il meccanismo}
+
+\begin{itemize}
+    \item Ogni volta che un pacchetto attraversa un router (un \emph{hop}), il suo TTL diminuisce di uno.
+    \item traceroute usa deliberatamente un TTL basso, \textbf{1} per cominciare, così che il pacchetto ``scada'' al
+          \textbf{primo router}.
+    \item Il router che riceve il pacchetto con TTL scaduto lo scarta e invia al mittente un messaggio ICMP
+          \textbf{Time Exceeded} (tipo 11). L'indirizzo IP sorgente di quel messaggio è l'indirizzo del router!
+    \item traceroute invia quindi una sequenza di pacchetti aumentando il TTL di uno ogni volta: ogni pacchetto scade al router
+          successivo lungo il percorso, che invia il proprio messaggio ICMP.
+    \item Raccogliendo gli indirizzi sorgente dei messaggi ICMP, traceroute identifica tutti i router tra l'host locale e la
+          destinazione, creando una \textbf{mappa del percorso}.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (h) at (0,0) {\icon[1cm]{laptop}}; \node[below=-2pt of h] {host};
+  \node (r1) at (3.2,0) {\icon[0.9cm]{router}}; \node[below=0pt of r1] {R1};
+  \node (r2) at (6.4,0) {\icon[0.9cm]{router}}; \node[below=0pt of r2] {R2};
+  \node (r3) at (9.6,0) {\icon[0.9cm]{router}}; \node[below=0pt of r3] {R3};
+  \node (d) at (12.8,0) {\icon[0.6cm]{server}}; \node[below=-2pt of d] {destinazione};
+  \foreach \a/\b in {h/r1, r1/r2, r2/r3, r3/d} \draw[wired] (\a) -- (\b);
+  % TTL 1
+  \draw[msg, netblue] (0.6,0.8) -- node[above] {UDP, TTL=1} (3.0,0.8);
+  \draw[msg, netred, dashed] (3.0,1.1) -- node[above] {ICMP time exceeded da R1} (0.6,1.1);
+  % TTL 2
+  \draw[msg, netblue] (0.6,1.7) -- node[above, pos=0.3] {UDP, TTL=2} (6.2,1.7);
+  \draw[msg, netred, dashed] (6.2,2.0) -- node[above, pos=0.6] {ICMP time exceeded da R2} (0.6,2.0);
+  % TTL 4
+  \draw[msg, netblue] (0.6,-1.2) -- node[below, pos=0.2] {UDP, TTL=4, porta alta casuale} (12.6,-1.2);
+  \draw[msg, netgreen!60!black, dashed] (12.6,-1.6) -- node[below, pos=0.6] {ICMP port unreachable: arrivato, traceroute si ferma} (0.6,-1.6);
+\end{tikzpicture}
+\caption{traceroute aumenta il TTL a ogni tentativo: ogni router che scarta il pacchetto si rivela con un messaggio ICMP.}
+\end{figure}
+
+\subsection{Come termina traceroute}
+
+\begin{itemize}
+    \item Il processo continua finché si raggiunge la destinazione o il \textbf{numero massimo di hop} configurato (di default 30).
+    \item I pacchetti inviati da traceroute (su Linux, datagrammi UDP) hanno come porta di destinazione un \textbf{numero alto scelto a caso}.
+          Se uno di questi pacchetti arriva al destinatario, di norma sul destinatario non c'è alcun processo su quella porta,
+          e il destinatario risponde con un messaggio ICMP \textbf{Destination Unreachable (Port Unreachable)}.
+    \item Quando il client riceve questo messaggio, traceroute termina e non invia altri segmenti UDP.
+\end{itemize}
+
+\info{Un'applicazione che scavalca il trasporto}{
+    Anche se traceroute è ovviamente un'applicazione, non usa il livello di trasporto in modo diretto: prepara e invia
+    direttamente pacchetti a livello di rete (IP, ICMP). Su Windows il comando equivalente, \texttt{tracert}, usa echo request
+    ICMP invece di UDP.
+}
+
+\subsection{L'output e gli asterischi}
+
+L'output è una lista ordinata di \emph{hop}, i router attraversati, con indirizzo IP o nome e i tempi di risposta
+misurati per ciascun salto (di solito tre tentativi per hop).
+
+\begin{lstlisting}[language=bash]
+$ traceroute italia.it
+traceroute to italia.it (151.101.195.10), 30 hops max, 60 byte packets
+ 1  _gateway (192.168.1.1)  1.210 ms  1.107 ms  1.049 ms
+ 2  100.75.5.21 (100.75.5.21)  8.921 ms  8.873 ms  8.826 ms
+ 3  ...
+ 6  151.101.195.10  25.4 ms  25.1 ms  24.9 ms
+ 7  * * *
+ 8  * * *
+\end{lstlisting}
+
+\warning{Gli asterischi}{
+    Se un router non risponde in tempo, al suo posto compare un asterisco (\texttt{*}) per quel tentativo. Può indicare
+    congestione, filtri, o dispositivi configurati per non rispondere ai pacchetti ICMP. Talvolta i pacchetti non ricevono
+    risposta né dal destinatario né dai router intermedi: nell'esempio, dopo 6 passi si raggiunge il nodo di
+    \texttt{italia.it}, che però non risponde (probabilmente per via di filtri). traceroute continua allora a inviare
+    datagrammi UDP che vengono ignorati, e che non vengono nemmeno scartati per TTL scaduto: il TTL, ricordiamo, non misura
+    il tempo ma il \textbf{numero di hop}.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{traceroute e la frammentazione IP}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Specificare la dimensione del datagramma}
+
+Con il traceroute di Linux si può indicare, come secondo argomento, la \textbf{lunghezza del pacchetto} sonda inviato:
+
+\begin{lstlisting}[language=bash]
+$ traceroute italia.it          # pacchetti piccoli (dimensione di default)
+$ traceroute italia.it 3000     # pacchetti da 3000 byte: verranno frammentati
+$ traceroute 8.8.8.8
+$ traceroute 8.8.8.8 3000
+\end{lstlisting}
+
+La dimensione comprende la parte dati che viaggia nella rete più gli header UDP e IP che la incapsulano (20 byte di
+header IP, 8 di header UDP, il resto è payload). Aumentandola si inviano pacchetti più grandi, che richiedono
+\textbf{frammentazione} se superano l'MTU del percorso. La dimensione si riferisce ai pacchetti sonda, non ai messaggi
+ICMP ricevuti, che hanno dimensioni diverse perché contengono solo una parte del pacchetto originale che ha generato
+l'errore. Serve a verificare come le reti gestiscono pacchetti di dimensioni diverse.
+
+\subsection{Osservare la frammentazione}
+
+\begin{esercizio}{Elementi di IPv4 con traceroute e Wireshark}
+\textbf{1. Elementi di IPv4.} Si seleziona il primo segmento UDP inviato da traceroute (senza specificare la dimensione) e si
+espande la sezione \emph{Internet Protocol}.
+\begin{enumerate}
+    \item Qual è l'indirizzo IP del proprio host? \emph{(campo Source)}
+    \item Qual è il valore del TTL? \emph{(1, per il primo pacchetto)}
+    \item Qual è il protocollo superiore? \emph{(17, UDP)}
+    \item Quanti byte ci sono nell'header IP? \emph{(20, senza opzioni)}
+    \item Quanti byte ci sono nel payload? \emph{(lunghezza totale meno 20)}
+    \item Il datagramma è stato frammentato? \emph{(no: flag More Fragments a 0 e offset 0)}
+\end{enumerate}
+Filtro per i pacchetti inviati al server: \texttt{ip.src==<mio\_IP> \&\& ip.dst==<IP\_server> \&\& udp}.
+\begin{enumerate}\setcounter{enumi}{6}
+    \item Quali campi restano costanti tra i pacchetti? \emph{(versione, lunghezza dell'header, indirizzi, protocollo: la sonda è sempre la stessa)}
+    \item Che andamento ha il campo \emph{Identification}? \emph{(cresce di uno a ogni datagramma)}
+\end{enumerate}
+Filtro per i messaggi ICMP dei router: \texttt{ip.dst==<mio\_IP> \&\& icmp}. Si osservino il protocollo superiore (1, ICMP),
+gli identificatori e i TTL dei datagrammi inviati dai router.
+
+\textbf{2. Frammentazione IP.} Si ripete con dimensione 3000 byte e filtro \texttt{ip.src==<mio\_IP> \&\& ip.dst==<IP\_server> \&\& ip}.
+\begin{itemize}
+    \item Il pacchetto da 3000 byte viene diviso in \textbf{tre frammenti}, con offset 0, 1480 e 2960 byte (nel campo dell'header 0, 185 e 370).
+    \item Indicano la frammentazione il flag \textbf{More Fragments} e il campo \textbf{Fragment Offset}.
+    \item Il primo frammento ha offset 0 e More Fragments = 1; quelli successivi hanno offset maggiore di 0; l'ultimo ha More Fragments = 0.
+    \item Tutti i frammenti hanno lo \textbf{stesso identificatore} (per esempio 28264) e lo stesso TTL: una volta ricomposti a
+          destinazione formeranno il payload ``artificiale'' preparato da traceroute.
+\end{itemize}
+\end{esercizio}
+
+% ══════════════════════════════════════════════════════════════
+\section{DNS, VPN e spoofing: un caso di studio}
+% ══════════════════════════════════════════════════════════════
+
+Durante un'esercitazione si è provato a interrogare direttamente un root server, collegati attraverso una
+\textbf{VPN} (una rete privata virtuale che cifra tutto il traffico verso un server remoto).
+
+\begin{lstlisting}[language=bash]
+$ nslookup iana.org c.root-servers.net
+Server:   c.root-servers.net
+Non-authoritative answer:
+Name:     iana.org
+Address:  192.0.43.8
+\end{lstlisting}
+
+Qualcosa non torna. Un root server \textbf{non} conosce i record A dei singoli domini: dovrebbe rispondere solo con i name
+server del dominio \texttt{org} (è quello che succede interrogando un altro root server senza VPN, dove ``non ci sono risposte
+con record A o AAAA, ma la risposta contiene informazioni sui name server per il dominio org''). Qui invece sembra che il
+root server abbia fornito direttamente l'indirizzo, con una risposta non autorevole.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (h) at (0,0) {\icon[1cm]{laptop}}; \node[below=-2pt of h] {host};
+  \node (v) at (5,0) {\icon[0.7cm]{server}}; \node[below=-2pt of v, align=center] {server VPN};
+  \node (dns) at (10,1.3) {\icon[0.6cm]{server}}; \node[right=0pt of dns, align=left] {DNS del provider};
+  \node (root) at (10,-1.3) {\icon[0.6cm]{server}}; \node[right=0pt of root] {c.root-servers.net};
+  \draw[very thick, netorange] (h) -- node[above] {tunnel cifrato} node[below] {Wireshark vede solo byte cifrati} (v);
+  \draw[msg, netblue] (v) -- node[above, sloped] {risolve il nome} (dns);
+  \draw[msg, dashed, black!40] (v) -- node[below, sloped] {la query non arriva mai qui} (root);
+  \draw[msg, netred, very thick] (4.6,0.6) to[bend right=25] node[above] {risposta ``falsificata'' come se venisse dal root server} (0.5,0.6);
+\end{tikzpicture}
+\caption{Il server VPN intercetta la query DNS, la risolve da sé e risponde fingendo di essere il server interrogato.}
+\end{figure}
+
+\begin{itemize}
+    \item Ovviamente Wireshark non vede il traffico da e verso la VPN, che è cifrato.
+    \item Evidentemente il server VPN a cui ci si collega non solo inoltra le query DNS al name server del provider, ma si prende
+          carico della risoluzione del nome e poi fa \textbf{spoofing} dei datagrammi UDP/IP, confezionando la risposta come se
+          provenisse dal name server interrogato.
+    \item Con un altro provider VPN lo spoofing non avviene, e la risposta è quella attesa da un root server (i name server di \texttt{org}).
+\end{itemize}
+
+\info{La lezione}{
+    Il campo ``indirizzo sorgente'' di un datagramma IP \textbf{non è una prova} di chi l'abbia davvero inviato: chi controlla un
+    punto del percorso può falsificarlo. È esattamente il problema dell'\textbf{IP spoofing} che affronteremo nella parte sulla
+    sicurezza, e il motivo per cui servono meccanismi di autenticazione.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item \textbf{ICMP} trasporta messaggi di controllo e di errore del livello di rete dentro datagrammi IP (tipo, codice, checksum).
+    \item \textbf{ping}: echo request (8) ed echo reply (0), misura RTT e perdite; non usa il trasporto.
+    \item \textbf{traceroute}: pacchetti con TTL = 1, 2, 3, \dots; ogni router che li scarta risponde con ICMP \emph{time exceeded} (11);
+          la destinazione risponde con \emph{port unreachable} (3/3) e il programma si ferma. Gli asterischi indicano assenza di risposta.
+    \item Con pacchetti più grandi dell'MTU si osserva la \textbf{frammentazione}: stesso identificatore, offset crescenti, flag More Fragments.
+    \item L'indirizzo sorgente IP si può falsificare (\textbf{spoofing}), come mostra il caso della VPN.
+\end{itemize}
+}

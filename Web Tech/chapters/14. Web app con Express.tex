@@ -1,0 +1,608 @@
+\chapter{Una web app con Express}
+
+Sappiamo ora che cosa sono i web framework, e conosciamo Express: router,
+middleware, template. Mettiamo a frutto queste conoscenze costruendo
+un'applicazione vera, e affrontando l'ultimo pezzo mancante: la
+\textbf{persistenza dei dati}.
+
+\section{Object-Relational Mapping}
+
+Quando si sviluppa software orientato agli oggetti che salva i dati in un
+database relazionale, si ha a che fare con \textbf{due rappresentazioni diverse}
+degli stessi dati: da una parte gli oggetti che vivono nello heap, dall'altra le
+righe delle tabelle del database.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      o/.style={rounded corners=3pt, draw=primary!65!black, line width=0.8pt,
+                fill=primary!8!white, align=left, inner sep=5pt,
+                font=\FiraCodeNL\scriptsize},
+      t/.style={rounded corners=3pt, draw=green-gradient-6, line width=0.8pt,
+                fill=green-gradient-1!35!white, align=left, inner sep=5pt,
+                font=\FiraCodeNL\scriptsize},
+      a/.style={{Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]},
+                line width=1pt, draw=accent!70!black}]
+
+    \node[o] (u1) at (0,0.9)  {UserName: Janet\\ Password: 837jnge\\ Age: 22};
+    \node[o] (u2) at (0,-0.9) {UserName: Riff Raff\\ Password: xjdf08b\\ Age: 26};
+
+    \node[t] (tb) at (7.6,0)
+      {\textbf{Users}\\ 1 \ Janet \ \ \ \ \ 837jnge \ 22\\
+       2 \ Riff Raff \ xjdf08b \ 26};
+
+    \draw[a] (2.2,0) -- node[wtlab, above]{ORM} (5.4,0);
+
+    \node[font=\Lato\scriptsize\itshape, text=neutral!35!black] at (0,-2.0)
+      {oggetti nello heap};
+    \node[font=\Lato\scriptsize\itshape, text=neutral!35!black] at (7.6,-2.0)
+      {righe nelle tabelle};
+  \end{tikzpicture}
+  \caption{Le due rappresentazioni che un ORM tiene allineate.}
+  \label{fig:orm}
+\end{figure}
+
+Le due rappresentazioni sono piuttosto diverse, e vanno tenute
+\textbf{allineate}: le modifiche agli oggetti del dominio vanno riportate nello
+schema del database, e le modifiche allo schema possono avere impatto sul codice
+esistente. È un lavoro considerevole, fatto di molto codice ripetitivo.
+
+\dfn{Libreria ORM}{
+  Una libreria \term{ORM} (\textit{Object-Relational Mapping}) è una soluzione
+  già pronta che aiuta a mantenere allineate la rappresentazione a oggetti e
+  quella relazionale, permettendo di lavorare con \textbf{astrazioni di alto
+  livello} invece che con interrogazioni SQL.}
+
+Tipicamente una libreria ORM permette di:
+
+\begin{itemize}
+  \item definire in modo \textbf{dichiarativo} come le tabelle sono mappate
+        sugli oggetti;
+  \item creare e aggiornare automaticamente lo schema del database;
+  \item eseguire facilmente le operazioni \term{CRUD} (\textit{Create, Read,
+        Update, Delete});
+  \item comporre ed eseguire interrogazioni complesse in modo dichiarativo;
+  \item gestire le transazioni;
+  \item supportare strategie di caching.
+\end{itemize}
+
+Fra le librerie ORM più note: \term{Hibernate} (Java), \term{Entity Framework}
+(C\#/.NET), \term{SQLAlchemy} (Python), \term{Propel} (PHP), \term{Active
+Record} (Ruby on Rails), \term{Sequelize}, \term{Prisma} e \term{TypeORM}
+(Node.js). I framework opinionated talvolta ne includono uno.
+
+\section{Sequelize}
+
+\term{Sequelize} è un ORM per Node.js che supporta Oracle, Postgres, MySQL,
+MariaDB, SQLite, SQL Server e altri, con un'API elegante basata sulle
+\textbf{Promise}. Qui si fa riferimento alla versione 6.
+
+\begin{lstlisting}[style=shell]
+npm install sequelize
+\end{lstlisting}
+
+Servono anche i driver per il database che si intende usare:
+
+\begin{lstlisting}[style=shell]
+npm install pg pg-hstore    # Postgres
+npm install mysql2          # MySQL
+npm install mariadb         # MariaDB
+npm install sqlite3         # SQLite
+npm install tedious         # MS SQL Server
+npm install oracledb        # Oracle
+\end{lstlisting}
+
+Per semplicità useremo SQLite.
+
+\subsection{Connettersi al database}
+
+\begin{lstlisting}[style=js, name=Database.js]
+import { Sequelize } from "sequelize";
+
+const database = new Sequelize("sqlite:mydb.sqlite");
+// oppure: new Sequelize('postgres://user:pass@example.com:5432/dbname')
+
+try {
+  await database.authenticate();
+  console.log('Connessione stabilita correttamente.');
+} catch (error) {
+  console.error('Impossibile connettersi al database:', error);
+}
+\end{lstlisting}
+
+Il codice sopra crea automaticamente un database SQLite nel file
+\code{mydb.sqlite}.
+
+\subsection{Definire i modelli}
+
+I \term{modelli} sono l'essenza di ogni ORM. In Sequelize sono classi che
+estendono \code{Model}, e si possono definire in due modi equivalenti: invocando
+il metodo \code{define} sulla connessione, oppure creando una classe che
+estende \code{Model} e invocandone il metodo \code{init}.
+
+\begin{lstlisting}[style=js, name=models/User.js]
+import { DataTypes, Sequelize } from "sequelize";
+
+const User = database.define('User', {
+  firstName: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  age: {
+    type: DataTypes.INTEGER      // allowNull vale true per impostazione predefinita
+  },
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  }
+});
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=models/Todo.js]
+class Todo extends Model {}
+
+Todo.init({
+  todo: { type: DataTypes.TEXT, allowNull: false },
+  done: { type: DataTypes.BOOLEAN, defaultValue: false },
+  id:   { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true }
+}, {
+  sequelize: database, modelName: "Todo"
+});
+\end{lstlisting}
+
+\subsection{Sincronizzazione dei modelli}
+
+Definendo un modello diciamo a Sequelize com'è fatto il nostro dominio. Ma
+partiamo da un database \textbf{completamente vuoto}: bisogna dire a Sequelize
+di allineare lo schema del database ai modelli definiti. Che cosa succede se non
+esiste alcuna tabella? E se esiste ma ha colonne diverse?
+
+L'allineamento avviene tramite la \term{sincronizzazione dei modelli}.
+
+\begin{lstlisting}[style=js, name=sync.js]
+const User = database.define('User', { /* specifica omessa */ });
+
+User.sync().then(() => {
+  console.log("Tabella Users sincronizzata.")
+}).catch(err => {
+  console.error("Errore di sincronizzazione:", err.message)
+});
+\end{lstlisting}
+
+\begin{console}[Terminale]
+Executing: SELECT name FROM sqlite_master WHERE type='table' AND name='Users';
+Executing: CREATE TABLE IF NOT EXISTS `Users` (`firstName` VARCHAR(255) NOT
+NULL, `age` INTEGER, `id` INTEGER PRIMARY KEY AUTOINCREMENT, `createdAt`
+DATETIME NOT NULL, `updatedAt` DATETIME NOT NULL);
+Tabella Users sincronizzata.
+\end{console}
+
+Tre osservazioni:
+
+\begin{itemize}
+  \item Sequelize ha \textbf{dedotto} il nome della tabella (\code{Users}): per
+        impostazione predefinita usa il nome del modello al plurale. Il
+        comportamento è configurabile.
+  \item Dai log si vede che Sequelize ha prima \textbf{verificato} l'esistenza
+        della tabella e poi l'ha creata.
+  \item Rieseguendo lo script la tabella non viene ricreata, perché esiste già.
+\end{itemize}
+
+Esistono modalità di sincronizzazione diverse:
+
+\begin{lstlisting}[style=js]
+User.sync();
+// crea la tabella se non esiste (non fa nulla se esiste)
+
+User.sync({ force: true });
+// ricrea la tabella, eliminandola se esiste (DISTRUTTIVO!)
+
+User.sync({ alter: true });
+// controlla lo stato della tabella e la modifica per allinearla al modello
+\end{lstlisting}
+
+È possibile sincronizzare più modelli in una volta invocando \code{sync()} sulla
+connessione al database.
+
+\warning{\code{force: true} cancella tutto}{
+  In sviluppo è comodissimo, perché riparte sempre da uno schema pulito. Su un
+  database di produzione elimina tutte le tabelle e tutti i dati, senza chiedere
+  conferma. Vale la pena assicurarsi che non finisca mai in un ramo di codice
+  che possa essere eseguito in produzione.}
+
+\subsection{Creare entità}
+
+\begin{lstlisting}[style=js, name=create.js]
+// prima si crea un'istanza del modello...
+let janet = new User({
+  name: "Janet",
+  age: 22
+});
+await janet.save();   // ...e poi la si salva nel database
+
+// oppure si usa il metodo statico Model.create()
+let riff = await User.create({
+  name: "Riff Raff",
+  age: 26
+});
+console.log(`Riff Raff salvato con id ${riff.id}.`);
+\end{lstlisting}
+
+\subsection{Associazioni}
+
+Sequelize supporta associazioni uno-a-uno, uno-a-molti e molti-a-molti.
+
+\begin{lstlisting}[style=js]
+A.hasOne(B);                          // A ha un B
+A.belongsTo(B);                       // A appartiene a B
+A.hasMany(B);                         // A ha molti B
+A.belongsToMany(B, { through: 'C' }); // molti-a-molti tramite la tabella C
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=models/Database.js]
+const database = new Sequelize("sqlite:mydb.sqlite");
+
+const User = database.define('User', { /* specifica */ });
+
+class Todo extends Model {}
+Todo.init({ /* specifica */ }, { /* opzioni */ });
+
+User.hasMany(Todo);    // Sequelize definisce una chiave esterna Todo -> User
+Todo.belongsTo(User);
+
+database.sync({ force: true }).then(() => {
+  console.log("Database sincronizzato.")
+});
+\end{lstlisting}
+
+Per impostazione predefinita Sequelize crea una colonna chiamata
+\code{ModelloRiferitoChiavePrimaria}: nel nostro caso una colonna
+\code{UserId} nella tabella \code{Todos}.
+
+\begin{lstlisting}[style=js, name=linked.js]
+let riff = await User.create({ name: "Riff Raff", age: 26 });
+
+let todo = await Todo.create({
+  todo: "Do the time warp again",
+  done: true,
+  UserId: riff.id
+});
+\end{lstlisting}
+
+Un'istanza può anche essere creata \textbf{insieme alle associazioni annidate}
+in un solo passo, purché tutti gli elementi siano nuovi:
+
+\begin{lstlisting}[style=js, name=nested.js]
+let janet = await User.create({
+  name: "Janet",
+  age: 22,
+  Todos: [
+    { todo: "Learn Sequelize" },
+    { todo: "Learn Express" }
+  ]
+}, {
+  include: [Todo]
+});
+\end{lstlisting}
+
+\subsection{Interrogare i dati}
+
+\begin{lstlisting}[style=js, name=query.js]
+let todos = await Todo.findAll();          // SELECT * FROM Todos
+for (let i of todos)
+  console.log(`${i.id}: ${i.todo}`);
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=query.js]
+import { Op } from "sequelize";
+
+// SELECT * FROM Todos WHERE id >= 2 AND todo LIKE '%Express%'
+let todos = await Todo.findAll({
+  where: {
+    id:   { [Op.gte]:  2 },
+    todo: { [Op.like]: '%Express%' }
+  }
+});
+\end{lstlisting}
+
+Per impostazione predefinita le associazioni \textbf{non} vengono caricate: se
+servono, vanno richieste esplicitamente.
+
+\begin{lstlisting}[style=js]
+let todos = await Todo.findAll({ include: [User] });
+
+for (let item of todos)
+  console.log(`${item.todo} - ${item.User?.name}`);
+\end{lstlisting}
+
+Si può recuperare un'entità dalla sua chiave primaria con \code{findByPk}:
+
+\begin{lstlisting}[style=js]
+let t = await Todo.findByPk(3);
+console.log("t:", t.id, t.todo, t.done, t.UserId);
+\end{lstlisting}
+
+\subsection{Modificare ed eliminare}
+
+\begin{lstlisting}[style=js, name=update.js]
+let learnSequelize = await Todo.findByPk(1);
+learnSequelize.setDataValue('done', true);
+await learnSequelize.save();     // aggiorna l'entita' sul database
+
+let learnExpress = await Todo.findByPk(2);
+await learnExpress.destroy();    // elimina l'entita' dal database
+\end{lstlisting}
+
+\subsection{Pro e contro degli ORM}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.3cm}@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{6.3cm}@{}}
+  \textbf{Pro} & \textbf{Contro} \\
+  \textbf{Astrazione}: si lavora con oggetti e modelli invece che con SQL.
+  & \textbf{Curva di apprendimento} più ripida. \\
+  \textbf{Produttività}: meno codice ripetitivo, generazione automatica dello
+  schema.
+  & \textbf{Complessità}: alcune operazioni possono risultare più contorte con
+    un ORM che in SQL. \\
+  \textbf{Portabilità}: è facile passare da un database supportato a un altro.
+  & \textbf{Vendor lock-in}: cambiare ORM può essere difficile. \\
+  \textbf{Leggibilità e coerenza}: più leggibile dell'SQL grezzo, e impone
+  convenzioni comuni.
+  & \textbf{Prestazioni}: un ORM può introdurre un sovraccarico, soprattutto se
+    usato male. \\
+\end{tabular}
+\end{center}
+
+\section{Organizzare un'applicazione Express}
+
+Express è \textit{unopinionated}: di conseguenza non esiste un unico modo giusto
+di organizzare un'applicazione. Quella che segue è l'organizzazione adottata nel
+corso; non è scolpita nella pietra.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.2cm}}>{\raggedright\arraybackslash}p{8.6cm}@{}}
+  \textbf{Directory} & \textbf{Contenuto} \\
+  \code{views}       & i template \\
+  \code{routes}      & la definizione dei router: il codice che indirizza le
+                       richieste verso il controller appropriato \\
+  \code{controllers} & il codice che implementa la logica di business per
+                       gestire le richieste \\
+  \code{models}      & la definizione dei modelli di dati e le connessioni al
+                       database \\
+  \code{middleware}  & i middleware personalizzati \\
+  \code{public}      & i file statici, organizzati in sottodirectory \\
+\end{tabular}
+\end{center}
+
+\section{Configurazione}
+
+Le applicazioni web dipendono spesso da informazioni \textbf{sensibili} e da
+impostazioni \textbf{specifiche dell'ambiente}:
+
+\begin{itemize}
+  \item sensibili: chiavi API, password del database, credenziali cloud;
+  \item specifiche dell'ambiente: URL del database di produzione, sviluppo o
+        collaudo, livelli di log.
+\end{itemize}
+
+\error{Mai scrivere le credenziali nel codice}{
+  Scrivere queste impostazioni direttamente nel codice non è una buona pratica:
+  \begin{itemize}
+    \item non è sicuro quando si versiona il codice in un repository pubblico
+          --- e una chiave finita per errore in un commit resta nella cronologia
+          anche dopo essere stata rimossa;
+    \item può essere necessario modificare più file per cambiare
+          un'impostazione;
+    \item porta ad avere \guillemotleft versioni\guillemotright\ diverse dell'applicazione (sviluppo,
+          produzione) da aggiornare e mantenere separatamente.
+  \end{itemize}
+  Questi dati vanno in un \textbf{file di configurazione dedicato}.}
+
+Il file di configurazione dovrebbe essere l'\textbf{unico punto} in cui queste
+impostazioni si cambiano, e \textbf{non} va versionato (va messo nel
+\code{.gitignore}). Al suo posto si versiona una \textbf{versione fittizia}, che
+ciascuno modifica con le proprie impostazioni.
+
+Un modo diffuso è usare un file \code{.env} nella radice del progetto; pacchetti
+come \code{dotenv} lo leggono e ne rendono disponibile il contenuto
+nell'oggetto globale \code{process.env}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      f/.style={rounded corners=3pt, line width=0.8pt, align=left, inner sep=5pt,
+                font=\FiraCodeNL\scriptsize, text width=3.3cm},
+      nv/.style={f, draw=red-gradient-6, fill=red-gradient-1!25!white},
+      v/.style={f, draw=green-gradient-6, fill=green-gradient-1!35!white}]
+
+    \node[font=\Lato\scriptsize\bfseries, text=red-gradient-6!75!black]
+      at (0,2.0) {non versionato};
+    \node[font=\Lato\scriptsize\bfseries, text=green-gradient-6!60!black]
+      at (6.5,2.0) {versionato};
+
+    \node[nv] (e1) at (0,0.9)
+      {\textbf{.env}\\ DB\_USER = "postgres"\\ DB\_PASS = "7\$cX\&"\\
+       DB\_HOST = "123.4.5.6"};
+    \node[nv] (e2) at (0,-1.4)
+      {\textbf{.env.production}\\ DB\_USER = "postgres"\\ DB\_PASS = "7\$cX\&"\\
+       DB\_HOST = "123.4.5.6"};
+
+    \node[v] (d1) at (6.5,0.9)
+      {\textbf{.env.dummy}\\ DB\_USER = "USER"\\ DB\_PASS = "PASS"\\
+       DB\_HOST = "???"};
+    \node[v] (d2) at (6.5,-1.4)
+      {\textbf{README.md}\\ Rinomina .env.dummy\\ in .env e adattalo\\
+       alle tue esigenze.};
+
+    \draw[dashed, draw=neutral!45!white, line width=0.8pt] (3.25,2.3) -- (3.25,-2.5);
+  \end{tikzpicture}
+  \caption{Che cosa si versiona e che cosa no.}
+  \label{fig:dotenv}
+\end{figure}
+
+\section{La lista di cose da fare, con Express}
+
+Riscriviamo l'applicazione con Express, aggiungendo qualche funzionalità: gli
+utenti potranno marcare gli elementi come completati, modificarli ed
+eliminarli, e la persistenza sarà gestita con Sequelize.
+
+\subsection{Configurazione dei middleware}
+
+\begin{lstlisting}[style=js, name=index.js]
+const app = express();
+const PORT = 3000;
+
+app.set("view engine", "pug");        // pug come motore di template predefinito
+
+app.use(morgan('dev'));               // log delle richieste
+app.use(express.static("public"));    // file statici
+app.use(express.urlencoded({ extended: false }));
+
+app.use(session({
+  secret: 'fu-tzu the great master',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 10 * 60 * 1000 }  // 10 minuti, in millisecondi
+}));
+
+app.use(flash());
+app.use(exportFlashMessagesToViews);
+app.use(exportAuthenticationStatus);
+\end{lstlisting}
+
+Si noti l'ordine: è quello in cui i middleware verranno eseguiti. La sessione
+deve essere stabilita \textbf{prima} dei middleware che ne leggono lo stato.
+
+\subsection{Configurazione delle rotte}
+
+\begin{lstlisting}[style=js, name=index.js]
+app.use(homepageRouter);
+app.use(resetRouter);
+app.use(authenticationRouter);
+app.use(todoRouter);
+
+// catch-all: se arriviamo qui, e' un 404
+app.get('*', function (req, res) {
+  res.status(404).render("errorPage",
+    { code: "404", description: "Non trovato." });
+});
+
+// gestore di errori
+app.use((err, req, res, next) => {
+  console.log(err.stack);
+  res.status(err.status || 500).render("errorPage", {
+    code: (err.status || 500),
+    description: (err.message || "Si e' verificato un errore")
+  });
+});
+
+app.listen(PORT);
+\end{lstlisting}
+
+L'ordine conta anche qui: il \textit{catch-all} va dopo tutte le rotte
+specifiche, e il gestore di errori per ultimo.
+
+\subsection{Un router}
+
+\begin{lstlisting}[style=js, name=routes/todoRouter.js]
+export const todoRouter = new express.Router();
+
+todoRouter.use(enforceAuthentication);   // middleware locale a questo router
+
+todoRouter.get("/todo", (req, res, next) => {
+  TodoController.getTodosForCurrentUser(req).then(todoItems => {
+    res.locals.todoItems = todoItems;
+    res.render("todo");
+  }).catch(err => {
+    next(err);        // gli errori asincroni vanno passati a next()
+  });
+});
+\end{lstlisting}
+
+\subsection{Un controller}
+
+\begin{lstlisting}[style=js, name=controllers/TodoController.js]
+import { Todo } from "../models/Database.js";
+
+export class TodoController {
+
+  static async getTodosForCurrentUser(req) {
+    return Todo.findAll({
+      where: {
+        UserUserName: req.session.username
+      }
+    })
+  }
+
+  // altri metodi
+}
+\end{lstlisting}
+
+\subsection{Autenticazione}
+
+\begin{lstlisting}[style=js, name=controllers/AuthController.js]
+export class AuthController {
+
+  static async checkCredentials(req, res) {
+    let user = new User({
+      userName: req.body.usr,
+      password: req.body.pwd
+    });
+
+    let found = await User.findOne({
+      where: { userName: user.userName, password: user.password }
+    });
+
+    if (found === null) {
+      return false;
+    } else {
+      // credenziali valide: creiamo una sessione
+      req.session.isAuthenticated = true;
+      req.session.username = found.userName;
+      return true;
+    }
+  }
+}
+\end{lstlisting}
+
+\error{Password in chiaro}{
+  Il codice sopra cerca l'utente confrontando direttamente la password: è
+  didatticamente chiaro, ma significa che le password sono memorizzate
+  \textbf{in chiaro} nel database. In un'applicazione reale non si memorizzano
+  mai le password, bensì il loro \textbf{hash} calcolato con una funzione lenta e
+  con \textit{salt} (bcrypt, scrypt, Argon2), e si confronta l'hash. Torneremo
+  sul tema nel capitolo sulla sicurezza.}
+
+\subsection{Un middleware di autenticazione}
+
+\begin{lstlisting}[style=js, name=middleware/auth.js]
+/**
+ * Assicura che l'utente sia autenticato. In caso contrario,
+ * reindirizza al login con un messaggio di errore.
+ */
+export function enforceAuthentication(req, res, next) {
+  if (!req?.session?.isAuthenticated) {
+    req.flash("error", "Devi effettuare l'accesso per usare questa funzione.");
+    res.redirect("/auth");
+  } else {
+    next();
+  }
+}
+\end{lstlisting}
+
+Vale la pena confrontarlo con il capitolo 12: lì il controllo
+dell'autenticazione andava ripetuto all'inizio di ogni controller. Qui è
+\textbf{un solo middleware}, montato una volta sul router, che protegge tutte le
+sue rotte. È il vantaggio concreto dell'inversione del controllo.
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{ORM Hate}, Martin Fowler. \\
+        \urlx{https://martinfowler.com/bliki/OrmHate.html}
+  \item \textbf{Getting Started: Sequelize} --- documentazione ufficiale. \\
+        \urlx{https://sequelize.org/docs/v6/getting-started/}
+\end{itemize}

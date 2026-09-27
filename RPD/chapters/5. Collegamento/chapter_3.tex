@@ -1,0 +1,371 @@
+\chapter{Indirizzi MAC, switch, ARP ed Ethernet}
+
+% ══════════════════════════════════════════════════════════════
+\section{Gli indirizzi MAC}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Indirizzo MAC}{
+    A livello di collegamento i dispositivi sono identificati dagli \textbf{indirizzi MAC} (o \textbf{indirizzi fisici}).
+    \begin{itemize}
+      \item Ogni interfaccia di rete ha un proprio indirizzo MAC (pensato per essere fisso, anche se si può cambiare).
+      \item Ogni produttore ha un proprio insieme di indirizzi MAC (i primi 3 byte identificano il produttore).
+      \item Un indirizzo MAC è lungo \textbf{6 byte} ($2^{48}$ indirizzi possibili) e si scrive di solito in esadecimale:
+            \texttt{1A:23:F9:CD:06:9B} oppure \texttt{1A-23-F9-CD-06-9B}.
+    \end{itemize}
+}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{3cm}p{5.5cm}p{5.5cm}}
+\toprule
+ & \textbf{Indirizzo IP} & \textbf{Indirizzo MAC} \\
+\midrule
+Livello & rete (3) & collegamento (2) \\
+Lunghezza & 32 bit (IPv4) & 48 bit \\
+Notazione & decimale puntata \texttt{192.168.1.10} & esadecimale \texttt{1A:23:F9:CD:06:9B} \\
+Portata & \textbf{globale} (fuori dalle LAN) & \textbf{locale} (solo nella LAN) \\
+Assegnazione & dipende dalla rete in cui ci si trova & dal produttore della scheda \\
+Analogia & l'indirizzo di casa (cambia se traslochi) & il codice fiscale (ti segue ovunque) \\
+\bottomrule
+\end{tabular}
+\caption{Indirizzi IP e MAC a confronto.}
+\end{table}
+
+\warning{Gli indirizzi MAC sono locali}{
+    Tutte le interfacce hanno un indirizzo MAC, ma questo è usato \textbf{solo all'interno di una LAN}: un frame non esce dalla propria rete locale.
+    Gli indirizzi IP, invece, fuori dalle LAN sono globali. Mentre il datagramma IP viaggia dalla sorgente alla destinazione mantenendo gli stessi
+    indirizzi IP, gli indirizzi MAC del frame \textbf{cambiano a ogni hop}.
+}
+
+\subsection{Come lavorano gli indirizzi MAC}
+
+In una LAN, due interfacce A e B comunicano così:
+
+\begin{itemize}
+    \item A inserisce nel frame l'indirizzo MAC di B e lo trasmette;
+    \item B riceve il frame e confronta il proprio indirizzo MAC con il MAC di destinazione del frame;
+    \item se coincidono il frame viene \textbf{accettato}, altrimenti viene \textbf{scartato} (e il resto della pila non viene nemmeno coinvolto).
+\end{itemize}
+
+\dfn{Indirizzo di broadcast}{
+    Si possono anche inviare messaggi \textbf{broadcast}, accettati da tutti indipendentemente dal MAC. Nelle LAN con indirizzi da 6 byte
+    (come Ethernet e 802.11) l'indirizzo broadcast è una stringa di \textbf{48 uni}: \texttt{FF-FF-FF-FF-FF-FF}.
+}
+
+In una LAN è del tutto possibile (anzi frequente) che un'interfaccia riceva frame destinati a un'altra: il ruolo dell'indirizzo MAC è
+\textbf{filtrare} i frame non destinati a sé, senza disturbare l'host.
+
+% ══════════════════════════════════════════════════════════════
+\section{Indirizzi e livelli}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \node[lay app, minimum width=3cm] (a) at (0,2.4) {Applicazione};
+  \node[lay tra, minimum width=3cm] (t) at (0,1.8) {Trasporto};
+  \node[lay net, minimum width=3cm] (n) at (0,1.2) {Rete};
+  \node[lay link, minimum width=3cm] (l) at (0,0.6) {Collegamento};
+  \node[lay phy, minimum width=3cm] (p) at (0,0) {Fisico};
+  \draw[decorate, decoration={brace, amplitude=6pt, mirror}] (-1.7,2.7) -- (-1.7,0.95) node[midway, left=8pt, text=netgreen!50!black, align=right] {indirizzi IP\\(e nomi, porte)};
+  \node[anchor=west, text=netred] (mac) at (2.2,0.6) {indirizzi MAC};
+  \draw[-{Stealth}, netred] (mac) -- (l.east);
+  \node[anchor=west, text=primary, text width=5cm] at (2.2,1.35) {\textbf{ARP} fa da ponte tra i due tipi di indirizzi};
+\end{tikzpicture}
+\caption{Nella pila IP e MAC convivono: ARP collega gli uni agli altri (una differenza rispetto al modello ISO/OSI puro).}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\section{Gli switch}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Switch}{
+    Gli \textbf{switch} sono l'equivalente dei router al livello di collegamento:
+    \begin{itemize}
+      \item non implementano alcun algoritmo di routing;
+      \item usano \textbf{solo indirizzi MAC}, non indirizzi IP.
+    \end{itemize}
+    Il loro compito è ricevere i frame in arrivo e \textbf{inoltrarli sui collegamenti in uscita} giusti.
+}
+
+\begin{itemize}
+    \item Lo switch è \textbf{trasparente} a host e router della subnet: nessuno gli indirizza frame, e nessuno si accorge che c'è.
+    \item Uno switch ha dei \textbf{buffer} sulle interfacce.
+    \item Gli switch hanno \textbf{tabelle di inoltro} che associano indirizzi MAC a interfacce.
+    \item La tabella si aggiorna \textbf{automaticamente e dinamicamente} man mano che si scoprono nuovi dispositivi (\textbf{self-learning}).
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (sw) at (0,0) {\icon[1.4cm]{switch}};
+  \node (a) at (-3.2,1.2) {\icon[0.8cm]{pc}}; \node[left=0pt of a, font=\scriptsize\ttfamily] {A: 1A-23-F9-CD-06-9B};
+  \node (b) at (-3.2,-1.2) {\icon[0.9cm]{laptop}}; \node[left=0pt of b, font=\scriptsize\ttfamily] {B: 5C-66-AB-90-75-B1};
+  \node (c) at (3.2,1.2) {\icon[0.8cm]{pc}}; \node[right=0pt of c, font=\scriptsize\ttfamily] {C: 49-BD-D2-C7-56-2A};
+  \node (d) at (3.2,-1.2) {\icon[0.9cm]{laptop}}; \node[right=0pt of d, font=\scriptsize\ttfamily] {D: 88-B2-2F-54-1A-0F};
+  \draw[wired] (a) -- node[above, sloped] {porta 1} (sw); \draw[wired] (b) -- node[below, sloped] {porta 2} (sw);
+  \draw[wired] (c) -- node[above, sloped] {porta 3} (sw); \draw[wired] (d) -- node[below, sloped] {porta 4} (sw);
+  \node[draw, fill=llink!40, anchor=north, font=\scriptsize\sffamily] at (0,-1.9) {
+    \begin{tabular}{llc}
+    \textbf{MAC} & \textbf{interfaccia} & \textbf{TTL} \\
+    1A-23-F9-CD-06-9B & 1 & 60 s \\
+    88-B2-2F-54-1A-0F & 4 & 60 s \\
+    \end{tabular}};
+\end{tikzpicture}
+\caption{Uno switch e la sua tabella, costruita osservando i frame che arrivano.}
+\end{figure}
+
+\subsection{Il self-learning}
+
+\begin{enumerate}
+    \item Quando arriva un frame sulla porta $x$, lo switch \textbf{impara} che il MAC \textbf{sorgente} si trova dietro la porta $x$ e lo registra
+          nella tabella (con un tempo di vita).
+    \item Poi cerca nella tabella il MAC di \textbf{destinazione}:
+    \begin{itemize}
+      \item se lo trova e la porta è diversa da $x$, \textbf{inoltra} il frame solo su quella porta;
+      \item se la porta coincide con $x$, \textbf{scarta} il frame (il destinatario è dallo stesso lato: lo ha già ricevuto);
+      \item se non lo trova, \textbf{inonda} (\emph{flooding}): invia il frame su tutte le porte tranne $x$.
+    \end{itemize}
+\end{enumerate}
+
+\begin{esempio}{Lo switch impara}
+Tabella vuota. A (porta 1) invia un frame a D.
+\begin{itemize}
+    \item Lo switch impara ``A è sulla porta 1''. Non conosce D: inonda le porte 2, 3 e 4.
+    \item D risponde ad A. Lo switch impara ``D è sulla porta 4''; conosce A: inoltra solo sulla porta 1.
+    \item Da ora in poi i frame tra A e D viaggiano solo tra le porte 1 e 4.
+\end{itemize}
+\end{esempio}
+
+% ══════════════════════════════════════════════════════════════
+\section{La LAN commutata}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.5\linewidth}\centering
+  \includegraphics[width=0.95\linewidth]{cap20/switched_lan.png}
+\end{minipage}\hfill
+\begin{minipage}{0.46\linewidth}
+È comune che le LAN usino uno o più switch per collegare molti dispositivi locali (nell'esempio del Kurose, i dipartimenti di un
+istituto collegati da switch, con un router verso Internet e i server Web e di posta).
+\end{minipage}
+\caption{Una rete di istituto con switch organizzati ad albero (da Kurose).}
+\end{figure}
+
+A differenza dei router, gli switch sono \textbf{veloci} e \textbf{plug-and-play}:
+
+\begin{itemize}
+    \item non c'è alcun algoritmo di routing;
+    \item si considerano solo i primi \textbf{2 livelli} della pila.
+\end{itemize}
+
+D'altra parte le LAN commutate sono \textbf{limitate in dimensione} e devono essere \textbf{strutturate ad albero}:
+
+\begin{itemize}
+    \item gli indirizzi MAC sono difficili da raggruppare (non hanno prefissi legati alla posizione): le tabelle degli switch possono crescere rapidamente;
+    \item non c'è routing: i \textbf{cicli} sono difficili da evitare (un frame inondato in un ciclo girerebbe per sempre).
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{3.5cm}p{5.2cm}p{5.2cm}}
+\toprule
+ & \textbf{Switch} & \textbf{Router} \\
+\midrule
+Livello & collegamento (2) & rete (3) \\
+Indirizzi & MAC & IP \\
+Tabelle & self-learning & algoritmi di routing \\
+Configurazione & plug-and-play & va configurato \\
+Topologia & albero (niente cicli) & qualsiasi, anche con cicli \\
+Traffico broadcast & lo inoltra & lo blocca (separa i domini) \\
+\bottomrule
+\end{tabular}
+\caption{Switch e router a confronto.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il protocollo ARP}
+% ══════════════════════════════════════════════════════════════
+
+I protocolli dei livelli superiori lavorano con gli indirizzi IP, mentre il frame ha bisogno dell'indirizzo MAC del destinatario. Serve quindi
+tradurre gli indirizzi IP in indirizzi MAC.
+
+\dfn{ARP (Address Resolution Protocol)}{
+    L'\textbf{ARP} gestisce la conversione tra indirizzi IP e indirizzi MAC.
+    \begin{itemize}
+      \item Ogni interfaccia ha un modulo ARP con una \textbf{tabella ARP}, che associa ogni IP della LAN a un indirizzo MAC, con un
+            \textbf{TTL} (\emph{time to live}) scaduto il quale la voce viene cancellata (tipicamente 5--20 minuti).
+      \item Poiché gli indirizzi MAC sono locali, anche ARP funziona \textbf{solo nelle reti locali}.
+    \end{itemize}
+}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Indirizzo IP} & \textbf{Indirizzo MAC} & \textbf{TTL} \\
+\midrule
+222.222.222.221 & 88-B2-2F-54-1A-0F & 13:45:00 \\
+222.222.222.223 & 5C-66-AB-90-75-B1 & 13:52:00 \\
+\bottomrule
+\end{tabular}
+\caption{Una tabella ARP: la voce scade all'orario indicato.}
+\end{table}
+
+\info{ARP e DNS}{
+    ARP fa per la LAN quello che il DNS fa per Internet: il DNS traduce \textbf{nomi} in indirizzi IP (in tutta Internet), ARP traduce
+    \textbf{indirizzi IP} in indirizzi MAC (solo nella propria LAN). Sulle proprie macchine si può vedere la tabella con \texttt{ip neigh}
+    (o \texttt{arp -a}).
+}
+
+\subsection{Un esempio di ARP}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.44\linewidth}\centering
+  \includegraphics[width=0.95\linewidth]{cap20/arp_lan.png}
+\end{minipage}\hfill
+\begin{minipage}{0.52\linewidth}
+L'host C (\texttt{222.222.222.220}) vuole inviare messaggi all'host A (\texttt{222.222.222.222}). Per farlo deve conoscere anche il MAC di A.
+\begin{enumerate}
+  \item Se A \textbf{non è nella tabella}, prima di inviare il messaggio C invia in \textbf{broadcast} a tutti i dispositivi della rete un
+        pacchetto \textbf{ARP request}: ``chi ha l'IP \texttt{222.222.222.222}? Lo dica a \texttt{222.222.222.220}''.
+  \item Tutti i nodi ricevono il pacchetto, ma \textbf{solo} chi ha l'IP cercato risponde, con un messaggio \textbf{ARP reply} diretto
+        (\emph{unicast}) che contiene il proprio MAC.
+  \item C inserisce la coppia IP--MAC nella propria tabella e invia il frame.
+\end{enumerate}
+\end{minipage}
+\caption{ARP in una LAN: tre host e un router collegati da uno switch (da Kurose).}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.85, every node/.style={font=\scriptsize\sffamily}]
+  \timeline{c}{0}{C}{3.6}
+  \timeline{b}{4}{B}{3.6}
+  \timeline{a}{8}{A}{3.6}
+  \draw[msg, netred] (0,-0.5) -- node[above, sloped, pos=0.5] {ARP request (dest. FF-FF-FF-FF-FF-FF): chi ha 222.222.222.222?} (8,-0.5);
+  \fill[netred] (4,-0.5) circle (2.5pt); \node[anchor=west, text=netred] at (4.1,-0.85) {riceve e ignora};
+  \node[anchor=west] at (8.2,-0.5) {``sono io!''};
+  \draw[msg, netgreen!60!black] (8,-1.7) -- node[above, pos=0.5] {ARP reply (unicast): 222.222.222.222 è 49-BD-D2-C7-56-2A} (0,-1.7);
+  \node[anchor=east, text width=2.6cm, align=right] at (-0.2,-1.9) {aggiorna la tabella ARP};
+  \draw[msg, netblue, very thick] (0,-2.8) -- node[above] {frame IP con MAC di destinazione di A} (8,-2.8);
+\end{tikzpicture}
+\caption{Richiesta in broadcast, risposta in unicast.}
+\end{figure}
+
+\warning{ARP poisoning}{
+    ARP non prevede alcuna autenticazione: un host \textbf{malevolo} può intercettare la richiesta e rispondere con una risposta
+    \textbf{falsificata}, associando l'IP cercato al proprio MAC (\textbf{ARP poisoning}). I frame destinati alla vittima arrivano così
+    all'attaccante, che può leggerli o modificarli (\emph{man in the middle}). È uno degli attacchi più comuni nelle LAN.
+}
+
+\subsection{ARP e il gateway}
+
+Che succede se l'IP di destinazione è \textbf{fuori dalla rete}?
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{cap20/arp_gateway.png}
+    \caption{Due subnet (111.111.111.x e 222.222.222.x) collegate da un router con due interfacce, ciascuna con il proprio IP, MAC e tabella ARP.}
+\end{figure}
+
+\begin{itemize}
+    \item Il router che collega le due reti deve avere almeno \textbf{2 interfacce} (2 IP, 2 MAC e 2 tabelle ARP), una dentro ciascuna subnet.
+    \item I frame diretti fuori dalla subnet vengono inviati alla \textbf{prima interfaccia del router}: l'host usa ARP per il MAC del
+          \textbf{router} (il gateway), non per quello del destinatario finale.
+    \item Il router estrae il datagramma, lo sposta sulla seconda interfaccia e, con la seconda tabella ARP, lo invia all'host giusto in un
+          \textbf{nuovo frame}.
+\end{itemize}
+
+\begin{esempio}{Da A (111.111.111.111) a B (222.222.222.222)}
+\begin{enumerate}
+    \item A capisce, confrontando indirizzo e maschera, che B è in un'altra subnet: deve passare dal gateway \texttt{111.111.111.110}.
+    \item A usa ARP per trovare il MAC dell'interfaccia del router \texttt{111.111.111.110} (\texttt{E6-E9-00-17-BB-4B}).
+    \item A crea un datagramma IP con \textbf{IP sorgente A} e \textbf{IP destinazione B}, e lo incapsula in un frame con
+          \textbf{MAC destinazione = MAC del router}.
+    \item Il router riceve il frame, estrae il datagramma, vede che B è sulla subnet \texttt{222.222.222.0/24}, usa ARP su quell'interfaccia per
+          trovare il MAC di B e crea un nuovo frame con \textbf{MAC sorgente = sua seconda interfaccia} e \textbf{MAC destinazione = B}.
+\end{enumerate}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Tratta} & \textbf{MAC sorgente} & \textbf{MAC destinazione} & \textbf{IP sorgente} & \textbf{IP destinazione} \\
+\midrule
+A $\rightarrow$ router & A & router (if. 1) & A & B \\
+router $\rightarrow$ B & router (if. 2) & B & A & B \\
+\bottomrule
+\end{tabular}
+\end{center}
+Gli indirizzi IP restano gli stessi da un estremo all'altro; gli indirizzi MAC cambiano a ogni collegamento.
+\end{esempio}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il frame Ethernet}
+% ══════════════════════════════════════════════════════════════
+
+Ethernet è la tecnologia dominante per le LAN cablate. Nata negli anni '70 come bus condiviso con CSMA/CD, oggi è quasi sempre una
+topologia a stella con uno switch al centro e collegamenti full-duplex (dove le collisioni non avvengono più).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[anchor=east, font=\footnotesize\bfseries\sffamily] at (-0.2,0) {Ethernet (DIX)};
+  \node[field, fill=lphy, minimum width=1.6cm] (pr) at (0.8,0) {preambolo};
+  \node[field, fill=llink, minimum width=1.9cm, right=0pt of pr] (dst) {indirizzo dest.};
+  \node[field, fill=llink, minimum width=1.9cm, right=0pt of dst] (src) {indirizzo sorg.};
+  \node[field, fill=lnet!50, minimum width=0.9cm, right=0pt of src] (ty) {tipo};
+  \node[field, fill=cloudbg, minimum width=3.2cm, right=0pt of ty] (da) {dati};
+  \node[field, fill=cloudbg!50, minimum width=0.9cm, right=0pt of da] (pad) {pad};
+  \node[field, fill=netred!25, minimum width=1.3cm, right=0pt of pad] (crc) {CRC};
+  \foreach \n/\b in {pr/8, dst/6, src/6, ty/2, da/{0--1500}, pad/{0--46}, crc/4} \node[above=0pt of \n] {\b};
+  \node[anchor=east] at (-0.2,0.45) {byte};
+  \begin{scope}[yshift=-1.1cm]
+    \node[anchor=east, font=\footnotesize\bfseries\sffamily] at (-0.2,0) {IEEE 802.3};
+    \node[field, fill=lphy, minimum width=1.3cm] (pr2) at (0.65,0) {preambolo};
+    \node[field, fill=lphy!60, minimum width=0.3cm, right=0pt of pr2] (sof) {\rotatebox{90}{\tiny SOF}};
+    \node[field, fill=llink, minimum width=1.9cm, right=0pt of sof] (dst2) {indirizzo dest.};
+    \node[field, fill=llink, minimum width=1.9cm, right=0pt of dst2] (src2) {indirizzo sorg.};
+    \node[field, fill=lnet!50, minimum width=0.9cm, right=0pt of src2] (ln) {lungh.};
+    \node[field, fill=cloudbg, minimum width=3.2cm, right=0pt of ln] {dati};
+    \node[field, fill=cloudbg!50, minimum width=0.9cm] at (9.95,0) {pad};
+    \node[field, fill=netred!25, minimum width=1.3cm] at (11.05,0) {CRC};
+  \end{scope}
+\end{tikzpicture}
+\caption{Il frame Ethernet nelle due varianti (DIX e IEEE 802.3).}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Preambolo} (8 byte): un blocco ``sveglia'' di bit alternati (\texttt{10101010} \dots, con l'ultimo byte \texttt{10101011})
+          usato per \textbf{sincronizzare gli orologi} degli adattatori di sorgente e destinazione.
+    \item \textbf{Indirizzo di destinazione} (6 byte): il MAC dell'adattatore di destinazione.
+    \item \textbf{Indirizzo sorgente} (6 byte): il MAC dell'adattatore che trasmette il frame nella LAN.
+    \item \textbf{Tipo} (2 byte): il protocollo di livello di rete contenuto nel frame. Non c'è solo IP (\texttt{0x0800}): per esempio i pacchetti
+          ARP hanno un tipo specifico, \texttt{0x0806}. Nella variante 802.3 al suo posto c'è la lunghezza.
+    \item \textbf{Dati} (da 46 a 1500 byte): il datagramma IP. Il massimo è la \textbf{MTU} di Ethernet: se il datagramma è più grande, va frammentato.
+    \item \textbf{Pad}: riempimento per raggiungere la lunghezza minima dei dati (46 byte), necessaria perché il CSMA/CD rilevi le collisioni
+          (tempo di trasmissione di almeno $2\tau$).
+    \item \textbf{CRC} (4 byte): il CRC-32 calcolato sul frame, per rilevare gli errori.
+\end{itemize}
+
+\info{Un servizio senza connessione e inaffidabile}{
+    Ethernet è \textbf{senza connessione} (nessun handshake con l'adattatore di destinazione) e \textbf{inaffidabile}: il ricevente non invia né ACK
+    né NAK. Un frame che non supera il controllo CRC viene semplicemente scartato; se i dati servono davvero, sarà TCP (o l'applicazione) a
+    accorgersi della mancanza e a ritrasmettere.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item L'\textbf{indirizzo MAC} (48 bit, esadecimale) identifica un'interfaccia ed è \textbf{locale}; broadcast = \texttt{FF-FF-FF-FF-FF-FF}.
+    \item Gli \textbf{switch} inoltrano frame in base al MAC, con tabelle \textbf{self-learning}; sono veloci e plug-and-play ma le LAN commutate
+          devono essere ad albero.
+    \item \textbf{ARP} traduce IP in MAC: richiesta in broadcast, risposta in unicast, tabella con TTL; vulnerabile all'\textbf{ARP poisoning}.
+    \item Verso un'altra subnet il frame va al MAC del \textbf{router}: gli IP restano uguali, i MAC cambiano a ogni hop.
+    \item \textbf{Frame Ethernet}: preambolo (8), destinazione (6), sorgente (6), tipo (2), dati (46--1500, con pad), CRC (4).
+\end{itemize}
+}

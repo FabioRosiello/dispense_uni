@@ -1,0 +1,538 @@
+\chapter{Il sottolivello MAC e l'accesso multiplo}
+
+% ══════════════════════════════════════════════════════════════
+\section{I due tipi di collegamento}
+% ══════════════════════════════════════════════════════════════
+
+Ricordiamo i quattro servizi del livello di collegamento: \textbf{framing} (incapsulare e decapsulare i datagrammi), \textbf{accesso al
+collegamento} (regolare l'accesso ai collegamenti condivisi, compito del protocollo MAC), \textbf{consegna affidabile} (per lo più
+facoltativa) e \textbf{rilevazione e correzione degli errori} (parità, checksum, CRC). In questo capitolo ci occupiamo del secondo.
+
+I collegamenti da gestire sono essenzialmente di due tipi.
+
+\dfn{Collegamento punto-punto e broadcast}{
+    \begin{itemize}
+      \item Un collegamento \textbf{punto-punto} ha un solo mittente a un'estremità e un solo ricevente all'altra. Un protocollo che
+            gestisce collegamenti di questo tipo è il \textbf{PPP} (\emph{Point-to-Point Protocol}). Esempio: un cavo Ethernet diretto
+            tra due computer.
+      \item Un collegamento \textbf{broadcast} ha più nodi mittenti e riceventi collegati allo \textbf{stesso canale condiviso}. Si
+            chiama broadcast perché quando un nodo trasmette un frame, questo viene \textbf{ricevuto da tutti} i nodi sul canale.
+            Esempi: il bus Ethernet, Ethernet half-duplex (raro, oggi i cavi sono quasi tutti full-duplex), le LAN wireless.
+    \end{itemize}
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \begin{scope}
+    \node[font=\small\bfseries\sffamily] at (2,1.6) {Punto-punto};
+    \node (a) at (0,0) {\icon[1cm]{pc}}; \node[below=-2pt of a] {invia A};
+    \node (b) at (4,0) {\icon[1cm]{laptop}}; \node[below=-2pt of b, text=netgreen!60!black] {accetta A};
+    \draw[wired, line width=1.6pt] (a) -- node[above] {PPP} (b);
+  \end{scope}
+  \begin{scope}[xshift=7.5cm]
+    \node[font=\small\bfseries\sffamily] at (2.5,1.6) {Broadcast};
+    \draw[backbone] (-0.2,0) -- (5.2,0);
+    \foreach \x/\ic/\t/\c in {0/pc/{invia A}/black, 1.7/laptop/{scarta A}/netred, 3.4/pc/{accetta A}/netgreen!60!black, 5/laptop/{scarta A}/netred} {
+      \node (n) at (\x,0.8) {\icon[0.7cm]{\ic}}; \draw[wired] (\x,0) -- (n);
+      \node[text=\c] at (\x,-0.4) {\t};
+    }
+  \end{scope}
+\end{tikzpicture}
+\caption{Nel broadcast tutti ricevono il frame, e solo il destinatario lo accetta.}
+\end{figure}
+
+L'accesso ai collegamenti broadcast va \textbf{coordinato} (\emph{problema dell'accesso multiplo}), perché più comunicazioni sullo
+stesso collegamento possono interferire tra loro.
+
+% ══════════════════════════════════════════════════════════════
+\section{Le collisioni}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Collisione}{
+    Il problema principale dei collegamenti broadcast è la \textbf{collisione}: se più nodi trasmettono frame \textbf{contemporaneamente}
+    sullo stesso canale, i frame si sovrappongono e diventano \textbf{incomprensibili}.
+}
+
+I frame in collisione vengono ricevuti da tutti i nodi e scartati come errati (non si fa danno), ma:
+
+\begin{itemize}
+    \item \textbf{tutti} i frame trasmessi vanno \textbf{persi};
+    \item l'intervallo di tempo è \textbf{sprecato}, perché il canale è stato usato per trasmettere dati inutili.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \draw[backbone] (-0.2,0) -- (8.2,0);
+  \node (a) at (0,0.8) {\icon[0.7cm]{pc}}; \draw[wired] (0,0) -- (a); \node[above=-1pt of a] {invia A};
+  \node (b) at (8,0.8) {\icon[0.7cm]{pc}}; \draw[wired] (8,0) -- (b); \node[above=-1pt of b] {invia B};
+  \node (c) at (2.7,0.8) {\icon[0.8cm]{laptop}}; \draw[wired] (2.7,0) -- (c); \node[above=-1pt of c, text=netred] {scarta \$@!};
+  \node (d) at (5.3,0.8) {\icon[0.8cm]{laptop}}; \draw[wired] (5.3,0) -- (d); \node[above=-1pt of d, text=netred] {scarta \$@!};
+  \draw[-{Stealth}, very thick, netblue] (0.3,-0.3) -- (4.8,-0.3);
+  \draw[-{Stealth}, very thick, netorange] (7.7,-0.45) -- (3.2,-0.45);
+  \node[starburst, draw=netred, fill=netred!20, minimum size=0.9cm, inner sep=0pt, font=\scriptsize\bfseries\sffamily] at (4,-0.9) {collisione!};
+\end{tikzpicture}
+\caption{Due trasmissioni contemporanee sullo stesso canale collidono: tutti i nodi ricevono dati illeggibili.}
+\end{figure}
+
+L'accesso al mezzo fisico (come il framing) è regolato dal protocollo \textbf{MAC} (\emph{Medium Access Control}), un
+\textbf{sottolivello} del livello di collegamento.
+
+% ══════════════════════════════════════════════════════════════
+\section{I protocolli ad accesso multiplo}
+% ══════════════════════════════════════════════════════════════
+
+Nelle reti i \textbf{protocolli ad accesso multiplo} regolano le trasmissioni sui canali broadcast in modo che:
+
+\begin{itemize}
+    \item le collisioni siano \textbf{gestite};
+    \item ogni nodo abbia la possibilità di trasmettere, e nessuno \textbf{monopolizzi} il collegamento;
+    \item le connessioni già stabilite non vengano interrotte (per esempio controllando se il collegamento è occupato).
+\end{itemize}
+
+Servono in molti contesti, cablati, senza fili e satellitari, dove centinaia o migliaia di nodi possono comunicare direttamente su un
+canale broadcast. Ne esistono decine, su tecnologie di collegamento diverse; gli approcci principali sono tre:
+
+\begin{itemize}
+    \item \textbf{partizionamento del canale}: la banda viene divisa tra i nodi;
+    \item \textbf{accesso casuale}: i nodi ``tentano la sorte'' per accedere;
+    \item \textbf{a turni} (\emph{taking-turns}): i nodi aspettano il proprio turno.
+\end{itemize}
+
+\dfn{Le proprietà desiderate}{
+    Un protocollo ad accesso multiplo per un canale broadcast a $R$ bit/s dovrebbe essere:
+    \begin{itemize}
+      \item \textbf{efficiente}: se un solo nodo deve trasmettere, dovrebbe avere throughput $R$; se $M$ nodi devono trasmettere, ciascuno
+            dovrebbe avere in media $R/M$ bit/s;
+      \item \textbf{decentralizzato}: un nodo ``master'' sarebbe un single point of failure;
+      \item \textbf{semplice e leggero}: si inviano tantissimi frame, non ci può essere overhead.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Protocolli a partizionamento del canale}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{TDMA}
+
+\dfn{TDMA (Time Division Multiple Access)}{
+    Dato un canale con $N$ nodi e velocità $R$ bit/s, il \textbf{TDMA} divide il tempo in \textbf{trame} (\emph{frame} temporali) e ogni
+    trama in $N$ \textbf{slot}. Ogni slot è assegnato a uno degli $N$ nodi: quando un nodo ha un pacchetto da inviare, aspetta il proprio
+    slot. Di solito la dimensione degli slot è scelta in modo che un pacchetto intero possa essere trasmesso in uno slot.
+}
+
+\subsection{FDMA}
+
+\dfn{FDMA (Frequency Division Multiple Access)}{
+    Il \textbf{FDMA} divide il canale da $R$ bit/s in \textbf{frequenze diverse}, ciascuna con banda $R/N$, e assegna ogni frequenza a uno
+    degli $N$ nodi.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \begin{scope}
+    \node[font=\footnotesize\bfseries\sffamily] at (2.8,2.6) {TDMA};
+    \draw[-{Stealth}] (0,0) -- (6,0) node[right] {tempo}; \draw[-{Stealth}] (0,0) -- (0,2.3) node[above] {frequenza};
+    \foreach \k in {0,1} \foreach \i/\c in {1/lapp,2/ltra,3/lnet,4/llink} { \fill[\c] (0.1+\k*2.8+\i*0.65-0.65,0.1) rectangle ++(0.6,1.9); \node at (0.4+\k*2.8+\i*0.65-0.65,1.05) {N\i}; }
+    \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (0.1,-0.15) -- (2.7,-0.15) node[midway, below=4pt] {trama};
+    \draw[decorate, decoration={brace, amplitude=3pt}] (0.1,2.05) -- (0.7,2.05) node[midway, above=3pt] {slot};
+  \end{scope}
+  \begin{scope}[xshift=7.8cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (2.8,2.6) {FDMA};
+    \draw[-{Stealth}] (0,0) -- (6,0) node[right] {tempo}; \draw[-{Stealth}] (0,0) -- (0,2.3) node[above] {frequenza};
+    \foreach \i/\c in {1/lapp,2/ltra,3/lnet,4/llink} { \fill[\c] (0.1,0.1+\i*0.48-0.48) rectangle ++(5.6,0.44); \node at (2.9,0.32+\i*0.48-0.48) {N\i}; }
+  \end{scope}
+\end{tikzpicture}
+\caption{TDMA: a turno, ciascuno con tutta la banda. FDMA: sempre, ciascuno con una fetta della banda.}
+\end{figure}
+
+FDMA e TDMA condividono pro e contro:
+
+\begin{itemize}
+    \item[\itick] \textbf{evitano le collisioni} e dividono la banda \textbf{equamente} tra gli $N$ nodi;
+    \item[\icross] un nodo è limitato a una banda di $R/N$ \textbf{anche quando è l'unico} ad avere pacchetti da inviare: capacità sprecata.
+\end{itemize}
+
+\subsection{CDMA}
+
+\dfn{CDMA (Code Division Multiple Access)}{
+    Il \textbf{CDMA} assegna a ogni nodo un \textbf{codice} diverso, con cui codifica e decodifica i bit che invia. Se i codici sono scelti con
+    cura, nelle reti CDMA più nodi possono trasmettere \textbf{contemporaneamente, sulle stesse frequenze}, senza interferire.
+}
+
+\begin{esempio}{L'idea del CDMA}
+Siano $c_A = (+1, -1)$ e $c_B = (+1, +1)$ i codici di due stazioni: sono \textbf{ortogonali}, cioè il loro prodotto scalare è
+$c_A \cdot c_B = 1 - 1 = 0$, mentre $c_B \cdot c_B = 2$. Per trasmettere un bit, ogni stazione invia il proprio codice moltiplicato per
+$+1$ (bit 1) o $-1$ (bit 0). Sul canale i segnali si \textbf{sommano}.
+\begin{itemize}
+    \item A invia 1, B invia 1: sul canale arriva $c_A + c_B = (2, 0)$.
+    \item Il ricevente di B calcola $(c_A + c_B)\cdot c_B = c_A\cdot c_B + c_B \cdot c_B = 0 + 2 > 0$: B ha inviato \textbf{1}.
+    \item Il ricevente di A calcola $(c_A + c_B)\cdot c_A = 2 + 0 > 0$: anche A ha inviato \textbf{1}.
+\end{itemize}
+Il contributo dell'altra stazione si annulla grazie all'ortogonalità dei codici (v. Tanenbaum per i dettagli).
+\end{esempio}
+
+\begin{itemize}
+    \item Funziona soprattutto sui canali \textbf{senza fili}; è usato da tempo in ambito militare (per le sue proprietà anti-disturbo) e
+          nella telefonia cellulare (per esempio il 3G).
+    \item[\icross] È complesso da realizzare.
+    \item[\icross] Non scala bene con il numero di nodi.
+\end{itemize}
+
+\info{Il segnale modulato}{
+    Sui canali radio i dati non viaggiano ``così come sono'': si trasmette un segnale in \textbf{banda base} (a bassa frequenza) modulando una
+    \textbf{frequenza portante} più alta. Il telefono analogico, per esempio, usa la banda 300--3400 Hz. FDMA e CDMA lavorano proprio sulle
+    frequenze portanti e sulla loro condivisione.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Protocolli ad accesso casuale}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Accesso casuale}{
+    Nei protocolli ad \textbf{accesso casuale} un nodo che trasmette usa sempre \textbf{tutta la velocità} del canale ($R$ bit/s). Se avviene
+    una collisione (almeno due nodi trasmettono insieme), ogni nodo coinvolto \textbf{aspetta un ritardo casuale} prima di ritrasmettere.
+}
+
+Poiché la scelta del ritardo è fatta indipendentemente, è possibile che i due nodi scelgano ritardi abbastanza diversi da permettere a uno
+dei due di ``infilare'' il proprio messaggio. Se invece scelgono ritardi simili, avviene una nuova collisione e il processo si ripete.
+
+\subsection{ALOHA puro}
+
+Il primo protocollo ad accesso casuale nacque alle Hawaii (ALOHAnet, anni '70), per collegare le isole via radio:
+
+\begin{itemize}
+    \item ogni stazione trasmette \textbf{appena ha un frame} da inviare;
+    \item una stazione centrale ripete ogni frame ricevuto: se non ci sono collisioni, ogni stazione riceve indietro il frame che ha appena
+          trasmesso, e capisce così se è arrivato;
+    \item in caso di collisione si attende un tempo di lunghezza casuale e si ritrasmette.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \foreach \y/\n in {0/A, -0.7/B, -1.4/C} { \node[anchor=east] at (-0.2,\y) {\n}; \draw[black!30] (0,\y) -- (11,\y); }
+  \draw[-{Stealth}] (0,-1.9) -- (11,-1.9) node[right] {tempo};
+  \fill[netblue!40] (0.5,-0.2) rectangle (2.5,0.2);
+  \fill[netred!40] (2.0,-0.9) rectangle (4.0,-0.5); \fill[netred!40] (3.4,-1.6) rectangle (5.4,-1.2);
+  \fill[netblue!40] (5.8,-0.2) rectangle (7.8,0.2); \fill[netblue!40] (8.4,-0.9) rectangle (10.4,-0.5);
+  \draw[netred, very thick] (2.0,-1.05) -- (5.4,-1.05);
+  \node[text=netred] at (3.7,-2.25) {B e C si sovrappongono (e B anche con A): collisioni};
+  \draw[dashed] (2,0.4) -- (2,-1.9); \draw[dashed] (2.5,0.4) -- (2.5,-1.9);
+\end{tikzpicture}
+\caption{ALOHA puro: basta che due frame si sovrappongano anche in parte perché entrambi vadano persi.}
+\end{figure}
+
+\subsection{Slotted ALOHA}
+
+\dfn{Slotted ALOHA}{
+    \begin{itemize}
+      \item Il tempo è diviso in \textbf{slot} (come in TDMA), ciascuno grande abbastanza da contenere un frame.
+      \item I nodi sono \textbf{sincronizzati}: ogni nodo trasmette frame solo \textbf{all'inizio} di uno slot.
+      \item Se nello slot non c'è collisione, la comunicazione prosegue.
+      \item Se c'è una collisione, ogni nodo coinvolto ritrasmette il frame in ciascuno degli slot successivi \textbf{con probabilità
+            $p \in [0,1]$} (``lancia una moneta''), finché il frame non viene inviato con successo.
+    \end{itemize}
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \foreach \x in {0,1.5,...,9} \draw[dashed, black!30] (\x,0.6) -- (\x,-1.6);
+  \node[anchor=east] at (-0.2,0) {nodo 1}; \node[anchor=east] at (-0.2,-1) {nodo 2};
+  \draw[-{Stealth}] (0,-1.6) -- (9.3,-1.6) node[right] {tempo};
+  \fill[netred!40] (0,-0.2) rectangle (1.5,0.2); \fill[netred!40] (0,-1.2) rectangle (1.5,-0.8);
+  \node[text=netred] at (0.75,-0.5) {collisione};
+  \node at (2.25,0) {non invia}; \node at (2.25,-1) {non invia};
+  \fill[netred!40] (3,-0.2) rectangle (4.5,0.2); \fill[netred!40] (3,-1.2) rectangle (4.5,-0.8);
+  \node[text=netred] at (3.75,-0.5) {collisione};
+  \fill[netgreen!40] (4.5,-0.2) rectangle (6,0.2); \node at (5.25,0) {invia};
+  \node at (5.25,-1) {non invia};
+  \fill[netgreen!40] (7.5,-1.2) rectangle (9,-0.8); \node at (8.25,-1) {invia};
+  \node[text=netgreen!50!black] at (5.25,0.45) {successo}; \node[text=netgreen!50!black] at (8.25,-0.55) {successo};
+\end{tikzpicture}
+\caption{Slotted ALOHA: dopo una collisione, in ogni slot ciascun nodo ritrasmette con probabilità $p$.}
+\end{figure}
+
+\begin{itemize}
+    \item[\itick] Se c'è un solo nodo, usa tutta la velocità $R$ del canale (niente collisioni).
+    \item[\itick] È \textbf{decentralizzato}: i nodi sono del tutto indipendenti tra loro, a parte la sincronizzazione.
+    \item[\itick] È \textbf{semplice} da realizzare ed eseguire (la scelta casuale è velocissima).
+    \item[\itick] Più collisioni consecutive sono improbabili.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \begin{axis}[width=10cm, height=5cm, xlabel={$G$ (tentativi per slot, cioè per tempo di frame)}, ylabel={$S$ (throughput per frame)},
+      xmin=0, xmax=3, ymin=0, ymax=0.42, grid=major, grid style={gray!20}, legend pos=north east,
+      legend style={font=\scriptsize\sffamily}, tick label style={font=\scriptsize}, label style={font=\footnotesize\sffamily}]
+    \addplot[very thick, netblue, domain=0:3, samples=80] {x*exp(-x)}; \addlegendentry{slotted ALOHA: $S = Ge^{-G}$}
+    \addplot[very thick, netred, domain=0:3, samples=80] {x*exp(-2*x)}; \addlegendentry{ALOHA puro: $S = Ge^{-2G}$}
+    \addplot[only marks, mark=*, netblue] coordinates {(1,0.368)}; \addplot[only marks, mark=*, netred] coordinates {(0.5,0.184)};
+  \end{axis}
+\end{tikzpicture}
+\caption{Throughput di ALOHA: al meglio lo slotted ALOHA usa il canale per il 37\% del tempo ($1/e$), l'ALOHA puro solo il 18\% ($1/2e$).}
+\end{figure}
+
+\subsection{CSMA e CSMA/CD}
+
+Un punto debole di ALOHA è che si può cominciare a trasmettere (producendo una collisione) anche se il canale \textbf{è già occupato}: ce
+ne accorgiamo solo dall'effetto delle collisioni. La soluzione è \textbf{ascoltare} il canale e tentare di trasmettere solo se è libero.
+
+\dfn{CSMA e CSMA/CD}{
+    I protocolli \textbf{CSMA} (\emph{Carrier Sense Multiple Access}) e \textbf{CSMA/CD} (CSMA con \emph{Collision Detection}) si basano su
+    due principi:
+    \begin{itemize}
+      \item \textbf{carrier sensing}: i nodi ascoltano il canale \textbf{prima} di trasmettere. Se un altro nodo sta trasmettendo un frame,
+            aspettano che la trasmissione finisca;
+      \item \textbf{collision detection}: i nodi ascoltano il canale \textbf{mentre} trasmettono. Se rilevano una collisione, smettono di
+            trasmettere e aspettano un tempo casuale prima di riprovare.
+    \end{itemize}
+}
+
+Ma se tutti i nodi ascoltano prima di trasmettere, perché avvengono comunque collisioni? Per il \textbf{ritardo di propagazione} del
+segnale.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.34\linewidth}\centering
+  \includegraphics[width=0.9\linewidth]{cap19/csma_ritardo.png}
+\end{minipage}\hfill
+\begin{minipage}{0.62\linewidth}
+\begin{itemize}
+  \item Anche se la propagazione è vicina alla velocità della luce, il segnale impiega del \textbf{tempo} per raggiungere gli altri nodi.
+  \item Nella figura (spazio in orizzontale, tempo verso il basso) B comincia a trasmettere al tempo $t_0$ e il segnale si propaga in entrambe
+        le direzioni. Al tempo $t_1$ D non ha ancora ricevuto il segnale di B, ascolta, trova il canale libero e \textbf{inizia a trasmettere}.
+  \item Poco dopo i due segnali si incontrano: collisione. D se ne accorge solo quando riceve il segnale di B.
+\end{itemize}
+Per questo ritardo tra inizio della trasmissione e rilevazione, un nodo può considerare libero un canale che in realtà è già in uso.
+\end{minipage}
+\caption{Collisione in CSMA dovuta al ritardo di propagazione (da Kurose).}
+\end{figure}
+
+\subsubsection*{CSMA puro}
+
+\begin{enumerate}
+    \item Controlla se il canale è occupato.
+    \item Se il canale è libero, invia un frame.
+\end{enumerate}
+
+In CSMA puro le collisioni \textbf{non vengono rilevate}, anche se sono possibili: si capisce che un frame è andato perso solo perché
+\textbf{non arriva l'ACK}.
+
+\info{Varianti di CSMA}{
+    Cosa fare se il canale è occupato? Nel \textbf{CSMA 1-persistente} si aspetta che si liberi e si trasmette subito (con probabilità 1);
+    nel \textbf{non persistente} si attende un tempo casuale e si riascolta; nel \textbf{$p$-persistente} (su canali a slot), quando il canale è
+    libero si trasmette con probabilità $p$ e si rimanda allo slot successivo con probabilità $1-p$.
+}
+
+\subsubsection*{CSMA/CD}
+
+Il \textbf{CSMA/CD}, più sofisticato, è quello implementato in \textbf{Ethernet}:
+
+\begin{enumerate}
+    \item controlla se il canale è occupato;
+    \item se il canale è libero, invia un frame;
+    \item \textbf{durante la trasmissione} controlla eventuali collisioni;
+    \item se rileva una collisione, \textbf{smette subito} di trasmettere e attende un periodo casuale $K \cdot$ (tempo di slot), con
+          $K \in \{0, 1, \dots, 2^n - 1\}$, dove $n$ è il numero di collisioni già rilevate per quel frame (\textbf{binary exponential backoff}).
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \draw[-{Stealth}] (0,0) -- (13,0) node[right] {tempo};
+  \fill[netblue!40] (0.2,0.1) rectangle (3,0.7); \node at (1.6,0.4) {frame};
+  \fill[netred!30] (3.3,0.1) rectangle (3.8,0.7); \fill[netred!30] (4.0,0.1) rectangle (4.5,0.7); \fill[netred!30] (4.7,0.1) rectangle (5.2,0.7);
+  \draw[decorate, decoration={brace, amplitude=4pt}] (3.3,0.8) -- (5.2,0.8) node[midway, above=4pt, align=center] {periodo di contesa:\\collisioni brevi, interrotte};
+  \fill[netblue!40] (5.5,0.1) rectangle (8.3,0.7); \node at (6.9,0.4) {frame};
+  \fill[black!10] (8.5,0.1) rectangle (10,0.7); \node at (9.25,0.4) {inattivo};
+  \fill[netblue!40] (10.2,0.1) rectangle (12.8,0.7); \node at (11.5,0.4) {frame};
+\end{tikzpicture}
+\caption{Con la collision detection le collisioni durano pochissimo: le stazioni smettono appena se ne accorgono, e il canale torna disponibile.}
+\end{figure}
+
+\begin{esempio}{Il binary exponential backoff}
+\begin{itemize}
+    \item Dopo la \textbf{1\textsuperscript{a}} collisione: $K \in \{0, 1\}$.
+    \item Dopo la \textbf{2\textsuperscript{a}}: $K \in \{0, 1, 2, 3\}$.
+    \item Dopo la \textbf{3\textsuperscript{a}}: $K \in \{0, \dots, 7\}$; dopo la $n$-esima: $K \in \{0, \dots, 2^n - 1\}$ (in Ethernet $n$ si ferma a 10).
+\end{itemize}
+Se due stazioni collidono una prima volta, con probabilità 1/2 scelgono lo stesso $K$ e collidono di nuovo; alla seconda la probabilità scende
+a 1/4, poi a 1/8. La probabilità di riuscire a inviare il frame \textbf{cresce con il numero di collisioni}, adattando l'attesa al carico: con
+poche stazioni le attese sono brevi, con molte si allungano.
+\end{esempio}
+
+\warning{La lunghezza minima dei frame in Ethernet}{
+    Perché la collision detection funzioni, una stazione deve essere \textbf{ancora in trasmissione} quando le arriva il segnale della collisione.
+    Sia $\tau$ il tempo di propagazione tra le due stazioni più lontane. Nel caso peggiore A inizia al tempo 0, e il suo segnale arriva a B al tempo
+    $\tau - \varepsilon$, un attimo dopo che B ha iniziato a trasmettere; B rileva subito la collisione, ma il ``rumore'' della collisione torna ad
+    A solo al tempo $2\tau - \varepsilon$. Quindi il tempo di trasmissione di un frame deve essere di almeno $2\tau$: per questo Ethernet ha un
+    campo \textbf{pad} che allunga artificialmente i frame troppo corti (dati da almeno 46 byte).
+    \begin{center}
+    \begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+      \node[draw, minimum size=0.5cm] (A) at (0,0) {A}; \node[draw, minimum size=0.5cm] (B) at (6,0) {B};
+      \draw[thick] (A) -- (B);
+      \draw[-{Stealth}, netblue, thick] (0.4,-0.4) -- node[below] {$t = 0$: A inizia} (5.6,-0.4);
+      \draw[-{Stealth}, netred, thick] (5.6,-1.1) -- node[below] {$t = \tau - \varepsilon$: B inizia e collide; il rumore torna ad A a $2\tau - \varepsilon$} (0.4,-1.1);
+    \end{tikzpicture}
+    \end{center}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Protocolli a turni}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Polling}
+
+\dfn{Protocollo di polling}{
+    C'è un nodo \textbf{master} che, a turno (\emph{round-robin}), seleziona un nodo alla volta a cui permettere di trasmettere (fino a una
+    quantità massima). Il processo si ripete ogni volta che la trasmissione termina. È il caso di Bluetooth.
+}
+
+\begin{itemize}
+    \item[\itick] Non ci sono collisioni.
+    \item[\icross] C'è un \textbf{ritardo di polling} (il tempo per selezionare i nodi).
+    \item[\icross] L'approccio è \textbf{centralizzato}: il master è un single point of failure.
+\end{itemize}
+
+\subsection{Token passing}
+
+\dfn{Protocollo a passaggio di token}{
+    Non c'è un master: i nodi si scambiano uno speciale frame detto \textbf{token} (gettone). Chi riceve il token \textbf{può} (ma non deve)
+    trasmettere, poi passa il token al nodo successivo.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \draw[thick, netblue] (0,0) circle (1.8cm);
+  \foreach \a [count=\i] in {90,30,-30,-90,-150,150} {
+    \node[draw, fill=white, minimum size=0.5cm] at (\a:1.8) {\i};
+  }
+  \draw[-{Stealth}, very thick, netred] (75:1.25) arc (75:40:1.25);
+  \fill[netorange] (57:1.25) circle (4pt); \node[text=netorange] at (57:0.8) {token};
+  \node[text width=6.5cm, anchor=west] at (2.8,0) {La stazione che ha il token, passato lungo l'anello, può trasmettere. Anche i frame di dati viaggiano sull'anello da una stazione alla successiva. L'anello può essere solo \textbf{logico}: a livello fisico le stazioni possono essere collegate a un bus, ma a livello logico c'è sempre il passaggio del token.};
+\end{tikzpicture}
+\caption{Token ring: il gettone circola e dà il diritto di trasmettere.}
+\end{figure}
+
+\begin{itemize}
+    \item[\itick] Non ci sono collisioni.
+    \item[\itick] L'approccio è \textbf{decentralizzato}.
+    \item[\icross] Ci sono problemi se un nodo \textbf{dimentica di rilasciare} il token, monopolizzando il collegamento, o se il token si perde. I
+          protocolli di rilascio hanno diverse varianti, ma è importante che esista un modo per \textbf{recuperare un token perso o bloccato} (per
+          esempio se una stazione smette di funzionare mentre lo custodisce).
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{3.3cm}p{3.6cm}p{3.6cm}p{3.6cm}}
+\toprule
+ & \textbf{Partizionamento} & \textbf{Accesso casuale} & \textbf{A turni} \\
+\midrule
+Esempi & TDMA, FDMA, CDMA & ALOHA, CSMA, CSMA/CD & polling, token passing \\
+Collisioni & no & sì, gestite & no \\
+Carico basso & spreco (banda fissa $R/N$) & ottimo (tutta la banda) & buono \\
+Carico alto & ottimo, equo & molte collisioni & buono \\
+Punto debole & banda inutilizzata & collisioni & master o token \\
+\bottomrule
+\end{tabular}
+\caption{Le tre famiglie di protocolli ad accesso multiplo.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Terminali nascosti ed esposti}
+% ══════════════════════════════════════════════════════════════
+
+Nelle reti \textbf{senza fili} il carrier sensing non basta: un nodo sente solo le stazioni nel proprio \textbf{raggio radio}, e ciò che conta è
+l'interferenza \textbf{presso il ricevente}, non presso il mittente.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \begin{scope}
+    \node[font=\footnotesize\bfseries\sffamily] at (1.9,1.9) {Terminale nascosto};
+    \draw[netgreen!60!black, thick] (1.1,0) circle (1.3cm); \draw[netgreen!60!black, thick] (2.7,0) circle (1.3cm);
+    \foreach \x/\n in {0/A, 1.9/B, 3.8/C} \node[draw, fill=white, minimum size=0.5cm] (\n) at (\x,0) {\n};
+    \draw[-{Stealth}, very thick, netblue] (A) -- (B); \draw[-{Stealth}, very thick, netred] (C) -- (B);
+    \node[text width=4cm, align=center] at (1.9,-1.8) {A e C non si sentono: entrambi trasmettono a B e collidono presso B};
+  \end{scope}
+  \begin{scope}[xshift=7.5cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (2.1,1.9) {Terminale esposto};
+    \draw[netgreen!60!black, thick] (1.4,0) circle (1.3cm); \draw[netgreen!60!black, thick] (2.8,0) circle (1.3cm);
+    \foreach \x/\n in {0/A, 1.4/B, 2.8/C, 4.2/D} \node[draw, fill=white, minimum size=0.5cm] (\n) at (\x,0) {\n};
+    \draw[-{Stealth}, very thick, netblue] (B) -- (A); \draw[-{Stealth}, very thick, dashed, netred] (C) -- (D);
+    \node[text width=4.4cm, align=center] at (2.1,-1.8) {C sente B e rinuncia a trasmettere a D, anche se non disturberebbe nessuno};
+  \end{scope}
+\end{tikzpicture}
+\caption{I cerchi indicano il raggio radio di B e C.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Terminali nascosti}: mittenti che non riescono a sentirsi a vicenda ma collidono comunque presso il ricevente. A e C trasmettono
+          entrambi a B; poiché A non sente C, il carrier sensing di A dice ``libero'', e i frame collidono in B. Si vuole evitare questa perdita di efficienza.
+    \item \textbf{Terminali esposti}: mittenti che si sentono a vicenda ma potrebbero comunque trasmettere senza problemi a riceventi diversi. B
+          trasmette ad A; C sente B e rimanda la propria trasmissione verso D, anche se D è fuori dalla portata di B. Si vorrebbe permettere questa
+          contemporaneità, che migliora le prestazioni.
+\end{itemize}
+
+\subsection{MACA}
+
+\dfn{MACA (Multiple Access with Collision Avoidance)}{
+    Il protocollo \textbf{MACA} concede l'accesso al canale con un breve scambio preliminare:
+    \begin{enumerate}
+      \item il mittente A invia un breve frame \textbf{RTS} (\emph{Request To Send}) a B, indicando la lunghezza del frame da inviare;
+      \item il ricevente B risponde con un frame \textbf{CTS} (\emph{Clear To Send}), anch'esso con la lunghezza;
+      \item A trasmette il frame.
+    \end{enumerate}
+    Chi sente l'RTS resta in silenzio per il tempo del CTS; chi sente il CTS resta in silenzio per tutta la durata del frame.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \begin{scope}
+    \node[font=\footnotesize\bfseries\sffamily] at (2.1,1.9) {(a) A invia RTS a B};
+    \fill[netblue!15] (1.4,0) circle (1.35cm); \draw[netblue, thick] (1.4,0) circle (1.35cm);
+    \foreach \x/\y/\n in {0.2/0/C, 1.4/0/A, 2.6/0/B, 3.9/0/D, 1.4/-1.0/E} \node[draw, fill=white, minimum size=0.45cm] (\n) at (\x,\y) {\n};
+    \draw[-{Stealth}, very thick, netblue] (A) -- node[above] {RTS} (B);
+    \node[text width=4.6cm, align=center] at (2,-1.9) {C ed E sentono l'RTS: restano in silenzio per il CTS};
+  \end{scope}
+  \begin{scope}[xshift=7.5cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (2.1,1.9) {(b) B risponde con CTS};
+    \fill[netred!15] (2.6,0) circle (1.35cm); \draw[netred, thick] (2.6,0) circle (1.35cm);
+    \foreach \x/\y/\n in {0.2/0/C, 1.4/0/A, 2.6/0/B, 3.9/0/D, 2.6/-1.0/E} \node[draw, fill=white, minimum size=0.45cm] (\n) at (\x,\y) {\n};
+    \draw[-{Stealth}, very thick, netred] (B) -- node[above] {CTS} (A);
+    \node[text width=4.6cm, align=center] at (2,-1.9) {D ed E sentono il CTS: restano in silenzio per tutto il frame};
+  \end{scope}
+\end{tikzpicture}
+\caption{MACA: RTS e CTS ``prenotano'' il canale attorno al mittente e al ricevente.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Terminale nascosto risolto}: D non sente A, ma sente il CTS di B, e quindi non disturba la ricezione di B.
+    \item \textbf{Terminale esposto risolto}: C sente l'RTS di A ma non il CTS di B: sa quindi di essere fuori dalla portata del ricevente e, dopo il
+          CTS, può trasmettere senza disturbare.
+    \item Le collisioni restano possibili tra RTS (per esempio due RTS inviati insieme a B), ma riguardano frame piccolissimi: si risolvono con un
+          backoff casuale e costano poco. Una versione evoluta del meccanismo è usata nel Wi-Fi (802.11).
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Sui collegamenti \textbf{broadcast} trasmissioni contemporanee \textbf{collidono}; il sottolivello \textbf{MAC} regola l'accesso.
+    \item Proprietà desiderate: $R/M$ a testa (e $R$ se si è soli), decentralizzato, semplice.
+    \item \textbf{Partizionamento}: TDMA (slot), FDMA (frequenze), CDMA (codici ortogonali); niente collisioni ma banda fissa $R/N$.
+    \item \textbf{Accesso casuale}: ALOHA puro e slotted (ritrasmissione con probabilità $p$), CSMA (ascolta prima), CSMA/CD di Ethernet (ascolta
+          anche durante, backoff esponenziale binario $K \in \{0..2^n-1\}$, frame lunghi almeno $2\tau$).
+    \item \textbf{A turni}: polling (master, Bluetooth) e token passing (token ring).
+    \item Nel wireless: terminali \textbf{nascosti} ed \textbf{esposti}; \textbf{MACA} li affronta con RTS/CTS.
+\end{itemize}
+}
