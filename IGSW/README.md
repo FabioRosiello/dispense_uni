@@ -10,6 +10,7 @@ Questa cartella contiene i sorgenti LaTeX di `../Dispensa.pdf`.
 - `chapters/chapter_3.tex` — Il modello a cascata (L_01)
 - `chapters/chapter_4.tex` — La qualità del software (L_01 + appunti L_03)
 - `chapters/chapter_5.tex` — Requisiti: elicitazione e analisi (L_05)
+- `chapters/chapter_6.tex` — Diagrammi dei casi d'uso (L_04-A)
 - `unina_doc_class.cls`, `fonts/`, `sources/` — template Unina Docs (da `Materiale/Dispense.rar`)
 - `Images/` — immagini tratte dalle slide del corso
 
