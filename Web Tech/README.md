@@ -6,7 +6,7 @@ Federico II, corso di laurea in Informatica.
 
 Copre **l'intero corso**: tutte le 24 lezioni, più la lezione bonus su CMS e
 GraphQL (inclusa come capitolo finale e segnalata come fuori programma).
-23 capitoli, 274 pagine.
+23 capitoli, 298 pagine.
 
 La dispensa contiene **solo i contenuti tecnici** visti a lezione, cioè quelli
 che possono essere oggetto d'esame. Le informazioni organizzative (crediti,
@@ -181,6 +181,19 @@ Tutte in `preamble/webtech-preamble.tex`, la classe non è stata toccata.
   inferiore e senza titolo nella pagina successiva. Nel preambolo la chiave
   `breakable` di tcolorbox è ridefinita perché equivalga a `unbreakable`: un
   riquadro che non entra passa intero alla pagina dopo, come i listati.
+
+- **Nessun concetto si divide fra due pagine** (in fondo al preambolo):
+  - la frase che introduce un listato, una figura, una tabella, una lista o un
+    risultato (`console`, `browser`, `devtools`, `affianco`) resta attaccata a
+    ciò che introduce;
+  - paragrafi e liste non si spezzano mai;
+  - un titolo va a pagina nuova se sotto non c'è spazio per qualche riga
+    (`\Needspace`);
+  - ogni `esempio`/`esercizio` viene composto in una scatola e, se sta in una
+    pagina, non si spezza (se fosse più lungo di una pagina si spezzerebbe
+    normalmente).
+
+  Il prezzo è qualche spazio bianco in più in fondo alle pagine.
 
 ### Una trappola da conoscere
 
