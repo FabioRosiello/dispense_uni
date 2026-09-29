@@ -110,7 +110,8 @@ versione moderna e \term{strict} di JavaScript.
   La modalità strict non aggiunge funzionalità: \textbf{toglie} comportamenti
   permissivi che nascondono errori. Trasforma in errori espliciti cose che
   altrimenti fallirebbero in silenzio, come assegnare a una variabile mai
-  dichiarata o riassegnare una costante. Costa una riga e fa emergere subito
+  dichiarata o scrivere su una proprietà in sola lettura (li vedremo entrambi
+  più avanti in questo capitolo). Costa una riga e fa emergere subito
   bug che altrimenti si scoprirebbero molto più tardi.}
 
 \section{Il linguaggio}
@@ -210,6 +211,31 @@ const y = 42;
 console.log(x);   // output: undefined
 console.log(y);   // output: 42
 \end{lstlisting}
+
+Con \code{const} si dichiarano \textbf{costanti locali con scope di blocco},
+cioè variabili il cui valore non può essere riassegnato. Per il resto si
+comportano come quelle dichiarate con \code{let}, compreso l'hoisting che
+vedremo fra poco.
+
+\begin{lstlisting}[style=js, name=const.js]
+const n = 42;
+console.log(n);   // output: 42
+n = 43;           // TypeError: Assignment to constant variable.
+\end{lstlisting}
+
+\begin{warningbox}{{const non rende immutabile un oggetto}}
+  \code{const} impedisce di \textbf{riassegnare la variabile}, non di
+  modificare il valore a cui si riferisce. Se il valore è un oggetto, la
+  variabile ne contiene solo il \textbf{riferimento} (lo vedremo nella sezione
+  sugli oggetti), e le proprietà si possono cambiare liberamente.
+
+\begin{lstlisting}[style=js]
+const pet = { name: "Hannibal" };
+pet.name = "Sif";   // consentito: cambia l'oggetto, non la variabile
+pet.age = 7;        // consentito
+pet = {};           // TypeError: e' la variabile a non poter cambiare
+\end{lstlisting}
+\end{warningbox}
 
 \subsection{Gli scope}
 
@@ -508,7 +534,8 @@ dichiarazione avviene.
   molto più leggibili della concatenazione con \code{+}.
 
   Su tastiera italiana il backtick si inserisce con \code{ALT+096} dal
-  tastierino numerico (su Windows).}
+  tastierino numerico su Windows, con \code{Option+9} su macOS e con
+  \code{AltGr+'} su Linux.}
 
 \subsection{Argomenti predefiniti}
 
@@ -617,6 +644,13 @@ Nel primo caso la \textbf{dichiarazione di funzione} viene sollevata per intero
 dentro il blocco, quindi la chiamata interna funziona. Nel secondo la variabile
 \code{salute} viene sollevata ma non inizializzata: la chiamata cade nella
 Temporal Dead Zone.
+
+La prima riga fallisce in \textbf{entrambi} i casi perché, in modalità strict,
+anche una dichiarazione di funzione scritta dentro un blocco ha \textbf{scope di
+blocco}: viene sollevata all'inizio del blocco, non fuori. Senza
+\code{"use strict"} i browser, per retro-compatibilità, rendono \code{greet}
+visibile anche fuori dal blocco, e la prima chiamata darebbe un errore diverso:
+un \code{TypeError} (\textit{greet is not a function}).
 \end{esempio}
 
 \subsection{Funzioni annidate restituite}
@@ -813,6 +847,18 @@ necessario farlo ogni volta: esistono alternative già pronte, come
 \code{Object.assign()} (superficiale) e \code{structuredClone()} (profonda).
 \end{esempio}
 
+\warning{Due trappole della copia profonda fatta a mano}{
+  La versione ricorsiva decide se scendere di livello con il test
+  \code{typeof object[key] === "object"}, che ha due punti deboli.
+  \begin{itemize}
+    \item \code{typeof null} vale \code{"object"} (una storica stranezza del
+          linguaggio): una proprietà che vale \code{null} diventa, nella copia,
+          un oggetto vuoto \code{\{\}}.
+    \item Anche gli array hanno tipo \code{"object"}: \code{[1, 2]} diventa
+          l'oggetto \code{\{0: 1, 1: 2\}}, che non è più un array.
+  \end{itemize}
+  \code{structuredClone()} gestisce correttamente entrambi i casi.}
+
 \subsection{Metodi}
 
 Le proprietà di un oggetto possono anche essere funzioni. Una funzione che è
@@ -961,6 +1007,15 @@ console.log(pet.species);       // undefined
 console.log(pet.owner.name);    // TypeError!
 \end{lstlisting}
 
+\info{{TypeError, non ReferenceError}}{
+  Nelle slide l'errore di \code{pet.owner.name} è indicato come
+  \code{ReferenceError}, ma quello che si ottiene davvero è un
+  \code{TypeError} (\textit{Cannot read properties of undefined}). La
+  differenza conta: un \code{ReferenceError} nasce quando si usa un
+  \textbf{nome} che non esiste, come una variabile mai dichiarata; qui invece
+  \code{pet} esiste e \code{pet.owner} vale semplicemente \code{undefined}, e
+  l'errore sta nel leggere una proprietà da un valore che non è un oggetto.}
+
 In molti casi pratici preferiremmo ottenere \code{undefined} (che significa
 semplicemente \guillemotleft il nome del proprietario non è noto\guillemotright) piuttosto che un
 errore. Si potrebbe verificare esplicitamente che la proprietà sia definita
@@ -972,7 +1027,8 @@ let ownerName = pet.owner ? pet.owner.name : undefined;
 
 L'operatore di \term{optional chaining} (\code{?.}) risolve la situazione:
 interrompe immediatamente la valutazione (fa \textit{corto circuito}) se la
-parte a sinistra è \code{undefined}, restituendo \code{undefined}.
+parte a sinistra è \code{undefined} (o \code{null}), restituendo
+\code{undefined}.
 
 \begin{lstlisting}[style=js]
 let ownerName = pet.owner?.name;
@@ -1036,6 +1092,13 @@ delete pet.species;    // funziona
 delete pet.name;       // TypeError: property "name" is non-configurable
 \end{lstlisting}
 \end{esempio}
+
+\info{Gli errori li dà la modalità strict}{
+  I due \code{TypeError} dell'esempio si ottengono in modalità strict. Senza
+  \code{"use strict"} l'assegnamento e la \code{delete} falliscono \textbf{in
+  silenzio}: \code{pet.name} resta \code{"Garfield"} e \code{delete} si limita
+  a restituire \code{false}. È proprio uno dei fallimenti silenziosi che la
+  modalità strict trasforma in errori espliciti.}
 
 \subsection{Getter e setter}
 
