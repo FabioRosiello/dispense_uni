@@ -1,0 +1,1206 @@
+\chapter{Altri diagrammi UML}
+
+Nel Capitolo 6 abbiamo usato il primo diagramma UML, quello dei casi d'uso, per descrivere i requisiti funzionali.
+UML offre però molti altri diagrammi, ciascuno pensato per mostrare il sistema da un punto di vista diverso.
+Si dividono in due grandi famiglie.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\scriptsize]
+  \node[card=ph5, text width=6.9cm, align=left, minimum height=2.7cm] (s) {\textbf{\small Diagrammi statici (strutturali)}\\[3pt]
+     Descrivono \textbf{com'è fatto} il sistema: le sue parti e come sono collegate fra loro.\\[3pt]
+     \textbullet\ diagramma delle classi\\
+     \textbullet\ \textbf{diagramma dei componenti}\\
+     \textbullet\ \textbf{diagramma di deployment}};
+  \node[card=q3, text width=6.9cm, align=left, minimum height=2.7cm, right=0.5cm of s] (d) {\textbf{\small Diagrammi comportamentali (dinamici)}\\[3pt]
+     Descrivono \textbf{cosa fa} il sistema nel tempo, in risposta agli eventi.\\[3pt]
+     \textbullet\ diagramma dei casi d'uso (Capitolo 6)\\
+     \textbullet\ \textbf{diagramma di stato} (\textit{statechart})\\
+     \textbullet\ \textbf{diagramma di attività}};
+\end{tikzpicture}
+\caption{Le due famiglie di diagrammi UML. In grassetto quelli trattati in questo capitolo.}
+\end{figure}
+
+In questo capitolo vediamo quattro diagrammi:
+\begin{itemize}
+  \item due \textbf{statici}, che descrivono l'architettura: il diagramma dei \textbf{componenti} e quello di \textbf{deployment};
+  \item due \textbf{comportamentali}: il diagramma di \textbf{stato} e quello di \textbf{attività}.
+\end{itemize}
+
+% ============================================================
+\section{Il diagramma dei componenti}
+
+\dfn{Componente}{
+  Un \textbf{componente} è un contenitore di altri elementi statici di UML, come classi e package. Può contenere a sua volta
+  altri componenti: un componente che ne contiene altri si chiama spesso \textbf{sottosistema}.
+}
+
+\Needspace{8\baselineskip}
+Che cosa sia concretamente un componente dipende dal contesto:
+\begin{itemize}
+  \item spesso è un \textbf{elemento fisico}: un file di codice sorgente, un file eseguibile, un database, \ldots;
+  \item in altri casi coincide con un \textbf{package}, come nelle librerie Java «impacchettate» in un unico file \texttt{.jar}.
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[compo, minimum width=3.0cm, minimum height=1.5cm] (ts) {{\tiny «component»}\\ \textbf{TicketSeller}};
+  \compicon{ts}
+  \node[note, right=0.6cm of ts, text width=6.5cm] {Un componente si disegna come un rettangolo con lo stereotipo
+    «component» e, nell'angolo in alto a destra, l'icona del componente.};
+\end{tikzpicture}
+\end{center}
+
+\dfn{Diagramma dei componenti}{
+  Mostra un insieme di \textbf{componenti} e le loro \textbf{relazioni}. Per ogni componente può mostrare esplicitamente le
+  \textbf{interfacce} che espone verso l'esterno. È un diagramma \textbf{architetturale}: mostra gli oggetti effettivamente
+  realizzati, ma \textbf{non} dice nulla sulla loro collocazione fisica (su quale macchina girano).
+}
+
+\subsection{Interfacce e porte}
+
+\Needspace{12\baselineskip}
+I componenti comunicano attraverso \textbf{interfacce}, che si disegnano con due simboli complementari.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[compo, minimum width=2.0cm, minimum height=0.9cm] (a) at (0,0) {A};
+  \draw[line width=0.8pt] (a.east) -- (1.9,0);
+  \palla{(2.0,0)}
+  \node[note, below=0.25cm of a, text width=3.6cm, align=center] {\textbf{Interfaccia fornita}\\(\textit{lollipop}, «lecca-lecca»):
+    A la implementa e la offre agli altri.};
+
+  \node[compo, minimum width=2.0cm, minimum height=0.9cm] (b) at (5.4,0) {B};
+  \draw[line width=0.8pt] (b.east) -- (7.1,0);
+  \presa{(7.3,0)}{0}
+  \node[note, below=0.25cm of b, text width=3.6cm, align=center] {\textbf{Interfaccia richiesta}\\(\textit{socket}, «presa»):
+    B ne ha bisogno per funzionare.};
+
+  \node[compo, minimum width=1.5cm, minimum height=0.9cm] (c) at (10.0,0) {C};
+  \node[compo, minimum width=1.5cm, minimum height=0.9cm] (d) at (13.2,0) {D};
+  \draw[line width=0.8pt] (c.east) -- (11.4,0);
+  \presa{(11.6,0)}{0}
+  \palla{(11.6,0)}
+  \draw[line width=0.8pt] (11.71,0) -- (d.west);
+  \node[note, below=0.25cm of c, xshift=1.6cm, text width=4.4cm, align=center] {\textbf{Collegamento}: la pallina di D entra
+    nella presa di C. D fornisce ciò che C richiede.};
+\end{tikzpicture}
+\end{center}
+
+\dfn{Porta di comunicazione}{
+  Piccolo quadrato sul bordo di un componente. Esprime la necessità di \textbf{trasferire dati} tra componenti, eventualmente
+  con operazioni di trasformazione, serializzazione o deserializzazione.
+}
+
+\begin{esempio}{Un server delle vendite}
+\begin{center}
+\begin{tikzpicture}
+  % componenti esterni
+  \node[compo, minimum width=2.2cm, minimum height=1.0cm] (till) at (-4.8,1.4) {\textbf{Till}};
+  \compicon{till}
+  \node[compo, minimum width=2.4cm, minimum height=1.0cm] (mq) at (-4.4,-1.0) {\textbf{Message Queue}};
+  \compicon{mq}
+  % collegamento "sales message"
+  \draw[line width=0.8pt] (till.south) -- (-4.8,0.2) -- (-2.8,0.2);
+  \draw[line width=0.8pt] (mq.north) -- (-4.4,0.2);
+  \presa{(-2.6,0.2)}{0}
+  \palla{(-2.6,0.2)}
+  \node[font=\tiny, align=center] at (-2.6,0.75) {sales\\message};
+  % Sales Server
+  \node[compo, minimum width=6.8cm, minimum height=3.4cm, anchor=west] (ss) at (-1.4,0.2) {};
+  \compicon{ss}
+  \node[font=\scriptsize\bfseries, anchor=north] at ($(ss.north)+(0,-0.12)$) {Sales Server};
+  \node[draw, fill=white, minimum size=0.16cm, inner sep=0pt] (p1) at (-1.4,0.2) {};
+  \draw[line width=0.8pt] (-2.49,0.2) -- (p1.west);
+  \node[compo, minimum width=2.2cm, minimum height=1.1cm, fill=white] (tp) at (0.8,0.2) {\textbf{Transaction}\\\textbf{Processor}};
+  \compicon{tp}
+  \node[compo, minimum width=2.2cm, minimum height=1.1cm, fill=white] (ad) at (4.0,0.2) {\textbf{Accounting}\\\textbf{Driver}};
+  \compicon{ad}
+  \draw[dipend] (p1.east) -- (tp.west);
+  % collegamento interno
+  \draw[line width=0.8pt] (tp.east) -- (2.2,0.2);
+  \presa{(2.4,0.2)}{0}
+  \palla{(2.4,0.2)}
+  \draw[line width=0.8pt] (2.51,0.2) -- (ad.west);
+  % porta verso l'esterno
+  \node[draw, fill=white, minimum size=0.16cm, inner sep=0pt] (p2) at (4.0,-1.5) {};
+  \draw[dipend] (ad.south) -- (p2.north);
+  \draw[line width=0.8pt] (p2.south) -- (4.0,-2.0);
+  \presa{(4.0,-2.2)}{-90}
+  \palla{(4.0,-2.2)}
+  \node[compo, minimum width=2.2cm, minimum height=1.0cm] (as) at (4.0,-3.4) {\textbf{Accounting}\\\textbf{System}};
+  \compicon{as}
+  \draw[line width=0.8pt] (4.0,-2.31) -- (as.north);
+  % annotazioni
+  \node[font=\scriptsize\itshape, text=swteal] (lc) at (-1.4,2.6) {componente};
+  \draw[-{Stealth[length=1.6mm]}, swteal] (lc.west) -- ($(till.north east)+(-0.1,-0.05)$);
+  \draw[-{Stealth[length=1.6mm]}, swteal] (lc.east) -- ($(ss.north)+(-0.5,0)$);
+  \node[font=\scriptsize\itshape, text=swteal, align=center] (li) at (0.9,-2.7) {interfaccia\\(richiesta e fornita)};
+  \draw[-{Stealth[length=1.6mm]}, swteal] (li.north) -- (2.35,0.0);
+  \draw[-{Stealth[length=1.6mm]}, swteal] (li.east) -- (3.75,-2.25);
+  \node[font=\scriptsize\itshape, text=swteal, align=center] (lp) at (6.9,-2.4) {porta di\\comunicazione};
+  \draw[-{Stealth[length=1.6mm]}, swteal] (lp.north west) -- (p2.east);
+\end{tikzpicture}
+\end{center}
+Il \textbf{Sales Server} contiene due componenti. Il \textbf{Transaction Processor} richiede un'interfaccia che l'\textbf{Accounting
+Driver} fornisce. I messaggi di vendita (\textit{sales message}) arrivano dalla cassa (\textbf{Till}) attraverso una coda di messaggi
+ed entrano nel server da una porta, che li inoltra (freccia tratteggiata) al Transaction Processor. Allo stesso modo l'Accounting
+Driver comunica con il sistema di contabilità esterno (\textbf{Accounting System}) attraverso una porta.
+\end{esempio}
+
+\subsection{Sottosistemi}
+
+Un componente che contiene altri componenti è un \textbf{sottosistema} (stereotipo «subsystem»). Le porte sul suo bordo collegano
+le interfacce esterne ai componenti interni che le realizzano: chi usa il sottosistema vede solo le porte, non come è organizzato dentro.
+
+\begin{esempio}{Un negozio online diviso in sottosistemi (semplificato)}
+\begin{center}
+\begin{tikzpicture}
+  % WebStore
+  \node[compo, minimum width=5.2cm, minimum height=3.4cm, anchor=south west] (ws) at (0,0) {};
+  \compicon{ws}
+  \node[font=\tiny, anchor=north, align=center] at ($(ws.north)+(0,-0.08)$) {«component» «subsystem»\\\textbf{\scriptsize WebStore}};
+  \node[compo, minimum width=2.4cm, minimum height=0.75cm, fill=white] (se) at (2.8,2.1) {:SearchEngine};
+  \node[compo, minimum width=2.4cm, minimum height=0.75cm, fill=white] (sc) at (2.8,0.8) {:ShoppingCart};
+  % porte a sinistra con interfacce fornite
+  \foreach \y/\n/\t in {2.1/pa/ProductSearch, 0.8/pb/OnlineShopping}{
+    \node[draw, fill=white, minimum size=0.16cm, inner sep=0pt] (\n) at (0,\y) {};
+    \draw[line width=0.8pt] (\n.west) -- (-0.7,\y);
+    \palla{(-0.81,\y)}
+    \node[font=\tiny, anchor=east] at (-0.95,\y) {\t};
+  }
+  \draw[dipend] (pa.east) -- (se.west);
+  \draw[dipend] (pb.east) -- (sc.west);
+  % Warehouses
+  \node[compo, minimum width=4.0cm, minimum height=2.3cm, anchor=south west] (wh) at (6.6,1.1) {};
+  \compicon{wh}
+  \node[font=\tiny, anchor=north, align=center] at ($(wh.north)+(0,-0.08)$) {«component» «subsystem»\\\textbf{\scriptsize Warehouses}};
+  \node[compo, minimum width=2.2cm, minimum height=0.75cm, fill=white] (inv) at (8.6,2.1) {:Inventory};
+  % collegamento Search Inventory
+  \node[draw, fill=white, minimum size=0.16cm, inner sep=0pt] (pc) at (5.2,2.1) {};
+  \node[draw, fill=white, minimum size=0.16cm, inner sep=0pt] (pd) at (6.6,2.1) {};
+  \draw[line width=0.8pt] (se.east) -- (pc.west);
+  \draw[line width=0.8pt] (pc.east) -- (5.7,2.1);
+  \presa{(5.9,2.1)}{0}
+  \palla{(5.9,2.1)}
+  \draw[line width=0.8pt] (6.01,2.1) -- (pd.west);
+  \draw[dipend] (pd.east) -- (inv.west);
+  \node[font=\tiny, align=center] at (5.9,2.65) {Search\\Inventory};
+\end{tikzpicture}
+\end{center}
+Dall'esterno il \textbf{WebStore} offre due interfacce, \textit{ProductSearch} e \textit{OnlineShopping}, e le porte le inoltrano
+ai componenti interni. Per cercare i prodotti, il SearchEngine usa l'interfaccia \textit{Search Inventory} fornita dal sottosistema
+\textbf{Warehouses}. Nelle slide lo stesso negozio ha anche un sottosistema Accounting (ordini e clienti) e un componente per
+l'autenticazione.
+\end{esempio}
+
+% ============================================================
+\section{Il diagramma di deployment}
+
+\dfn{Diagramma di deployment}{
+  Mostra l'\textbf{architettura fisica} del sistema: su quali macchine e dispositivi gira il software e come sono collegati.
+}
+
+\Needspace{12\baselineskip}
+I suoi elementi sono:
+\begin{itemize}
+  \item il \textbf{nodo}, elemento fondamentale: corrisponde a un elemento \textbf{fisico} del sistema, come una macchina o un
+        dispositivo. Si disegna come un \textbf{parallelepipedo};
+  \item i \textbf{componenti}, che si possono disegnare \textbf{dentro} i nodi: così il diagramma di deployment si collega ai
+        diagrammi dei componenti corrispondenti;
+  \item gli \textbf{artefatti}, che rappresentano i prodotti dell'elaborazione: un artefatto è qualunque oggetto fisico prodotto
+        dal sistema (un file, un database, \ldots);
+  \item gli \textbf{archi}, che corrispondono alle \textbf{connessioni fisiche} tra i nodi (spesso etichettati con il protocollo, ad
+        esempio TCP/IP).
+\end{itemize}
+
+\begin{esempio}{I nodi di un sistema di vendita di biglietti}
+Ogni nodo è un'\textbf{istanza}: a sinistra dei due punti c'è il nome dell'istanza, a destra il tipo di nodo. Come per gli oggetti
+UML, il nome è sottolineato.
+\begin{center}
+\begin{tikzpicture}
+  \nodo{ms}{(-8.0,0)}{3.9}{0.7}{\underline{Main St. Kiosk : Kiosk}}
+  \nodo{hq}{(-2.25,0)}{4.5}{0.7}{\underline{headquarters : TicketServer}}
+  \nodo{rs}{(-7.8,-1.8)}{5.4}{0.7}{\underline{River St. Box Office : SalesTerminal}}
+  \nodo{to}{(2.5,-1.8)}{5.1}{0.7}{\underline{Telesales Office : SalesTerminal}}
+  \nodo{vm}{(-2.1,-3.0)}{4.2}{0.7}{\underline{Valley Mall Kiosk : Kiosk}}
+  \draw[line width=0.8pt] (ms.east) -- (hq.west);
+  \draw[line width=0.8pt] ($(hq.south)+(-1.4,0)$) -- ++(0,-0.45) -| (rs.north);
+  \draw[line width=0.8pt] ($(hq.south)+(1.4,0)$) -- ++(0,-0.45) -| (to.north);
+  \draw[line width=0.8pt] (hq.south) -- (vm.north);
+\end{tikzpicture}
+\end{center}
+Un server centrale (\textit{headquarters}) è collegato a due chioschi e a due terminali di vendita. Kiosk e SalesTerminal
+sono tipi di nodo; ogni parallelepipedo è una macchina concreta.
+\end{esempio}
+
+\begin{esempio}{Nodi che contengono componenti e artefatti}
+\begin{center}
+\begin{tikzpicture}
+  \nodo{bs}{(0,0)}{6.0}{2.4}{\textbf{Bank Server}}
+  \node[compo, minimum width=3.0cm, minimum height=0.8cm, fill=white] (ma) at (1.8,1.4) {{\tiny «component»}\\Mortgage Application};
+  \node[compo, minimum width=2.0cm, minimum height=0.8cm, draw=q9, fill=q9!6] (cdb) at (4.7,1.4) {{\tiny «artifact»}\\Customer DB};
+  \draw[dipend] (ma.east) -- (cdb.west);
+  \draw[line width=0.8pt] (ma.south) -- (1.8,0.55);
+  \palla{(1.8,0.44)}
+  \node[font=\tiny, anchor=west] at (2.0,0.44) {IMortgageApplication};
+
+  \nodo{re}{(6.8,0)}{6.0}{2.4}{\textbf{Real Estate Server}}
+  \node[compo, minimum width=2.2cm, minimum height=0.8cm, fill=white] (li) at (8.4,1.4) {{\tiny «component»}\\Listing};
+  \node[compo, minimum width=2.4cm, minimum height=0.8cm, draw=q9, fill=q9!6] (ml) at (11.3,1.4) {{\tiny «artifact»}\\Multiple Listings};
+  \draw[dipend] (li.east) -- (ml.west);
+  \draw[line width=0.8pt] (li.south) -- (8.4,0.55);
+  \palla{(8.4,0.44)}
+  \node[font=\tiny, anchor=west] at (8.6,0.44) {IListing};
+
+  \nodo{pc}{(4.6,-3.0)}{3.6}{1.5}{\textbf{PC}}
+  \node[compo, minimum width=2.6cm, minimum height=0.6cm, fill=white] (bi) at (6.4,-2.55) {{\tiny «component»}\\BuyerInterface};
+  \draw[dipend] ($(bi.north)+(-0.5,0)$) -- ++(0,1.25) -| (1.8,0.33);
+  \draw[dipend] ($(bi.north)+(0.5,0)$) -- ++(0,1.05) -| (8.4,0.33);
+  \draw[line width=0.8pt] (0.8,0) -- (0.8,-2.3) -- node[font=\tiny, above]{TCP/IP} (4.6,-2.3);
+  \draw[line width=0.8pt] (12.2,0) -- (12.2,-2.3) -- node[font=\tiny, above]{TCP/IP} (8.42,-2.3);
+\end{tikzpicture}
+\end{center}
+Il PC dell'acquirente ospita la sua interfaccia (\textit{BuyerInterface}), che usa le interfacce offerte dai componenti dei due server,
+collegati al PC via TCP/IP. Ogni componente dei server lavora su un proprio artefatto: un database dei clienti e un archivio degli
+annunci immobiliari.
+\end{esempio}
+
+\info{Quando si disegnano}{
+  I diagrammi di deployment sono diagrammi \textbf{architetturali}: si usano nella fase di \textbf{progettazione dell'architettura}
+  e in quella di \textbf{implementazione}. A volte però servono già in \textbf{fase di analisi}, quando il problema stesso impone
+  dei vincoli architetturali. Ad esempio, se il sistema deve ricevere dati da un satellite GPS via rete wireless, questo vincolo
+  fa parte del problema, non della soluzione.
+}
+
+\warning{Componenti o deployment?}{
+  Il diagramma dei \textbf{componenti} dice \textbf{che cosa} è stato costruito e come i pezzi si collegano \textit{logicamente}
+  (chi offre quale interfaccia a chi). Il diagramma di \textbf{deployment} dice \textbf{dove} quei pezzi girano \textit{fisicamente}
+  (su quale macchina, con quale collegamento). Lo stesso componente può comparire in entrambi.
+}
+
+% ============================================================
+\section{Il diagramma di stato (statechart)}
+
+\dfn{Diagramma di stato}{
+  Un \textbf{diagramma di stato} (\textit{statechart}) descrive il comportamento di un sistema, di una parte di un sistema o di
+  un singolo oggetto. È un \textbf{grafo orientato} in cui i nodi sono gli \textbf{stati} e gli archi sono le \textbf{transizioni}.
+}
+
+\Needspace{10\baselineskip}
+L'idea di fondo è questa:
+\begin{itemize}
+  \item in ogni momento il sistema (o l'oggetto) si trova in un certo \textbf{stato};
+  \item trovarsi in uno stato significa \textbf{reagire in un modo specifico} agli eventi che si verificano;
+  \item alcuni eventi fanno \textbf{cambiare stato} al sistema;
+  \item nel nuovo stato, il sistema reagisce agli eventi \textbf{in modo diverso}.
+\end{itemize}
+
+\subsection{Regioni, vertici e transizioni}
+
+Un diagramma di stato UML contiene una \textbf{regione} di primo livello. Una regione contiene \textbf{vertici} e \textbf{transizioni}:
+i vertici rappresentano gli stati (ne esistono di diversi tipi, con significati diversi), le transizioni sono gli archi orientati tra
+due vertici.
+
+\subsection{Gli stati}
+
+\Needspace{14\baselineskip}
+\begin{minipage}[c]{0.62\textwidth}
+Uno \textbf{stato} si disegna come un \textbf{rettangolo con gli angoli arrotondati} che contiene il suo nome.
+\begin{itemize}
+  \item In ogni momento è attivo \textbf{uno e un solo} stato del diagramma (più precisamente, uno per regione: vedremo più avanti
+        le regioni parallele).
+  \item Gli stati sono \textbf{stabili}: il sistema resta in uno stato finché un evento non provoca una transizione verso un altro.
+\end{itemize}
+Esistono poi due \textbf{stati speciali} (pseudostati):
+\begin{itemize}
+  \item lo \textbf{stato iniziale}, un pallino pieno: non può essere raggiunto (non ha frecce entranti);
+  \item lo \textbf{stato finale}, un pallino cerchiato: non può essere lasciato (non ha frecce uscenti).
+\end{itemize}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.33\textwidth}
+\centering
+\begin{tikzpicture}
+  \node[iniziale] (i) at (0,1.6) {};
+  \node[stato] (s) at (0,0) {Stato};
+  \node[finale] (f) at (0,-1.6) {};
+  \draw[tr] (i) -- (s);
+  \draw[tr] (s) -- (f);
+  \node[note, anchor=west] at (0.3,1.6) {stato iniziale};
+  \node[note, anchor=west] at (0.3,-1.6) {stato finale};
+\end{tikzpicture}
+\end{minipage}
+
+\subsection{Le transizioni}
+
+\dfn{Transizione}{
+  Arco orientato che indica un \textbf{cambiamento di stato}. Può avere un'etichetta della forma
+  \par\smallskip
+  {\centering \textcolor{q8}{\textbf{trigger}} \textcolor{swred}{\textbf{[guardia]}} \textcolor{q7}{\textbf{/ azioni}}\par}
+  \smallskip
+  \begin{itemize}
+    \item i \textcolor{q8}{\textbf{trigger}} sono gli \textbf{eventi} che possono provocare il cambiamento di stato;
+    \item la \textcolor{swred}{\textbf{guardia}} è una \textbf{condizione booleana};
+    \item le \textcolor{q7}{\textbf{azioni}} sono le operazioni da eseguire quando la transizione scatta.
+  \end{itemize}
+  Tutte e tre le parti sono \textbf{facoltative}. Sono ammesse anche le \textbf{autotransizioni}, che partono da uno stato e vi ritornano.
+}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[stato] (a) at (0,0) {State A};
+  \node[stato] (b) at (6,0) {State B};
+  \draw[tr] (a) -- node[above, font=\scriptsize]{\textcolor{q8}{event()} \textcolor{swred}{[guard]} \textcolor{q7}{/actions}} (b);
+\end{tikzpicture}
+\end{center}
+
+\Needspace{12\baselineskip}
+\textbf{La semantica.} Quando scatta una transizione?
+\begin{itemize}
+  \item Una transizione è \textbf{attivabile} (\textit{fireable}) quando si sono verificati gli eventi corrispondenti a
+        \textbf{tutti} i suoi trigger \textbf{e} la guardia vale \textbf{vero}.
+  \item Una transizione \textbf{spontanea} non ha né trigger né guardia: scatta senza bisogno di eventi.
+  \item Dopo che una transizione è scattata, si eseguono le sue azioni.
+  \item Se sono attivabili \textbf{più} transizioni, ne scatta \textbf{una sola}, scelta in modo \textbf{non deterministico}.
+\end{itemize}
+
+\warning{Il non determinismo è quasi sempre un errore}{
+  Se da uno stato escono due transizioni con lo stesso evento, le loro guardie dovrebbero essere \textbf{mutuamente esclusive}
+  (ad esempio \texttt{[credito < 2]} e \texttt{[credito >= 2]}). Altrimenti il comportamento del sistema dipende dal caso, e
+  quasi mai è ciò che il progettista voleva.
+}
+
+\subsection{Tre esempi}
+
+\begin{esempio}{Una lampada con un solo pulsante}
+\begin{center}
+\begin{tikzpicture}
+  \node[iniziale] (i) at (0,1.4) {};
+  \node[stato] (off) at (0,0) {Off};
+  \node[stato] (on) at (0,-1.9) {On};
+  \draw[tr] (i) -- (off);
+  \draw[tr] ($(off.south)+(-0.4,0)$) -- node[left, font=\scriptsize]{click()} ($(on.north)+(-0.4,0)$);
+  \draw[tr] ($(on.north)+(0.4,0)$) -- node[right, font=\scriptsize]{click()} ($(off.south)+(0.4,0)$);
+\end{tikzpicture}
+\end{center}
+Lo stesso evento \texttt{click()} ha effetti opposti a seconda dello stato in cui arriva: è esattamente ciò che un diagramma di stato
+sa esprimere.
+\end{esempio}
+
+\begin{esempio}{Un contatore, dal codice Java al diagramma}
+Il metodo \texttt{flick()} fa salire il contatore fino a 10, poi lo fa scendere fino a 0, poi di nuovo salire, e così via.
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[c]{0.44\textwidth}
+\begin{lstlisting}[language=Java]
+public class Counter {
+  private int count = 0;
+  private String mode = "increment";
+
+  public void flick() {
+    if (mode.equals("increment"))
+      count++;
+    else
+      count--;
+
+    if (count == 10)
+      mode = "decrement";
+    else if (count == 0)
+      mode = "increment";
+  }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.53\textwidth}
+\centering
+\begin{tikzpicture}
+  \node[iniziale] (i) at (-2.6,0) {};
+  \node[stato, minimum width=1.9cm] (inc) at (0,0) {Increment};
+  \node[stato, minimum width=1.9cm] (dec) at (0,-2.6) {Decrement};
+  \draw[tr] (i) -- node[above, font=\tiny]{/ count=0} (inc);
+  \path (inc) edge[tr, loop above, out=125, in=55, min distance=10mm] node[above, font=\tiny]{flick() [count<9] / count++} (inc);
+  \path (dec) edge[tr, loop below, out=-125, in=-55, min distance=10mm] node[below, font=\tiny]{flick() [count>1] / count\mbox{-}\mbox{-}} (dec);
+  \draw[tr] ($(inc.south)+(0.45,0)$) -- node[right, font=\tiny, align=left]{flick()\\{}[count==9]\\/ count++} ($(dec.north)+(0.45,0)$);
+  \draw[tr] ($(dec.north)+(-0.45,0)$) -- node[left, font=\tiny, align=right]{flick()\\{}[count==1]\\/ count\mbox{-}\mbox{-}} ($(inc.south)+(-0.45,0)$);
+\end{tikzpicture}
+\end{minipage}
+
+\medskip
+La variabile \texttt{mode} è proprio lo \textbf{stato}: i suoi due valori diventano i due stati del diagramma. La variabile
+\texttt{count}, invece, non diventa uno stato (servirebbero 11 stati!): compare nelle \textbf{guardie} e nelle \textbf{azioni}.
+Si noti che le guardie guardano il valore di \texttt{count} \textbf{prima} dell'azione: in Increment, con \texttt{count==9}
+lo \texttt{flick()} porta il contatore a 10 e fa passare in Decrement.
+\end{esempio}
+
+\begin{esempio}{Un distributore automatico}
+Il distributore eroga prodotti che costano 2 euro e accetta diversi tipi di monete.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[stato, fill=yellow!25, draw=red!50!black] (att) at (0,0) {Attesa};
+  \node[stato, fill=yellow!25, draw=red!50!black, minimum width=2.8cm] (asp) at (0,-3.9) {Attesa scelta prodotto};
+  \node[stato, fill=yellow!25, draw=red!50!black, minimum width=2.8cm] (ero) at (0,-7.6) {Erogazione prodotto};
+  \node[iniziale] (i) at (-3.6,1.7) {};
+  \node[finale] (f) at (7.2,0) {};
+  % da Attesa
+  \draw[tr] (i) -- node[etich, pos=0.35, above right]{Avvia distributore / Azzera credito} (att.north west);
+  \path (att) edge[tr, out=70, in=30, min distance=11mm] node[etich, above right, pos=0.4]{Richiesta restituzione / Restituisci e decrementa credito} (att);
+  \path (att) edge[tr, loop left, min distance=11mm] node[etich, left, text width=3.2cm, align=right]{Inserimento moneta [credito+moneta < 2 euro] / Incrementa credito} (att);
+  \draw[tr] (att) -- node[etich, above, pos=0.5]{Spegni distributore / Restituisci e decrementa credito} (f);
+  \draw[tr] (att.south) -- node[etich, right, text width=3.3cm, align=left, pos=0.45]{Inserimento moneta [credito+moneta >= 2 euro] / Incrementa credito} (asp.north);
+  % da Attesa scelta prodotto
+  \draw[tr] (asp.north west) to[bend left=35] node[etich, left, text width=3.0cm, align=right]{Richiesta restituzione / Restituisci e decrementa credito} (att.south west);
+  \path (asp) edge[tr, loop right, min distance=11mm] node[etich, right, text width=2.2cm, align=left]{Inserimento moneta / Incrementa credito} (asp);
+  \draw[tr] (asp.south) -- node[etich, text width=1.3cm, align=center, pos=0.5]{Scelta prodotto 2 euro} (ero.north);
+  % da Erogazione prodotto
+  \draw[tr] (ero.north east) to[bend right=40] node[etich, right, pos=0.5, text width=1.8cm, align=left]{Time out per erogazione fallita} (asp.south east);
+  \draw[tr] (ero.north west) to[bend left=40] node[etich, left, text width=3.0cm, align=right]{Erogazione avvenuta [credito >= 4 euro] / Decrementa credito} (asp.south west);
+  \draw[tr] (ero.east) -- (6.4,-7.6) -- node[etich, right, text width=2.5cm, align=left]{Erogazione avvenuta [credito < 4 euro] / Decrementa credito} (6.4,-1.0) -- (att.south east);
+\end{tikzpicture}
+\end{center}
+
+Leggiamolo seguendo un cliente.
+\begin{itemize}
+  \item All'avvio il credito viene azzerato e si va in \textbf{Attesa}. Finché il credito resta sotto i 2 euro, ogni moneta lo
+        incrementa e si resta in Attesa; la moneta che porta il credito ad almeno 2 euro fa passare in \textbf{Attesa scelta prodotto}.
+        Le due guardie sono complementari, quindi non c'è non determinismo.
+  \item In Attesa scelta prodotto si possono aggiungere altre monete, chiedere la restituzione (e tornare in Attesa) oppure
+        scegliere il prodotto, che fa passare in \textbf{Erogazione prodotto}.
+  \item Se l'erogazione va a buon fine il credito scende di 2 euro. Se \textbf{prima} dell'erogazione il credito era di almeno
+        4 euro, dopo ne restano almeno 2 e si torna in Attesa scelta prodotto: il cliente può scegliere un altro prodotto.
+        Altrimenti si torna in Attesa. Se l'erogazione fallisce (\textit{time out}) si torna alla scelta del prodotto senza
+        scalare nulla.
+\end{itemize}
+\end{esempio}
+
+\subsection{Dal diagramma al codice}
+
+\Needspace{16\baselineskip}
+Un diagramma di stato a livello di dettaglio si può implementare con una catena di \textbf{\texttt{switch} annidati}: il primo sceglie
+lo stato corrente, il secondo l'evento arrivato.
+
+\begin{lstlisting}[language=Java]
+switch (statoCorrente) {
+  case STATO_1:
+    switch (evento) {
+      case EVENTO_1:
+        if (guardia1) {
+          azioneEvento1();
+          statoCorrente = STATO_2;
+        }
+        break;
+      // ... altri eventi
+    }
+    break;
+  case STATO_2:
+    // ...
+}
+\end{lstlisting}
+
+Funziona, ma con molti stati ed eventi lo \texttt{switch} diventa enorme e ogni modifica rischia di rompere qualcosa altrove.
+Nei sistemi orientati agli oggetti c'è una soluzione migliore.
+
+\dfn{Pattern State}{
+  Il diagramma di stato si traduce in:
+  \begin{itemize}
+    \item una \textbf{classe generale} degli stati, che dichiara un metodo per \textbf{ogni evento} ma lo implementa
+          \textbf{senza fare nulla};
+    \item una serie di \textbf{classi derivate}, una per ogni stato del diagramma, che ridefiniscono (\textit{override})
+          \textbf{solo} i metodi degli eventi che hanno un effetto in quello stato;
+    \item una classe \textbf{contenitore} (il \textit{contesto}), che ricorda lo stato corrente e \textbf{delega} ogni evento a lui.
+  \end{itemize}
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[cls/.style={rectangle, draw=black!75, fill=white, line width=0.7pt, font=\scriptsize, align=left, inner sep=4pt}]
+  \node[cls] (dis) at (-4.6,0) {\textbf{Distributore}\\[-1pt]\rule{3.0cm}{0.4pt}\\- stato : State\\- credito : int\\[-1pt]\rule{3.0cm}{0.4pt}\\+ inserisciMoneta()\\+ selezionaProdotto()\\+ \ldots};
+  \node[cls] (st) at (1.4,0) {\textbf{State}\\[-1pt]\rule{4.4cm}{0.4pt}\\+ inserisciMoneta(Distributore)\\+ sceltaProdotto(Distributore)\\+ richiestaRestituzione(Distributore)\\+ \ldots\ \textit{(tutti vuoti)}};
+  \node[cls] (a1) at (-2.6,-3.0) {\textbf{Attesa}};
+  \node[cls] (a2) at (1.4,-3.0) {\textbf{AttesaSceltaProdotto}};
+  \node[cls] (a3) at (5.4,-3.0) {\textbf{ErogazioneProdotto}};
+  \draw[-{Straight Barb[length=2mm]}, line width=0.7pt] (dis.east) -- node[above, font=\tiny]{stato corrente} (st.west);
+  \foreach \c in {a1,a2,a3}{ \draw[gen] (\c.north) -- (st.south); }
+\end{tikzpicture}
+\caption{Il pattern State applicato al distributore: una sottoclasse di State per ogni stato del diagramma.}
+\end{figure}
+
+\Needspace{24\baselineskip}
+Il contesto tiene lo stato corrente e il credito, e inoltra ogni evento allo stato corrente passandogli se stesso:
+
+\begin{lstlisting}[language=Java]
+public class Distributore {
+    private State stato;
+    static State attesa = new Attesa();
+    static State attesaSceltaProdotto = new AttesaSceltaProdotto();
+    static State erogazioneProdotto = new ErogazioneProdotto();
+    private int credito = 0;
+
+    public Distributore() { setState(attesa); }
+    void setState(State nuovoStato) { this.stato = nuovoStato; }
+    void setCredito(int credito) { this.credito = credito; }
+    int getCredito() { return credito; }
+
+    // ogni evento viene delegato allo stato corrente
+    public void inserisciMoneta()   { stato.inserisciMoneta(this); }
+    public void selezionaProdotto() { stato.sceltaProdotto(this); }
+    public void richiestaRestituzioneCredito() { stato.richiestaRestituzione(this); }
+    public void spegniDistributore() { stato.spegniDistributore(this); }
+    public void prelevaProdotto()    { stato.prelevaProdotto(this); }
+    public void timeoutErogazione()  { stato.timeOutErogazione(this); }
+}
+\end{lstlisting}
+
+\Needspace{12\baselineskip}
+La classe generale degli stati non fa nulla: in uno stato, un evento non previsto viene semplicemente ignorato.
+
+\begin{lstlisting}[language=Java]
+public class State {
+    public void inserisciMoneta(Distributore distributore) {}
+    public void richiestaRestituzione(Distributore distributore) {}
+    public void sceltaProdotto(Distributore distributore) {}
+    public void spegniDistributore(Distributore distributore) {}
+    public void prelevaProdotto(Distributore distributore) {}
+    public void timeOutErogazione(Distributore distributore) {}
+}
+\end{lstlisting}
+
+\Needspace{30\baselineskip}
+Ogni stato ridefinisce solo gli eventi che lo riguardano. Ecco lo stato \textbf{Attesa}:
+
+\begin{lstlisting}[language=Java]
+public class Attesa extends State {
+    @Override
+    public void inserisciMoneta(Distributore distributore) {
+        distributore.setCredito(distributore.getCredito() + 1);
+        System.out.println("Credito attuale: " + distributore.getCredito());
+        if (distributore.getCredito() >= 2) {       // guardia
+            distributore.setState(Distributore.attesaSceltaProdotto);  // transizione
+        }
+    }
+    @Override
+    public void richiestaRestituzione(Distributore distributore) {
+        System.out.println("Ritira il tuo credito: " + distributore.getCredito());
+        distributore.setCredito(0);
+    }
+    @Override
+    public void sceltaProdotto(Distributore distributore) {
+        System.out.println("Non hai credito sufficiente");
+    }
+    @Override
+    public void spegniDistributore(Distributore distributore) {
+        System.out.println("Ritira il tuo credito: " + distributore.getCredito());
+        distributore.setCredito(0);
+        System.out.println("Spengo il distributore");
+        System.exit(0);
+    }
+    @Override
+    public void prelevaProdotto(Distributore distributore) {
+        System.out.println("Il prodotto non e' pronto");
+    }
+}
+\end{lstlisting}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.35}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{4.2cm} L}
+\toprule
+Nel diagramma & Nel codice (pattern State) \\
+\midrule
+Stato & Una sottoclasse di \texttt{State} (\texttt{Attesa}, \ldots) \\
+Evento (trigger) & Un metodo di \texttt{State} (\texttt{inserisciMoneta}, \ldots) \\
+Guardia & Un \texttt{if} dentro il metodo \\
+Azione & Il corpo del metodo (\texttt{setCredito}, \texttt{println}, \ldots) \\
+Transizione & La chiamata \texttt{setState(\ldots)} verso il nuovo stato \\
+Evento ignorato in uno stato & Metodo non ridefinito: resta quello vuoto di \texttt{State} \\
+\bottomrule
+\end{tabularx}
+\caption{Corrispondenza tra diagramma di stato e codice.}
+\end{table}
+
+\info{Perché è meglio dello switch}{
+  È il \textbf{polimorfismo} ad adattare il comportamento allo stato corrente: \texttt{stato.inserisciMoneta(this)} esegue codice
+  diverso a seconda di quale oggetto è in \texttt{stato}. Il codice di ogni stato è raccolto in una sola classe, e aggiungere uno
+  stato significa aggiungere una classe, senza toccare un unico \texttt{switch} gigante. Il codice completo dell'esempio è su Teams.
+}
+
+\subsection{Attività interne}
+
+Uno stato può contenere, facoltativamente, una lista di \textbf{attività interne}. Ogni attività ha un'etichetta che dice
+\textbf{quando} va eseguita; tre etichette sono riservate:
+\begin{itemize}
+  \item \textbf{entry /} attività eseguita all'\textbf{ingresso} nello stato;
+  \item \textbf{do /} attività eseguita \textbf{finché} il sistema resta nello stato (dopo che le attività di entry sono terminate);
+  \item \textbf{exit /} attività eseguita all'\textbf{uscita} dallo stato.
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[stato, align=left, minimum width=3.6cm] (c) at (0,0) {\makebox[3.3cm]{\textbf{Cooking}}\\[-2pt]\rule{3.3cm}{0.4pt}\\
+     entry / turnOnMicrowaves()\\ do / rotatePlate()\\ exit / turnOffMicrowaves()};
+  \node[stato, align=left, fill=yellow!25, draw=red!50!black, minimum width=7.0cm] (a) at (7.2,0) {\makebox[6.6cm]{\textbf{Attesa}}\\[-2pt]\rule{6.6cm}{0.4pt}\\
+     entry / azzera credito\\ do / Inserimento moneta [credito < 2 euro] / Incrementa credito\\
+     do / Richiesta restituzione / Restituisci credito e decrementa\\ exit / \ldots};
+\end{tikzpicture}
+\end{center}
+
+\Needspace{4\baselineskip}
+Il forno a microonde accende le microonde quando inizia a cuocere, fa girare il piatto per tutta la cottura e spegne le microonde
+quando smette, qualunque sia il motivo per cui smette.
+
+\info{Autotransizione o attività interna?}{
+  Le due cose sembrano equivalenti, ma non lo sono. Un'\textbf{autotransizione} (una freccia che esce dallo stato e vi rientra)
+  \textbf{esce} dallo stato e \textbf{rientra}: esegue quindi le attività di \textbf{exit} e poi di \textbf{entry}. Una reazione
+  \textbf{interna}, scritta dentro lo stato, non lo lascia mai. Nello stato Attesa qui sopra la differenza è decisiva: se
+  l'inserimento di una moneta fosse un'autotransizione, ogni moneta farebbe rieseguire \texttt{entry / azzera credito} e il
+  credito tornerebbe a zero a ogni moneta!
+
+  Nella notazione UML standard le reazioni agli eventi dentro uno stato si scrivono \texttt{evento [guardia] / azione}, senza
+  \texttt{do}, che resta riservato a un'attività continua come \texttt{rotatePlate()}; la slide del distributore usa \texttt{do}
+  anche per queste reazioni.
+}
+
+\subsection{Stati compositi e regioni parallele}
+
+\Needspace{8\baselineskip}
+\begin{itemize}
+  \item Gli \textbf{stati compositi} contengono, al loro interno, un intero diagramma di stato.
+  \item Uno stato composito può contenere \textbf{più regioni}, separate da una linea tratteggiata, che rappresentano comportamenti
+        che si svolgono \textbf{in parallelo}: in ogni regione è attivo uno stato.
+  \item Quando si esce da uno stato composito, \textbf{tutte} le sue regioni vengono terminate.
+  \item Analogamente esistono gli \textbf{stati di attività} (\textit{activity states}), che contengono un diagramma di attività.
+\end{itemize}
+
+\begin{esempio}{Superare Ingegneria del Software}
+\begin{center}
+\begin{tikzpicture}
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!18] (0,0) rectangle (7.8,7.8);
+  \node[font=\scriptsize\bfseries] at (3.9,7.5) {AttemptingSoftwareEngineering};
+  \node[font=\scriptsize, anchor=west] at (0.2,7.1) {entry / joinTheTeamOnMsTeams()};
+  \node[iniziale] (i0) at (3.9,6.55) {};
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!32] (0.4,1.0) rectangle (7.4,6.0);
+  \coordinate (stN) at (3.9,6.0);
+  \draw[tr] (i0) -- (stN);
+  \node[font=\scriptsize\bfseries] at (3.9,5.75) {Studying};
+  \node[font=\scriptsize, anchor=west] at (0.55,5.4) {exit / celebrate()};
+  \draw[dashed, line width=0.7pt] (4.3,1.1) -- (4.3,5.2);
+  % regione 1
+  \node[iniziale] (r1) at (2.2,5.0) {};
+  \node[stato, fill=q3!45, minimum width=2.2cm] (study) at (2.2,4.0) {Study};
+  \node[stato, fill=q3!45, minimum width=2.2cm] (exam) at (2.2,2.5) {Take final exam};
+  \node[finale] (f1) at (2.2,1.45) {};
+  \draw[tr] (r1) -- (study);
+  \draw[tr] ($(study.south)+(0.4,0)$) -- node[right, font=\tiny]{done()} ($(exam.north)+(0.4,0)$);
+  \draw[tr] ($(exam.north)+(-0.4,0)$) -- node[left, font=\tiny]{failed()} ($(study.south)+(-0.4,0)$);
+  \draw[tr] (exam) -- node[right, font=\tiny]{passed()} (f1);
+  % regione 2
+  \node[iniziale] (r2) at (5.85,5.0) {};
+  \node[stato, fill=q3!45, minimum width=2.2cm] (proj) at (5.85,4.0) {Do Project};
+  \node[finale] (f2) at (5.85,1.45) {};
+  \draw[tr] (r2) -- (proj);
+  \draw[tr] (proj) -- node[right, font=\tiny]{projdone()} (f2);
+  % uscita
+  \node[finale] (fo) at (7.0,0.5) {};
+  \draw[tr] (1.0,1.0) -- (1.0,0.5) -- node[above, font=\tiny]{[examPassed \& projectDone]} (fo);
+\end{tikzpicture}
+\end{center}
+Entrando nello stato composito ci si iscrive al team su MS Teams (\texttt{entry}) e si entra in \textbf{Studying}. Qui due regioni
+procedono \textbf{in parallelo}: da una parte si studia e si sostiene l'esame (se lo si fallisce, si torna a studiare), dall'altra si
+fa il progetto. Quando esame e progetto sono entrambi superati si esce da Studying, eseguendo \texttt{exit / celebrate()}.
+\end{esempio}
+
+\begin{esempio}{Il cambio automatico di un'auto}
+\begin{center}
+\begin{tikzpicture}
+  \node[iniziale] (i) at (-4.3,2.3) {};
+  \node[stato, minimum width=6.0cm, fill=white, draw=black!80] (neu) at (0,2.3) {Neutral};
+  \node[stato, minimum width=1.8cm, fill=white, draw=black!80] (rev) at (6.4,2.3) {Reverse};
+  \draw[tr] (i) -- (neu);
+  \draw[tr] ($(neu.east)+(0,0.15)$) -- node[above, font=\tiny\itshape]{selectReverse} ($(rev.west)+(0,0.15)$);
+  \draw[tr] ($(rev.west)+(0,-0.15)$) -- node[below, font=\tiny\itshape]{selectNeutral} ($(neu.east)+(0,-0.15)$);
+  % stato composito
+  \draw[rounded corners=10pt, line width=0.8pt] (-3.9,-1.1) rectangle (6.9,0.9);
+  \node[iniziale] (i2) at (-3.4,0) {};
+  \node[stato, minimum width=1.4cm, fill=white, draw=black!80] (fi) at (-2.2,0) {First};
+  \node[stato, minimum width=1.4cm, fill=white, draw=black!80] (se) at (1.6,0) {Second};
+  \node[stato, minimum width=1.4cm, fill=white, draw=black!80] (th) at (5.5,0) {Third};
+  \draw[tr] (i2) -- (fi);
+  \draw[tr] ($(fi.east)+(0,0.15)$) -- node[above, font=\tiny\itshape, align=center]{reachSecondSpeed\\{}[driveSelected]} ($(se.west)+(0,0.15)$);
+  \draw[tr] ($(se.west)+(0,-0.15)$) -- node[below, font=\tiny\itshape, align=center]{dropBelowSecondSpeed\\{}[driveSelected]} ($(fi.east)+(0,-0.15)$);
+  \draw[tr] ($(se.east)+(0,0.15)$) -- node[above, font=\tiny\itshape, align=center]{reachThirdSpeed\\{}[driveSelected]} ($(th.west)+(0,0.15)$);
+  \draw[tr] ($(th.west)+(0,-0.15)$) -- node[below, font=\tiny\itshape]{dropBelowThirdSpeed} ($(se.east)+(0,-0.15)$);
+  % da Neutral verso il composito
+  \draw[tr] (-2.2,1.95) -- node[left, font=\tiny\itshape]{selectFirst} (fi.north);
+  \draw[tr] (-0.4,1.95) -- node[right, font=\tiny\itshape]{selectDrive} (-0.4,0.9);
+  \draw[tr] (1.6,1.95) -- node[right, font=\tiny\itshape]{selectSecond} (se.north);
+  \draw[tr] (3.4,0.9) -- node[right, font=\tiny\itshape]{selectNeutral} (3.4,1.95);
+  % dal bordo del composito
+  \draw[tr] (-1.9,-1.1) -- (-1.9,-1.45) -- (-2.5,-1.45) -- (-2.5,-0.4);
+  \node[font=\tiny\itshape] at (-2.2,-1.7) {selectFirst};
+  \draw[tr] (1.9,-1.1) -- (1.9,-1.45) -- (1.3,-1.45) -- (1.3,-0.4);
+  \node[font=\tiny\itshape] at (1.6,-1.7) {selectSecond};
+\end{tikzpicture}
+\end{center}
+Lo stato composito (senza nome) raccoglie le marce avanti. Le transizioni che partono dal suo \textbf{bordo} valgono per
+\textbf{tutti} i suoi sottostati:
+\begin{itemize}
+  \item \texttt{selectNeutral} riporta in folle da qualunque marcia: basta una freccia invece di tre;
+  \item \texttt{selectFirst} e \texttt{selectSecond}, partendo dal bordo, portano in prima o in seconda da qualunque marcia.
+\end{itemize}
+Una transizione che arriva sul bordo (\texttt{selectDrive}) entra dallo stato iniziale interno, cioè in First; una transizione che
+punta direttamente a un sottostato (\texttt{selectSecond} da Neutral) entra proprio in quel sottostato.
+\end{esempio}
+
+\subsection{Diagrammi di stato e interfacce grafiche}
+
+I diagrammi di stato sono particolarmente utili per modellare i sistemi \textbf{guidati dagli eventi} (\textit{event-driven}).
+Un caso speciale molto importante sono le \textbf{interfacce grafiche} (GUI): uno stato corrisponde a una \textbf{finestra} (o
+schermata), un evento trigger a un'azione dell'utente (un tasto premuto, un clic del mouse, \ldots).
+
+\begin{esempio}{Una GUI per gestire un archivio di film (percorso principale)}
+\begin{center}
+\begin{tikzpicture}
+  \node[stato, fill=white, draw=black!80] (la) at (-4.8,0) {Logged As Admin};
+  \node[stato, fill=white, draw=black!80] (sm) at (0,1.6) {Search Movie};
+  \node[stato, fill=white, draw=black!80] (lf) at (4.8,1.6) {List of Films};
+  \node[stato, fill=white, draw=black!80] (fi) at (4.8,-1.4) {Film Information};
+  \node[stato, fill=white, draw=black!80] (mi) at (0,-2.4) {Movie Inserted};
+  \draw[tr] (la) to[bend left=15] node[etich, above left]{Click on "Add new film"} (sm);
+  \draw[tr] (sm) to[bend left=15] node[etich, below right]{Click on "Cancel"} (la);
+  \draw[tr] (sm) to[bend left=15] node[etich, above]{Click on "Search"} (lf);
+  \draw[tr] (lf) to[bend left=15] node[etich, below]{Click on "Back"} (sm);
+  \draw[tr] (lf) -- node[etich, right]{Click on film's link} (fi);
+  \draw[tr] (fi) -- node[etich, below right]{Click on "Insert"} (mi);
+  \draw[tr] (mi) -- node[etich, below left]{Click on "OK"} (la);
+  \draw[tr] (fi) -- node[etich, above, pos=0.35]{Click on "Cancel"} (la);
+\end{tikzpicture}
+\end{center}
+Le slide mostrano un modello più completo, con altre schermate combinate (ad esempio la scheda del film insieme alla lista dei film);
+qui è riportato solo il percorso per inserire un nuovo film. Un modello così permette, ad esempio, di verificare che da ogni schermata
+si possa tornare indietro, o di generare i casi di test dell'interfaccia percorrendo le transizioni.
+\end{esempio}
+
+\subsection{Lo pseudostato history}
+
+\dfn{Pseudostato history (shallow)}{
+  Si disegna come una \textbf{H} cerchiata. Rappresenta lo \textbf{stato più recentemente attivo} all'interno di uno stato
+  composito: entrare nel composito attraverso la H significa tornare nel sottostato in cui ci si trovava quando se ne è usciti.
+  Ricorda però solo il sottostato di primo livello, \textbf{non} i sottostati di quel sottostato (per questo è detto
+  \textit{shallow}, superficiale). Può comparire solo negli stati compositi, e al più una volta per regione.
+}
+
+\begin{esempio}{Una lampada con tre livelli di luce}
+\begin{center}
+\begin{tikzpicture}
+  \node[stato] (off) at (0,0.2) {Off};
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!18] (2.6,-3.4) rectangle (7.6,1.4);
+  \node[font=\scriptsize\bfseries] at (5.1,1.15) {On};
+  \node[circle, draw, fill=white, font=\tiny, inner sep=1pt, minimum size=0.36cm] (h) at (3.1,0.2) {H};
+  \node[stato, fill=q3!40, minimum width=2.4cm] (low) at (5.6,0.4) {LightLevelLow};
+  \node[stato, fill=q3!40, minimum width=2.4cm] (med) at (5.6,-1.1) {LightLevelMedium};
+  \node[stato, fill=q3!40, minimum width=2.4cm] (hig) at (5.6,-2.6) {LightLevelHigh};
+  \node[iniziale] (ii) at (3.3,-1.1) {};
+  \draw[tr] (ii) -- (med);
+  \draw[tr] (off) -- node[above, font=\tiny]{on()} (h);
+  \draw[tr] ($(low.south)+(-0.45,0)$) -- node[left, font=\tiny]{plus()} ($(med.north)+(-0.45,0)$);
+  \draw[tr] ($(med.north)+(0.45,0)$) -- node[right, font=\tiny]{minus()} ($(low.south)+(0.45,0)$);
+  \draw[tr] ($(med.south)+(-0.45,0)$) -- node[left, font=\tiny]{plus()} ($(hig.north)+(-0.45,0)$);
+  \draw[tr] ($(hig.north)+(0.45,0)$) -- node[right, font=\tiny]{minus()} ($(med.south)+(0.45,0)$);
+  \draw[tr] (2.6,-2.2) -- node[above, font=\tiny]{off()} (0,-2.2) -- (off.south);
+\end{tikzpicture}
+\end{center}
+La prima volta che si accende la lampada non c'è nessuna storia da ricordare, e si parte dallo stato iniziale interno:
+\textbf{LightLevelMedium}. Da acceso, \texttt{off()} spegne la lampada da qualunque livello (la transizione parte dal bordo).
+Alla riaccensione, \texttt{on()} entra attraverso la \textbf{H}, e la lampada torna al livello che aveva quando è stata spenta.
+\end{esempio}
+
+\info{History profonda}{
+  Esiste anche lo pseudostato di history \textbf{profonda} (\textit{deep history}), disegnato \textbf{H*}, che ricorda lo stato attivo
+  a \textbf{tutti} i livelli di annidamento, non solo al primo.
+}
+
+% ============================================================
+\section{Il diagramma di attività}
+
+\Needspace{12\baselineskip}
+Un \textbf{diagramma di attività} si può usare in fasi diverse dello sviluppo:
+\begin{itemize}
+  \item per modellare un \textbf{flusso di lavoro} (\textit{workflow});
+  \item nella fase di \textbf{analisi}, per modellare un \textbf{problema reale};
+  \item nella \textbf{progettazione di alto livello}, per modellare l'interazione tra oggetti concettuali nella soluzione di un problema;
+  \item nella \textbf{progettazione di dettaglio}, per modellare un \textbf{algoritmo}, eventualmente concorrente, da implementare.
+\end{itemize}
+
+È un'estensione del classico \textbf{diagramma di flusso} (\textit{flowchart}) che introduce, in particolare, le \textbf{esecuzioni
+concorrenti}. In UML è nato come estensione del diagramma di stato, ma nelle versioni più recenti ne è stato completamente separato,
+quindi ha senso studiarlo a parte.
+
+\subsection{Attività e flussi}
+
+\Needspace{12\baselineskip}
+\begin{minipage}[c]{0.6\textwidth}
+\begin{itemize}
+  \item Le \textbf{attività} sono le azioni di elaborazione che il sistema deve eseguire; si disegnano come
+        \textbf{rettangoli arrotondati} con il nome dell'attività.
+  \item Il \textbf{flusso} tra le attività si disegna con frecce entranti e uscenti.
+  \item Per convenzione, l'\textbf{ingresso} nell'attività coincide con il suo \textbf{inizio} e l'\textbf{uscita} con il suo
+        \textbf{completamento}.
+  \item Anche qui un nodo \textbf{iniziale} e un nodo \textbf{finale} delimitano il diagramma.
+\end{itemize}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.36\textwidth}
+\centering
+\begin{tikzpicture}
+  \node[iniziale] (i) at (0,1.0) {};
+  \node[azione] (a) at (0,0) {Customer Submits PO};
+  \draw[tr] (i) -- (a);
+  \node[azione] (b) at (3.0,0.6) {Log Shipment};
+  \node[finale] (f) at (3.0,-0.5) {};
+  \draw[tr] (b) -- (f);
+  \node[font=\tiny] at (3.0,-0.85) {Order is Shipped};
+\end{tikzpicture}
+\end{minipage}
+
+\subsection{Decisioni: branch e merge}
+
+\dfn{Branch e merge}{
+  Il \textbf{branch} (decisione) corrisponde a un \textbf{IF}. Si disegna come un \textbf{rombo} con un solo arco entrante e più
+  archi uscenti; ogni arco uscente ha una \textbf{condizione di guardia} tra parentesi quadre, e le condizioni devono essere
+  \textbf{mutuamente esclusive}.
+
+  Il \textbf{merge} è l'elemento duale e corrisponde all'\textbf{END IF}: è ancora un rombo, ma con più archi entranti e un solo
+  arco uscente.
+}
+
+\subsection{Concorrenza: fork e join}
+
+\dfn{Fork e join}{
+  Il \textbf{fork} separa il flusso in due o più \textbf{thread} che possono procedere \textbf{in modo concorrente}. Si disegna come
+  una \textbf{barra} in cui entra un solo arco ed escono più archi, senza etichette: si intende che vengono avviati tutti i thread
+  insieme.
+
+  Il \textbf{join} è l'elemento duale: una barra in cui entrano più archi ed esce un solo arco. Si prosegue solo quando
+  \textbf{tutti} i flussi entranti sono arrivati. Fork e join corrispondono esattamente alle primitive omonime della programmazione
+  concorrente.
+}
+
+\begin{center}
+\begin{tikzpicture}
+  % branch / merge
+  \node[azione, minimum width=1.8cm] (a1) at (0,0) {Activity1};
+  \node[decisione] (d) at (0,-1.1) {};
+  \node[azione, minimum width=1.8cm] (a2) at (-1.6,-2.3) {Activity2};
+  \node[azione, minimum width=1.8cm] (a3) at (1.6,-2.3) {Activity3};
+  \node[decisione] (m) at (0,-3.5) {};
+  \node[azione, minimum width=1.8cm] (a4) at (0,-4.6) {Activity4};
+  \draw[tr] (a1) -- (d);
+  \draw[tr] (d) -| node[etich, left, pos=0.75]{[decision == true]} (a2);
+  \draw[tr] (d) -| node[etich, right, pos=0.75]{[decision == false]} (a3);
+  \draw[tr] (a2) |- (m);
+  \draw[tr] (a3) |- (m);
+  \draw[tr] (m) -- (a4);
+  \node[note, anchor=west] at (0.3,-0.75) {branch};
+  \node[note, anchor=west] at (0.3,-3.85) {merge};
+  % fork / join
+  \begin{scope}[xshift=7cm]
+    \node[azione, minimum width=1.8cm] (b1) at (0,0) {Activity1};
+    \node[barra, minimum width=2.4cm] (fk) at (0,-1.1) {};
+    \node[azione, minimum width=1.8cm] (b2) at (-1.6,-2.3) {Activity2};
+    \node[azione, minimum width=1.8cm] (b3) at (1.6,-2.3) {Activity3};
+    \node[barra, minimum width=2.4cm] (jn) at (0,-3.5) {};
+    \node[azione, minimum width=1.8cm] (b4) at (0,-4.6) {Activity4};
+    \draw[tr] (b1) -- (fk);
+    \draw[tr] ($(fk.south)+(-0.8,0)$) -- (b2);
+    \draw[tr] ($(fk.south)+(0.8,0)$) -- (b3);
+    \draw[tr] (b2) -- ($(jn.north)+(-0.8,0)$);
+    \draw[tr] (b3) -- ($(jn.north)+(0.8,0)$);
+    \draw[tr] (jn) -- (b4);
+    \node[note, anchor=west] at (1.4,-1.1) {fork};
+    \node[note, anchor=west] at (1.4,-3.5) {join};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+
+\warning{{Il rombo sceglie, la barra sdoppia}}{
+  Dopo un \textbf{branch} si percorre \textbf{uno solo} dei rami (quello con la guardia vera). Dopo un \textbf{fork} si percorrono
+  \textbf{tutti} i rami, contemporaneamente. Allo stesso modo il \textbf{merge} lascia passare il primo flusso che arriva, mentre il
+  \textbf{join} aspetta che arrivino tutti.
+}
+
+\begin{esempio}{La gestione di un ordine}
+\begin{center}
+\begin{tikzpicture}[scale=0.95, every node/.append style={transform shape}]
+  \node[iniziale] (i) at (0,0) {};
+  \node[azione, minimum width=2.0cm] (ro) at (0,-1.0) {Receive Order};
+  \node[barra, minimum width=2.6cm] (fk) at (0,-2.0) {};
+  \node[azione, minimum width=2.0cm] (fo) at (-1.9,-3.1) {Fill Order};
+  \node[azione, minimum width=2.2cm] (si) at (2.1,-3.1) {Send Invoice};
+  \node[decisione] (d) at (-1.9,-4.2) {};
+  \node[azione, minimum width=1.8cm] (od) at (-3.2,-5.4) {Overnight\\Delivery};
+  \node[azione, minimum width=1.8cm] (rd) at (-0.6,-5.4) {Regular\\Delivery};
+  \node[azione, minimum width=2.0cm] (rp) at (2.1,-5.4) {Receive\\Payment};
+  \node[decisione] (m) at (-1.9,-6.6) {};
+  \node[barra, minimum width=2.6cm] (jn) at (0,-7.6) {};
+  \node[azione, minimum width=2.0cm] (co) at (0,-8.6) {Close Order};
+  \node[finale] (f) at (0,-9.6) {};
+  \draw[tr] (i) -- (ro);
+  \draw[tr] (ro) -- (fk);
+  \draw[tr] ($(fk.south)+(-0.9,0)$) |- ++(0,-0.25) -| (fo);
+  \draw[tr] ($(fk.south)+(0.9,0)$) |- ++(0,-0.25) -| (si);
+  \draw[tr] (fo) -- (d);
+  \draw[tr] (d) -| node[etich, above, pos=0.25]{[priority order]} (od);
+  \draw[tr] (d) -| node[etich, above, pos=0.25]{[else]} (rd);
+  \draw[tr] (si) -- (rp);
+  \draw[tr] (od) |- (m);
+  \draw[tr] (rd) |- (m);
+  \draw[tr] (m) |- ++(0,-0.4) -| ($(jn.north)+(-0.9,0)$);
+  \draw[tr] (rp) |- ++(0,-1.5) -| ($(jn.north)+(0.9,0)$);
+  \draw[tr] (jn) -- (co);
+  \draw[tr] (co) -- (f);
+  % annotazioni
+  \begin{scope}[every node/.style={font=\tiny\itshape, text=black!60}, ann/.style={-{Stealth[length=1.4mm]}, dotted, black!55}]
+    \node (n1) at (1.6,0.1) {nodo iniziale};    \draw[ann] (n1.west) -- (i.east);
+    \node (n2) at (-2.6,-1.7) {fork};            \draw[ann] (n2.east) -- ($(fk.west)+(0,0.02)$);
+    \node (n3) at (3.9,-2.3) {azione};           \draw[ann] (n3.south west) -- (si.north east);
+    \node (n4) at (-0.2,-3.8) {decisione};       \draw[ann] (n4.south west) -- (d.north east);
+    \node (n5) at (3.5,-4.3) {flusso};           \draw[ann] (n5.west) -- (2.15,-4.3);
+    \node (n6) at (-3.3,-7.0) {merge};           \draw[ann] (n6.north east) -- (m.south west);
+    \node (n7) at (2.4,-7.9) {join};             \draw[ann] (n7.west) -- ($(jn.east)+(0,-0.02)$);
+    \node (n8) at (-1.8,-9.3) {nodo finale};     \draw[ann] (n8.east) -- (f.west);
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+Ricevuto l'ordine, due flussi procedono \textbf{in parallelo}: da una parte si prepara l'ordine e lo si spedisce (con consegna
+espressa se l'ordine è prioritario, normale altrimenti), dall'altra si invia la fattura e si riceve il pagamento. L'ordine si chiude
+solo quando \textbf{entrambi} i flussi sono terminati (join).
+\end{esempio}
+
+\subsection{Le swimlane}
+
+I diagrammi di attività possono modellare anche le \textbf{interazioni tra classi diverse} (o tra ruoli, reparti, sistemi).
+Il diagramma si divide in \textbf{corsie verticali} (\textit{swimlane}), e in ogni corsia compaiono le attività che riguardano una
+particolare classe.
+
+\begin{esempio}{L'iscrizione a un corso}
+\begin{center}
+\begin{tikzpicture}
+  % corsie
+  \draw[line width=0.8pt] (0,0.5) rectangle (10.4,-10.0);
+  \draw[line width=0.8pt] (5.0,0.5) -- (5.0,-10.0);
+  \draw[line width=0.6pt] (0,0) -- (10.4,0);
+  \node[font=\scriptsize\bfseries] at (2.5,0.25) {Student};
+  \node[font=\scriptsize\bfseries] at (7.7,0.25) {CourseSection};
+  % CourseSection
+  \node[iniziale] (i) at (7.5,-0.5) {};
+  \node[azione, minimum width=3.0cm] (rr) at (7.5,-1.4) {Receive course\\registration request};
+  \node[barra, minimum width=5.6cm] (fk) at (5.2,-2.5) {};
+  \node[azione, minimum width=2.4cm] (vc) at (7.5,-3.5) {Verify course\\not full};
+  \node[decisione] (d3) at (7.5,-4.6) {};
+  \node[finale] (f3) at (9.3,-5.3) {};
+  % Student
+  \node[azione, minimum width=2.4cm] (cp) at (2.9,-3.5) {Check\\prerequisites};
+  \node[decisione] (d1) at (2.9,-4.6) {};
+  \node[azione, minimum width=2.4cm] (sp) at (1.5,-5.8) {Check special\\permission};
+  \node[decisione] (d2) at (1.5,-6.9) {};
+  \node[finale] (f2) at (1.5,-7.9) {};
+  % join e completamento
+  \node[barra, minimum width=5.0cm] (jn) at (5.6,-8.4) {};
+  \node[azione, minimum width=2.4cm] (cr) at (7.5,-9.1) {Complete\\registration};
+  \node[finale] (f) at (9.6,-9.1) {};
+  \draw[tr] (i) -- (rr);
+  \draw[tr] (rr) -- (7.5,-2.46);
+  \draw[tr] (2.9,-2.54) -- (cp);
+  \draw[tr] (7.5,-2.54) -- (vc);
+  \draw[tr] (cp) -- (d1);
+  \draw[tr] (d1) -- node[etich, above, pos=0.5]{[ok]} (3.6,-4.6) -- (3.6,-8.36);
+  \draw[tr] (d1) -| node[etich, above, pos=0.3]{[not ok]} (sp);
+  \draw[tr] (sp) -- (d2);
+  \draw[tr] (d2) -- node[etich, above]{[ok]} (3.4,-6.9) -- (3.4,-8.36);
+  \draw[tr] (d2) -- node[etich, right]{[not ok]} (f2);
+  \draw[tr] (vc) -- (d3);
+  \draw[tr] (d3) -- node[etich, right]{[ok]} (7.5,-8.36);
+  \draw[tr] (d3) -| node[etich, above, pos=0.3]{[not ok]} (f3);
+  \draw[tr] (6.2,-8.44) -- (6.2,-9.1) -- (cr.west);
+  \draw[tr] (cr) -- (f);
+\end{tikzpicture}
+\end{center}
+Ricevuta la richiesta, due controlli partono \textbf{in parallelo}: il sistema del corso (\textbf{CourseSection}) verifica che il corso
+non sia pieno, mentre sullo studente (\textbf{Student}) si controllano i prerequisiti; se mancano, si controlla se ha un permesso
+speciale. L'iscrizione si completa solo se \textbf{entrambi} i controlli vanno a buon fine (join). Se uno dei due fallisce, il flusso
+arriva a un nodo finale.
+\end{esempio}
+
+\warning{Il nodo finale chiude tutto}{
+  Quando un flusso raggiunge un \textbf{nodo finale di attività}, termina l'\textbf{intera} attività, compresi gli altri flussi
+  concorrenti ancora in corso. Nell'esempio, se il corso è pieno l'iscrizione si interrompe subito, anche se il controllo dei
+  prerequisiti non è ancora finito.
+}
+
+\info{Altri esempi nelle slide}{
+  Le slide riportano altri diagrammi con swimlane: il prelievo al bancomat (corsie Customer, ATM Machine e Bank), un processo di
+  vendita con le corsie Customer, Sales, Contracts, Legal e Fulfillment, e la consegna dei compiti tra Teacher e Student. Vale la pena
+  provare a leggerli con le regole di questo capitolo.
+}
+
+\subsection{Macro-attività}
+
+Il limite dei diagrammi di attività è probabilmente la descrizione \textbf{troppo dettagliata} dei problemi. Per gestire diversi
+livelli di astrazione si possono racchiudere i compiti complessi in \textbf{macro-attività} generiche, da dettagliare separatamente
+in altri diagrammi. Ad esempio, un'attività \textit{Deliver Order} può comparire come un solo rettangolo nel diagramma generale ed
+essere espansa in un diagramma a parte che mostra la scelta tra consegna normale ed espressa.
+
+\subsection{I segnali}
+
+I diagrammi di attività, a differenza di quelli di stato, non mostrano esplicitamente gli \textbf{eventi}. Per compensare questa
+mancanza sono stati introdotti i \textbf{segnali}.
+
+\dfn{Segnale}{
+  Un \textbf{segnale} indica un evento \textbf{esterno} e \textbf{asincrono} che influenza l'esecuzione di un'attività. Un caso tipico
+  sono i \textbf{segnali di tempo}. Simboli diversi indicano:
+  \begin{itemize}
+    \item i segnali \textbf{inviati} (\textit{send}): un pentagono a punta;
+    \item i segnali \textbf{ricevuti} (\textit{accept}): un pentagono con una rientranza;
+    \item i segnali di \textbf{tempo} (\textit{timer}): una clessidra.
+  \end{itemize}
+}
+
+\begin{esempio}{Segnali di tempo, ricevuti e inviati}
+\begin{center}
+\begin{tikzpicture}[sig/.style={line width=0.8pt, draw=ph4!80!black, fill=ph4!8}]
+  % primo diagramma
+  \draw[sig] (-0.25,0.35) -- (0.25,0.35) -- (-0.25,-0.35) -- (0.25,-0.35) -- cycle;
+  \node[font=\tiny, align=center] at (0,-0.65) {Two hours\\before flight};
+  \node[azione, minimum width=1.8cm] (pb) at (2.2,0) {Pack Bags};
+  \draw[tr] (0.1,0) -- (pb);
+  \draw[sig] (1.3,-1.2) -- (3.1,-1.2) -- (3.1,-1.9) -- (1.3,-1.9) -- (1.6,-1.55) -- cycle;
+  \node[font=\tiny, align=center] at (2.3,-1.55) {Taxi Arrives};
+  \node[barra, minimum width=0.09cm, minimum height=1.6cm] (jn) at (4.3,-0.75) {};
+  \draw[tr] (pb.east) -| (3.8,-0.4) -- (4.25,-0.4);
+  \draw[tr] (3.1,-1.55) -| (3.8,-1.1) -- (4.25,-1.1);
+  \node[azione, minimum width=2.0cm] (la) at (5.9,-0.75) {Leave for Airport};
+  \draw[tr] (jn) -- (la);
+  \node[font=\tiny\itshape, text=black!60] at (-0.9,0.7) {segnale di tempo};
+  \node[font=\tiny\itshape, text=black!60] at (2.3,-2.2) {segnale ricevuto};
+  % secondo diagramma
+  \begin{scope}[yshift=-3.6cm]
+    \node[azione, minimum width=2.2cm] (ri) at (0,0.2) {Reserve Itinerary};
+    \draw[sig] (-0.9,-0.9) -- (0.6,-0.9) -- (0.9,-1.25) -- (0.6,-1.6) -- (-0.9,-1.6) -- cycle;
+    \node[font=\tiny] at (-0.05,-1.25) {Send Itinerary};
+    \draw[tr] (ri) -- (0,-0.9);
+    \node[barra, minimum width=0.09cm, minimum height=1.9cm] (fk) at (1.6,-1.6) {};
+    \draw[tr] (0.9,-1.25) -- (1.55,-1.25);
+    \draw[sig] (2.8,-0.6) -- (4.4,-0.6) -- (4.4,-1.3) -- (2.8,-1.3) -- (3.1,-0.95) -- cycle;
+    \node[font=\tiny, align=center] at (3.7,-0.95) {Itinerary\\Confirmed};
+    \draw[tr] (1.65,-0.95) -- (2.95,-0.95);
+    \draw[sig] (3.35,-1.9) -- (3.85,-1.9) -- (3.35,-2.6) -- (3.85,-2.6) -- cycle;
+    \node[font=\tiny] at (3.6,-2.85) {Wait 48 hours};
+    \draw[tr] (1.65,-2.25) -- (3.45,-2.25);
+    \node[azione, minimum width=2.0cm] (bi) at (5.9,-0.95) {Book Itinerary};
+    \node[azione, minimum width=2.0cm] (ci) at (5.9,-2.25) {Cancel Itinerary};
+    \draw[tr] (4.4,-0.95) -- (bi);
+    \draw[tr] (3.75,-2.25) -- (ci);
+    \node[finale] (f) at (7.8,-1.6) {};
+    \draw[tr] (bi.east) -| (f.north);
+    \draw[tr] (ci.east) -| (f.south);
+    \node[font=\tiny\itshape, text=black!60] at (-0.05,-1.95) {segnale inviato};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+\begin{itemize}
+  \item \textbf{In alto}: due ore prima del volo (segnale di tempo) si fanno le valigie; si parte per l'aeroporto solo quando le
+        valigie sono pronte \textbf{e} il taxi è arrivato (segnale ricevuto, poi join).
+  \item \textbf{In basso}: si prenota un itinerario e lo si invia (segnale inviato); poi due flussi partono in parallelo. Se arriva
+        la conferma, si prenota; se passano 48 ore senza conferma, si annulla. Entrambi portano al nodo finale, che chiude
+        l'intera attività: \textbf{vince il primo} dei due eventi, e l'altro flusso viene interrotto.
+\end{itemize}
+\end{esempio}
+
+\info{Per approfondire}{
+  Martin Fowler, \textit{UML Distilled}: capitolo 10 (diagrammi di stato) e capitolo 11 (diagrammi di attività). La specifica
+  completa è l'OMG UML 2.5 (\url{https://www.omg.org/spec/UML/2.5/PDF/}); un altro riferimento è I.~Jacobson, J.~Rumbaugh,
+  G.~Booch, \textit{The Unified Modeling Language Reference Manual}.
+}
+
+% ============================================================
+\section{Esercizi}
+
+\begin{esercizio}{Dal codice al diagramma di stato}
+Disegna il diagramma di stato del tornello descritto da questa classe.
+
+\Needspace{12\baselineskip}
+\begin{lstlisting}[language=Java]
+public class Tornello {
+  private boolean bloccato = true;
+
+  public void moneta() {
+    if (bloccato) bloccato = false;
+    else restituisciMoneta();
+  }
+
+  public void spinta() {
+    if (!bloccato) bloccato = true;
+    else suonaAllarme();
+  }
+}
+\end{lstlisting}
+
+\textbf{Soluzione.} Come per il contatore, la variabile booleana \texttt{bloccato} diventa lo stato.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[iniziale] (i) at (-2.6,0) {};
+  \node[stato] (b) at (0,0) {Bloccato};
+  \node[stato] (s) at (5,0) {Sbloccato};
+  \draw[tr] (i) -- (b);
+  \draw[tr] ($(b.east)+(0,0.15)$) -- node[above, font=\tiny]{moneta()} ($(s.west)+(0,0.15)$);
+  \draw[tr] ($(s.west)+(0,-0.15)$) -- node[below, font=\tiny]{spinta()} ($(b.east)+(0,-0.15)$);
+  \path (b) edge[tr, loop above, out=125, in=55, min distance=10mm] node[above, font=\tiny]{spinta() / suonaAllarme()} (b);
+  \path (s) edge[tr, loop above, out=125, in=55, min distance=10mm] node[above, font=\tiny]{moneta() / restituisciMoneta()} (s);
+\end{tikzpicture}
+\end{center}
+\end{esercizio}
+
+\begin{esercizio}{Leggere un diagramma di attività}
+Rispondi guardando il diagramma della gestione di un ordine.
+\begin{enumerate}
+  \item La fattura può essere inviata prima che l'ordine sia stato preparato?
+  \item Per un ordine prioritario si possono eseguire sia la consegna espressa sia quella normale?
+  \item Se il cliente paga ma la merce non è ancora stata consegnata, l'ordine si chiude?
+\end{enumerate}
+
+\textbf{Soluzione.}
+(1) Sì: dopo il fork i due flussi sono \textbf{concorrenti} e non c'è alcun ordine tra le loro attività.
+(2) No: il rombo è un \textbf{branch}, le guardie sono mutuamente esclusive e si percorre un solo ramo.
+(3) No: il \textbf{join} aspetta che arrivino entrambi i flussi, consegna e pagamento.
+\end{esercizio}
+
+\begin{esercizio}{Autotransizione o reazione interna?}
+Nello stato Attesa del distributore c'è l'attività \texttt{entry / azzera credito}. Un progettista modella l'inserimento di una moneta
+(con credito sotto i 2 euro) come un'\textbf{autotransizione} su Attesa invece che come reazione interna. Che cosa succede quando il
+cliente inserisce due monete da un euro?
+
+\textbf{Soluzione.} Un'autotransizione esce dallo stato e vi rientra. In UML l'ordine è: attività di \texttt{exit} dello stato,
+azioni della transizione, attività di \texttt{entry} dello stato di arrivo. Quindi la moneta incrementa il credito e subito dopo
+\texttt{entry / azzera credito} lo riporta a zero: dopo due monete il credito vale 0, il cliente non arriva mai a 2 euro e il
+distributore non passa mai in Attesa scelta prodotto. Per questo l'inserimento della moneta va modellato come reazione
+\textbf{interna} allo stato.
+\end{esercizio}
+
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item Il \textbf{diagramma dei componenti} mostra i componenti (file, eseguibili, database, librerie, sottosistemi), le
+        \textbf{interfacce} fornite (pallina) e richieste (presa) e le \textbf{porte}; non dice dove girano.
+  \item Il \textbf{diagramma di deployment} mostra l'architettura \textbf{fisica}: \textbf{nodi} (parallelepipedi, \textit{istanza : tipo}),
+        componenti e \textbf{artefatti} al loro interno, \textbf{connessioni} fisiche.
+  \item Il \textbf{diagramma di stato} descrive come un sistema o un oggetto reagisce agli eventi. Le transizioni hanno etichetta
+        \textbf{trigger [guardia] / azioni}; se più transizioni sono attivabili ne scatta una sola, in modo non deterministico.
+  \item Un diagramma di stato si implementa con \textbf{switch annidati} o, meglio, con il \textbf{pattern State}: una sottoclasse
+        per stato, un metodo per evento, e il polimorfismo al posto dello switch.
+  \item Gli stati possono avere attività \textbf{entry}, \textbf{do} ed \textbf{exit}, essere \textbf{compositi} (anche con
+        \textbf{regioni parallele}) e usare lo pseudostato \textbf{history} (H) per ricordare il sottostato attivo.
+  \item Il \textbf{diagramma di attività} estende il diagramma di flusso con la concorrenza: \textbf{branch/merge} (rombo, un solo
+        ramo), \textbf{fork/join} (barra, tutti i rami), \textbf{swimlane}, \textbf{macro-attività} e \textbf{segnali} (tempo,
+        ricevuti, inviati).
+\end{itemize}
+}
