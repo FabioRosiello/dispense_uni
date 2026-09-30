@@ -299,9 +299,20 @@
 % I \nopagebreak tengono il filetto e il titolo dell'esempio attaccati al
 % contenuto che segue: senza, il titolo poteva restare da solo in fondo a una
 % pagina, con il codice (che non si spezza) spostato alla pagina successiva.
+% L'esempio viene composto in una scatola: se sta in una pagina la si mette
+% intera (e passa alla pagina dopo se non entra), altrimenti la si "svuota"
+% nella pagina e l'esempio può spezzarsi normalmente.
+\newbox\wtesbox
+\newcommand{\wtemetti}{%
+  \ifdim\dimexpr\ht\wtesbox+\dp\wtesbox\relax>\textheight
+    \unvbox\wtesbox
+  \else
+    \box\wtesbox
+  \fi}
 \renewenvironment{esempio}[1]{%
+  \par\addvspace{0.8em}%
+  \setbox\wtesbox\vbox\bgroup
   \refstepcounter{esempio}%
-  \vspace{0.8em}%
   \noindent\rule{\linewidth}{0.5pt}\par\nopagebreak%
   \vspace{0.15em}%
   \noindent{\color{primary!80!black}\textbf{Esempio \theesempio}}%
@@ -311,13 +322,16 @@
   \vspace{0.3em}%
 }{%
   \par\vspace{0.3em}%
-  \noindent\rule{\linewidth}{0.5pt}%
-  \vspace{0.8em}%
+  \noindent\rule{\linewidth}{0.5pt}\par
+  \egroup
+  \wtemetti
+  \par\vspace{0.8em}%
 }
 
 \renewenvironment{esercizio}[1]{%
+  \par\addvspace{0.8em}%
+  \setbox\wtesbox\vbox\bgroup
   \refstepcounter{esercizio}%
-  \vspace{0.8em}%
   \noindent\rule{\linewidth}{1.2pt}\vspace{1pt}\par%
   \noindent\rule{\linewidth}{0.4pt}\par%
   \vspace{0.15em}%
@@ -329,8 +343,10 @@
 }{%
   \par\vspace{0.3em}%
   \noindent\rule{\linewidth}{0.4pt}\vspace{1pt}\par%
-  \noindent\rule{\linewidth}{1.2pt}%
-  \vspace{0.8em}%
+  \noindent\rule{\linewidth}{1.2pt}\par
+  \egroup
+  \wtemetti
+  \par\vspace{0.8em}%
 }
 
 % ============================================================
@@ -470,7 +486,7 @@
 % indivisibile: se il listato non entra nello spazio rimasto in fondo alla
 % pagina, passa per intero alla pagina successiva invece di essere tagliato.
 % Il listato piu' lungo della dispensa (38 righe) sta comodamente in una pagina.
-\AddToHook{env/lstlisting/before}{\par\noindent\begin{minipage}{\linewidth}}
+\AddToHook{env/lstlisting/before}{\wtattacca\noindent\begin{minipage}{\linewidth}}
 \AddToHook{env/lstlisting/after}{\end{minipage}\par}
 
 % ============================================================
@@ -656,3 +672,34 @@
 % successiva, esattamente come i listati di codice.
 \tcbset{breakable/.style={breakable@false}}
 
+
+% ============================================================
+%  Un concetto non si spezza fra due pagine
+% ============================================================
+% Il testo che introduce un listato, una figura, una lista o un risultato
+% ("... come segue:") resta attaccato a ciò che introduce: se non entrano
+% insieme in fondo alla pagina, passano insieme alla successiva. Le penalità
+% impediscono il salto pagina solo in quel punto: il blocco che ne risulta
+% (frase + listato, frase + figura, ...) è sempre più corto di una pagina.
+\raggedbottom
+% Un paragrafo non si divide mai fra due pagine
+\interlinepenalty=10000
+\makeatletter
+% Niente salto pagina fra la frase introduttiva e la lista o il blocco
+% centrato (tabelle, figure non flottanti) che la segue
+\@beginparpenalty=10000
+% Una lista resta tutta sulla stessa pagina
+\@itempenalty=10000
+\makeatother
+\newcommand{\wtattacca}{\par\nopagebreak}
+% (per i listati \wtattacca è già nell'hook che li chiude in una minipage)
+\AddToHook{env/figure/before}{\wtattacca}
+\AddToHook{env/table/before}{\wtattacca}
+\AddToHook{env/console/before}{\wtattacca}
+\AddToHook{env/browser/before}{\wtattacca}
+\AddToHook{env/devtools/before}{\wtattacca}
+\AddToHook{env/affianco/before}{\wtattacca}
+% Un titolo non resta da solo in fondo alla pagina: se sotto non c'è spazio
+% per qualche riga di contenuto, va a pagina nuova
+\AddToHook{cmd/section/before}{\Needspace{22\baselineskip}}
+\AddToHook{cmd/subsection/before}{\Needspace{8\baselineskip}}

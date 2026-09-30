@@ -11,6 +11,7 @@ Questa cartella contiene i sorgenti LaTeX di `../Dispensa.pdf`.
 - `chapters/chapter_4.tex` — La qualità del software (L_01 + appunti L_03)
 - `chapters/chapter_5.tex` — Requisiti: elicitazione e analisi (L_05)
 - `chapters/chapter_6.tex` — Diagrammi dei casi d'uso (L_04-A)
+- `chapters/chapter_7.tex` — Altri diagrammi UML: componenti, deployment, stati, attività (L_06)
 - `unina_doc_class.cls`, `fonts/`, `sources/` — template Unina Docs (da `Materiale/Dispense.rar`)
 - `Images/` — immagini tratte dalle slide del corso
 
@@ -33,5 +34,7 @@ cp main.pdf ../Dispensa.pdf
 - ambienti `esempio` ed `esercizio` (numerati per capitolo)
 - `\Needspace{...}` prima di riquadri, esempi, esercizi e listati per evitare che un
   concetto si spezzi tra due pagine
+- `esempio` ed `esercizio` sono composti in una scatola: se stanno in una pagina non si
+  spezzano mai (passano interi alla pagina successiva)
 - i titoli dei riquadri che contengono una virgola vanno racchiusi in doppie graffe:
   `\info{{Titolo, con virgola}}{...}`
