@@ -1,0 +1,560 @@
+\chapter{Diagrammi dei package e di sequenza}
+
+Il diagramma delle classi del Capitolo 7 descrive gli elementi del sistema uno per uno. Per sistemi reali servono altri due punti
+di vista: come le classi sono \textbf{raggruppate} in moduli (il diagramma dei \textbf{package}) e come gli oggetti
+\textbf{collaborano nel tempo} per realizzare una funzionalità (il diagramma di \textbf{sequenza}).
+
+% ============================================================
+\section{Il diagramma dei package}
+
+\dfn{Diagramma dei package}{
+  Diagramma diverso da quello delle classi, anche se ne condivide molti aspetti ed elementi. Vi compaiono:
+  \begin{itemize}
+    \item i \textbf{package}, disegnati come cartelle con una linguetta;
+    \item le relazioni di \textbf{dipendenza} tra i package;
+    \item le \textbf{interfacce} e le relazioni di \textbf{realizzazione}.
+  \end{itemize}
+}
+
+Talvolta diagramma dei package e diagramma delle classi si fondono in un unico diagramma: dentro ogni package si disegna il
+diagramma delle classi che gli appartengono.
+
+\Needspace{8\baselineskip}
+I diagrammi dei package si usano di solito come diagrammi di \textbf{dettaglio}, che mostrano la reale implementazione di un
+sistema:
+\begin{itemize}
+  \item servono quando si sceglie l'\textbf{architettura} del progetto;
+  \item la fase successiva è il disegno dei diagrammi delle classi dell'implementazione, uno per ogni package.
+\end{itemize}
+
+\begin{esempio}{L'architettura dei progetti del corso}
+\begin{center}
+\begin{tikzpicture}
+  \umlpkg{gui}{(0,3.4)}{5.6}{1.3}{GUI}
+  \node[font=\scriptsize, text width=5.2cm, align=center] at ($(gui.center)+(0,-0.15)$) {Qui mettiamo tutte le classi relative ai frame dell'interfaccia grafica};
+  \umlpkg{ctr}{(0,1.4)}{5.6}{1.3}{Controller}
+  \node[font=\scriptsize, text width=5.2cm, align=center] at ($(ctr.center)+(0,-0.15)$) {Nei nostri progetti, per semplicità, il controller avrà una sola classe};
+  \umlpkg{mod}{(0,-0.6)}{5.6}{1.3}{Model}
+  \node[font=\scriptsize, text width=5.2cm, align=center] at ($(mod.center)+(0,-0.15)$) {Qui riproduciamo il diagramma delle classi progettato in fase di analisi del dominio};
+  \draw[dep] (gui.south) -- (ctr.north);
+  \draw[dep] (ctr.south) -- (mod.north);
+\end{tikzpicture}
+\end{center}
+L'interfaccia grafica dipende dal controller, che a sua volta dipende dal modello. Il modello non dipende da nessuno: si può
+cambiare l'interfaccia senza toccare le classi del dominio.
+\end{esempio}
+
+\begin{esempio}{Package e classi insieme}
+\begin{center}
+\begin{tikzpicture}
+  % GUI
+  \umlpkg{gui}{(0,3.6)}{5.4}{1.6}{GUI}
+  \node[classe1=1.6cm] (home) at (1.2,4.2) {Home};
+  \node[classe1=1.8cm] (ns) at (4.0,4.2) {NuovaSocieta};
+  \draw[dep] (home) -- (ns);
+  % Controller
+  \umlpkg{ctrp}{(0,1.2)}{5.4}{1.8}{Controller}
+  \umlclass[4.0cm]{ctr}{(2.7,1.8)}{Controller}{}{+ nuovaSocieta(nome, prezzo)}
+  \draw[dep] (ns.south) -- (ns.south |- ctr.north);
+  % Model
+  \umlpkg{mod}{(0,-1.7)}{7.4}{1.7}{Model}
+  \node[classe1=1.4cm] (bo) at (0.9,-1.05) {Borsa};
+  \umlclass[1.9cm]{li}{(3.4,-1.0)}{Listino}{}{+ addSocieta()}
+  \node[classe1=1.5cm] (so) at (6.3,-1.05) {Societa};
+  \draw[line width=0.7pt] (bo) -- node[molt, below, pos=0.15]{1} node[molt, below, pos=0.8]{1} (li.west |- bo);
+  \draw[line width=0.7pt] (li.east |- so) -- node[molt, below, pos=0.15]{1} node[molt, below, pos=0.8]{1..*} (so);
+  \draw[dep] ($(ctr.south)+(-1.2,0)$) -- (bo.north);
+  \draw[dep] ($(ctr.south)+(1.2,0)$) -- node[stereo, right]{«create»} (so.north);
+  % DAO
+  \umlpkg{daop}{(6.1,1.2)}{3.2}{1.8}{DAO}
+  \umlclass[2.5cm]{dao}{(7.7,1.75)}{{\tiny\normalfont «interface»}\\ListinoDAO}{}{+ addSocietaDB()}
+  \draw[dep] (ctr.east |- dao) -- (dao.west);
+  % Implementazione
+  \umlpkg{impp}{(9.9,1.2)}{4.9}{1.8}{ImplementazionePostgresDAO}
+  \node[classe1=4.5cm] (imp) at (12.35,1.75) {ListinoImplementazionePostgresDAO};
+  \draw[realizza] (imp.west) -- (dao.east |- imp.west);
+  % Database
+  \umlpkg{dbp}{(9.9,-1.9)}{4.9}{1.9}{Database}
+  \umlclass[3.4cm]{db}{(12.35,-1.2)}{ConnessioneDatabase}{+ connection}{}
+  \draw[dep] (imp.south) -- (db.north);
+\end{tikzpicture}
+\end{center}
+\begin{itemize}
+  \item Nel package \textbf{GUI} la schermata Home apre la schermata per inserire una nuova società.
+  \item L'unica classe del package \textbf{Controller} usa le classi del \textbf{Model} (e crea le società, «create»).
+  \item Il Controller non parla direttamente con il database: dipende dall'\textbf{interfaccia} \texttt{ListinoDAO} (\textit{Data
+        Access Object}), realizzata da una classe specifica per PostgreSQL che usa la connessione al \textbf{Database}. Per passare a
+        un altro database basta scrivere un'altra implementazione dell'interfaccia.
+\end{itemize}
+\end{esempio}
+
+% ============================================================
+\section{I diagrammi di interazione}
+
+\dfn{Diagrammi di interazione}{
+  Diagrammi che modellano gli aspetti \textbf{dinamici} di un sistema software, mettendo in evidenza le \textbf{interazioni} tra
+  gli elementi che lo compongono (descritti nei diagrammi strutturali). Appartengono alla famiglia dei diagrammi
+  \textbf{comportamentali}.
+}
+
+\Needspace{8\baselineskip}
+Esistono quattro tipi di diagrammi di interazione:
+\begin{itemize}
+  \item i \textbf{sequence diagram} (diagrammi di sequenza), di gran lunga i più usati;
+  \item i \textbf{communication diagram} (in UML 1 si chiamavano \textit{collaboration diagram});
+  \item gli \textbf{interaction overview diagram};
+  \item i \textbf{timing diagram}.
+\end{itemize}
+
+\dfn{Diagramma di sequenza}{
+  Modella le interazioni tra uno o più \textbf{attori} e il sistema software durante l'esecuzione di uno \textbf{scenario}. Come
+  prevede il paradigma a oggetti, le interazioni tra attori e sistema, e tra le parti del sistema, sono rappresentate come
+  \textbf{messaggi}. Il \textbf{tempo scorre dall'alto verso il basso}.
+}
+
+\begin{esempio}{Il calcolo del prezzo di un ordine}
+\begin{center}
+\begin{tikzpicture}
+  \foreach \x/\n/\t in {0/o/an Order, 3/ol/an Order Line, 6/pr/aProduct, 9/cu/aCustomer}{
+    \node[partec, minimum width=2.2cm] (\n) at (\x,0) {\t};
+    \draw[vita] (\n.south) -- (\x,-7.0);
+  }
+  % messaggio trovato
+  \fill (-2.4,-1.0) circle (0.07);
+  \draw[sinc] (-2.4,-1.0) -- node[msgl]{calculatePrice} (-0.08,-1.0);
+  \attiv{0}{-1.0}{-6.6}
+  \draw[sinc] (0.08,-1.5) -- node[msgl]{getQuantity} (2.92,-1.5);
+  \attiv{3}{-1.5}{-1.9}
+  \draw[sinc] (0.08,-2.2) -- node[msgl]{getProduct} (2.92,-2.2);
+  \attiv{3}{-2.2}{-2.7}
+  \draw[ritorno] (2.92,-2.7) -- node[msgl]{aProduct} (0.08,-2.7);
+  \draw[sinc] (0.08,-3.3) -- node[msgl, pos=0.35]{getPricingDetails} (5.92,-3.3);
+  \attiv{6}{-3.3}{-3.8}
+  % chiamate a se stesso
+  \draw[sinc] (0.08,-4.1) -- (1.4,-4.1) -- (1.4,-4.4) -- (0.24,-4.4); \node[font=\tiny, anchor=west] at (1.45,-4.25) {calculateBasePrice};
+  \draw[fill=white, line width=0.6pt] (0.08,-4.4) rectangle (0.24,-4.9);
+  \draw[sinc] (0.08,-5.1) -- (1.4,-5.1) -- (1.4,-5.4) -- (0.24,-5.4); \node[font=\tiny, anchor=west] at (1.45,-5.25) {calculateDiscounts};
+  \draw[fill=white, line width=0.6pt] (0.08,-5.4) rectangle (0.24,-6.3);
+  \draw[sinc] (0.24,-5.8) -- node[msgl, pos=0.6]{getDiscountInfo} (8.92,-5.8);
+  \attiv{9}{-5.8}{-6.3}
+  % annotazioni
+  \begin{scope}[every node/.style={font=\tiny\itshape, text=black!60}, ann/.style={-{Stealth[length=1.4mm]}, dotted, black!55}]
+    \node (a1) at (-2.2,-1.9) {messaggio trovato};    \draw[ann] (a1.north) -- (-1.9,-1.1);
+    \node (a2) at (4.5,-1.0) {partecipante};          \draw[ann] (a2.north west) -- (3.5,-0.35);
+    \node (a3) at (7.4,-1.5) {linea di vita};         \draw[ann] (a3.west) -- (6.05,-1.5);
+    \node (a4) at (7.4,-2.9) {attivazione};           \draw[ann] (a4.south west) -- (6.1,-3.4);
+    \node (a5) at (4.2,-2.4) {ritorno};               \draw[ann] (a5.west) -- (2.5,-2.65);
+    \node (a6) at (4.2,-4.7) {chiamata a se stesso};  \draw[ann] (a6.west) -- (1.45,-4.35);
+    \node (a7) at (7.4,-5.2) {messaggio};             \draw[ann] (a7.south) -- (7.2,-5.7);
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+L'ordine riceve la richiesta \texttt{calculatePrice} da qualcuno che non compare nel diagramma (\textbf{messaggio trovato}, con il
+pallino). Chiede quantità e prodotto alla riga d'ordine, chiede i dettagli del prezzo al prodotto, calcola il prezzo base e gli
+sconti chiamando \textbf{se stesso}, e per gli sconti interroga il cliente.
+\end{esempio}
+
+\subsection{Gli elementi}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{3.2cm} L}
+\toprule
+Elemento & Descrizione \\
+\midrule
+Oggetti (istanze di classi) & Rettangoli con il nome della classe e l'identificatore dell'oggetto sottolineati (notazione UML 1,
+ad esempio \underline{\texttt{o1:Order}}), oppure semplicemente un nome da cui si capisce che è un'istanza della classe
+(\texttt{anOrder}, \texttt{aProduct}). \\
+Attori o endpoint & Riportati a sinistra, con frecce verso gli oggetti del sistema. Rappresentano la persona o il metodo che avvia
+l'elaborazione. Si possono omettere se lo scenario è avviato da un altro scenario. \\
+Messaggi & Frecce da un attore a un oggetto o tra due oggetti. L'ordine dall'alto in basso è l'ordine in cui vengono scambiati. \\
+Linea di vita (\textit{lifeline}) & Linea verticale tratteggiata che parte dal rettangolo dell'oggetto: indica il periodo di vita
+dell'oggetto, dalla creazione alla distruzione. \\
+Barra di attivazione & Rettangolo sulla linea di vita di un oggetto che riceve un messaggio: rappresenta il tempo necessario per
+elaborare la richiesta. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\Needspace{12\baselineskip}
+\begin{center}
+\begin{tikzpicture}
+  \draw[sinc] (0,0) -- node[msgl]{messaggio sincrono} (3.4,0);
+  \node[note, anchor=west] at (3.7,0) {freccia \textbf{triangolare piena}: chi invia aspetta la risposta};
+  \draw[asinc] (0,-0.7) -- node[msgl]{messaggio asincrono} (3.4,-0.7);
+  \node[note, anchor=west] at (3.7,-0.7) {freccia \textbf{semplice}: chi invia prosegue senza aspettare};
+  \draw[ritorno] (3.4,-1.4) -- node[msgl]{ritorno} (0,-1.4);
+  \node[note, anchor=west] at (3.7,-1.4) {linea \textbf{tratteggiata}: la risposta (si può omettere)};
+  \draw[sinc] (1.5,-2.0) -- (2.6,-2.0) -- (2.6,-2.3) -- (1.58,-2.3);
+  \draw[fill=white, line width=0.6pt] (1.42,-1.9) rectangle (1.58,-2.6);
+  \node[note, anchor=west] at (3.7,-2.2) {un messaggio può restare dentro lo stesso oggetto (\textbf{autoanello})};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Creazione e distruzione degli oggetti}
+
+\Needspace{10\baselineskip}
+\begin{itemize}
+  \item Le linee di vita degli oggetti che esistono già (ad esempio quelli \texttt{static}) partono dalla \textbf{cima} del diagramma.
+  \item Una chiamata al \textbf{costruttore} crea un oggetto: il rettangolo dell'oggetto si disegna alla \textbf{punta} della freccia
+        del messaggio di creazione, più in basso degli altri.
+  \item La \textbf{distruzione} di un oggetto si indica con una \textbf{croce} che interrompe la sua linea di vita.
+\end{itemize}
+
+\begin{esempio}{Una query al database}
+\begin{center}
+\begin{tikzpicture}
+  \node[partec, minimum width=2.0cm] (h) at (0,0) {a Handler};
+  \draw[vita] (h.south) -- (0,-7.2);
+  \draw[sinc] (-2.6,-0.9) -- node[msgl]{query database} (-0.08,-0.9);
+  \attiv{0}{-0.9}{-6.8}
+  % creazione di a Query Command
+  \node[partec, minimum width=2.0cm] (q) at (3.4,-1.5) {a Query\\Command};
+  \draw[sinc] (0.08,-1.5) -- node[msgl]{new} (q.west);
+  \draw[vita] (q.south) -- (3.4,-6.5);
+  \attiv{3.4}{-2.0}{-6.4}
+  % creazione di a Database Statement
+  \node[partec, minimum width=2.0cm] (d) at (6.8,-2.4) {a Database\\Statement};
+  \draw[sinc] (3.48,-2.4) -- node[msgl]{new} (d.west);
+  \draw[vita] (d.south) -- (6.8,-5.6);
+  \draw[sinc] (3.48,-3.3) -- node[msgl]{execute} (6.72,-3.3);
+  \attiv{6.8}{-3.3}{-3.8}
+  \draw[ritorno] (6.72,-3.8) -- node[msgl]{results} (3.48,-3.8);
+  \draw[sinc] (3.48,-4.2) -- (4.6,-4.2) -- (4.6,-4.5) -- (3.64,-4.5); \node[font=\tiny, anchor=west] at (4.65,-4.35) {extract results};
+  \draw[fill=white, line width=0.6pt] (3.48,-4.5) rectangle (3.64,-5.0);
+  \draw[sinc] (3.48,-5.6) -- node[msgl]{close} (6.72,-5.6);
+  \draw[line width=1pt] (6.62,-5.42) -- (6.98,-5.78) (6.62,-5.78) -- (6.98,-5.42);
+  \draw[ritorno] (3.4,-6.5) -- node[msgl]{results} (0.08,-6.5);
+  \draw[line width=1pt] (3.22,-6.32) -- (3.58,-6.68) (3.22,-6.68) -- (3.58,-6.32);
+  \begin{scope}[every node/.style={font=\tiny\itshape, text=black!60}, ann/.style={-{Stealth[length=1.4mm]}, dotted, black!55}]
+    \node (c1) at (1.6,-2.6) {creazione};                          \draw[ann] (c1.north) -- (1.6,-1.6);
+    \node[align=center] (c2) at (8.6,-4.8) {distruzione\\da parte di\\un altro oggetto}; \draw[ann] (c2.south west) -- (7.0,-5.55);
+    \node (c3) at (5.3,-7.0) {autodistruzione};                    \draw[ann] (c3.west) -- (3.65,-6.6);
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+Il gestore crea un comando di query, che a sua volta crea uno statement del database, lo esegue, ne estrae i risultati e lo
+chiude (lo statement viene distrutto dal comando). Alla fine il comando restituisce i risultati al gestore e si distrugge.
+\end{esempio}
+
+\begin{esempio}{L'iscrizione a un corso, con il suo diagramma delle classi}
+\begin{center}
+\begin{tikzpicture}
+  \stickman{(-1.4,-0.3)}{}
+  \draw[vita] (-1.4,-0.85) -- (-1.4,-3.6);
+  \attiv{-1.4}{-1.0}{-3.3}
+  \node[partec, minimum width=2.2cm] (cs) at (2.0,0) {\underline{:CourseSection}};
+  \draw[vita] (cs.south) -- (2.0,-3.6);
+  \node[partec, minimum width=2.2cm] (st) at (8.4,0) {\underline{:Student}};
+  \draw[vita] (st.south) -- (8.4,-3.6);
+  \draw[sinc] (-1.32,-1.1) -- node[msgl]{requestToRegister} (1.92,-1.1);
+  \attiv{2.0}{-1.1}{-3.2}
+  \node[partec, minimum width=2.0cm] (re) at (5.2,-1.6) {\underline{:Registration}};
+  \draw[dipend] (2.08,-1.6) -- node[msgl]{«create»} (re.west);
+  \draw[vita] (re.south) -- (5.2,-3.6);
+  \attiv{5.2}{-1.9}{-3.0}
+  \draw[sinc] (5.28,-2.2) -- node[msgl]{addToSchedule} (8.32,-2.2);
+  \attiv{8.4}{-2.2}{-2.6}
+  \draw[sinc] (5.12,-2.8) -- node[msgl]{addToRegistrationList} (2.08,-2.8);
+  % diagramma delle classi
+  \umlclass[2.4cm]{c1}{(-0.8,-5.0)}{Course}{}{getPrerequisite}
+  \umlclass[3.0cm]{c2}{(2.6,-5.0)}{CourseSection}{}{requestToRegister\\addToRegistrationList}
+  \node[classe1=2.2cm] (c3) at (5.9,-4.75) {Registration};
+  \umlclass[2.4cm]{c4}{(9.0,-5.0)}{Student}{}{addToSchedule\\hasPassedCourse}
+  \draw[line width=0.7pt] (c1.east |- c3) -- node[molt, above, pos=0.8]{*} (c2.west |- c3);
+  \draw[line width=0.7pt] (c2.east |- c3) -- node[molt, above, pos=0.8]{*} (c3.west);
+  \draw[line width=0.7pt] (c3.east) -- node[molt, above, pos=0.15]{*} (c4.west |- c3);
+\end{tikzpicture}
+\end{center}
+Lo studente chiede alla sezione del corso di iscriversi; la sezione \textbf{crea} una Registration, che aggiunge il corso al piano
+di studi dello studente e poi si aggiunge alla lista delle iscrizioni della sezione. Ogni messaggio che un oggetto riceve è
+un'\textbf{operazione} della sua classe nel diagramma delle classi: i due diagrammi devono essere \textbf{coerenti}.
+\end{esempio}
+
+\subsection{Quando si usa}
+
+\Needspace{10\baselineskip}
+In fase di \textbf{progettazione di dettaglio}, i diagrammi di sequenza descrivono la \textbf{realizzazione dei metodi}:
+\begin{itemize}
+  \item gli oggetti sono istanze delle classi di progetto di dettaglio;
+  \item i messaggi sono le chiamate di metodo sugli oggetti;
+  \item al posto degli elementi architetturali compaiono gli oggetti delle classi che vi danno accesso (ad esempio, invece del
+        «database», l'oggetto JDBC su cui si eseguono le query).
+\end{itemize}
+
+\warning{Non per gli algoritmi}{
+  Per descrivere \textbf{algoritmi}, i diagrammi di sequenza non sono lo strumento più adatto: di solito si preferiscono i diagrammi
+  di attività o di stato (Capitolo 9). Un diagramma di sequenza mostra bene \textbf{chi parla con chi}, non la logica di calcolo.
+}
+
+\subsection{Cicli e condizioni}
+
+\Needspace{12\baselineskip}
+Cicli e condizioni si indicano con un \textbf{riquadro} (\textit{frame}) che racchiude una sottosequenza di messaggi. Nell'angolo
+in alto a sinistra si indica il costrutto; questa notazione è stata introdotta con UML 2.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabularx}{\textwidth}{>{\bfseries\ttfamily}P{1.4cm} P{2.6cm} L}
+\toprule
+\normalfont\textbf{Costrutto} & \textbf{Corrisponde a} & \textbf{Uso} \\
+\midrule
+loop & \texttt{while-do}, \texttt{do-while} & Ciclo: la condizione si indica tra parentesi quadre all'inizio o alla fine. \\
+alt & \texttt{if-then-else} & La condizione si indica in cima; se ci sono rami \textit{else}, una linea tratteggiata separa la zona
+\textit{then} dalla zona \textit{else}, eventualmente con un'altra condizione accanto a \texttt{[else]}. \\
+opt & \texttt{if-then} & Racchiude una sottosequenza eseguita solo se la condizione in cima è vera. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Esistono anche altri costrutti, ad esempio per il parallelismo (\texttt{par}) o le regioni critiche (\texttt{critical}).
+
+\begin{esempio}{La spedizione di un ordine}
+\noindent\begin{minipage}[c]{0.33\textwidth}
+\begin{lstlisting}[language=Java, basicstyle=\scriptsize\ttfamily]
+procedure dispatch
+  foreach (lineitem)
+    if (product.value > 10K)
+      careful.dispatch
+    else
+      regular.dispatch
+    end if
+  end for
+  if (needsConfirmation)
+    messenger.confirm
+end procedure
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.64\textwidth}
+\centering
+\begin{tikzpicture}[scale=0.92, every node/.append style={transform shape}]
+  \foreach \x/\n/\t in {0/o/:Order, 2.6/ca/careful :\\Distributor, 4.9/re/regular :\\Distributor, 7.2/me/:Messenger}{
+    \node[partec, minimum width=1.9cm] (\n) at (\x,0) {\t};
+    \draw[vita] (\n.south) -- (\x,-7.3);
+  }
+  \fill (-1.4,-0.9) circle (0.07);
+  \draw[sinc] (-1.4,-0.9) -- node[msgl]{dispatch} (-0.08,-0.9);
+  \attiv{0}{-0.9}{-7.0}
+  \sdframe{-1.0}{-1.3}{6.0}{-5.2}{loop}{[for each line item]}
+  \sdframe{-0.7}{-1.9}{5.8}{-4.9}{alt}{[value > \$10000]}
+  \draw[sinc] (0.08,-2.7) -- node[msgl]{dispatch} (2.52,-2.7);
+  \attiv{2.6}{-2.7}{-3.1}
+  \draw[dashed, line width=0.6pt] (-0.7,-3.5) -- (5.8,-3.5);
+  \node[font=\tiny, anchor=north west] at (-0.6,-3.55) {[else]};
+  \draw[sinc] (0.08,-4.2) -- node[msgl]{dispatch} (4.82,-4.2);
+  \attiv{4.9}{-4.2}{-4.6}
+  \sdframe{-1.0}{-5.5}{7.9}{-6.9}{opt}{[needsConfirmation]}
+  \draw[sinc] (0.08,-6.3) -- node[msgl]{confirm} (7.12,-6.3);
+  \attiv{7.2}{-6.3}{-6.7}
+\end{tikzpicture}
+\end{minipage}
+
+\medskip
+Per ogni riga dell'ordine (\textbf{loop}), se il valore del prodotto supera i 10.000 dollari la spedizione è affidata al
+distributore «attento», altrimenti a quello normale (\textbf{alt}, con il ramo \texttt{[else]} sotto la linea tratteggiata).
+Alla fine, solo se serve una conferma (\textbf{opt}), si avvisa il messaggero.
+\end{esempio}
+
+\info{{Riquadri sì, ma con moderazione}}{
+  Quando l'algoritmo da modellare si fa complesso, è buona norma usare altri tipi di diagramma. Un diagramma di sequenza pieno di
+  riquadri annidati è difficile da leggere quanto il codice che descrive.
+}
+
+% ============================================================
+\section{Esempio: dal codice al diagramma di sequenza}
+
+Immaginiamo di voler disegnare il diagramma di sequenza di una funzionalità \textbf{già implementata}. Sarà inevitabilmente un
+diagramma di \textbf{dettaglio}, in cui compaiono tutte le classi realmente presenti nel codice, comprese quelle dell'interfaccia
+utente. La funzionalità è \textbf{Aggiungi nuova società (nome, valore azione)} del videogioco di borsa del Capitolo 7, con
+l'architettura GUI--Controller--Model vista sopra.
+
+\Needspace{16\baselineskip}
+\textbf{1. La schermata Home.} Servono due input, quindi si crea una nuova finestra e la si apre dalla Home:
+\begin{lstlisting}[language=Java]
+aggiungiNuovaSocietaButton.addActionListener(new ActionListener() {
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        AggiungiNuovaSocieta aggiungiNuovaSocieta = new AggiungiNuovaSocieta(controller, frame);
+        aggiungiNuovaSocieta.frame.setVisible(true);
+        frame.setVisible(false);
+    }
+});
+\end{lstlisting}
+
+\Needspace{18\baselineskip}
+\textbf{2. Il pulsante OK.} Alla pressione bisogna verificare che i dati siano validi (lo si farà in futuro), inserire i dati nel
+modello tramite il controller e tornare alla schermata precedente (\textit{Annulla} farà solo quest'ultima operazione):
+\begin{lstlisting}[language=Java]
+OKButton.addActionListener(new ActionListener() {
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        // aggiunge la societa' al listino
+        controller.aggiungiSocietaBorsa(nomeSocietaText.getText(),
+                Double.parseDouble(valoreAzioneText.getText()));
+        frame.setVisible(false);
+        frameChiamante.setVisible(true);
+        frame.dispose();
+    }
+});
+\end{lstlisting}
+
+\Needspace{24\baselineskip}
+\textbf{3. Controller e modello.} Il controller si limita a inoltrare la richiesta all'oggetto \texttt{borsa}, che ha una lista di
+società inizialmente vuota; \texttt{aggiungiSocieta} crea una nuova società e la aggiunge alla lista.
+\begin{lstlisting}[language=Java]
+// nel Controller
+public void aggiungiSocietaBorsa(String text, double parseDouble) {
+    borsa.aggiungiSocieta(text, parseDouble);
+}
+
+public class Borsa {
+    private ArrayList<Societa> societa;
+    public Borsa() { societa = new ArrayList<Societa>(); }
+
+    public void aggiungiSocieta(String text, double parseDouble) {
+        Societa s = new Societa(text, parseDouble);
+        societa.add(s);
+    }
+}
+
+public class Societa {
+    private Double valoreAzione;
+    private String nome;
+    public Societa(String n, Double valore) { nome = n; valoreAzione = valore; }
+}
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.93, every node/.append style={transform shape}]
+  \draw[line width=0.6pt] (-0.9,1.3) rectangle (15.4,-8.4);
+  \draw[line width=0.6pt, fill=white] (-0.9,1.3) -- ++(2.6,0) -- ++(0,-0.2) -- ++(-0.12,-0.14) -- (-0.9,0.96) -- cycle;
+  \node[font=\tiny, anchor=north west, inner sep=1.5pt] at (-0.85,1.28) {\textbf{sd} Aggiungi nuova società};
+  \stickman{(0,-0.1)}{a User}
+  \draw[vita] (0,-0.9) -- (0,-8.1);
+  \foreach \x/\n/\t in {1.9/ho/a Home, 7.3/ct/a Controller, 10.2/bo/a Borsa, 14.4/al/a ArrayList\\<Societa>}{
+    \node[partec, minimum width=1.6cm] (\n) at (\x,-0.2) {\t};
+    \draw[vita] (\n.south) -- (\x,-8.1);
+  }
+  \draw[sinc] (0,-1.3) -- node[msgl]{1: click(Aggiungi)} (1.82,-1.3);
+  \attiv{1.9}{-1.3}{-2.1}
+  \node[partec, minimum width=2.3cm] (fo) at (4.9,-1.7) {an AggiungiNuovaSocieta};
+  \draw[dipend] (1.98,-1.7) -- (fo.west); \node[font=\tiny, anchor=south] at (2.85,-1.68) {2: «create»};
+  \draw[vita] (fo.south) -- (4.9,-7.6);
+  \draw[sinc] (0,-2.6) -- node[msgl, pos=0.3]{3: setNomeSocieta} (4.82,-2.6);
+  \attiv{4.9}{-2.6}{-2.85}
+  \draw[sinc] (0,-3.2) -- node[msgl, pos=0.3]{4: setPrezzoAzione} (4.82,-3.2);
+  \attiv{4.9}{-3.2}{-3.45}
+  \draw[sinc] (0,-3.8) -- node[msgl, pos=0.3]{5: click(OK)} (4.82,-3.8);
+  \attiv{4.9}{-3.8}{-7.3}
+  \draw[sinc] (4.98,-4.3) -- node[msgl, align=center]{6: aggiungiSocietaBorsa\\(nome, prezzo)} (7.22,-4.3);
+  \attiv{7.3}{-4.3}{-6.5}
+  \draw[sinc] (7.38,-4.8) -- node[msgl, align=center]{7: aggiungiSocieta\\(nome, prezzo)} (10.12,-4.8);
+  \attiv{10.2}{-4.8}{-6.2}
+  \node[partec, minimum width=1.5cm] (so) at (12.3,-5.2) {a Societa};
+  \draw[dipend] (10.28,-5.2) -- (so.west); \node[font=\tiny, anchor=south] at (10.95,-5.18) {8: «create»};
+  \draw[vita] (so.south) -- (12.3,-8.1);
+  \draw[sinc] (10.28,-5.9) -- node[msgl, pos=0.75]{9: add(s)} (14.32,-5.9);
+  \attiv{14.4}{-5.9}{-6.15}
+  \draw[ritorno] (10.12,-6.2) -- node[msgl]{10} (7.38,-6.2);
+  \draw[ritorno] (7.22,-6.5) -- node[msgl]{11} (4.98,-6.5);
+  \draw[sinc] (4.82,-6.9) -- node[msgl]{12: setVisible(true)} (1.98,-6.9);
+  \attiv{1.9}{-6.9}{-7.2}
+  \draw[line width=1pt] (4.72,-7.42) -- (5.08,-7.78) (4.72,-7.78) -- (5.08,-7.42);
+  \node[font=\tiny, anchor=west] at (5.15,-7.6) {13: dispose()};
+\end{tikzpicture}
+\caption{Il diagramma di sequenza di «Aggiungi nuova società», ricavato dal codice.}
+\end{figure}
+
+\Needspace{6\baselineskip}
+Si notino la \textbf{creazione} della finestra (2) e della società (8), disegnate alla punta della freccia; i \textbf{ritorni}
+tratteggiati (10 e 11) quando i metodi terminano; e la \textbf{distruzione} della finestra, che si chiude da sola con
+\texttt{dispose()}. L'oggetto \texttt{ArrayList} esiste già, perché è stato creato dal costruttore di \texttt{Borsa}.
+
+\info{{Un nome, tre versioni}}{
+  Nelle slide lo stesso metodo del controller si chiama \texttt{aggiungiSocietaBorsa} nel codice, \texttt{aggiungiSocietaListino}
+  nel diagramma di sequenza e \texttt{nuovaSocieta} nel diagramma dei package. Qui si usa il nome del codice. Mantenere
+  \textbf{coerenti} codice e diagrammi è esattamente il lavoro che, nei progetti reali, gli strumenti di co-generazione (come il
+  plug-in \textit{Diagrams} di IntelliJ) aiutano a fare.
+}
+
+% ============================================================
+\section{Esercizi}
+
+\begin{esercizio}{Dal codice al diagramma}
+Disegna il diagramma di sequenza della chiamata \texttt{carrello.totale()}.
+
+\Needspace{14\baselineskip}
+\begin{lstlisting}[language=Java]
+public class Carrello {
+    private List<Riga> righe;
+    private Cliente cliente;
+
+    public double totale() {
+        double t = 0;
+        for (Riga r : righe) {
+            t += r.getSubtotale();
+        }
+        if (cliente.isPremium()) {
+            t = applicaSconto(t);
+        }
+        return t;
+    }
+}
+\end{lstlisting}
+
+\textbf{Soluzione.} Il \texttt{for} diventa un riquadro \textbf{loop}, l'\texttt{if} senza \texttt{else} un riquadro \textbf{opt},
+e \texttt{applicaSconto} è una chiamata a se stesso.
+\begin{center}
+\begin{tikzpicture}
+  \foreach \x/\n/\t in {0/ca/:Carrello, 3.6/ri/:Riga, 7.2/cl/:Cliente}{
+    \node[partec, minimum width=1.8cm] (\n) at (\x,0) {\t};
+    \draw[vita] (\n.south) -- (\x,-5.8);
+  }
+  \fill (-2.0,-0.8) circle (0.07);
+  \draw[sinc] (-2.0,-0.8) -- node[msgl]{totale()} (-0.08,-0.8);
+  \attiv{0}{-0.8}{-5.4}
+  \sdframe{-0.9}{-1.2}{4.6}{-2.6}{loop}{[per ogni riga]}
+  \draw[sinc] (0.08,-1.9) -- node[msgl]{getSubtotale()} (3.52,-1.9);
+  \attiv{3.6}{-1.9}{-2.3}
+  \draw[ritorno] (3.52,-2.3) -- (0.08,-2.3);
+  \draw[sinc] (0.08,-3.0) -- node[msgl]{isPremium()} (7.12,-3.0);
+  \attiv{7.2}{-3.0}{-3.3}
+  \draw[ritorno] (7.12,-3.3) -- (0.08,-3.3);
+  \sdframe{-0.9}{-3.6}{4.6}{-5.0}{opt}{[cliente premium]}
+  \draw[sinc] (0.08,-4.2) -- (1.4,-4.2) -- (1.4,-4.5) -- (0.24,-4.5); \node[font=\tiny, anchor=west] at (1.45,-4.35) {applicaSconto(t)};
+  \draw[fill=white, line width=0.6pt] (0.08,-4.5) rectangle (0.24,-4.8);
+  \draw[ritorno] (-0.08,-5.4) -- node[msgl]{t} (-2.0,-5.4);
+\end{tikzpicture}
+\end{center}
+\end{esercizio}
+
+\begin{esercizio}{Vero o falso?}
+\begin{enumerate}
+  \item In un diagramma di sequenza il tempo scorre da sinistra verso destra.
+  \item Un messaggio asincrono si disegna con una freccia a punta triangolare piena.
+  \item Il rettangolo di un oggetto creato durante lo scenario si disegna in cima al diagramma, come gli altri.
+  \item Un \texttt{if} senza \texttt{else} si rappresenta con un riquadro \texttt{opt}.
+  \item Nel diagramma dei package, una freccia tratteggiata tra due package indica una dipendenza.
+\end{enumerate}
+
+\textbf{Soluzione.} (1) Falso: dall'alto verso il basso. (2) Falso: la punta piena è per i messaggi sincroni; gli asincroni hanno
+una freccia semplice. (3) Falso: si disegna alla punta della freccia del messaggio di creazione. (4) Vero. (5) Vero.
+\end{esercizio}
+
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item Il \textbf{diagramma dei package} mostra i package (cartelle), le dipendenze tra loro e le interfacce; si usa per scegliere
+        l'architettura, ad esempio GUI--Controller--Model con i DAO per l'accesso ai dati. Può contenere i diagrammi delle classi.
+  \item I \textbf{diagrammi di interazione} sono quattro: di sequenza, di comunicazione, interaction overview e timing.
+  \item Il \textbf{diagramma di sequenza} mostra i \textbf{messaggi} scambiati da attori e oggetti in uno scenario, dall'alto verso
+        il basso: oggetti, linee di vita, barre di attivazione, messaggi sincroni (punta piena), asincroni (punta semplice) e di
+        ritorno (tratteggiati), chiamate a se stessi, creazione e distruzione (croce).
+  \item I riquadri \textbf{loop}, \textbf{alt} e \textbf{opt} (UML 2) rappresentano cicli e condizioni, ma per gli algoritmi
+        complessi sono meglio i diagrammi di attività o di stato.
+  \item Nel progetto di dettaglio i messaggi sono chiamate di metodo, e il diagramma di sequenza deve essere \textbf{coerente} con
+        il diagramma delle classi e con il codice.
+\end{itemize}
+}
