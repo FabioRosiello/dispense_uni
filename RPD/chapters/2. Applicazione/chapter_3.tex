@@ -219,6 +219,29 @@ inviando. Il corpo contiene l'oggetto (\texttt{data data \dots}). Gli header:
           questo header, \textbf{non} dall'estensione del file.
 \end{itemize}
 
+\subsection{Parlare HTTP a mano}
+
+In una richiesta non c'è nulla di magico: la si può scrivere a mano. Con \texttt{nc} (\emph{netcat}) si apre una
+connessione TCP verso la porta 80 e si digitano le righe:
+
+\begin{lstlisting}[language=bash]
+$ nc -C info.cern.ch 80          # apre una connessione TCP verso la porta 80
+GET /hypertext/WWW/TheProject.html HTTP/1.1
+Host: info.cern.ch
+                                 # la riga vuota chiude la richiesta
+HTTP/1.1 200 OK
+...
+\end{lstlisting}
+
+\warning{L'opzione \texttt{-C} non è facoltativa}{
+    HTTP termina ogni riga con \texttt{CR LF}, mentre \texttt{nc} da solo invia soltanto \texttt{LF}: senza
+    \texttt{-C} questo server risponde \texttt{400 Bad Request}.
+}
+
+Il server risponde a un programma che non è un browser perché non ha modo di accorgersene: vede soltanto quei
+byte. Sostituendo \texttt{GET} con \texttt{HEAD} si ottengono le sole intestazioni: gli stessi metadati, senza
+il traffico dell'oggetto.
+
 % ══════════════════════════════════════════════════════════════
 \section{I cookie}
 % ══════════════════════════════════════════════════════════════
@@ -279,6 +302,25 @@ dal client (il carrello di Amazon, i suggerimenti di Netflix, \dots).
 \end{enumerate}
 \end{esempio}
 
+\subsection{Se il file dei cookie viene cancellato}
+
+Che succede al carrello se si cancellano i dati del browser a metà di un acquisto? La richiesta successiva
+arriva \textbf{senza} la riga \texttt{Cookie}. Il server non ha modo di distinguerla da una prima visita, quindi
+assegna un \textbf{nuovo} identificativo: il carrello risulta vuoto, e quello vecchio resta nel database,
+ormai irraggiungibile.
+
+\begin{itemize}
+    \item Il server non stava conservando la ``sessione'' dell'utente: conservava una \textbf{riga} di
+          database, e l'utente portava con sé la \textbf{chiave} per raggiungerla.
+    \item È anche il motivo per cui lo stesso account appare diverso sul telefono: un altro file, un'altra chiave.
+\end{itemize}
+
+\info{HTTP resta stateless}{
+    HTTP non è diventato un protocollo con stato: lo stato è stato costruito \textbf{sopra} di esso, con due
+    righe di intestazione e due archivi (il file dei cookie e il database), entrambi \textbf{agli estremi},
+    mai nel protocollo.
+}
+
 \subsection{Usi e problemi dei cookie}
 
 I siti usano i cookie per:
@@ -289,6 +331,10 @@ I siti usano i cookie per:
           non doverli reinserire ogni volta;
     \item i \textbf{suggerimenti}: prodotti consigliati in base alle pagine visitate.
 \end{itemize}
+
+Per fare tutto questo il server non ha mai avuto bisogno di sapere il \textbf{nome} dell'utente. Ma basta
+fornirlo una volta, al momento della registrazione, perché l'intera cronologia associata al numero
+acquisti un'identità.
 
 \warning{Cookie e privacy}{
     I cookie semplificano la vita, ma sono \textbf{controversi}: possono essere considerati un'invasione della
@@ -372,6 +418,25 @@ Fino al 70\% delle richieste, quindi, può essere servito localmente.
 \caption{Una cache istituzionale: il percorso rosso (miss) esce su Internet, quello verde (hit) resta nella rete locale.}
 \end{figure}
 
+\begin{esempio}{Quanto vale una cache}
+Un'istituzione ha una rete locale a 100 Mbps e un collegamento di accesso a Internet a \textbf{15 Mbps}.
+L'oggetto medio è di \textbf{1 Mbit}, dall'istituzione partono \textbf{15 richieste al secondo}, e recuperare un
+oggetto dall'altra parte di Internet richiede in media \textbf{2 secondi}.
+\begin{itemize}
+    \item Domanda sul collegamento di accesso: $15 \times 1 = 15$ Mbps, su un collegamento da esattamente
+          15 Mbps: l'\textbf{intensità di traffico} è 1.
+    \item Un collegamento sfruttato al 100\% della capacità non tiene il passo: la coda davanti a lui cresce
+          senza limite e l'attesa diventa di \textbf{minuti} (il perché lo vedremo con il livello di trasporto e di
+          rete).
+    \item \textbf{Soluzione 1}: portare il collegamento a 100 Mbps. Funziona, e costa ogni mese.
+    \item \textbf{Soluzione 2}: una cache con hit rate 0{,}4. Solo il 60\% delle richieste esce: la domanda
+          scende a $0{,}6 \times 15 = 9$ Mbps (intensità 0{,}6, ritardo di coda piccolo). Il tempo medio diventa
+          circa $0{,}6 \times 2\ \text{s} + 0{,}4 \times (\text{pochi ms}) \approx 1{,}2$ s.
+\end{itemize}
+La cache costa meno dell'aggiornamento ed è anche più veloce. Per questo università, aziende e provider la
+installano per il \textbf{collegamento}, non per gli utenti.
+\end{esempio}
+
 \subsection{Il GET condizionale}
 
 Il caching introduce un problema nuovo: la copia in cache potrebbe essere \textbf{vecchia}, se nel
@@ -406,6 +471,26 @@ frattempo l'oggetto è cambiato sul server.
 Se l'oggetto è aggiornato, alla cache basta una piccola risposta del server (niente oggetto da
 ritrasmettere) e il client riceve la copia locale.
 
+\begin{esempio}{Lo stesso scambio, nelle intestazioni}
+Che cosa la cache aveva memorizzato una settimana prima:
+\begin{lstlisting}[language=http]
+HTTP/1.1 200 OK
+Last-Modified: Wed, 9 Sep 2015 09:23:24      # conservata con l'oggetto
+\end{lstlisting}
+Che cosa invia oggi, e che cosa torna indietro:
+\begin{lstlisting}[language=http]
+GET /fruit/kiwi.gif HTTP/1.1
+Host: www.exotiquecuisine.com
+If-modified-since: Wed, 9 Sep 2015 09:23:24  # lo stesso valore, restituito
+
+HTTP/1.1 304 Not Modified
+Date: Sat, 10 Oct 2015 15:39:29
+                                             # corpo vuoto
+\end{lstlisting}
+L'immagine non è mai stata inviata: è tutto qui il risparmio, ed è per questo che \texttt{Last-Modified} compare
+in ogni risposta. Nessun protocollo nuovo: due righe di intestazione e un codice di stato.
+\end{esempio}
+
 \subsection{Il caching nel browser}
 
 Anche i \textbf{browser} fanno caching in locale, con lo stesso principio: conservano gli oggetti già
@@ -436,6 +521,58 @@ dell'Ateneo, per esempio, offre un proxy Web (\texttt{proxy.unina.it}): poiché 
 inoltrate dal proxy, per il server di origine \textbf{arrivano tutte dall'istituzione}. Così, da casa, si
 possono consultare riviste scientifiche abbonate dall'Università. Esistono anche molti proxy
 commerciali o gratuiti su Internet.
+
+Il server di origine vede l'indirizzo del proxy, e ricava la vera destinazione dalla riga \texttt{Host}: ecco
+perché quella riga, che sembrava ridondante, serve.
+
+% ══════════════════════════════════════════════════════════════
+\section{Perché l'HTTP in chiaro non si vede più}
+% ══════════════════════════════════════════════════════════════
+
+Scrivendo oggi \texttt{http://} in un browser, è molto improbabile che dalla macchina esca davvero HTTP in chiaro.
+
+\begin{itemize}
+    \item \textbf{HTTPS}: lo stesso HTTP, sopra \textbf{TLS}, sulla porta \textbf{443}. I messaggi sono identici,
+          ma nessuno lungo il percorso può leggerli.
+    \item \textbf{HSTS} (\emph{HTTP Strict Transport Security}): una riga di intestazione con cui un sito dichiara
+          che i browser non devono più usare HTTP in chiaro con lui, per mesi.
+    \item I browser includono una lista precaricata (\emph{preload list}) di questi siti e una modalità
+          \emph{HTTPS-first}: l'URL viene riscritto prima ancora di inviare un pacchetto.
+\end{itemize}
+
+\info{Che cosa mostra il filtro \texttt{http} di Wireshark?}{
+    Niente. Il traffico c'è (TCP verso la porta 443), ma Wireshark vede \textbf{record TLS}, non richieste HTTP.
+    Che cosa faccia TLS al loro interno lo vedremo nella parte sulla sicurezza.
+}
+
+\subsection{Laboratorio: una risposta che non sta in un pacchetto}
+
+Si cattura una pagina abbastanza lunga da dover essere divisa in più segmenti TCP.
+
+\begin{enumerate}
+    \item Svuotare la cache del browser, così che nulla venga servito localmente (in Firefox o Chrome
+          \texttt{Ctrl+Shift+Canc}, oppure disattivarla negli strumenti per sviluppatori).
+    \item Avviare la cattura in Wireshark, ancora senza filtro.
+    \item Scaricare la pagina con un client che non trasforma la richiesta in HTTPS:
+\begin{lstlisting}[language=bash]
+$ curl http://info.cern.ch/hypertext/WWW/TheProject.html > /dev/null
+\end{lstlisting}
+    \item Fermare la cattura e scrivere \texttt{http} nel filtro per trovare i due messaggi HTTP.
+    \item Togliere di nuovo il filtro: la risposta cercata sta per lo più in pacchetti che \textbf{non} sono
+          messaggi HTTP.
+\end{enumerate}
+
+\begin{esercizio}{Domande sulla cattura}
+(a) Quanti messaggi \texttt{GET} ha inviato il client, e quale numero di pacchetto contiene quello della pagina?
+(b) Quale pacchetto contiene il codice e la frase di stato della risposta? (c) Quali sono?
+(d) Quanti segmenti TCP con dati sono serviti per quell'unica risposta?
+
+\svolgimento
+Anche qui i numeri vanno letti dalla propria cattura. Per (d) si cercano, nella colonna \emph{Info}, i pacchetti
+marcati \emph{TCP segment of a reassembled PDU}: sono i pezzi della risposta, che Wireshark riassembla e mostra
+come un unico messaggio HTTP solo nell'ultimo segmento. Ripetendo con un browser al posto di \texttt{curl}, i
+messaggi HTTP spariscono: il browser è passato a HTTPS, e la pagina viaggia dentro record TLS.
+\end{esercizio}
 
 % ══════════════════════════════════════════════════════════════
 \section{Riepilogo}

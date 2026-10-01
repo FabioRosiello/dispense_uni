@@ -139,6 +139,27 @@ Una pagina con un testo HTML e cinque immagini JPEG ha \textbf{sei oggetti}: il 
 cinque immagini. Il browser riceve prima l'HTML, vi trova i riferimenti alle immagini e le chiede una a una.
 \end{esempio}
 
+Una pagina, quindi, non è un trasferimento ma \textbf{diversi} trasferimenti: ed è proprio il modo di
+organizzarli il tema del resto del capitolo.
+
+\subsection{Prima del primo messaggio HTTP}
+
+Tra il momento in cui si preme Invio e quello in cui parte la prima richiesta succedono già parecchie cose:
+
+\begin{enumerate}
+    \item il browser \textbf{scompone l'URL}: protocollo, host, porta, percorso;
+    \item l'host è un \textbf{nome}, e verso un nome non si può aprire nessuna connessione: il \textbf{DNS}
+          fornisce l'indirizzo IP corrispondente (lo vedremo nel capitolo dedicato);
+    \item solo a questo punto si apre una \textbf{connessione TCP} verso quell'indirizzo, sulla porta 80 o 443;
+    \item su quella connessione viaggia la prima \textbf{richiesta HTTP}, con il percorso;
+    \item il browser legge l'HTML, trova gli oggetti a cui rimanda e ricomincia.
+\end{enumerate}
+
+\info{Il tempo che non contiamo}{
+    Anche la risoluzione del nome costa tempo, ma nei conti in RTT che seguono non viene mai inclusa:
+    si parte sempre da quando l'indirizzo del server è già noto.
+}
+
 % ══════════════════════════════════════════════════════════════
 \section{Come funziona HTTP}
 % ══════════════════════════════════════════════════════════════
@@ -333,12 +354,26 @@ handshake analogo avviene anche quando la connessione viene chiusa.
     $$T_{\text{risposta}} \approx \underbrace{1\ \text{RTT}}_{\text{apertura TCP}} + \underbrace{1\ \text{RTT}}_{\text{richiesta e risposta}} + t_{\text{trasmissione del file}} = 2\ \text{RTT} + t_{\text{trasmissione}}$$
 }
 
-\begin{esempio}{Una pagina con 10 immagini}
-Con RTT $= 50$ ms e tempi di trasmissione trascurabili, una pagina con HTML e 10 immagini, scaricate
-\textbf{in sequenza} con connessioni non persistenti, richiede circa $11 \times 2\ \text{RTT} = 22$ RTT
-$= 1{,}1$ s. Con 10 connessioni \textbf{parallele} per le immagini si scende a $2 + 2 = 4$ RTT
-$= 0{,}2$ s. Con una connessione \textbf{persistente} senza pipelining: $2 + 10 \times 1 = 12$ RTT
-$= 0{,}6$ s; con pipelining circa $2 + 1 = 3$ RTT $= 0{,}15$ s.
+\begin{esempio}{La stessa pagina, contata in quattro modi}
+La pagina con l'HTML e 10 immagini JPEG (11 oggetti), senza perdite e con tempi di trasmissione
+trascurabili, come nelle slide:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{p{6.2cm}p{4.6cm}r}
+\toprule
+\textbf{Modalità} & \textbf{Conto} & \textbf{RTT} \\
+\midrule
+Non persistente, un oggetto alla volta & $2 \times 11$ & \textbf{22} \\
+Non persistente, 5 connessioni in parallelo & 2 per l'HTML, poi due turni da 2 per le 10 immagini & \textbf{6} \\
+Persistente, senza pipelining & 1 per aprire, poi 1 per ogni oggetto & \textbf{12} \\
+Persistente con pipelining & 1 per aprire, 1 per l'HTML, 1 per le 10 immagini insieme & \textbf{3} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Con RTT $= 50$ ms si va da $22 \times 50 = 1{,}1$ s a $3 \times 50 = 0{,}15$ s. Stessa pagina, stesso server,
+stessa distanza: tutto ciò che sta fra 22 e 3 dipende solo da \textbf{come vengono gestite le connessioni}.
 \end{esempio}
 
 % ══════════════════════════════════════════════════════════════
@@ -353,7 +388,8 @@ inviato una risposta.
           connessione: l'intera pagina dell'esempio (HTML + 10 immagini) passa su \textbf{una sola}
           connessione TCP.
     \item Anche più pagine dello stesso server possono essere inviate sulla stessa connessione.
-    \item Si risparmiano circa \textbf{1--2 RTT per oggetto} (non si riapre ogni volta la connessione).
+    \item L'handshake si paga \textbf{una volta sola}: ogni oggetto dopo il primo costa \textbf{1 RTT} invece di 2.
+    \item Il server chiude la connessione quando resta inutilizzata per un tempo configurabile (\emph{timeout}).
 \end{itemize}
 
 \dfn{Pipelining}{
@@ -420,6 +456,183 @@ inviato una risposta.
 \caption{Connessioni persistenti e non persistenti a confronto.}
 \end{table}
 
+Lo scambio è quello di sempre: la connessione già aperta è veloce, ma è una risorsa tenuta occupata per
+qualcuno che potrebbe non tornare più.
+
+\subsection{La connessione che si chiude mentre la usi}
+
+Che cosa succede se il server chiude per timeout una connessione persistente \textbf{proprio mentre} il
+client la sta riusando?
+
+\begin{itemize}
+    \item Il server chiude da solo una connessione inattiva, senza chiedere nulla al client.
+    \item Una richiesta scritta in quello stesso istante si perde con la connessione: nessuna risposta, e
+          nessun errore da parte del protocollo.
+    \item Un client che riusa una connessione inattiva deve quindi essere pronto ad \textbf{aprirne una nuova}
+          e a \textbf{reinviare} la richiesta.
+\end{itemize}
+
+\warning{Ripetere deve essere innocuo}{
+    Reinviare una richiesta è sicuro solo se ripeterla non fa danni. È uno dei motivi per cui ci si aspetta
+    che una \texttt{GET} \textbf{non modifichi} nulla sul server: chiedere due volte la stessa pagina va bene,
+    pagare due volte lo stesso ordine no.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{HTTP/2 e HTTP/3}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Il blocco in testa alla fila}
+
+Perché un oggetto grande può rallentare dieci oggetti piccoli? Prendiamo una pagina con un video pesante
+in alto e molti piccoli oggetti sotto, una sola connessione persistente e un collegamento lento lungo il
+percorso.
+
+\dfn{Head-of-line blocking}{
+    Il video occupa la connessione, e i piccoli oggetti, già pronti, aspettano dietro di lui: è il
+    \textbf{blocco in testa alla fila} (\emph{head-of-line blocking}, HOL).
+}
+
+I browser aggirano il problema aprendo \textbf{fino a sei connessioni parallele}. Così, però, si prendono
+anche una fetta più grande del collegamento più lento, perché TCP divide la banda in parti uguali fra le
+\textbf{connessioni}, non fra le pagine. Eliminare quelle connessioni parallele senza pagare il blocco è lo
+scopo di HTTP/2.
+
+\subsection{HTTP/2: frame intercalati su una sola connessione}
+
+\begin{itemize}
+    \item Un sotto-livello di \textbf{framing} spezza ogni messaggio in piccoli \textbf{frame}: l'intestazione
+          in uno, il corpo in altri, tutti in codifica \textbf{binaria}.
+    \item I frame di risposte diverse vengono \textbf{intercalati} sulla stessa connessione e riassemblati
+          dall'altra parte.
+    \item Metodi, codici di stato, URL e campi di intestazione \textbf{non cambiano}: cambia solo il modo in
+          cui i dati sono formattati e trasportati.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, fr/.style={draw=black!50, minimum width=0.42cm, minimum height=0.42cm, inner sep=0pt}]
+  \node[anchor=east, font=\footnotesize\bfseries\sffamily] at (-0.3,0.9) {HTTP/1.1};
+  \foreach \i in {0,...,13} { \node[fr, fill=netred!35] at (\i*0.45,0.9) {}; }
+  \node at (6.6,0.9) {\dots\ 1000 frame del video};
+  \foreach \i in {0,...,3} { \node[fr, fill=lnet] at (8.0+\i*0.45,0.9) {}; }
+  \node at (10.2,0.9) {\dots};
+  \node[anchor=east, font=\footnotesize\bfseries\sffamily] at (-0.3,0) {HTTP/2};
+  \foreach \i/\c in {0/netred!35,1/lnet,2/lnet,3/netred!35,4/lnet,5/lnet,6/netred!35,7/lnet,8/lnet,9/netred!35,10/lnet,11/lnet,12/netred!35,13/lnet} {
+     \node[fr, fill=\c] at (\i*0.45,0) {}; }
+  \node at (7.2,0) {\dots\ gli oggetti piccoli finiscono presto};
+  \node[fr, fill=netred!35, label=right:{frame del video}] at (0.2,-0.8) {};
+  \node[fr, fill=lnet, label=right:{frame degli oggetti piccoli}] at (3.6,-0.8) {};
+\end{tikzpicture}
+\caption{Con HTTP/1.1 gli oggetti piccoli aspettano la fine del video; con HTTP/2 i frame si alternano.}
+\end{figure}
+
+\begin{esempio}{18 frame invece di 1016}
+Un video di 1000 frame e otto oggetti piccoli di 2 frame ciascuno. Con HTTP/1.1 gli oggetti piccoli arrivano
+dopo il video: l'ultimo è completo dopo $1000 + 16 = 1016$ frame. Con HTTP/2, alternando un frame del video e
+quelli degli oggetti piccoli, tutti gli otto oggetti sono consegnati dopo appena \textbf{18} frame
+(i loro 16, più i 2 del video intercalati).
+\end{esempio}
+
+\subsection{Priorità e server push}
+
+\begin{itemize}
+    \item Il client può dare a ogni richiesta un \textbf{peso} fra 1 e 256 e dichiarare da quale altro
+          messaggio dipende.
+    \item Il server invia per primi i frame delle risposte a priorità più alta: il foglio di stile prima
+          dell'immagine in fondo alla pagina.
+    \item Con il \textbf{server push} il server legge l'HTML di base, capisce quali oggetti serviranno e li
+          invia \textbf{prima che vengano richiesti}: si risparmia un RTT per ogni oggetto ``spinto'', cioè la
+          richiesta che il client avrebbe comunque mandato.
+\end{itemize}
+
+\subsection{HTTP/3 e QUIC}
+
+\dfn{QUIC}{
+    \textbf{QUIC} è un protocollo di trasporto realizzato \textbf{nel livello applicativo}, sopra il
+    semplicissimo UDP. Fornisce ciò che serve a HTTP e che UDP non dà: affidabilità, multiplazione di più
+    flussi, controllo di flusso per ciascun flusso. \textbf{HTTP/3} è HTTP sopra QUIC.
+}
+
+\begin{itemize}
+    \item Aprire una connessione richiede \textbf{meno RTT}, perché connessione e cifratura vengono negoziate
+          \textbf{insieme} invece che una dopo l'altra.
+    \item Un pacchetto perso blocca solo il \textbf{proprio} flusso: sparisce il blocco in testa alla fila
+          che sopravviveva dentro TCP (in HTTP/2, una perdita ferma tutti i frame dietro di sé).
+    \item Diversi meccanismi di HTTP/2 sono già dentro QUIC, quindi il protocollo sopra diventa più semplice.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{lll}
+\toprule
+\textbf{Versione} & \textbf{Connessioni per pagina} & \textbf{Che cosa ha introdotto} \\
+\midrule
+HTTP/1.0 (1996) & una per oggetto & connessioni non persistenti \\
+HTTP/1.1 (1997) & una, riusata & connessioni persistenti, pipelining \\
+HTTP/2 (2015) & una, con frame intercalati & framing binario, priorità, server push \\
+HTTP/3 (2022) & una, su QUIC sopra UDP & apertura in meno RTT, niente HOL fra flussi \\
+\bottomrule
+\end{tabular}
+\caption{Trent'anni di lavoro su un'unica domanda: quante connessioni, e per quanto tempo.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Laboratorio: il primo GET con Wireshark}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Installare Wireshark}
+
+Su Debian, Ubuntu e derivate (rispondere \emph{sì} quando si chiede se gli utenti non root possono catturare
+pacchetti):
+
+\begin{lstlisting}[language=bash]
+$ sudo apt update && sudo apt install wireshark
+$ sudo dpkg-reconfigure wireshark-common   # se si e' risposto no
+$ sudo usermod -aG wireshark $USER         # poi uscire e rientrare
+$ groups                                   # deve comparire wireshark
+$ getcap /usr/bin/dumpcap
+cap_net_raw,cap_net_admin=eip              # cio' che deve stampare
+\end{lstlisting}
+
+Se \texttt{getcap} non stampa nulla, bisogna assegnare a mano quelle due \emph{capability} al programma, con
+\texttt{setcap}.
+
+\subsection{Catturare un GET}
+
+\begin{enumerate}
+    \item Avviare Wireshark, senza far partire la cattura.
+    \item Scrivere \texttt{http} nel filtro di visualizzazione, così da vedere solo i pacchetti HTTP.
+    \item Aspettare poco più di un minuto (vedremo perché), poi avviare la cattura.
+    \item Scaricare una pagina molto semplice: \texttt{\$ lynx http://www.columbia.edu/\textasciitilde fdc/sample.html}
+    \item Fermare la cattura. Chiudere i dettagli Frame, Ethernet, IP e TCP, e aprire quello HTTP.
+\end{enumerate}
+
+Si vedono \textbf{due} pacchetti HTTP: la \texttt{GET} inviata dal client e il \texttt{200 OK} di risposta,
+ciascuno dentro un segmento TCP, dentro un datagramma IP, dentro un frame Ethernet.
+
+\begin{esercizio}{Domande sulla cattura}
+Sulla \textbf{richiesta}: (a) quale versione di HTTP annuncia il client, e con quale risponde il server?
+(b) Quali lingue il client dichiara di accettare? (c) Qual è l'indirizzo IP della propria macchina, e quello del
+server?
+
+Sulla \textbf{risposta}: (d) quale codice di stato ha restituito il server? (e) Quando è stata modificata
+l'ultima volta la pagina? (f) Quanti byte di contenuto sono stati inviati? (g) Nei byte grezzi del pacchetto
+ci sono righe di intestazione che l'elenco dei pacchetti non mostra?
+
+\svolgimento
+Le risposte vanno lette dalla \textbf{propria} cattura, non da qui. Dove guardare: la versione è nella prima
+riga di ciascun messaggio (riga di richiesta e riga di stato); le lingue nella riga \texttt{Accept-Language};
+gli indirizzi nel dettaglio IP (\emph{Source} e \emph{Destination}); il codice nella riga di stato; la data di
+modifica in \texttt{Last-Modified}; i byte in \texttt{Content-Length}.
+
+Per (e): la pagina può sembrare modificata meno di un minuto prima. Quel server aggiorna la data ogni minuto,
+così che tutti scarichino una copia nuova: è il motivo dell'attesa al passo 3. Si ripeta poi con
+\texttt{http://scottaaronson.com} e con un browser moderno al posto di \texttt{lynx}: che cosa cambia, e perché?
+(Un browser moderno usa quasi sempre HTTPS: si veda il laboratorio del capitolo successivo.)
+\end{esercizio}
+
 % ══════════════════════════════════════════════════════════════
 \section{Riepilogo}
 % ══════════════════════════════════════════════════════════════
@@ -431,7 +644,9 @@ inviato una risposta.
     \item HTTP usa \textbf{TCP} (porta 80) e, con HTTP/3, anche \textbf{UDP} con QUIC.
     \item HTTP è \textbf{stateless}: il server non ricorda le richieste precedenti.
     \item Connessioni \textbf{non persistenti}: una connessione per oggetto, circa 2 RTT + trasmissione per
-          ciascuno. Connessioni \textbf{persistenti}: una sola connessione, con il \textbf{pipelining} le
-          richieste partono senza aspettare le risposte.
+          ciascuno. Connessioni \textbf{persistenti}: l'handshake si paga una volta, poi 1 RTT per oggetto; con il
+          \textbf{pipelining} le richieste partono senza aspettare le risposte.
+    \item \textbf{HTTP/2} intercala i frame di più risposte su una connessione (niente blocco in testa alla
+          fila fra oggetti), con priorità e server push; \textbf{HTTP/3} porta tutto su \textbf{QUIC}, sopra UDP.
 \end{itemize}
 }
