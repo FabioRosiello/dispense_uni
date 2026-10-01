@@ -701,5 +701,79 @@
 \AddToHook{env/affianco/before}{\wtattacca}
 % Un titolo non resta da solo in fondo alla pagina: se sotto non c'è spazio
 % per qualche riga di contenuto, va a pagina nuova
-\AddToHook{cmd/section/before}{\Needspace{22\baselineskip}}
-\AddToHook{cmd/subsection/before}{\Needspace{8\baselineskip}}
+%
+% Inoltre ogni "blocco" (da un titolo di sezione o sottosezione al titolo
+% successivo) che sta in una pagina non viene spezzato: la posizione di inizio
+% e di fine di ogni blocco viene salvata nel file .aux (zref-savepos) e, alla
+% compilazione successiva, prima del titolo si chiede tanto spazio quanto è alto
+% il blocco. Se non c'è, il blocco intero passa alla pagina dopo. Servono quindi
+% almeno tre compilazioni perché le posizioni si stabilizzino.
+\usepackage{zref-savepos,zref-abspage}
+\newcount\wtblocco
+\makeatletter
+\zref@addprop{savepos}{abspage}
+\newcommand{\wtfineblocco}{%
+  \ifnum\wtblocco>\z@ \zsavepos{wtb\the\wtblocco e}\fi}
+\newcommand{\wtiniziablocco}{%
+  \global\advance\wtblocco\@ne \zsavepos{wtb\the\wtblocco s}}
+% \wtspazio{minimo}: Needspace pari all'altezza del prossimo blocco, se sta in
+% una pagina, altrimenti pari al minimo. L'altezza misurata quando il blocco
+% stava tutto in una pagina viene ricordata (\wtmem nel file .aux): così un
+% blocco già spostato non torna indietro alla compilazione successiva.
+\newdimen\wtaltezza
+\newcommand{\wtmem}[2]{\expandafter\gdef\csname wtmem@#1\endcsname{#2}}
+% \wtcap{n}: il blocco n apre un capitolo, quindi il blocco n-1 chiude il
+% precedente e la sua "fine" viene registrata nella pagina del nuovo capitolo
+\newcommand{\wtcap}[1]{\expandafter\gdef\csname wtcap@#1\endcsname{}}
+\newcommand{\wtspazio}[1]{%
+  \begingroup
+  \edef\wtn{\the\numexpr\wtblocco+1\relax}%
+  \edef\wtps{\zref@extractdefault{wtb\wtn s}{abspage}{0}}%
+  \edef\wtpe{\zref@extractdefault{wtb\wtn e}{abspage}{0}}%
+  \wtaltezza=#1\relax
+  \ifnum\wtps>\z@
+    \ifnum\wtpe=\wtps
+      % tutto in una pagina: altezza esatta, da ricordare
+      \wtaltezza=\dimexpr\zposy{wtb\wtn s}sp-\zposy{wtb\wtn e}sp\relax
+      % si tiene la misura piu' alta: in cima alla pagina il blocco risulta piu'
+      % basso (sparisce lo spazio prima del titolo), e senza questo l'impaginazione
+      % oscillerebbe fra due soluzioni
+      \ifcsname wtmem@\wtn\endcsname
+        \ifdim\csname wtmem@\wtn\endcsname>\wtaltezza
+          \wtaltezza=\csname wtmem@\wtn\endcsname\relax
+        \fi
+      \fi
+      \immediate\write\@auxout{\string\wtmem{\wtn}{\the\wtaltezza}}%
+    \else\ifnum\wtpe=\numexpr\wtps+1\relax
+      \ifcsname wtcap@\the\numexpr\wtn+1\relax\endcsname
+        % ultimo blocco di un capitolo: la fine e' nella pagina dopo
+      \else\ifdim\zposy{wtb\wtn e}sp>\wttesta
+        % la fine e' solo scivolata in cima alla pagina dopo: il blocco sta gia'
+      \else\ifcsname wtmem@\wtn\endcsname
+        \wtaltezza=\csname wtmem@\wtn\endcsname\relax
+        \immediate\write\@auxout{\string\wtmem{\wtn}{\the\wtaltezza}}%
+      \else\ifdim\zposy{wtb\wtn s}sp>\wttesta
+        % comincia gia' in cima a una pagina ed e' spezzato: e' troppo lungo
+        \immediate\write\@auxout{\string\wtmem{\wtn}{\the\maxdimen}}%
+      \else
+        % spezzato: si prova a portarlo intero alla pagina successiva
+        \wtaltezza=\maxdimen
+      \fi\fi\fi\fi
+    \fi\fi
+  \fi
+  \ifdim\wtaltezza=\maxdimen
+    \par\newpage
+  \else
+    \ifdim\wtaltezza<#1\relax \wtaltezza=#1\relax\fi
+    \ifdim\wtaltezza>.97\textheight \wtaltezza=#1\relax\fi
+    \Needspace{\dimexpr\wtaltezza+\baselineskip\relax}%
+  \fi
+  \endgroup}
+% posizione verticale oltre la quale un punto e' "in cima alla pagina"
+\newdimen\wttesta
+\AtBeginDocument{\wttesta=\dimexpr\paperheight-\topmargin-1in-\headheight-\headsep-40pt\relax}
+\AddToHook{cmd/chapter/before}{\wtfineblocco\wtiniziablocco\immediate\write\@auxout{\string\wtcap{\the\wtblocco}}}
+\AddToHook{cmd/section/before}{\wtfineblocco\wtspazio{22\baselineskip}\wtiniziablocco}
+\AddToHook{cmd/subsection/before}{\wtfineblocco\wtspazio{8\baselineskip}\wtiniziablocco}
+\AddToHook{enddocument}{\wtfineblocco}
+\makeatother
