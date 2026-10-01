@@ -6,7 +6,7 @@ Federico II, corso di laurea in Informatica.
 
 Copre **l'intero corso**: tutte le 24 lezioni, più la lezione bonus su CMS e
 GraphQL (inclusa come capitolo finale e segnalata come fuori programma).
-23 capitoli, 298 pagine.
+23 capitoli, 341 pagine.
 
 La dispensa contiene **solo i contenuti tecnici** visti a lezione, cioè quelli
 che possono essere oggetto d'esame. Le informazioni organizzative (crediti,
@@ -192,6 +192,15 @@ Tutte in `preamble/webtech-preamble.tex`, la classe non è stata toccata.
   - ogni `esempio`/`esercizio` viene composto in una scatola e, se sta in una
     pagina, non si spezza (se fosse più lungo di una pagina si spezzerebbe
     normalmente).
+
+  - ogni blocco da un titolo di sezione o sottosezione al successivo, se sta
+    in una pagina, non si spezza: le posizioni di inizio e fine vengono
+    salvate nel file `.aux` e alla compilazione successiva il blocco, se non
+    entra, passa intero alla pagina dopo. Le altezze misurate restano
+    memorizzate (`\wtmem` nel `.aux`) perché l'impaginazione non oscilli:
+    servono **più compilazioni** (5-6 partendo da zero) perché si stabilizzi.
+    Dopo modifiche importanti alla struttura dei capitoli conviene cancellare
+    `main.aux` e ricompilare da capo.
 
   Il prezzo è qualche spazio bianco in più in fondo alle pagine.
 

@@ -117,6 +117,33 @@ E se la funzione costruttore non ha una proprietà \code{prototype}? In quel cas
 viene usato un \term{prototipo predefinito}: un oggetto con una sola proprietà
 \code{constructor}, che punta indietro alla funzione costruttore.
 
+Il codice seguente crea esattamente gli oggetti della figura: una funzione
+costruttore \code{Pet} senza un \code{prototype} assegnato a mano, e due oggetti
+creati con \code{new}. I controlli in fondo verificano, una per una, le frecce
+del disegno.
+
+\begin{lstlisting}[style=js, name=costruttore-predefinito.js]
+function Pet(name, age) {
+  this.name = name;
+  this.age = age;
+}
+// nessuna assegnazione a Pet.prototype: si usa quello predefinito
+
+let chuck = new Pet("Chuck", 3);
+let rick  = new Pet("Rick", 7);
+
+// le frecce della figura
+Pet.prototype.constructor === Pet;                          // true
+Object.getPrototypeOf(chuck) === Pet.prototype;             // true
+Object.getPrototypeOf(rick)  === Pet.prototype;             // true
+Object.getPrototypeOf(Pet.prototype) === Object.prototype;  // true
+
+// constructor non e' una proprieta' di chuck: arriva dal prototipo
+chuck.hasOwnProperty("constructor");   // false
+chuck.constructor === Pet;             // true
+chuck.toString();                      // "[object Object]", da Object.prototype
+\end{lstlisting}
+
 \begin{figure}[H]
   \centering
   \begin{tikzpicture}[font=\Lato\footnotesize,
@@ -154,11 +181,24 @@ viene usato un \term{prototipo predefinito}: un oggetto con una sola proprietà
 \end{figure}
 
 Questo meccanismo ci permette, dato un oggetto, di risalire al costruttore che
-lo ha creato:
+lo ha creato, e di usarlo per crearne uno nuovo dello stesso tipo:
+
+\begin{lstlisting}[style=js]
+let b = new chuck.constructor('Bob', 1);   // come new Pet('Bob', 1)
+\end{lstlisting}
+
+\begin{warningbox}{{Senza new non funziona}}
+  Le slide scrivono \code{chuck.constructor('Bob', 1)}, senza \code{new}. Così
+  \code{Pet} viene chiamata come un normale \textbf{metodo} di \code{chuck}:
+  \code{this} vale \code{chuck}, la funzione \textbf{sovrascrive} nome ed età di
+  \code{chuck} e restituisce \code{undefined}.
 
 \begin{lstlisting}[style=js]
 let b = chuck.constructor('Bob', 1);
+console.log(b);            // undefined
+console.log(chuck.name);   // "Bob" (!)
 \end{lstlisting}
+\end{warningbox}
 
 \subsection{Due modi per aggiungere metodi}
 
