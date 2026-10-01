@@ -215,6 +215,24 @@ Un unico server DNS centralizzato non avrebbe senso. Lo spazio dei nomi è quind
     \emph{secondari}). Come dividere il proprio dominio in zone lo decide l'amministratore.
 }
 
+\warning{Un dominio non è una zona}{
+    Una zona è la parte dell'albero che un'amministrazione serve davvero: un dominio, \textbf{meno} ciò che ha
+    delegato ad altri. \texttt{unina.it} è una zona; un dipartimento che riceve un proprio server diventa una zona a
+    sé ed esce dalla prima. Il dominio dice \textbf{come sono fatti i nomi}, la zona dice \textbf{chi risponde} per
+    essi. E i confini sono amministrativi, non geografici: due host dello stesso dominio possono stare in
+    continenti diversi.
+}
+
+\begin{itemize}
+    \item Ogni zona ha almeno \textbf{due} name server, su macchine separate: un \textbf{primario} e uno o più
+          \textbf{secondari}. Entrambi sono \textbf{autorevoli}: le loro risposte sono il dato stesso, non la copia
+          della risposta di qualcun altro.
+    \item Il secondario copia la zona dal primario a intervalli regolari, e continua a rispondere quando il
+          primario è irraggiungibile.
+    \item Un'organizzazione può gestirli da sé o pagare un fornitore: la maggior parte delle università li gestisce
+          da sé. Per esempio \texttt{a.nic.va} ha autorità su \texttt{vatican.va}: è lì che quei record vivono davvero.
+\end{itemize}
+
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.72\linewidth]{cap07/zone_dns.png}
@@ -382,6 +400,20 @@ La risoluzione procede così:
     resolver hanno ancora in cache il record, finché il suo TTL non scade. Per questo prima di un trasloco si
     abbassa il TTL dei record interessati.
 }
+
+\begin{esempio}{Quanto costa il TTL}
+\texttt{www.example.it} era \texttt{138.12.27.42} e viene spostato su una nuova macchina, \texttt{107.46.72.221}.
+\begin{itemize}
+    \item La vecchia coppia non sta in un posto solo: \textbf{ogni} server che ha risolto quel nome negli ultimi
+          giorni ne ha una copia.
+    \item Nessuno va a correggerle: quelle copie continuano a rispondere con il vecchio indirizzo finché il loro
+          TTL non scade.
+    \item Un TTL \textbf{breve} propaga in fretta i cambiamenti ma costa più query; uno \textbf{lungo} risparmia
+          query e ritarda i cambiamenti (86400 secondi, un giorno, per un record stabile; 60 per uno che si sposta).
+\end{itemize}
+Per questo il TTL si abbassa \textbf{giorni prima} di un trasloco programmato, e si rialza quando il nuovo
+indirizzo si è assestato.
+\end{esempio}
 
 % ══════════════════════════════════════════════════════════════
 \section{I messaggi DNS}
@@ -556,6 +588,231 @@ Address: 133.5.40.197                                     # finalmente il server
 }
 
 % ══════════════════════════════════════════════════════════════
+\section{dig: leggere il messaggio DNS}
+% ══════════════════════════════════════════════════════════════
+
+Nelle lezioni si usa \texttt{dig}, che stampa il \textbf{messaggio DNS} quasi per intero (su Windows c'è
+\texttt{nslookup}, che ne mostra meno).
+
+\begin{lstlisting}[language=bash]
+$ dig vatican.va
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 19917
+;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+;; QUESTION SECTION:
+;vatican.va.                    IN      A
+;; ANSWER SECTION:
+vatican.va.             21559   IN      A        185.152.70.106
+;; SERVER: 127.0.0.53#53(127.0.0.53) (UDP)
+\end{lstlisting}
+
+\begin{itemize}
+    \item La query è andata a \texttt{127.0.0.53}, il resolver locale di questa macchina, che l'ha inoltrata.
+    \item Il numero prima di \texttt{IN} è il \textbf{TTL} rimasto, in secondi.
+    \item Le sezioni stampate (\emph{question}, \emph{answer}, \emph{authority}, \emph{additional}) sono proprio
+          quelle del formato dei messaggi DNS visto sopra.
+\end{itemize}
+
+\subsection{I flag}
+
+La riga \texttt{flags} descrive come il server ha trattato la query.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{>{\ttfamily}l l p{8.2cm}}
+\toprule
+\normalfont\textbf{Flag} & \textbf{Nome} & \textbf{Significato} \\
+\midrule
+qr & Query/Response & presente in ogni risposta \\
+aa & Authoritative Answer & chi risponde è la fonte di verità della zona, non una cache \\
+tc & Truncated & risposta troppo grande per UDP: riprovare su TCP \\
+rd & Recursion Desired & il client ha chiesto la ricorsione \\
+ra & Recursion Available & il server conferma di poter fare la ricorsione \\
+ad & Authentic Data & la validazione DNSSEC è riuscita \\
+cd & Checking Disabled & il client ha chiesto di saltare la validazione DNSSEC (\texttt{+cd}) \\
+\bottomrule
+\end{tabular}
+\caption{I flag più comuni nell'intestazione di una risposta di \texttt{dig}.}
+\end{table}
+
+Nell'esempio di \texttt{vatican.va}: \texttt{qr}, è una risposta; \texttt{rd}, abbiamo chiesto la ricorsione;
+\texttt{ra}, il server la offre; niente \texttt{aa}, la risposta viene da una cache; niente \texttt{ad}, DNSSEC non è
+stato validato. Interrogando direttamente un server autorevole si vedono invece \texttt{flags: qr aa}, senza
+\texttt{rd} e \texttt{ra}, perché la ricorsione non è stata né chiesta né necessaria.
+
+\subsection{Chiedere un tipo}
+
+Il tipo va dopo il nome; senza tipo, \texttt{dig} chiede un indirizzo (A). Con \texttt{+noall +answer} si stampa
+solo la sezione delle risposte.
+
+\begin{lstlisting}[language=bash]
+$ dig +noall +answer www.mit.edu A
+www.mit.edu.               1070 IN  CNAME  www.mit.edu.edgekey.net.
+www.mit.edu.edgekey.net.     51 IN  CNAME  e9566.dscb.akamaiedge.net.
+e9566.dscb.akamaiedge.net.   20 IN  A      23.75.122.29
+\end{lstlisting}
+
+Due CNAME prima di un indirizzo: il nome pubblicato è un alias di un altro nome, e la macchina che alla fine
+risponde appartiene a un'altra azienda (una CDN). E si guardino i TTL: l'alias viene tenuto per minuti,
+l'indirizzo finale per secondi.
+
+\begin{lstlisting}[language=bash]
+$ dig +noall +answer mit.edu MX
+mit.edu.            59 IN MX 100 mit-edu.mail.protection.outlook.com.
+$ dig +noall +answer mit-edu.mail.protection.outlook.com A
+mit-edu.mail.protection.outlook.com. 10 IN A 52.101.60.185
+mit-edu.mail.protection.outlook.com. 10 IN A 52.101.41.125
+mit-edu.mail.protection.outlook.com. 10 IN A 52.101.9.26
+mit-edu.mail.protection.outlook.com. 10 IN A 52.101.11.19
+\end{lstlisting}
+
+\begin{itemize}
+    \item Un record \textbf{MX} dà un \textbf{nome} e una preferenza (100), mai un indirizzo: serve sempre una
+          seconda query.
+    \item Quattro indirizzi per un nome: più server di posta equivalenti (distribuzione del carico), e la posta di
+          questo dominio è gestita da un'altra azienda.
+\end{itemize}
+
+\begin{lstlisting}[language=bash]
+$ dig +noall +answer mit.edu NS
+mit.edu.   840 IN NS use2.akam.net.
+mit.edu.   840 IN NS eur5.akam.net.
+mit.edu.   840 IN NS asia1.akam.net.        # otto in tutto, su tre continenti
+$ dig +noall +answer +multiline mit.edu SOA
+mit.edu.   1800 IN SOA use2.akam.net. network-request.mit.edu. (
+                23589      ; serial
+                900        ; refresh (15 minutes)
+                900        ; retry (15 minutes)
+                3600000    ; expire (5 weeks 6 days 16 hours)
+                3600       ; minimum (1 hour)
+                )
+\end{lstlisting}
+
+\textbf{NS} elenca tutti i server con autorità sulla zona; \textbf{SOA} nomina per primo l'unico da cui gli altri
+copiano. I suoi parametri sono l'orologio della zona: ogni quanto i secondari si riallineano (\emph{refresh}),
+dopo quanto riprovano (\emph{retry}), quando smettono di considerare valida la copia (\emph{expire}) e il TTL
+minimo dei record.
+
+\subsection{Fare il server locale: partire dalla radice}
+
+Si può ignorare il server locale e percorrere la gerarchia a mano, come farebbe lui con le cache vuote.
+L'opzione \texttt{+norecurse} chiede esattamente \textbf{un passo}.
+
+\begin{lstlisting}[language=bash]
+$ dig +norecurse @c.root-servers.net hyoka.ofc.kyushu-u.ac.jp A
+;; flags: qr; QUERY: 1, ANSWER: 0, AUTHORITY: 8, ADDITIONAL: 16
+;; AUTHORITY SECTION:
+jp.                      172800   IN      NS        a.dns.jp.
+jp.                      172800   IN      NS        b.dns.jp.     # otto in tutto
+;; ADDITIONAL SECTION:
+a.dns.jp.                172800   IN      A         203.119.1.1
+b.dns.jp.                172800   IN      A         202.12.30.131
+\end{lstlisting}
+
+La radice non ha l'indirizzo dell'host: la sezione \emph{answer} è vuota. Invece \textbf{delega}: i server di
+\texttt{jp} nella sezione \emph{authority}, e i loro indirizzi in quella \emph{additional} (altrimenti bisognerebbe
+prima risolvere i loro nomi).
+
+\begin{lstlisting}[language=bash]
+$ dig +norecurse @b.dns.jp hyoka.ofc.kyushu-u.ac.jp A
+;; flags: qr; QUERY: 1, ANSWER: 0, AUTHORITY: 3, ADDITIONAL: 3
+kyushu-u.ac.jp.            86400 IN NS ns2.kyushu-u.ac.jp.
+ns2.kyushu-u.ac.jp.        86400 IN A  133.5.1.9
+$ dig +norecurse @ns2.kyushu-u.ac.jp hyoka.ofc.kyushu-u.ac.jp A
+;; flags: qr; QUERY: 1, ANSWER: 0, AUTHORITY: 2, ADDITIONAL: 2
+ofc.kyushu-u.ac.jp.         3600 IN NS ns.jimu.kyushu-u.ac.jp.
+ns.jimu.kyushu-u.ac.jp.     3600 IN A  133.5.40.1
+$ dig +norecurse @ns.jimu.kyushu-u.ac.jp hyoka.ofc.kyushu-u.ac.jp A
+;; flags: qr aa; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+hyoka.ofc.kyushu-u.ac.jp.   3600 IN A  133.5.40.197
+\end{lstlisting}
+
+Radice $\rightarrow$ \texttt{jp} $\rightarrow$ \texttt{kyushu-u.ac.jp} $\rightarrow$ \texttt{ofc.kyushu-u.ac.jp}: a ogni
+passo la stessa domanda, e un rinvio al server successivo. Solo l'ultima risposta ha il flag \texttt{aa}, perché
+viene dalla zona stessa. \texttt{dig +trace} fa l'intero percorso con un solo comando.
+
+% ══════════════════════════════════════════════════════════════
+\section{Come un record entra nel database}
+% ══════════════════════════════════════════════════════════════
+
+Si è appena registrato \texttt{example.it}: per ora nessuno al mondo può raggiungerlo.
+
+\begin{enumerate}
+    \item Si comunicano al \textbf{registrar} i nomi e gli indirizzi del proprio name server primario e secondario.
+    \item Il registrar inserisce nei \textbf{server del TLD} (\texttt{it}) un record \textbf{NS} per il dominio e un
+          record \textbf{A} per ciascuno di quei server.
+    \item Nei propri server si inseriscono il record \textbf{A} del server Web e il record \textbf{MX} del server di
+          posta.
+\end{enumerate}
+
+Da quel momento la discesa dalla radice arriva fino al nuovo dominio, e un host dall'altra parte del mondo può
+trovare la macchina senza che nessuno gli abbia detto nulla.
+
+% ══════════════════════════════════════════════════════════════
+\section{La risposta che nessun server autorevole ha inviato}
+% ══════════════════════════════════════════════════════════════
+
+Abbiamo interrogato direttamente il server autorevole: perché la risposta \textbf{non} è autorevole? Perché chi ha
+risposto \textbf{non era} quel server. La risposta è tornata senza il flag \texttt{aa}, e quel flag lo imposta la
+macchina che possiede la zona.
+
+\begin{itemize}
+    \item Una query DNS è un datagramma UDP verso la porta 53: niente connessione, niente autenticazione, niente
+          firma.
+    \item Qualunque apparato lungo il percorso può rispondere \textbf{per primo}, a nome del server interpellato, e il
+          resolver non ha modo di accorgersene (alcune reti intercettano così tutto il traffico DNS).
+    \item Il \textbf{cache poisoning} e il dirottamento verso il sito Web di qualcun altro sono lo stesso trucco,
+          usato deliberatamente.
+\end{itemize}
+
+\info{Le contromisure}{
+    \textbf{DNSSEC} firma i record, così che una risposta falsificata possa essere riconosciuta; i trasporti
+    \textbf{cifrati} (DNS over TLS, DNS over HTTPS) nascondono la domanda stessa. Se ne parla nella parte sulla
+    sicurezza.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Laboratorio: cinque domande a un dominio vero}
+% ══════════════════════════════════════════════════════════════
+
+Si sceglie un dominio (\texttt{vatican.va}, \texttt{unina.it}, uno proprio) e gli si chiedono cinque cose.
+
+\begin{lstlisting}[language=bash]
+$ dig vatican.va                       # 1. l'indirizzo
+$ dig vatican.va NS                    # 2. chi ha autorita'
+$ dig vatican.va SOA                   # 3. quale di loro e' il principale
+$ dig a.nic.va A                       # 4. il suo indirizzo
+$ dig @212.77.0.110 vatican.va A       # 5. chiederlo direttamente a lui
+\end{lstlisting}
+
+I passi 4 e 5 usano ciò che ha restituito il passo 3: prima il nome del server principale, poi l'indirizzo appena
+risolto per lui.
+
+\begin{esercizio}{Domande}
+(a) Quali delle cinque risposte arrivano senza il flag \texttt{aa}, e perché è normale per le prime tre?
+(b) Il server primario nominato nel record SOA compare fra i record NS? Dovrebbe?
+(c) Che TTL torna con la prima query, e a quanto scende ripetendola un minuto dopo?
+(d) Il passo 5 interroga il server che possiede la zona. La risposta è autorevole? Se non lo è, chi ha risposto?
+(e) Si provi una query MX sullo stesso dominio: quante query servono per arrivare a un indirizzo verso cui aprire
+una connessione?
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Le prime tre passano dal resolver locale, che risponde dalla propria cache o da quella del server del
+          provider: \textbf{nessuna} è autorevole, ed è normale. Anche la quarta, di solito, non lo è.
+    \item Di norma sì: il primario è un server autorevole della zona, quindi compare anche fra gli NS. Non è però
+          obbligatorio: alcune organizzazioni tengono un primario ``nascosto'' (\emph{hidden primary}), da cui i
+          secondari copiano la zona ma che non risponde al pubblico e quindi non viene elencato fra gli NS.
+    \item La prima volta torna il TTL rimasto nella cache del resolver; un minuto dopo è \textbf{sceso di circa 60}
+          secondi, perché si sta leggendo la stessa copia che invecchia. Quando arriva a zero, il resolver la richiede.
+    \item Dovrebbe esserlo, con \texttt{aa}. Se manca, ha risposto qualcun altro al posto del server: un apparato
+          lungo il percorso che intercetta le query DNS (si veda la sezione precedente).
+    \item Almeno \textbf{due}: la query MX restituisce un nome, e serve una seconda query (A o AAAA) per ottenere
+          l'indirizzo. Se il nome passa per dei CNAME, ne servono di più.
+\end{enumerate}
+\end{esercizio}
+
+% ══════════════════════════════════════════════════════════════
 \section{Riepilogo}
 % ══════════════════════════════════════════════════════════════
 
@@ -570,5 +827,9 @@ Address: 133.5.40.197                                     # finalmente il server
           root, TLD e server autorevoli.
     \item Il \textbf{caching} (con scadenza data dal TTL) rende il DNS veloce; il DNS offre anche \textbf{alias} e
           \textbf{distribuzione del carico}.
+    \item \texttt{dig} stampa il messaggio DNS: flag (\texttt{aa}, \texttt{rd}, \texttt{ra}, \dots) e sezioni
+          answer, authority e additional. Con \texttt{+norecurse} si percorre la gerarchia un passo alla volta.
+    \item Le query viaggiano su UDP senza autenticazione: chiunque lungo il percorso può rispondere al posto del
+          server; DNSSEC firma i record.
 \end{itemize}
 }
