@@ -113,9 +113,28 @@ let chuck = new Duck("Chuck");   // chuck.__proto__ == pet
 console.log(chuck.eats);         // true
 \end{lstlisting}
 
-E se la funzione costruttore non ha una proprietà \code{prototype}? In quel caso
-viene usato un \term{prototipo predefinito}: un oggetto con una sola proprietà
-\code{constructor}, che punta indietro alla funzione costruttore.
+E se alla funzione costruttore non assegniamo nessun \code{prototype}? In quel
+caso viene usato un \term{prototipo predefinito}: un oggetto con una sola
+proprietà \code{constructor}, che punta indietro alla funzione costruttore. Ogni
+funzione ordinaria lo riceve automaticamente nel momento in cui viene creata, ed
+è come se JavaScript eseguisse per noi:
+
+\begin{lstlisting}[style=js]
+Pet.prototype = { constructor: Pet };   // fatto in automatico
+\end{lstlisting}
+
+L'unica differenza rispetto a questa riga scritta a mano è che, nel prototipo
+predefinito, \code{constructor} non è \textbf{enumerabile}: non compare in un
+ciclo \code{for..in} né in \code{Object.keys}.
+
+\warning{Sostituire il prototipo fa perdere constructor}{
+  Nell'esempio di \code{Duck} il prototipo predefinito è stato
+  \textbf{sostituito} con \code{pet}, che non ha una proprietà
+  \code{constructor}. La ricerca allora risale fino a \code{Object.prototype}:
+  \code{chuck.constructor} vale \code{Object}, non \code{Duck}. Se serve, va
+  rimessa a mano: \code{Duck.prototype.constructor = Duck}. Oppure, più
+  semplicemente, si \textbf{aggiungono} proprietà al prototipo esistente invece
+  di sostituirlo.}
 
 Il codice seguente crea esattamente gli oggetti della figura: una funzione
 costruttore \code{Pet} senza un \code{prototype} assegnato a mano, e due oggetti
@@ -381,6 +400,12 @@ let y = a.shift();   // [1]
 console.log(x);   // 2
 console.log(y);   // 0
 \end{lstlisting}
+
+\info{Tutti i metodi, visualizzati}{
+  Gli array hanno molti altri metodi (\code{slice}, \code{splice},
+  \code{map}, \code{filter}, \code{find}, \code{includes}, \code{sort},
+  \ldots). Una visualizzazione di ciascuno, nello stesso stile della figura, si
+  trova su \urlx{https://js-arrays-visualized.com/}.}
 
 \subsection{Iterazione}
 
@@ -677,6 +702,38 @@ Che cosa fa allora il costrutto \code{class Pet \{...\}}?
 È esattamente il secondo dei due modi di aggiungere metodi visti all'inizio del
 capitolo: le classi sono \textbf{zucchero sintattico} sopra i prototipi.
 
+\subsection{Non solo zucchero sintattico}
+
+Il risultato è molto simile a quello di una funzione costruttore scritta a mano,
+ma non identico. Le differenze principali:
+
+\begin{itemize}
+  \item una classe \textbf{non si può chiamare senza} \code{new}: si ottiene un
+        \code{TypeError}, mentre una funzione costruttore chiamata per errore
+        senza \code{new} viene eseguita come funzione normale (il problema visto
+        con \code{chuck.constructor('Bob', 1)});
+  \item i metodi della classe \textbf{non sono enumerabili}: non compaiono in
+        un \code{for..in} sull'oggetto, a differenza di quelli aggiunti con
+        \code{Pet.prototype.metodo = ...};
+  \item il corpo della classe è sempre in modalità \textbf{strict}, anche se lo
+        script non lo è;
+  \item una classe non si può usare \textbf{prima} della sua dichiarazione,
+        come le variabili \code{let}.
+\end{itemize}
+
+\begin{lstlisting}[style=js, name=classe-vs-funzione.js]
+class Dog {
+  constructor(name) { this.name = name; }
+  bark() { return "Woof"; }
+}
+
+Dog("Rex");   // TypeError: Class constructor Dog cannot be
+              //            invoked without 'new'
+
+let rex = new Dog("Rex");
+for (let key in rex) console.log(key);   // solo "name", non "bark"
+\end{lstlisting}
+
 \subsection{Proprietà, getter e setter}
 
 Come gli oggetti, anche le classi supportano proprietà e accessori.
@@ -778,6 +835,7 @@ Il costrutto \code{try/catch/finally} permette di gestire gli errori.
 Concettualmente è lo stesso costrutto di Java, con qualche differenza.
 
 \begin{lstlisting}[style=js, name=trycatch.js]
+"use strict";
 try {
   console.log("starting");
   x = 1;                            // dimenticata la parola chiave let
@@ -790,6 +848,22 @@ try {
 }
 \end{lstlisting}
 
+\begin{console}
+starting
+ReferenceError
+x is not defined
+done
+\end{console}
+
+\warning{L'errore c'è solo in modalità strict}{
+  Le slide omettono la riga \code{"use strict"}, che qui è stata aggiunta. Senza
+  di essa, assegnare una variabile mai dichiarata \textbf{non} è un errore:
+  JavaScript crea in silenzio una variabile globale \code{x}, stampa
+  \textit{assignment done}, salta il \code{catch} ed esegue il \code{finally}.
+  Lo stesso vale nella console dei DevTools, che non è in modalità strict. Il
+  comportamento delle slide si ottiene invece senza la direttiva dentro un
+  modulo o il corpo di una classe, che sono sempre strict.}
+
 Le particolarità rispetto a Java sono due:
 
 \begin{itemize}
@@ -800,6 +874,7 @@ Le particolarità rispetto a Java sono due:
 \end{itemize}
 
 \begin{lstlisting}[style=js, name=tipi-errore.js]
+"use strict";
 try {
   x = 1;
 } catch (error) {
@@ -828,6 +903,77 @@ const pet = new Pet('Chuck', 'Duck', 3);
 
 console.log(pet instanceof Pet);      // true
 console.log(pet instanceof Object);   // true
+\end{lstlisting}
+
+Perché anche \code{pet instanceof Object} è vero? Basta seguire la catena dei
+prototipi di \code{pet}. Il primo anello è \code{Pet.prototype}, cioè il
+prototipo predefinito di \code{Pet}; il secondo è \code{Object.prototype}.
+Entrambi i costruttori hanno il proprio \code{prototype} nella catena.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\footnotesize,
+      o/.style={rounded corners=3pt, draw=primary!65!black, line width=0.8pt,
+                fill=primary!8!white, minimum width=3.1cm, minimum height=1.0cm,
+                align=center},
+      pt/.style={o, draw=accent!60!black, fill=accent!9!white},
+      g/.style={o, draw=neutral!55!white, fill=neutral!7!white},
+      f/.style={o, minimum width=2.2cm},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+                draw=neutral!45!black},
+      ch/.style={a, draw=accent!70!black}]
+
+    \node[o]  (pe) at (0,0)    {\code{pet}\\\scriptsize name, species, age};
+    \node[pt] (pp) at (0,1.9)  {\code{Pet.prototype}\\\scriptsize constructor: Pet};
+    \node[g]  (op) at (0,3.8)  {\code{Object.prototype}\\\scriptsize toString(), valueOf()\ldots};
+
+    \node[f] (fp) at (5.6,1.9) {\code{Pet}};
+    \node[f] (fo) at (5.6,3.8) {\code{Object}};
+
+    \draw[ch] (pe) -- node[wtlab, left, xshift=-2pt]{\code{[[Prototype]]}} (pp);
+    \draw[ch] (pp) -- node[wtlab, left, xshift=-2pt]{\code{[[Prototype]]}} (op);
+
+    \draw[a] ([yshift=6pt]fp.west) -- node[wtlab, above]{\code{prototype}}
+             ([yshift=6pt]pp.east);
+    \draw[a] ([yshift=-6pt]pp.east) -- node[wtlab, below]{\code{constructor}}
+             ([yshift=-6pt]fp.west);
+    \draw[a] ([yshift=6pt]fo.west) -- node[wtlab, above]{\code{prototype}}
+             ([yshift=6pt]op.east);
+    \draw[a] ([yshift=-6pt]op.east) -- node[wtlab, below]{\code{constructor}}
+             ([yshift=-6pt]fo.west);
+  \end{tikzpicture}
+  \caption{\code{pet instanceof Pet} e \code{pet instanceof Object}: risalendo
+           la catena (in viola) si incontrano sia \code{Pet.prototype} sia
+           \code{Object.prototype}.}
+  \label{fig:instanceof}
+\end{figure}
+
+In altre parole, \code{obj instanceof C} equivale a questa funzione, che risale
+la catena un anello alla volta finché non trova \code{C.prototype} o arriva in
+fondo (\code{null}):
+
+\begin{lstlisting}[style=js, name=instanceof-a-mano.js]
+function myInstanceof(obj, C) {
+  let p = Object.getPrototypeOf(obj);
+  while (p !== null) {
+    if (p === C.prototype) return true;
+    p = Object.getPrototypeOf(p);
+  }
+  return false;
+}
+
+myInstanceof(pet, Pet);      // true
+myInstanceof(pet, Object);   // true
+myInstanceof(pet, Array);    // false
+\end{lstlisting}
+
+È lo stesso meccanismo che fa funzionare il controllo nel \code{catch}: nella
+catena di un \code{ReferenceError} ci sono sia il suo prototipo sia quello di
+\code{Error}, quindi sono veri entrambi i controlli.
+
+\begin{lstlisting}[style=js]
+error instanceof ReferenceError;   // true
+error instanceof Error;            // true: ogni errore "eredita" da Error
 \end{lstlisting}
 
 \subsection{Sollevare errori}
@@ -986,6 +1132,54 @@ permette di rinominare un import, risolvendo il conflitto fra le due funzioni
   esplicitamente. Il vecchio modello, in cui tutti gli script condividevano un
   unico scope globale, rendeva impossibile riusare codice scritto da altri senza
   leggerlo per intero a caccia di collisioni.}
+
+\subsection{Altre forme di export e import}
+
+Oltre a marcare con \code{export} ogni dichiarazione, si possono esportare più
+nomi insieme in fondo al file, e ogni modulo può avere al più un
+\term{export predefinito} (\code{export default}), che si importa senza
+parentesi graffe e con il nome che si preferisce.
+
+\begin{lstlisting}[style=js, name=geometria.js]
+const PI = 3.14;
+function area(r) { return PI * r * r; }
+
+export { PI, area };                  // export di piu' nomi insieme
+export default class Circle { /* ... */ }   // export predefinito
+\end{lstlisting}
+
+\begin{lstlisting}[style=js, name=main.js]
+import Circle, { area } from './geometria.js';   // default + nominato
+import * as geo from './geometria.js';           // tutto in un oggetto
+
+area(1);    // 3.14
+geo.PI;     // 3.14
+\end{lstlisting}
+
+\subsection{Cose da sapere sui moduli}
+
+\begin{itemize}
+  \item Un modulo è sempre in modalità \textbf{strict}, anche senza
+        \code{"use strict"}; al livello più esterno \code{this} vale
+        \code{undefined}.
+  \item Uno script di tipo modulo è \textbf{differito}: viene eseguito solo
+        dopo che il documento è stato analizzato, come con l'attributo
+        \attr{defer}.
+  \item Un modulo viene eseguito \textbf{una volta sola}, anche se è importato
+        da più file: tutti ricevono le stesse funzioni e variabili.
+  \item Gli import sono in sola lettura: assegnare un valore a \code{greetPet}
+        nello script solleva un \code{TypeError}.
+  \item Il percorso dopo \code{from} è un URL, relativo al file che importa:
+        va scritto per intero, estensione \code{.js} compresa.
+\end{itemize}
+
+\warning{I moduli non funzionano aprendo il file con un doppio clic}{
+  Se si apre la pagina direttamente dal disco (indirizzo \code{file://...}),
+  il browser blocca il caricamento dei moduli per motivi di sicurezza e in
+  console compare un errore CORS. La pagina va servita da un server web,
+  anche solo locale: per esempio con l'estensione \textit{Live Server} di
+  VS Code, oppure con \code{npx serve} o \code{python3 -m http.server} lanciati
+  nella cartella del progetto.}
 
 \section{Riferimenti}
 
