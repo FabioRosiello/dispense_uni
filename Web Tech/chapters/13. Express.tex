@@ -137,6 +137,7 @@ diffuso per Node.js.
 npm install express
 \end{lstlisting}
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=index.js]
 import express from "express";
 
@@ -149,6 +150,11 @@ app.get('/', (req, res) => {
 
 app.listen(PORT);
 \end{lstlisting}
+\risultato
+\begin{browser}[localhost:3000]
+  Hello World!
+\end{browser}
+\end{affianco}
 
 Vale la pena confrontare queste otto righe con le decine di righe di
 \code{switch} del capitolo 11.
@@ -163,6 +169,7 @@ appropriati sull'oggetto \code{app}, tipicamente nella forma:
   \code{app.<METODO>(<PERCORSO>, callback)}
 \end{center}
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js]
 app.get("/hello", (req, res) => {
   res.send("Hello");
@@ -172,6 +179,21 @@ app.post("/hello", (req, res) => {
   res.send("Hello Post");
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}[Stesso percorso, metodi diversi, risposte diverse.]
+\begin{tikzpicture}[
+    rq/.style={mcod, anchor=east, draw=primary!55!black, fill=primary!8!white,
+      rounded corners=2pt, inner sep=3pt},
+    rs/.style={mcod, anchor=west},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[rq] (r1) at (2.2,0) {GET /hello};
+  \node[rs] (s1) at (3.0,0) {"Hello"};
+  \node[rq] (r2) at (2.2,-0.65) {POST /hello};
+  \node[rs] (s2) at (3.0,-0.65) {"Hello Post"};
+  \draw[a] (r1) -- (s1); \draw[a] (r2) -- (s2);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Percorsi delle rotte}
 
@@ -179,21 +201,42 @@ I percorsi possono essere stringhe, schemi di stringa o espressioni regolari
 complete. In caso di più corrispondenze, si applica \textbf{la prima} rotta che
 corrisponde.
 
+\begin{affianco}[0.58][c]
 \begin{lstlisting}[style=js, name=routes.js]
 app.get("/webtech", (req, res) => {
   res.send("Web Technologies!");
 });
 
-// corrisponde a /webtech, /web-tech, /web-technologies, /webtechnologies...
+// corrisponde a /webtech, /web-tech,
+// /web-technologies, /webtechnologies...
 app.get("/web(-)?tech*", (req, res) => {
   res.send("Web Technologies Pattern!");
 });
 
-// corrisponde a /webtech, /wirelesstech, /wtech, /whatever-tech...
+// corrisponde a /webtech, /wirelesstech,
+// /wtech, /whatever-tech...
 app.get(/^\/w.*tech$/, (req, res) => {
   res.send("Web Technologies Regex!");
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}[Vince la prima rotta che corrisponde.]
+\begin{tikzpicture}[
+    u/.style={mcod, anchor=east},
+    r/.style={mcod, anchor=west},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \foreach \u/\r [count=\i] in {\slash webtech/1\textsuperscript{a}: Web Technologies!,
+      \slash web-tech/2\textsuperscript{a}: \ldots Pattern!,
+      \slash webtechnologies/2\textsuperscript{a}: \ldots Pattern!,
+      \slash wirelesstech/3\textsuperscript{a}: \ldots Regex!,
+      \slash wtech/3\textsuperscript{a}: \ldots Regex!} {
+    \node[u] (u\i) at (2.4,-\i*0.5) {\u};
+    \node[r] (r\i) at (2.9,-\i*0.5) {\r};
+    \draw[a] (u\i) -- (r\i);
+  }
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Parametri di rotta}
 
@@ -201,6 +244,8 @@ Le rotte possono catturare segmenti di URL con un nome, detti \term{parametri},
 dichiarati nel percorso con la sintassi \code{:nomeParametro}. I parametri
 catturati sono resi disponibili nell'oggetto \code{req.params}.
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=params.js]
 // per una richiesta a /student/42/exams/TecWeb
 app.get("/student/:student_id/exams/:exam_name", (req, res) => {
@@ -213,6 +258,24 @@ app.get("/student/:student_id([0-9]+)/exams/:exam_name", (req, res) => {
   res.send(req.params);
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}[I segmenti con i due punti diventano\\ proprietà di \code{req.params}.]
+\begin{tikzpicture}[
+    s/.style={mcod, anchor=base west, inner sep=1pt},
+    p/.style={s, fill=accent!14!white}]
+  \node[s] (a) at (0,0) {/student/};
+  \node[p] (b) at (a.base east) {42};
+  \node[s] (c) at (b.base east) {/exams/};
+  \node[p] (e) at (c.base east) {TecWeb};
+  \draw[wtbrace] ([yshift=-2pt]b.south west) -- ([yshift=-2pt]b.south east)
+    node[midway, below=4pt, mcod]{student\_id};
+  \draw[wtbrace] ([yshift=-2pt]e.south west) -- ([yshift=-2pt]e.south east)
+    node[midway, below=4pt, mcod]{exam\_name};
+  \mchiave{1.6cm}
+  \oggetto{rp}{(1.7,-1.5)}{3.2cm}{req.params}{student\_id/"42", exam\_name/"TecWeb"}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \info{Il problema risolto}{
   Questo è esattamente il caso \code{GET /users/42/friends} che nel capitolo 11
@@ -225,6 +288,8 @@ app.get("/student/:student_id([0-9]+)/exams/:exam_name", (req, res) => {
 \textit{middleware}, e \code{next} è la callback che invoca il gestore
 successivo.
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=handlers.js]
 let f1 = function (req, res, next) { console.log("f1"); next(); }
 let f2 = function (req, res, next) { console.log("f2"); next(); }
@@ -234,12 +299,33 @@ app.get("/handlers", [f1, f2, f3], (req, res) => {
   res.send("Done with all handlers");
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[
+    f/.style={mfun},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=accent!70!black}]
+  \node[f] (f1) at (0,0) {f1};
+  \node[f] (f2) at (1.6,0) {f2};
+  \node[f] (f3) at (3.2,0) {f3};
+  \node[f, fill=green-gradient-1!45!white, draw=green-gradient-6] (h) at (5.1,0) {gestore};
+  \draw[a] (f1) -- node[mcod, above, font=\FiraCodeNL\tiny]{next()} (f2);
+  \draw[a] (f2) -- node[mcod, above, font=\FiraCodeNL\tiny]{next()} (f3);
+  \draw[a] (f3) -- node[mcod, above, font=\FiraCodeNL\tiny]{next()} (h);
+\end{tikzpicture}
+\end{immagine}
+\begin{console}[Terminale del server]
+f1
+f2
+f3
+\end{console}
+\end{affianco}
 
 \subsection{Rotte concatenabili e router modulari}
 
 Con \code{app.route()} il percorso si specifica in un solo punto (meno
 ridondanza) e i gestori specifici per metodo si concatenano.
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=chained.js]
 app.route('/book')
   .get((req, res) => {
@@ -252,9 +338,25 @@ app.route('/book')
     res.send('Delete a book')
   });
 \end{lstlisting}
+\risultato
+\begin{immagine}[Un percorso, un gestore per metodo.]
+\begin{tikzpicture}[
+    u/.style={mcod, draw=primary!55!black, fill=primary!8!white, rounded corners=2pt, inner sep=3pt},
+    m/.style={mcod, font=\FiraCodeNL\tiny\bfseries, text=accent!70!black},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[u] (b) at (0,0) {/book};
+  \foreach \m/\t/\y in {GET/Get a random book/0.7, POST/Add a book/0, DELETE/Delete a book/-0.7} {
+    \node[mcod, anchor=west] (x) at (2.3,\y) {"\t"};
+    \draw[a] (b.east) -- node[m, above, sloped]{\m} (x.west);
+  }
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
-Si può anche creare un \term{router modulare}, caricabile all'occorrenza:
+Si può anche creare un \term{router modulare} (a sinistra), da montare
+nell'applicazione principale (a destra):
 
+\begin{affianco}[0.45]
 \begin{lstlisting}[style=js, name=router.js]
 import express from "express";
 
@@ -264,7 +366,7 @@ router.get("/echo/:value", (req, res) => {
   res.send(req.params.value);
 });
 \end{lstlisting}
-
+\risultato
 \begin{lstlisting}[style=js, name=index.js]
 import { router as echoRouter } from "./router.js";
 
@@ -272,10 +374,11 @@ const app = express();
 
 // monta echoRouter, opzionalmente sotto un certo percorso
 app.use("/custom", echoRouter);
-// le richieste a /custom/echo/:value saranno gestite dal router
+// /custom/echo/:value e' gestita dal router
 
 app.listen(3000);
 \end{lstlisting}
+\end{affianco}
 
 È il modo con cui si tiene ordinata un'applicazione di dimensioni reali:
 un file di rotte per ciascuna area funzionale.
@@ -316,6 +419,7 @@ app.get('/template', (req, res) => {
 app.listen(3000);
 \end{lstlisting}
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=pug, name=views/template.pug]
 doctype html
 html
@@ -325,6 +429,12 @@ html
     h1 Rendering a Pug Template in Express
     p Il procedimento e' immediato.
 \end{lstlisting}
+\risultato
+\begin{browser}[Pug Template rendered in Express]
+  {\raggedright\Lora\bfseries\LARGE Rendering a Pug Template in Express\par}\vspace{6pt}
+  Il procedimento e' immediato.
+\end{browser}
+\end{affianco}
 
 I dati impostati nell'oggetto \code{res.locals} sono disponibili a tutte le
 viste generate per quella risposta.
@@ -340,6 +450,7 @@ app.get("/example", (req, res) => {
 });
 \end{lstlisting}
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=pug, name=views/example.pug]
 doctype html
 html
@@ -350,6 +461,16 @@ html
     each exam in items
       li #{exam.name} grade #{exam.grade}
 \end{lstlisting}
+\risultato
+\begin{browser}[List of Exams]
+  {\Lora\bfseries\LARGE List of Exams}
+  \begin{itemize}[leftmargin=1.8em, itemsep=0pt, topsep=4pt, parsep=0pt]
+    \item Web tech. grade A+
+    \item Soft. Eng. grade A
+    \item Calculus grade B
+  \end{itemize}
+\end{browser}
+\end{affianco}
 
 \section{Il ciclo richiesta-risposta}
 
@@ -426,15 +547,16 @@ I middleware:
 \end{itemize}
 
 \begin{esempio}{Il primo middleware}
+\begin{affianco}[0.45]
 \begin{lstlisting}[style=js, name=middleware.js]
 export function logger(req, res, next) {
   console.log("LOGGER HAS BEEN CALLED!");
   next();
 }
 \end{lstlisting}
-
+\risultato
 \begin{lstlisting}[style=js, name=index.js]
-app.use(logger);   // monta il middleware "logger" sul percorso "/"
+app.use(logger);   // monta logger sul percorso "/"
 
 app.get('/', (req, res) => {
   res.send('Hello World!')
@@ -442,16 +564,29 @@ app.get('/', (req, res) => {
 
 app.listen(PORT);
 \end{lstlisting}
+\begin{console}[Terminale, a ogni richiesta]
+LOGGER HAS BEEN CALLED!
+\end{console}
+\end{affianco}
 \end{esempio}
 
 \begin{esempio}{Un middleware che arricchisce la richiesta}
+\begin{affianco}[0.45]
 \begin{lstlisting}[style=js, name=middleware.js]
 export function addTimestamp(req, res, next) {
   req.timestamp = new Date();
   next();
 }
 \end{lstlisting}
+\begin{immagine}[\code{addTimestamp} arricchisce \code{req}.]
+\begin{tikzpicture}
+  \mchiave{1.4cm}
+  \oggetto{r}{(0,0)}{3.4cm}{req}{method/"GET", url/"/", timestamp/Date \ldots}
+  \node[draw=accent!60!black, line width=1.1pt, fit=(r-3), inner sep=0pt] {};
+\end{tikzpicture}
+\end{immagine}
 
+\risultato
 \begin{lstlisting}[style=js, name=index.js]
 app.use(addTimestamp);
 app.use(logger);
@@ -460,6 +595,10 @@ app.get('/', (req, res) => {
   res.send(`Richiesta ricevuta il ${req.timestamp}`)
 });
 \end{lstlisting}
+\begin{browser}[localhost:3000]
+  Richiesta ricevuta il Mon Oct 05 2026 10:15:42 GMT+0200
+\end{browser}
+\end{affianco}
 
 Qui si vede il punto centrale: un middleware può \textbf{aggiungere proprietà}
 all'oggetto richiesta, e tutti i middleware e i gestori successivi le trovano
@@ -481,15 +620,25 @@ middleware o delle rotte sia gestito correttamente da Express.
 Se un errore viene sollevato durante l'esecuzione di codice \textbf{sincrono},
 viene catturato automaticamente dal gestore di errori predefinito di Express.
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js]
 app.get("/error", (req, res) => {
   throw new Error("Si e' verificato un errore");
 });
 \end{lstlisting}
+\risultato
+\begin{browser}[localhost:3000/error]
+  {\FiraCodeNL\scriptsize Error: Si e' verificato un errore\\
+   \hspace*{1em}at file:///app/index.js:12:9\\
+   \hspace*{1em}at Layer.handle \ldots}
+\end{browser}
+\wtnota{La pagina d'errore predefinita di Express\\ (stato 500, traccia solo in sviluppo).}
+\end{affianco}
 
 Gli errori restituiti da funzioni \textbf{asincrone} invocate da gestori di
 rotta e middleware devono invece essere passati esplicitamente a \code{next()}.
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=async-error.js]
 app.get('/readfile', (req, res, next) => {
   fs.readFile('/file-does-not-exist', (err, data) => {
@@ -501,6 +650,20 @@ app.get('/readfile', (req, res, next) => {
   })
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}[L'errore della callback va consegnato\\ a mano a \code{next}.]
+\begin{tikzpicture}[
+    st/.style={rounded corners=3pt, draw=primary!55!black, fill=primary!6!white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, inner sep=3pt},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=merr}]
+  \node[st] (r) at (0,0) {fs.readFile(\ldots)};
+  \node[st, draw=merr, fill=red-gradient-1!35!white] (n) at (0,-1.1) {next(err)};
+  \node[st] (h) at (0,-2.2) {gestore degli errori};
+  \draw[a] (r) -- node[mnota, right]{\code{err}} (n);
+  \draw[a] (n) -- (h);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 A partire da Express 5, i gestori e i middleware che restituiscono una Promise
 invocano automaticamente \code{next(value)} quando questa viene rifiutata o
@@ -519,12 +682,23 @@ Express include un gestore di errori predefinito, che stampa l'intera traccia di
 stack solo in modalità sviluppo. Se ne possono definire di propri: sono
 middleware speciali con \textbf{quattro} parametri di ingresso.
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=error-handler.js]
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send('Something broke!');
 });
 \end{lstlisting}
+\risultato
+\begin{browser}[localhost:3000/error]
+  Something broke!
+\end{browser}
+\begin{console}[Terminale del server]
+Error: Si e' verificato un errore
+    at file:///app/index.js:12:9
+    ...
+\end{console}
+\end{affianco}
 
 \info{Quattro parametri, non tre}{
   È l'\textbf{arità} della funzione a dire a Express che si tratta di un gestore
@@ -539,10 +713,27 @@ app.use((err, req, res, next) => {
 Middleware integrato, progettato per servire file statici. Usa \code{req.url}
 per determinare se una richiesta corrisponde alla directory radice indicata.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js]
-// tutti i file nella directory /public saranno serviti come file statici
+// i file nella directory public diventano statici
 app.use(express.static("public"));
 \end{lstlisting}
+\risultato
+\begin{immagine}[Ogni file di \code{public} ha la sua URL.]
+\begin{tikzpicture}[
+    f/.style={mcod, anchor=west},
+    u/.style={mcod, anchor=west, text=primary!60!black},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[f] at (0,0) {public/};
+  \foreach \p/\u [count=\i] in {css\slash style.css/\slash css\slash style.css,
+      img\slash logo.png/\slash img\slash logo.png, index.html/\slash index.html} {
+    \node[f] (p\i) at (0.4,-\i*0.5) {\p};
+    \node[u] (u\i) at (3.0,-\i*0.5) {\u};
+    \draw[a] (p\i.east -| 2.5,0) -- (u\i.west);
+  }
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Sostituisce da sola tutti i \code{case} con \code{fs.readFile} che avevamo
 scritto a mano nel capitolo 11.
@@ -552,6 +743,7 @@ scritto a mano nel capitolo 11.
 Middleware integrato che analizza il corpo delle richieste con contenuto
 codificato come URL, cioè quelle inviate dai form.
 
+\begin{affianco}[0.55]
 \begin{lstlisting}[style=js, name=form.js]
 app.use(express.urlencoded({ extended: false }));
 
@@ -561,7 +753,7 @@ app.post("/form", (req, res) => {
   res.send(`msg=${req.body.msg}; num=${req.body.num}`);
 });
 \end{lstlisting}
-
+\risultato
 \begin{lstlisting}[style=pug, name=views/form.pug]
 h1 Form
 form(action="/form" method="POST")
@@ -569,6 +761,12 @@ form(action="/form" method="POST")
   input(type="number" name="num")
   input(type="submit")
 \end{lstlisting}
+\begin{browser}[localhost:3000/form]
+  {\Lora\bfseries\LARGE Form}\\[4pt]
+  \wtcampo[2.0cm]{ciao}\ \wtcampo[1.0cm]{3}\ \wtbottone{Invia}
+\end{browser}
+\wtnota{Dopo l'invio: \code{msg=ciao; num=3}}
+\end{affianco}
 
 Una riga sostituisce le due funzioni di analisi del corpo scritte a mano nel
 capitolo 11, gestione della codifica URL compresa.
@@ -586,6 +784,7 @@ app.post("/json", (req, res) => {
 });
 \end{lstlisting}
 
+\begin{affianco}[0.5]
 \begin{lstlisting}[style=http, name=Richiesta]
 POST http://localhost:3000/json HTTP/1.1
 Content-Type: application/json
@@ -595,7 +794,7 @@ Content-Type: application/json
   "grade": "A+"
 }
 \end{lstlisting}
-
+\risultato
 \begin{lstlisting}[style=http, name=Risposta]
 HTTP/1.1 200 OK
 X-Powered-By: Express
@@ -604,6 +803,7 @@ Content-Length: 31
 
 exam=Web Technologies; grade=A+
 \end{lstlisting}
+\end{affianco}
 
 \subsection{express-session}
 
@@ -612,6 +812,8 @@ memorizzata sul server: i dati restano sul server, l'identificatore viaggia in
 un cookie. È esattamente il meccanismo che nel capitolo 12 abbiamo implementato
 a mano.
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=session.js]
 app.use(session({
   secret: "s3cr37",
@@ -629,6 +831,22 @@ app.get("/session-counter", (req, res) => {
   }
 });
 \end{lstlisting}
+\risultato
+\begin{browser}[1\textsuperscript{a} visita]
+  E' la prima volta che visiti questa pagina.
+\end{browser}
+\begin{browser}[3\textsuperscript{a} visita]
+  Hai visitato questa pagina 3 volte.
+\end{browser}
+\begin{immagine}[Il contatore sta sul server; il browser\\ conserva solo il cookie \code{connect.sid}.]
+\begin{tikzpicture}
+  \mchiave{0.9cm}
+  \oggetto[fill=green-gradient-1!50!white]{s}{(0,0)}{2.4cm}{sessione sul server}{count/3}
+  \node[mcod, anchor=east] (c) at (-1.9,-0.25) {connect.sid=s\%3A\ldots};
+  \draw[-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=accent!70!black] (c.east) -- (s-box.west |- c);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \warning{L'archivio predefinito non è per la produzione}{
   L'archivio di sessione predefinito di \code{express-session} tiene tutto in
@@ -641,6 +859,8 @@ app.get("/session-counter", (req, res) => {
 Analizza l'header \code{Cookie} delle richieste in arrivo e popola
 \code{req.cookies} con un oggetto le cui proprietà sono i nomi dei cookie.
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=cookies.js]
 app.use(cookieParser());
 
@@ -649,12 +869,24 @@ app.get("/cookie-counter", (req, res) => {
     res.cookie("count", 1, { maxAge: 10 * 60 * 1000 });
     res.send("E' la prima volta che visiti questa pagina.");
   } else {
-    res.cookie("count", parseInt(req.cookies.count) + 1,
-               { maxAge: 10 * 60 * 1000 });
-    res.send(`Hai visitato questa pagina ${parseInt(req.cookies.count) + 1} volte.`);
+    let count = parseInt(req.cookies.count) + 1;
+    res.cookie("count", count, { maxAge: 10 * 60 * 1000 });
+    res.send(`Hai visitato questa pagina ${count} volte.`);
   }
 });
 \end{lstlisting}
+\risultato
+\begin{browser}[3\textsuperscript{a} visita]
+  Hai visitato questa pagina 3 volte.
+\end{browser}
+\begin{immagine}[Qui invece il contatore viaggia nel cookie:\\
+                 il client può leggerlo e cambiarlo.]
+\begin{tikzpicture}
+  \mchiave{1.0cm}
+  \oggetto[fill=neutral!12!white]{c}{(0,0)}{3.0cm}{cookie nel browser}{count/"3"}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \section{Messaggi flash}
 
@@ -692,6 +924,7 @@ app.get("/showflash", (req, res) => {
 });
 \end{lstlisting}
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=pug, name=views/flash.pug]
 ul
   each info in infos
@@ -701,6 +934,17 @@ ul
   each error in errors
     li(style="color: red") #{error}
 \end{lstlisting}
+\risultato
+\begin{browser}[localhost:3000/showflash]
+  \begin{itemize}[leftmargin=1.8em, itemsep=0pt, topsep=2pt, parsep=0pt]
+    \item {\color{css-blue}Sei stato reindirizzato.}
+    \item {\color{css-blue}Questa e' una dimostrazione dei messaggi flash.}
+    \item {\color{css-green}E' andato tutto bene.}
+    \item {\color{css-red}Ma abbiamo anche un messaggio di errore.}
+  \end{itemize}
+\end{browser}
+\wtnota{Ricaricando la pagina, la lista è vuota.}
+\end{affianco}
 
 Una volta consumati, i messaggi flash vengono \textbf{cancellati}: ricaricando
 la pagina \code{/showflash}, o visitandola direttamente senza essere stati

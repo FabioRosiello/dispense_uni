@@ -57,6 +57,7 @@ il file esterno deve avere estensione \code{.js}.
 \end{lstlisting}
 
 \begin{esempio}{Hello World}
+\begin{affianco}[0.5]
 \begin{lstlisting}[style=html, name=hello.html]
 <!DOCTYPE html>
 <html>
@@ -72,10 +73,14 @@ il file esterno deve avere estensione \code{.js}.
   </body>
 </html>
 \end{lstlisting}
-
+\risultato
+\begin{browser}[JavaScript]
+  {\Lora\bfseries\Huge Hello!}
+\end{browser}
 \begin{console}
 Hello World!
 \end{console}
+\end{affianco}
 
 Il messaggio non compare nella pagina: compare nella \textbf{console} dei
 DevTools. È il canale principale con cui uno script comunica a chi lo sviluppa.
@@ -252,6 +257,7 @@ uno \term{scope di blocco}, cioè il più vicino blocco delimitato da una coppia
 di parentesi graffe.
 
 \begin{esempio}{Scope di blocco con let}
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=scope.js]
 let bool;              // dichiarazione
 bool = true;
@@ -265,6 +271,21 @@ if (bool) {
 // console.log(msg);   // msg non e' definita qui
 console.log(bool);     // output: true
 \end{lstlisting}
+\risultato
+\begin{immagine}[Ogni blocco ha il suo scope: da dentro si vede fuori,\\
+                 da fuori non si vede dentro.]
+\begin{tikzpicture}
+  \variabile{msg}{(0,0)}{msg}{"Hello"}
+  \node[mnota, anchor=west] (nb) at ([xshift=8pt]msg.east)
+    {esiste solo\\ dentro il blocco};
+  \scopo{2}{blk}{blocco dell'if}{(msg)(msg-nome)(nb)}
+  \variabile{bool}{(0,1.75)}{bool}{true}
+  \node[mnota, anchor=west] at ([xshift=8pt]bool.east)
+    {visibile ovunque,\\ anche nel blocco};
+  \scopo{1}{glob}{scope globale}{(bool)(bool-nome)(blk)([xshift=4pt]nb.east)}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Lo scope delle variabili dichiarate con \code{let} e \code{const} è il blocco
 più vicino, e le variabili sono accessibili \textbf{solo dopo} che la riga in
@@ -283,6 +304,7 @@ non l'inizializzazione: quest'ultima avviene sulla riga che conteneva
 originariamente la dichiarazione. Nell'intervallo fra le due la variabile esiste
 ma è inaccessibile: è la \term{Temporal Dead Zone} della figura precedente.
 
+\begin{affianco}[0.56]
 \begin{lstlisting}[style=js, name=hoisting.js]
 // qui la variabile x non e' definita
 {
@@ -293,25 +315,62 @@ ma è inaccessibile: è la \term{Temporal Dead Zone} della figura precedente.
 }
 // qui la variabile x non e' piu' definita
 \end{lstlisting}
-
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[y=0.58cm]
+  % il blocco, riga per riga
+  \node[mcod, anchor=west] at (0,0)    {\{};
+  \node[mcod, anchor=west] (r1) at (0.3,-1) {console.log(x);};
+  \node[mcod, anchor=west] (r2) at (0.3,-2) {let x = 1;};
+  \node[mcod, anchor=west] (r3) at (0.3,-3) {console.log(x);};
+  \node[mcod, anchor=west] at (0,-4)   {\}};
+  % stato di x lungo il blocco
+  \fill[merr!22] (2.75,0.3) rectangle (3.0,-2);
+  \fill[mok!30]  (2.75,-2) rectangle (3.0,-4.3);
+  \draw[merr, line width=0.8pt] (2.6,-2) -- (3.15,-2);
+  \node[mnota, anchor=west] at (3.15,-0.75)
+    {\textbf{TDZ}: \code{x} esiste\\ ma non si può usare};
+  \node[mnota, anchor=west] at (3.15,-3.15) {\code{x} vale \code{1}};
+  \node[anchor=east] at (0.25,-1) {\merr};
+  \node[anchor=east] at (0.25,-3) {\mok};
+\end{tikzpicture}
+\end{immagine}
 \begin{console}
-Uncaught ReferenceError: can't access lexical declaration
-'x' before initialization
+Uncaught ReferenceError: can't access
+lexical declaration 'x' before
+initialization
 \end{console}
+\end{affianco}
 
 \begin{esempio}{Shadowing}
+\begin{affianco}[0.6][c]
 \begin{lstlisting}[style=js, name=shadowing.js]
 let n;                // dichiarazione
 n = 1;
 
 if (n > 0) {
   let n = 2;          // maschera la n dello scope esterno
-  // let n;           // errore: non si puo' ridichiarare nello stesso blocco
+  // let n;           // errore: gia' dichiarata in questo blocco
   console.log(n);     // output: 2
 }
 
 console.log(n);       // output: 1
 \end{lstlisting}
+\risultato
+\begin{immagine}[Il nome si cerca partendo dallo scope\\ più interno:
+                 vince la \code{n} più vicina.]
+\begin{tikzpicture}
+  \variabile{n2}{(0,0)}{n}{2}
+  \node[mcod, anchor=west] (l2) at (1.15,0) {log(n) \(\rightarrow\) 2};
+  \scopo{2}{blk}{blocco dell'if}{(n2)(n2-nome)(l2)}
+  \variabile{n1}{(0,1.75)}{n}{1}
+  \node[mcod, anchor=west] (l1) at (1.15,1.75) {log(n) \(\rightarrow\) 1};
+  \scopo{1}{glob}{scope globale}{(n1)(n1-nome)(l1)(blk)}
+  \draw[mcerca] (l2.south) to[out=-150, in=-30] (n2.south east);
+  \draw[mcerca] (l1.north) to[out=150, in=30] (n1.north east);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 \end{esempio}
 
 \subsection{Prima di ECMAScript 6: var e dichiarazioni implicite}
@@ -325,24 +384,27 @@ Le variabili dichiarate con \code{var} vengono sollevate allo scope di funzione
 o globale più vicino (\textbf{niente scope di blocco}) e vengono \textbf{anche
 inizializzate} a \code{undefined}.
 
+Il codice a sinistra si comporta esattamente come quello a destra: la
+dichiarazione esce dal blocco e sale in cima, già inizializzata.
+
+\begin{affianco}[0.5]
 \begin{lstlisting}[style=js, name=var.js]
 if (true) {
-  console.log(n);   // output: undefined (non un errore!)
+  console.log(n);   // undefined, non un errore!
   var n = 1;
 }
-console.log(n);     // output: 1 (n e' sopravvissuta al blocco)
+console.log(n);     // output: 1 (n e' sopravvissuta)
 \end{lstlisting}
-
-Il codice sopra si comporta esattamente come questo:
-
+\risultato
 \begin{lstlisting}[style=js, name=var-equivalente.js]
-var n;
+var n;              // sollevata e inizializzata
 if (true) {
   console.log(n);   // output: undefined
   n = 1;
 }
 console.log(n);     // output: 1
 \end{lstlisting}
+\end{affianco}
 
 Le variabili possono anche essere dichiarate \textbf{implicitamente}, per
 esempio usandole in un assegnamento senza alcuna parola chiave. Il risultato è
@@ -366,30 +428,60 @@ msg = "meglio evitare";   // ReferenceError: msg is not defined
 
 L'operatore \code{typeof} restituisce il tipo di un valore.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=tipi.js]
-let x;                        // dichiarata e inizializzata a undefined
-console.log(typeof x);        // undefined
+let x;                   // inizializzata a undefined
+console.log(typeof x);   // undefined
 
 x = 42;
-console.log(typeof x);        // number
+console.log(typeof x);   // number
 x = 3.14;
-console.log(typeof x);        // number
+console.log(typeof x);   // number
 x = 10e12;
-console.log(typeof x);        // number
+console.log(typeof x);   // number
 
 x = "hello";
-console.log(typeof x);        // string
-x = 'hello';                  // apici singoli o doppi, indifferente
-console.log(typeof x);        // string
+console.log(typeof x);   // string
+x = 'hello';             // apici singoli o doppi
+console.log(typeof x);   // string
 
 x = false;
-console.log(typeof x);        // boolean
+console.log(typeof x);   // boolean
 
-x = 42 / 0;                   // Infinity
-console.log(typeof x);        // number
-x = 42 * "Hello";             // NaN
-console.log(typeof x);        // number
+x = 42 / 0;              // Infinity
+console.log(typeof x);   // number
+x = 42 * "Hello";        // NaN
+console.log(typeof x);   // number
 \end{lstlisting}
+\risultato
+\begin{immagine}[I valori dell'esempio raggruppati\\ secondo ciò che
+                 restituisce \code{typeof}.]
+\begin{tikzpicture}[
+    tipo/.style={rounded corners=2pt, draw=primary!65!black,
+      fill=primary!16!white, line width=0.7pt, font=\FiraCodeNL\scriptsize,
+      text=primary!35!black, minimum width=1.75cm, minimum height=0.5cm},
+    val/.style={rounded corners=2pt, draw=neutral!50!white, fill=white,
+      line width=0.6pt, font=\FiraCodeNL\scriptsize, minimum height=0.5cm,
+      inner xsep=4pt},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt,
+      draw=neutral!45!black}]
+  \foreach \t/\vs [count=\i] in {
+      number/{42, 3.14, 10e12, Infinity, NaN},
+      string/{"hello", 'hello'},
+      boolean/{false},
+      undefined/{undefined}} {
+    \node[tipo] (t\i) at (0,-\i*0.8) {\t};
+    \coordinate (p) at ([xshift=14pt]t\i.east);
+    \foreach \v in \vs {
+      \node[val, anchor=west] (v) at (p) {\v};
+      \coordinate (p) at ([xshift=3pt]v.east);
+    }
+    \draw[a] ([xshift=14pt]t\i.east) -- (t\i.east);
+  }
+  \node[mnota, anchor=south] at (t1.north) {\code{typeof}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \info{Un solo tipo numerico}{
   JavaScript non distingue interi e numeri in virgola mobile: esiste un solo
@@ -445,6 +537,7 @@ Gli operatori di confronto sono gli stessi di Java, con l'aggiunta di
 L'operatore di \term{uguaglianza debole} (\code{==}) verifica se i due operandi
 sono uguali, \textbf{tentando di convertirli} quando sono di tipo diverso.
 
+\begin{affianco}[0.45][c]
 \begin{lstlisting}[style=js, name=uguaglianza-debole.js]
 console.log(42 == 42);       // true
 console.log("JS" == "JS");   // true
@@ -454,11 +547,32 @@ console.log(true == 1);      // true
 console.log(true == "1");    // true
 console.log(true == 42);     // false
 \end{lstlisting}
+\risultato
+\begin{immagine}[Con tipi diversi, \code{==} converte entrambi gli operandi\\
+                 in numero e poi confronta.]
+\begin{tikzpicture}[a/.style={-{Stealth[length=4pt,width=3.5pt]},
+                              line width=0.7pt, draw=neutral!45!black}]
+  \matrix[matrix of nodes, column sep=0.75cm, row sep=1pt,
+          nodes={mcod, anchor=west, minimum height=0.42cm}] (m) {
+    |[mnota]| confronto & |[mnota]| convertiti & |[mnota]| esito \\
+    "1" == 1    & 1 == 1  & |[text=mok]| true  \\
+    0 == false  & 0 == 0  & |[text=mok]| true  \\
+    true == "1" & 1 == 1  & |[text=mok]| true  \\
+    true == 42  & 1 == 42 & |[text=merr]| false \\
+  };
+  \foreach \r in {2,...,5} {
+    \draw[a] ([xshift=3pt]m-\r-1.east -| m-4-1.east) -- ([xshift=-3pt]m-\r-2.west);
+    \draw[a] ([xshift=3pt]m-\r-2.east -| m-5-2.east) -- ([xshift=-3pt]m-\r-3.west);
+  }
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 L'operatore di \term{uguaglianza stretta} (\code{===}) verifica l'uguaglianza
 \textbf{senza} conversione di tipo: se gli operandi sono di tipo diverso, il
 confronto restituisce immediatamente \code{false}.
 
+\begin{affianco}[0.45][c]
 \begin{lstlisting}[style=js, name=uguaglianza-stretta.js]
 console.log(42 === 42);      // true
 console.log("JS" === "JS");  // true
@@ -468,6 +582,26 @@ console.log(true === 1);     // false
 console.log(true === "1");   // false
 console.log(true === 42);    // false
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{===} controlla prima il tipo: se è diverso\\
+                 la risposta è subito \code{false}.]
+\begin{tikzpicture}[a/.style={-{Stealth[length=4pt,width=3.5pt]},
+                              line width=0.7pt, draw=neutral!45!black}]
+  \matrix[matrix of nodes, column sep=0.75cm, row sep=1pt,
+          nodes={mcod, anchor=west, minimum height=0.42cm}] (m) {
+    |[mnota]| confronto & |[mnota]| tipi & |[mnota]| esito \\
+    42 === 42    & number, number   & |[text=mok]| true  \\
+    "1" === 1    & string, number   & |[text=merr]| false \\
+    0 === false  & number, boolean  & |[text=merr]| false \\
+    true === 1   & boolean, number  & |[text=merr]| false \\
+  };
+  \foreach \r in {2,...,5} {
+    \draw[a] ([xshift=3pt]m-\r-1.east -| m-4-1.east) -- ([xshift=-3pt]m-\r-2.west);
+    \draw[a] ([xshift=3pt]m-\r-2.east -| m-4-2.east) -- ([xshift=-3pt]m-\r-3.west);
+  }
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \warning{Usare sempre \code{===}}{
   L'ultima riga dei due esempi merita attenzione: \code{true == 1} è vero, ma
@@ -516,13 +650,31 @@ switch (espressione) {
 
 Le funzioni si dichiarano con la sintassi seguente.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=funzioni.js]
 function greet(name) {
   console.log(`Hello ${name}`);   // backtick: template literal
 }
 
-greet("Web Technologies");        // stampa "Hello Web Technologies"
+greet("Web Technologies");        // Hello Web Technologies
 \end{lstlisting}
+\risultato
+\begin{immagine}[Nel template literal \code{\$\{name\}} viene sostituito\\
+                 dal valore del parametro.]
+\begin{tikzpicture}[
+    seg/.style={rounded corners=2pt, fill=accent!14!white,
+      draw=accent!55!black, line width=0.6pt, inner sep=2pt},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=neutral!45!black}]
+  \node[mcod] (t) at (0,0)
+    {`Hello \tikz[baseline]\node[seg, anchor=base]{\$\{name\}};`};
+  \node[mcod] (r) at (0,-1.5)
+    {"Hello \tikz[baseline]\node[seg, anchor=base]{Web Technologies};"};
+  \draw[a] (t) -- node[mnota, right, xshift=3pt]
+    {\code{name} = \code{"Web Technologies"}} (r);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Lo scope di una dichiarazione di funzione è lo scope corrente, quello in cui la
 dichiarazione avviene.
@@ -543,8 +695,10 @@ Quando in una chiamata non viene passato alcun argomento, i parametri sono
 inizializzati a \code{undefined}. Le funzioni possono però dichiarare valori
 predefiniti.
 
+\begin{affianco}[0.57][c]
 \begin{lstlisting}[style=js, name=default.js]
-function greet(name, message = "Hello") {   // message ha un valore predefinito
+// message ha un valore predefinito
+function greet(name, message = "Hello") {
   console.log(`${message} ${name}`);
 }
 
@@ -552,6 +706,26 @@ greet("Web Technologies");           // Hello Web Technologies
 greet("Web Technologies", "Ciao");   // Ciao Web Technologies
 greet();                             // Hello undefined
 \end{lstlisting}
+\risultato
+\begin{immagine}[I parametri a ogni chiamata. In viola i valori\\
+                 che nessuno ha passato.]
+\begin{tikzpicture}[
+    pn/.style={mvar, minimum width=2.6cm},
+    pm/.style={mvar, minimum width=1.3cm},
+    nessuno/.style={fill=accent!12!white, draw=accent!55!black}]
+  \node[mnota] at (0,0.55) {\code{name}};
+  \node[mnota] at (2.3,0.55) {\code{message}};
+  \foreach \n/\sn/\m/\sm [count=\i] in {
+      "Web Technologies"/{}/"Hello"/nessuno,
+      "Web Technologies"/{}/"Ciao"/{},
+      undefined/nessuno/"Hello"/nessuno} {
+    \node[mnota, anchor=east] at (-1.5,-\i*0.7+0.7) {chiamata \i};
+    \node[pn, \sn] at (0,-\i*0.7+0.7) {\n};
+    \node[pm, \sm] at (2.3,-\i*0.7+0.7) {\m};
+  }
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Hoisting delle funzioni}
 
@@ -559,13 +733,33 @@ L'hoisting si applica anche alle dichiarazioni di funzione, e in questo caso
 solleva la funzione \textbf{per intero}: si può quindi invocare una funzione
 \textbf{prima} della riga in cui è dichiarata.
 
+\begin{affianco}[0.52][c]
 \begin{lstlisting}[style=js, name=hoisting-funzioni.js]
-greet("Web Technologies");   // stampa "Hello Web Technologies" (!)
+greet("Web Technologies");   // Hello Web Technologies (!)
 
 function greet(name, message = "Hello") {
   console.log(`${message} ${name}`);
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[La dichiarazione sale per intero in cima allo scope:\\
+                 quando arriva la chiamata, \code{greet} esiste già.]
+\begin{tikzpicture}[
+    riga/.style={mcod, draw=neutral!45!white, fill=white, rounded corners=2pt,
+      minimum width=3.6cm, minimum height=0.5cm, anchor=west, inner xsep=4pt},
+    fun/.style={riga, fill=accent!12!white, draw=accent!55!black},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=accent!70!black}]
+  \node[mnota] at (1.8,0.6) {come è scritto};
+  \node[riga] (c1) at (0,0)     {greet("Web Tech...");};
+  \node[fun]  (f1) at (0,-0.65) {function greet(...) \{...\}};
+  \node[mnota] at (6.2,0.6) {come viene eseguito};
+  \node[fun]  (f2) at (4.4,0)     {function greet(...) \{...\}};
+  \node[riga] (c2) at (4.4,-0.65) {greet("Web Tech...");};
+  \draw[a] (f1.east) to[out=0, in=180] (f2.west);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Scope interno e visibilità}
 
@@ -575,21 +769,40 @@ interno non sono visibili negli scope esterni. Al contrario, una funzione
 purché non siano mascherate nel proprio scope.
 
 \begin{esempio}{Funzioni annidate e closure}
+\begin{affianco}[0.55][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=closure.js]
 let message = "Hello";
 
-console.log(greet("Web Technologies"));  // output: Hello Web Technologies!
+console.log(greet("Web Technologies"));  // Hello Web Technologies!
 
-function greet(name) {                   // sollevata a inizio scope globale
+function greet(name) {             // sollevata nello scope globale
   return generateMessage();
 
-  function generateMessage() {           // sollevata a inizio scope di greet
+  function generateMessage() {     // sollevata nello scope di greet
     return `${message} ${name}!`;
   }
 }
 
 generateMessage();  // ReferenceError: generateMessage is not defined
 \end{lstlisting}
+\risultato
+\begin{immagine}[Tre scope annidati. Le frecce tratteggiate mostrano\\
+                 dove il motore trova \code{name} e \code{message}.]
+\begin{tikzpicture}
+  \node[mcod] (c) at (1.3,0) {`\$\{message\} \$\{name\}!`};
+  \scopo{3}{s3}{generateMessage}{(c)}
+  \node[mfun] (gm) at (0.2,1.45) {generateMessage};
+  \variabile{n}{(3.85,1.45)}{name}{"Web Tech..."}
+  \scopo{2}{s2}{greet}{(n)(gm)(s3)}
+  \node[mfun] (g) at (-0.45,3.05) {greet};
+  \variabile{m}{(3.85,3.05)}{message}{"Hello"}
+  \scopo{1}{s1}{scope globale}{(m)(g)(s2)}
+  \draw[mcerca] ([xshift=10pt]c.north) to[out=70, in=-100] (n.south);
+  \draw[mcerca] (c.east) to[out=0, in=0, looseness=1.5] (m.east);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 La funzione \code{generateMessage} è locale allo scope di \code{greet} e non
 può essere referenziata dall'esterno. Al suo interno, però, accede sia a
@@ -661,6 +874,7 @@ funzione originale, e ovunque vengano usate mantengono l'accesso al
 \textbf{contesto esterno} della funzione che le ha create.
 
 \begin{esempio}{Una fabbrica di funzioni}
+\begin{affianco}[0.45][c]
 \begin{lstlisting}[style=js, name=fabbrica.js]
 function getGreeter(message) {
   let sep = ",";
@@ -675,6 +889,25 @@ helloGreeter("Web");        // Hello, Web!
 let howdyGreeter = getGreeter("Howdy");
 howdyGreeter("JS");         // Howdy, JS!
 \end{lstlisting}
+\risultato
+\begin{immagine}[Ogni chiamata a \code{getGreeter} crea uno scope nuovo,\\
+                 e la funzione restituita lo porta con sé.]
+\begin{tikzpicture}[
+    ric/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=accent!70!black, dashed}]
+  \mchiave{1.3cm}
+  \foreach \v/\msg [count=\i] in {helloGreeter/"Hello", howdyGreeter/"Howdy"} {
+    \variabile[minimum width=0.55cm]{v\i}{(0,-\i*1.9+1.9)}{\v}{}
+    \node[mfun] (f\i) at (1.75,-\i*1.9+1.9) {function};
+    \riferimento{v\i}{-- (f\i.west)}
+    \oggetto[anchor=north west]{e\i}{([xshift=1.3cm, yshift=0.45cm]f\i.east)}
+      {2.65cm}{scope di getGreeter}{message/\msg, sep/{","}}
+    \draw[ric] (f\i.east) -- node[mnota, above]{ricorda}
+      (e\i-box.west |- f\i.east);
+  }
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Le due funzioni restituite sono indipendenti e ciascuna \guillemotleft ricorda\guillemotright\ i
 propri \code{message} e \code{sep}, anche se \code{getGreeter} è terminata da
@@ -695,12 +928,25 @@ let b = {};             // sintassi "oggetto letterale", usata piu' spesso
 
 Le proprietà si possono aggiungere al momento della creazione:
 
+\begin{affianco}[0.6][c]
 \begin{lstlisting}[style=js, name=pet.js]
 let pet = {
-  name: "Hannibal",   // alla chiave "name" associa il valore "Hannibal"
+  name: "Hannibal",   // alla chiave "name" associa "Hannibal"
   age: 7              // alla chiave "age" associa il valore 7
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}
+  \variabile[minimum width=0.55cm]{p}{(0,0)}{pet}{}
+  \oggetto[anchor=north west]{o}{(1.0,0.45)}{2.7cm}{Object}
+    {name/"Hannibal", age/7}
+  \riferimento{p}{-- (o-box.west |- p)}
+  \node[mnota, anchor=south] at ([xshift=0.72cm]o.north west) {chiave};
+  \node[mnota, anchor=south west] at ([xshift=1.4cm]o.north west) {valore};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Una proprietà ha una \textbf{chiave} (detta anche nome o identificatore) prima
 dei due punti, e un \textbf{valore} alla loro destra. Le dichiarazioni di
@@ -723,6 +969,7 @@ Accedere a una proprietà inesistente non è un errore: restituisce
 
 \subsection{Aggiungere ed eliminare proprietà}
 
+\begin{affianco}[0.58][c]
 \begin{lstlisting}[style=js, name=modifica.js]
 let pet = { name: "Hannibal", age: 7 }
 
@@ -734,8 +981,28 @@ console.log(pet.age);           // undefined
 console.log(pet.nickname);      // "the Affable"
 
 console.log(pet);               // stampa l'oggetto in console
-console.table(pet);             // modo alternativo, in forma tabellare
+console.table(pet);             // la stampa in forma tabellare
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=neutral!45!black}]
+  \mchiave{1.35cm}
+  \oggetto{prima}{(0,0)}{2.9cm}{prima}{name/"Hannibal", age/7}
+  \oggetto{dopo}{(0,-2.1)}{2.9cm}{dopo}
+    {name/"Hannibal", nickname/"the Affable"}
+  \draw[merr, line width=0.8pt] ([xshift=4pt]prima-2.west) -- ([xshift=-4pt]prima-2.east);
+  \node[mnota, anchor=west, text=merr] at ([xshift=4pt]prima-2.east) {\code{delete}};
+  \node[draw=mok, line width=1pt, fit=(dopo-2), inner sep=0pt] {};
+  \node[mnota, anchor=west, text=mok] at ([xshift=4pt]dopo-2.east) {aggiunta};
+  \draw[a] (prima-box.south) -- (dopo.north);
+\end{tikzpicture}
+\end{immagine}
+\begin{devtools}{Console}
+\ctabella{name & 'Hannibal' \\ nickname & 'the Affable'}
+\end{devtools}
+\end{affianco}
 
 \subsection{Notazione a parentesi quadre}
 
@@ -743,19 +1010,26 @@ Le chiavi possono contenere spazi, e in tal caso vanno lette con la
 \term{notazione a parentesi quadre}. Fra le parentesi si può usare
 un'\textbf{espressione} qualunque.
 
+\begin{affianco}[0.52][c]
 \begin{lstlisting}[style=js, name=quadre.js]
 let dog = {
   name: "Sif",
   "is a good boy": true
 }
 
-console.log(dog["name"]);
-console.log(dog["is a good boy"]);
+console.log(dog["name"]);            // Sif
+console.log(dog["is a good boy"]);   // true
 
 // come chiave si puo' usare un'espressione
 dog["is the " + "best boy"] = true;
 console.table(dog);
 \end{lstlisting}
+\risultato
+\begin{devtools}{Console}
+\ctabella{name & 'Sif' \\ is a good boy & true \\ is the best boy & true}
+\end{devtools}
+\wtnota{Le chiavi con gli spazi sono chiavi come le altre.}
+\end{affianco}
 
 \subsection{Gli oggetti sono riferimenti}
 
@@ -763,6 +1037,8 @@ Una variabile a cui è assegnato un oggetto memorizza un \term{riferimento}
 all'oggetto, non l'oggetto stesso.
 
 \begin{esempio}{Due nomi per lo stesso oggetto}
+\begin{affianco}[0.57][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=riferimenti.js]
 let firstPet = {
   name: "Richard",
@@ -776,9 +1052,23 @@ secondPet.species = "Duck";
 console.log(firstPet);   // Object { name: "Chuck", species: "Duck" }
 console.log(secondPet);  // Object { name: "Chuck", species: "Duck" }
 
-console.log(firstPet == secondPet);    // true, stesso valore
-console.log(firstPet === secondPet);   // true, entrambi riferimenti uguali
+console.log(firstPet == secondPet);    // true
+console.log(firstPet === secondPet);   // true: e' lo stesso oggetto
 \end{lstlisting}
+\risultato
+\begin{immagine}[Le variabili contengono solo la freccia:\\
+                 l'oggetto è uno, e si modifica da entrambe.]
+\begin{tikzpicture}
+  \mchiave{1.2cm}
+  \variabile[minimum width=0.55cm]{a}{(0,0.23)}{firstPet}{}
+  \variabile[minimum width=0.55cm]{b}{(0,-1.2)}{secondPet}{}
+  \oggetto[anchor=north west]{o}{(1.3,0.46)}{2.6cm}{Object}
+    {name/"Chuck", species/"Duck"}
+  \riferimento{a}{-- (o-box.west |- a)}
+  \riferimento{b}{to[out=0, in=-150] (o-box.south west)}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Modificando \code{secondPet} è cambiato anche \code{firstPet}: non sono due
 oggetti, è un solo oggetto con due nomi.
@@ -789,6 +1079,7 @@ oggetti, è un solo oggetto con due nomi.
 Per creare davvero una copia bisogna \textbf{iterare} sulle proprietà e
 copiarle una a una.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=clone.js]
 function clone(object) {
   let copy = {};                    // nuovo oggetto
@@ -805,12 +1096,29 @@ copy.name = "Chuck";
 console.log(pet.name);    // Richard
 console.log(copy.name);   // Chuck
 \end{lstlisting}
+\risultato
+\begin{immagine}[Due oggetti distinti: cambiare la copia\\
+                 non tocca l'originale.]
+\begin{tikzpicture}
+  \mchiave{1.2cm}
+  \variabile[minimum width=0.55cm]{p}{(0,0.23)}{pet}{}
+  \oggetto[anchor=north west]{o1}{(0.9,0.46)}{2.75cm}{Object}
+    {name/"Richard", species/"Lizard"}
+  \riferimento{p}{-- (o1-box.west |- p)}
+  \variabile[minimum width=0.55cm]{c}{(0,-1.67)}{copy}{}
+  \oggetto[anchor=north west]{o2}{(0.9,-1.44)}{2.75cm}{Object}
+    {name/"Chuck", species/"Lizard"}
+  \riferimento{c}{-- (o2-box.west |- c)}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Il valore di una proprietà, però, può essere a sua volta un oggetto: la funzione
 appena scritta produce una \term{copia superficiale} (\textit{shallow clone}),
 in cui gli oggetti interni non vengono clonati ma solo referenziati.
 
 \begin{esempio}{Il limite della copia superficiale}
+\begin{affianco}[0.48][c]
 \begin{lstlisting}[style=js, name=shallow.js]
 let pet = {
   name: "Garfield",
@@ -824,10 +1132,33 @@ copy.owner.name = "Liz";
 console.log(pet.owner.name);    // Liz  (!)
 console.log(copy.owner.name);   // Liz
 \end{lstlisting}
+\risultato
+\begin{immagine}[La copia superficiale duplica solo il primo livello:\\
+                 \code{owner} è lo stesso oggetto per entrambi.]
+\begin{tikzpicture}
+  \mchiave{1.2cm}
+  \variabile[minimum width=0.55cm]{p}{(0,0.23)}{pet}{}
+  \oggetto[anchor=north west]{o1}{(0.9,0.46)}{2.75cm}{Object}
+    {name/"Garfield", species/"Cat", owner/}
+  \riferimento{p}{-- (o1-box.west |- p)}
+  \variabile[minimum width=0.55cm]{c}{(0,-2.27)}{copy}{}
+  \oggetto[anchor=north west]{o2}{(0.9,-2.04)}{2.75cm}{Object}
+    {name/"Garfield", species/"Cat", owner/}
+  \riferimento{c}{-- (o2-box.west |- c)}
+  \oggetto[anchor=west]{w}{(4.6,-0.8)}{2.3cm}{Object}
+    {name/"Liz", age/17}
+  \node (d1) at ([xshift=-9pt]o1-3.east) {};
+  \node (d2) at ([xshift=-9pt]o2-3.east) {};
+  \riferimento{d1}{to[out=0, in=180] (w.west)}
+  \riferimento{d2}{to[out=0, in=180] (w-box.west)}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Per ottenere una \term{copia profonda} (\textit{deep clone}), cioè per clonare
 anche gli oggetti interni, serve la ricorsione.
 
+\begin{affianco}[0.48][c]
 \begin{lstlisting}[style=js, name=deep-clone.js]
 function clone(object) {
   let copy = {};
@@ -841,6 +1172,31 @@ function clone(object) {
   return copy;
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Con la copia profonda anche \code{owner} è duplicato:\\
+                 \code{copy.owner.name = "Liz"} non tocca \code{pet}.]
+\begin{tikzpicture}
+  \mchiave{1.2cm}
+  \variabile[minimum width=0.55cm]{p}{(0,0.23)}{pet}{}
+  \oggetto[anchor=north west]{o1}{(0.9,0.46)}{2.75cm}{Object}
+    {name/"Garfield", species/"Cat", owner/}
+  \riferimento{p}{-- (o1-box.west |- p)}
+  \variabile[minimum width=0.55cm]{c}{(0,-2.27)}{copy}{}
+  \oggetto[anchor=north west]{o2}{(0.9,-2.04)}{2.75cm}{Object}
+    {name/"Garfield", species/"Cat", owner/}
+  \riferimento{c}{-- (o2-box.west |- c)}
+  \mchiave{0.9cm}
+  \oggetto[anchor=north west]{w1}{(4.4,0.46)}{2.2cm}{Object}
+    {name/"John", age/17}
+  \oggetto[anchor=north west]{w2}{(4.4,-2.04)}{2.2cm}{Object}
+    {name/"Liz", age/17}
+  \node (d1) at ([xshift=-9pt]o1-3.east) {};
+  \node (d2) at ([xshift=-9pt]o2-3.east) {};
+  \riferimento{d1}{to[out=0, in=180] (w1.west)}
+  \riferimento{d2}{to[out=0, in=180] (w2.west)}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Implementare i metodi di clonazione da zero ha valore didattico, ma non è
 necessario farlo ogni volta: esistono alternative già pronte, come
@@ -920,6 +1276,7 @@ Il punto cruciale è che il valore di \code{this} è valutato \textbf{a tempo di
 esecuzione}, in base al contesto della chiamata.
 
 \begin{esempio}{Lo stesso codice, due valori di this}
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=this-runtime.js]
 let john = { name: "John" };
 let will = { name: "Will" };
@@ -928,19 +1285,44 @@ let greet = function () {
   console.log(`Hi, I'm ${this.name}!`);
 }
 
-// la stessa funzione viene assegnata come metodo a due oggetti diversi
+// la stessa funzione diventa metodo di due oggetti
 john.greet = greet;
 will.greet = greet;
 
 john.greet();   // Hi, I'm John!
 will.greet();   // Hi, I'm Will!
 \end{lstlisting}
+\risultato
+\begin{immagine}[Una sola funzione: \code{this} è l'oggetto\\
+                 che compare prima del punto nella chiamata.]
+\begin{tikzpicture}
+  \mchiave{0.95cm}
+  \oggetto{j}{(0,0)}{2.3cm}{john}{name/"John", greet/}
+  \oggetto{w}{(0,-1.9)}{2.3cm}{will}{name/"Will", greet/}
+  \node[mfun, align=left] (f) at (4.1,-0.95)
+    {function () \{\\ \ \ ...\$\{this.name\}...\\ \}};
+  \node (dj) at ([xshift=-9pt]j-2.east) {};
+  \node (dw) at ([xshift=-9pt]w-2.east) {};
+  \riferimento{dj}{to[out=0, in=160] (f.west)}
+  \riferimento{dw}{to[out=0, in=200] (f.west)}
+  \node[mcod, anchor=east] at ([xshift=-4pt]j.west)
+    {john.greet()};
+  \node[mnota, anchor=north east] at ([xshift=-4pt, yshift=-2pt]j.west)
+    {\code{this} = \code{john}};
+  \node[mcod, anchor=east] at ([xshift=-4pt]w.west)
+    {will.greet()};
+  \node[mnota, anchor=north east] at ([xshift=-4pt, yshift=-2pt]w.west)
+    {\code{this} = \code{will}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 \end{esempio}
 
 \begin{warningbox}{{Le arrow function non hanno this}}
   Se \code{this} compare dentro una arrow function, viene preso dal
   \textbf{contesto esterno}, non dall'oggetto su cui il metodo è invocato.
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=this-arrow.js]
 let john = { nick: "John" };
 let will = { nick: "Will" };
@@ -955,6 +1337,27 @@ will.greet = greet;
 john.greet();   // Hi, I'm undefined!
 will.greet();   // Hi, I'm undefined!
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[
+    passo/.style={rounded corners=3pt, draw=neutral!50!black, fill=white,
+      line width=0.7pt, font=\Lato\scriptsize, align=center,
+      minimum width=5.2cm, minimum height=0.75cm},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=neutral!45!black}]
+  \node[passo] (p1) at (0,0) {chiamata \code{john.greet()}};
+  \node[passo, fill=accent!10!white, draw=accent!55!black] (p2) at (0,-1.25)
+    {la arrow function \textbf{non ha} un \code{this} proprio};
+  \node[passo, fill=neutral!8!white] (p3) at (0,-2.5)
+    {usa il \code{this} del contesto esterno\\(lo scope globale, non \code{john})};
+  \node[passo, draw=merr, fill=red-gradient-1!40!white] (p4) at (0,-3.75)
+    {\code{this.nick} vale \code{undefined}};
+  \draw[a] (p1) -- (p2);
+  \draw[a] (p2) -- (p3);
+  \draw[a] (p3) -- (p4);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
   Non è un difetto: è precisamente il motivo per cui le arrow function sono
   comode come callback, dove si vuole conservare il \code{this} circostante. La
@@ -975,6 +1378,7 @@ I costruttori sono normali funzioni, con due convenzioni:
   \item vanno invocati \textbf{solo} con la parola chiave \code{new}.
 \end{enumerate}
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=costruttore.js]
 function Pet(name, species) {
   this.name = name;
@@ -985,8 +1389,32 @@ function Pet(name, species) {
 let rick  = new Pet("Richard", "Lizard");
 let chuck = new Pet("Chuck", "Duck");
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{new Pet("Richard", "Lizard")}, passo per passo.]
+\begin{tikzpicture}[
+    num/.style={circle, fill=accent!70!black, text=white,
+      font=\Lato\scriptsize\bfseries, inner sep=1.2pt, minimum size=11pt},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=neutral!45!black}]
+  \mchiave{1.2cm}
+  \oggetto{v}{(0,0)}{1.6cm}{Object}{}
+  \node[mnota, anchor=south] at (v.north) {\code{this}};
+  \oggetto{o}{(4.4,0)}{2.8cm}{Object}
+    {name/"Richard", species/"Lizard", age/undefined}
+  \node[mnota, anchor=south] at (o.north) {\code{this}};
+  \draw[a] (v-box.east |- v-1) -- node[mnota, above]{corpo di \code{Pet}}
+    (o-box.west |- v-1);
+  \variabile[minimum width=0.55cm]{r}{(4.0,-2.25)}{rick}{}
+  \riferimento{r}{-- (r |- o-box.south)}
+  \node[num] at ([xshift=-8pt]v.west) {1};
+  \node[num] at ([xshift=-8pt]o.west) {2};
+  \node[num] at ([xshift=-10pt]r-nome.west) {3};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
-Quando una funzione viene eseguita con \code{new}:
+Quando una funzione viene eseguita con \code{new} (i numeri sono quelli della
+figura):
 
 \begin{enumerate}
   \item viene creato un nuovo oggetto vuoto e assegnato a \code{this};
@@ -1000,12 +1428,38 @@ Quando una funzione viene eseguita con \code{new}:
 Accedendo a una proprietà inesistente si ottiene \code{undefined}. Ma accedere a
 una proprietà \textbf{di} una proprietà inesistente produce un errore.
 
+\begin{affianco}[0.45][c]
 \begin{lstlisting}[style=js, name=chaining.js]
 let pet = { name: "Garfield" }
 
 console.log(pet.species);       // undefined
 console.log(pet.owner.name);    // TypeError!
 \end{lstlisting}
+\risultato
+\begin{immagine}[La catena si valuta da sinistra a destra:\\
+                 leggere \code{.name} da \code{undefined} è un errore.]
+\begin{tikzpicture}[
+    v/.style={mcod, draw=neutral!50!black, fill=white, rounded corners=2pt,
+      minimum height=0.5cm, inner xsep=4pt},
+    u/.style={v, fill=neutral!10!white},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=neutral!45!black},
+    lab/.style={mcod, above, text=primary!60!black}]
+  % pet.species
+  \node[v] (a1) at (0,0) {pet};
+  \node[u, right=1.7cm of a1] (a2) {undefined};
+  \draw[a] (a1) -- node[lab]{.species} (a2);
+  \node[anchor=west] at ([xshift=3pt]a2.east) {\mok};
+  % pet.owner.name
+  \node[v] (b1) at (0,-1.2) {pet};
+  \node[u, right=1.7cm of b1] (b2) {undefined};
+  \node[v, draw=merr, text=merr, right=1.5cm of b2] (b3) {TypeError};
+  \draw[a] (b1) -- node[lab]{.owner} (b2);
+  \draw[a] (b2) -- node[lab]{.name} (b3);
+  \node[anchor=west] at ([xshift=3pt]b3.east) {\merr};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \info{{TypeError, non ReferenceError}}{
   Nelle slide l'errore di \code{pet.owner.name} è indicato come
@@ -1030,9 +1484,30 @@ interrompe immediatamente la valutazione (fa \textit{corto circuito}) se la
 parte a sinistra è \code{undefined} (o \code{null}), restituendo
 \code{undefined}.
 
+\begin{affianco}[0.45][c]
 \begin{lstlisting}[style=js]
-let ownerName = pet.owner?.name;
+let ownerName = pet.owner?.name;   // undefined
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[
+    v/.style={mcod, draw=neutral!50!black, fill=white, rounded corners=2pt,
+      minimum height=0.5cm, inner xsep=4pt},
+    u/.style={v, fill=neutral!10!white},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=neutral!45!black},
+    lab/.style={mcod, above, text=primary!60!black}]
+  % pet.owner?.name
+  \node[v] (c1) at (0,0) {pet};
+  \node[u, right=1.7cm of c1] (c2) {undefined};
+  \node[u, right=1.7cm of c2] (c3) {undefined};
+  \draw[a] (c1) -- node[lab]{.owner} (c2);
+  \draw[a, dashed] (c2) -- node[lab, text=accent!70!black]{?.name} (c3);
+  \node[mnota, anchor=north] at ($(c2.south)!0.5!(c3.south)$) {corto circuito};
+  \node[anchor=west] at ([xshift=3pt]c3.east) {\mok};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \begin{esempio}{Varianti dell'optional chaining}
 Si può usare anche per invocare una funzione che potrebbe non esistere, o per
@@ -1073,6 +1548,7 @@ Quando si crea una proprietà nel modo \guillemotleft tradizionale\guillemotrigh
 \code{false} per impostazione predefinita.
 
 \begin{esempio}{Proprietà con flag espliciti}
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=flags.js]
 let pet = { species: "cat" }
 
@@ -1089,8 +1565,32 @@ for (let key in pet) {
 
 pet.name = "Odie";     // TypeError: "name" is read-only
 delete pet.species;    // funziona
-delete pet.name;       // TypeError: property "name" is non-configurable
+delete pet.name;       // TypeError: "name" is non-configurable
 \end{lstlisting}
+\risultato
+\begin{immagine}[Ogni proprietà porta con sé i suoi tre flag.]
+\begin{tikzpicture}
+  \matrix[matrix of nodes, row sep=-0.7pt, column sep=-0.7pt,
+          nodes={draw=primary!65!black, fill=primary!3!white, line width=0.7pt,
+                 minimum height=0.5cm, font=\FiraCodeNL\scriptsize,
+                 anchor=center},
+          column 1/.style={nodes={minimum width=1.35cm}},
+          column 2/.style={nodes={minimum width=1.7cm}},
+          column 3/.style={nodes={minimum width=1.25cm}},
+          column 4/.style={nodes={minimum width=1.25cm}},
+          column 5/.style={nodes={minimum width=1.35cm}},
+          row 1/.style={nodes={fill=primary!16!white, font=\Lato\tiny\bfseries,
+                               text=primary!35!black}}] (t) {
+    chiave  & valore     & writable & enumerable & configurable \\
+    species & "cat"      & \mok     & \mok       & \mok         \\
+    name    & "Garfield" & \merr    & \merr      & \merr        \\
+  };
+  \node[mnota, anchor=north west, align=left] at ([yshift=-4pt]t.south west)
+    {\code{species}: creata nel modo tradizionale\\
+     \code{name}: creata con \code{defineProperty}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 \end{esempio}
 
 \info{Gli errori li dà la modalità strict}{
@@ -1116,6 +1616,8 @@ lettura) e da un \term{setter} (invocato in scrittura), che si dichiarano con le
 parole chiave \code{get} e \code{set}.
 
 \begin{esempio}{Una proprietà calcolata}
+\begin{affianco}[0.56][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=getset.js]
 let p = {
   first: "John",
@@ -1126,11 +1628,11 @@ let p = {
   },
 
   set fullName(name) {
-    [this.first, this.last] = name.split(" ");   // assegnamento destrutturante
+    [this.first, this.last] = name.split(" ");   // destrutturazione
   }
 }
 
-// fullName si usa come una proprieta', non come una funzione: niente "()"
+// fullName si usa come una proprieta': niente "()"
 console.log(p.fullName);      // John Smith
 
 p.fullName = "Jane White";
@@ -1138,6 +1640,29 @@ console.log(p.fullName);      // Jane White
 
 p.fullName();                 // TypeError: p.fullName is not a function
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{first} e \code{last} contengono un valore,\\
+                 \code{fullName} è una coppia di funzioni.]
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=accent!70!black},
+    b/.style={a, draw=green-gradient-6!80!black}]
+  \mchiave{1.3cm}
+  \oggetto{o}{(0,0)}{3.2cm}{p}{first/"John", last/"Smith", fullName/get | set}
+  \node[draw=accent!60!black, line width=1.1pt, fit=(o-3), inner sep=0pt] {};
+  % lettura
+  \node[mcod, anchor=west] (r) at (2.4,-0.1) {p.fullName};
+  \node[mnota, anchor=north west] (rr) at ([yshift=-1pt]r.south west)
+    {\(\rightarrow\) get() \(\rightarrow\) \code{"John Smith"}};
+  \draw[a] ([xshift=-12pt]o-3.east) to[out=0, in=180] (r.west);
+  % scrittura
+  \node[mcod, anchor=west] (w) at (2.4,-1.55) {p.fullName = "Jane White"};
+  \node[mnota, anchor=north west] at ([yshift=-1pt]w.south west)
+    {\(\rightarrow\) set() \(\rightarrow\) \code{first}, \code{last}};
+  \draw[b] ([xshift=-12pt]o-3.east) to[out=-20, in=180] (w.west);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Dall'esterno non c'è alcuna differenza fra una proprietà dati e una proprietà
 accessoria: è precisamente questo il punto. Si può trasformare una proprietà

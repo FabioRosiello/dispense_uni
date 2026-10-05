@@ -101,6 +101,8 @@ Angular fornisce tutto il necessario per testare le applicazioni usando
 nella stessa directory del componente o servizio che testano, con la convenzione
 di aggiungere \code{.spec} al nome.
 
+\begin{affianco}[0.46][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=calculator.service.spec.ts]
 import { TestBed } from '@angular/core/testing';
 import { CalculatorService } from './calculator.service';
@@ -122,6 +124,18 @@ describe('CalculatorService', () => {
   });
 });
 \end{lstlisting}
+\risultato
+\begin{browser}[Karma]
+  {\wtuifont
+  \colorbox{green-gradient-6}{\makebox[\dimexpr\linewidth-2\fboxsep][l]{%
+    \color{white}\bfseries 2 specs, 0 failures}}\par\vspace{6pt}
+  {\color{neutral!25!black}CalculatorService}\par\vspace{2pt}
+  \hspace*{10pt}{\color{mok}$\bullet$ should be created}\par
+  \hspace*{10pt}{\color{mok}$\bullet$ should sum two positive numbers correctly}\par}
+\end{browser}
+\wtnota{Il rapporto di Jasmine nel browser aperto da \code{ng test}:\\
+        una suite (\code{describe}) con due specifiche (\code{it}).}
+\end{affianco}
 
 \begin{center}
 \renewcommand{\arraystretch}{1.4}
@@ -177,12 +191,36 @@ Scrivere i double a mano richiede però molto codice ripetitivo. I framework di
 testing vengono in aiuto: Jasmine supporta il concetto di \term{spy}, un test
 double che può simulare qualunque funzione.
 
+\begin{affianco}[0.58][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=spy.ts]
 let todos = [{ id: 1, todo: "foo" }, { id: 2, todo: "bar" }];
 
 restBackendSpy = jasmine.createSpyObj('RestBackendService', ['getTodos']);
 restBackendSpy.getTodos.and.returnValue(of(todos));
 \end{lstlisting}
+\risultato
+\begin{immagine}[Il componente riceve lo spy:\\
+                 servizio reale e API restano fuori dal test.]
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.75pt,
+      draw=neutral!45!black}]
+  \node[wtnodeplain, font=\FiraCodeNL\scriptsize] (c) at (1.9,0) {TodoPageComponent};
+  \node[wtnodeplain, font=\FiraCodeNL\scriptsize, text=neutral!55!white,
+        draw=neutral!35!white, dashed] (r) at (0,-1.3) {RestBackendService};
+  \node[wtnodeplain, font=\Lato\scriptsize, text=neutral!55!white,
+        draw=neutral!35!white, dashed] (api) at (0,-2.4) {API REST};
+  \node[wtnodeacc, font=\FiraCodeNL\scriptsize, inner sep=3pt] (s) at (3.8,-1.3)
+    {restBackendSpy};
+  \node[mcod, text=accent!75!black] (v) at (3.8,-2.4) {of([foo, bar])};
+  \draw[a, draw=neutral!35!white, dashed] (c) -- (r);
+  \draw[a, draw=neutral!35!white, dashed] (r) -- (api);
+  \node[text=merr] at ($(c)!0.5!(r)$) {$\times$};
+  \draw[a, draw=accent!70!black] (c) -- (s);
+  \draw[a, draw=accent!70!black] (s) -- node[mcod, right]{getTodos()} (v);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Il codice crea uno spy del \code{RestBackendService} simulandone il metodo
 \code{getTodos()}, e lo configura perché restituisca sempre un Observable con
@@ -190,6 +228,8 @@ una data lista di due elementi. Usando lo spy al posto del servizio reale, il
 test non dipende né dal servizio né dalla API REST esterna.
 
 \begin{esempio}{Testare un componente}
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=todo-page.component.spec.ts]
 it('should properly fetch to-do items', () => {
   let todos = [{ id: 1, todo: "foo" }, { id: 2, todo: "bar" }];
@@ -211,6 +251,28 @@ it('should properly fetch to-do items', () => {
   expect(content).toContain('bar');
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[
+    fase/.style={rounded corners=3pt, line width=0.7pt, inner sep=4pt,
+      text width=4.6cm, align=left, font=\Lato\scriptsize},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.75pt,
+      draw=neutral!45!black}]
+  \node[fase, draw=primary!60!black, fill=primary!7!white] (ar) at (0,0)
+    {\textbf{Arrange}\\ uno spy che restituisce due elementi};
+  \node[fase, draw=accent!60!black, fill=accent!7!white] (ac) at (0,-1.25)
+    {\textbf{Act}\\ \code{fetchTodos()} e \code{detectChanges()}};
+  \node[fase, draw=green-gradient-6, fill=green-gradient-1!35!white] (as) at (0,-2.5)
+    {\textbf{Assert}\\ due elementi, e la \code{<ul>} contiene \guillemotleft foo\guillemotright\ e \guillemotleft bar\guillemotright};
+  \draw[a] (ar) -- (ac); \draw[a] (ac) -- (as);
+  \node[mdom] (u) at (-0.9,-3.75) {<ul>};
+  \node[mtesto] (l1) at (-1.6,-4.6) {foo};
+  \node[mtesto] (l2) at (-0.2,-4.6) {bar};
+  \draw[mramo] (u.south) -- (l1.north); \draw[mramo] (u.south) -- (l2.north);
+  \node[mnota, anchor=west] at (0.4,-4.15) {\mok\ \code{toContain}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Si noti \code{fixture.detectChanges()}: forza il ciclo di change detection
 descritto nel capitolo 20, senza il quale il template non sarebbe ancora
@@ -381,7 +443,7 @@ Torna qui utile tutto quello che abbiamo studiato sui selettori CSS nel capitolo
 
 \begin{center}
 \renewcommand{\arraystretch}{1.45}
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{5.0cm}@{\hspace{0.9cm}}>{\raggedright\arraybackslash}p{7.6cm}@{}}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{7.7cm}@{\hspace{0.8cm}}>{\raggedright\arraybackslash}p{8.4cm}@{}}
   \textbf{Localizzatore} & \textbf{Perché si rompe} \\
   \code{click(100, 200)}
     & basta spostare il pulsante di qualche pixel e le coordinate non
@@ -467,6 +529,8 @@ npm init playwright@latest
 I test si definiscono con la funzione \code{test()}, che riceve un titolo e una
 funzione asincrona contenente il codice.
 
+\begin{affianco}[0.53][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=example.spec.ts]
 import { test, expect } from '@playwright/test';
 
@@ -484,7 +548,21 @@ test('get started link', async ({ page }) => {
     .toBeVisible();
 });
 \end{lstlisting}
+\risultato
+\begin{browser}[playwright.dev]
+  {\wtuifont\color{neutral!45!black}titolo: \textit{Fast and reliable end-to-end testing
+   for modern web apps | Playwright}\par}\vspace{4pt}
+  \colorbox{green-gradient-6!85!black}{\color{white}\Lato\footnotesize Get started}
+  \wtpuntatore
+\end{browser}
+\begin{browser}[playwright.dev/docs/intro]
+  {\Lora\bfseries\Large Installation\par}
+\end{browser}
+\wtnota{\mok\ titolo con \guillemotleft Playwright\guillemotright\quad
+        \mok\ intestazione \guillemotleft Installation\guillemotright\ visibile}
+\end{affianco}
 
+\begin{affianco}[0.48][c]
 \begin{console}[Terminale]
 $ npx playwright test
 Running 6 tests using 6 workers
@@ -493,6 +571,21 @@ Running 6 tests using 6 workers
 $ npx playwright show-report
 Serving HTML report at http://localhost:9323.
 \end{console}
+\risultato
+\begin{immagine}[2 test $\times$ 3 browser = 6 esecuzioni.]
+\begin{tikzpicture}
+  \matrix[matrix of nodes, nodes={font=\FiraCodeNL\scriptsize, minimum height=0.5cm,
+          minimum width=1.5cm, draw=neutral!40!white, line width=0.5pt},
+          column 1/.style={nodes={minimum width=2.6cm, font=\Lato\scriptsize}},
+          row 1/.style={nodes={fill=neutral!10!white}},
+          column sep=-0.5pt, row sep=-0.5pt] {
+    {} & chromium & firefox & webkit \\
+    has title        & \textcolor{mok}{\itick} & \textcolor{mok}{\itick} & \textcolor{mok}{\itick} \\
+    get started link & \textcolor{mok}{\itick} & \textcolor{mok}{\itick} & \textcolor{mok}{\itick} \\
+  };
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Per impostazione predefinita i test vengono eseguiti su \code{chromium} (motore
 Blink), \code{firefox} (Gecko) e \code{webkit} (il motore di Safari e dei
@@ -518,19 +611,52 @@ Tre parti sono cruciali nella scrittura di un test E2E automatizzato:
 \textbf{individuare} gli elementi, \textbf{compiere} azioni e
 \textbf{verificare} lo stato rispetto alle aspettative.
 
+\begin{affianco}[0.44][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=localizzatori.ts]
-page.getByText();         // per contenuto testuale
-page.getByLabel();        // un controllo di form, tramite la sua etichetta
-page.getByPlaceholder();  // un input, tramite il suo placeholder
-page.getByAltText();      // un elemento (di solito immagine), tramite alt
-page.getByTitle();        // tramite l'attributo title
-page.getByTestId();       // tramite l'attributo data-testid
+page.getByText();         // contenuto testuale
+page.getByLabel();        // etichetta di un campo
+page.getByPlaceholder();  // placeholder di un input
+page.getByAltText();      // testo alternativo (alt)
+page.getByTitle();        // attributo title
+page.getByTestId();       // attributo data-testid
 
-// e' possibile usare anche selettori CSS e XPath
+// si possono usare anche selettori CSS e XPath
 page.locator("#foo ul [data-foo]");
 page.locator("//[@id='foo']//ul//*[@data-foo]");
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[
+    el/.style={inner sep=2pt, font=\Lato\scriptsize, anchor=west},
+    loc/.style={font=\FiraCodeNL\scriptsize, text=accent!75!black, anchor=west},
+    l/.style={wtdash, draw=accent!50!white}]
+  \draw[rounded corners=3pt, draw=neutral!35!white, line width=0.8pt, fill=white]
+    (0,0.55) rectangle (4.1,-3.9);
+  \node[el, fill=primary!12!white, minimum width=0.9cm, minimum height=0.45cm,
+        font=\Lato\tiny] (img) at (0.2,0.15) {logo};
+  \node[el, font=\Lora\bfseries\normalsize] (h) at (0.2,-0.45) {Accedi};
+  \node[el] (lab) at (0.2,-1.0) {Email};
+  \node[el] (in1) at (0.2,-1.45) {\wtcampo[3.2cm]{}};
+  \node[el] (in2) at (0.2,-2.25)
+    {\wtcampo[3.2cm]{\color{neutral!50!white}name@example.com}};
+  \node[el] (b) at (0.2,-3.25) {\wtbottone{Sign in}};
+  \node[loc] (L2) at (4.5,0.15) {getByAltText('logo')};
+  \node[loc] (L1) at (4.5,-0.45) {getByText('Accedi')};
+  \node[loc] (L3) at (4.5,-1.25) {getByLabel('Email')};
+  \node[loc] (L4) at (4.5,-2.25) {getByPlaceholder(\ldots)};
+  \node[loc] (L5) at (4.5,-3.25) {getByTestId('submit')};
+  \draw[l] (L1.west) -- (h.east);
+  \draw[l] (L2.west) -- (img.east);
+  \draw[l] (L3.west) -- (in1.east);
+  \draw[l] (L4.west) -- (in2.east);
+  \draw[l] (L5.west) -- (b.east);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
+\begin{affianco}[0.52][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=azioni.ts]
 page.locator("#input").clear();
 page.locator("#input").fill("Foo");
@@ -540,6 +666,14 @@ page.locator("#select-course").selectOption("web technologies");
 page.locator("#button").click();
 page.locator("#button").dblclick();
 \end{lstlisting}
+\risultato
+\begin{browser}[dopo le azioni]
+  \wtcampo[3.2cm]{Foo}\par\vspace{5pt}
+  \wtcasella{1}\ {\wtuifont Accetto le condizioni}\par\vspace{5pt}
+  \wttendina[3.2cm]{web technologies}\par\vspace{5pt}
+  \wtbottone{Invia}
+\end{browser}
+\end{affianco}
 
 \begin{lstlisting}[style=ts, name=asserzioni.ts]
 expect(page.locator("#foo")).toBeDefined();
