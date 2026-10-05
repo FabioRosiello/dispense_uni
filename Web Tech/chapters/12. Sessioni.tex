@@ -75,6 +75,7 @@ richieste diverse è impostare dei \term{cookie}. L'idea è la seguente.
 
 \subsection{Gestire il login}
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=login.js]
 if (isAuthenticated) {
   response.writeHead(300, {
@@ -87,13 +88,31 @@ if (isAuthenticated) {
   response.end();
 }
 \end{lstlisting}
+\risultato
+\begin{lstlisting}[style=http, name=Risposta generata]
+HTTP/1.1 300 Multiple Choices
+Location: /
+Set-Cookie: auth=true; max-age=3600
+Set-Cookie: username=luigi; max-age=3600
+\end{lstlisting}
+\wtnota{Due header \code{Set-Cookie}: il browser\\ memorizza due cookie distinti.}
+\end{affianco}
 
 Si impostano due cookie --- uno con il nome utente, l'altro un semplice valore
 booleano --- entrambi con scadenza a un'ora, e si reindirizza alla homepage.
 
+\warning{300 o 303?}{
+  Il codice delle slide usa \code{300} (\textit{Multiple Choices}), con cui il
+  browser \textbf{non è tenuto} a seguire l'header \code{Location}. Per
+  reindirizzare dopo l'invio di un form si usa di norma \code{303}
+  (\textit{See Other}), oppure \code{302}: il browser segue il reindirizzamento
+  con una \code{GET}, e un aggiornamento della pagina non reinvia il form.}
+
 Se invece le credenziali non sono corrette, si mostra di nuovo la pagina di
 login restituendo un codice \code{401}:
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=login.js]
 if (!isAuthenticated) {
   let renderedContent = pug.renderFile("./templates/login.pug",
@@ -102,6 +121,16 @@ if (!isAuthenticated) {
   response.end(renderedContent);
 }
 \end{lstlisting}
+\risultato
+\begin{browser}[localhost:3000/login]
+  {\Lora\bfseries\LARGE Login}\\[4pt]
+  {\color{css-crimson}\small Autenticazione fallita. Controlla le credenziali.}\\[6pt]
+  \wtcampo[3.2cm]{luigi}\\[3pt]
+  \wtcampo[3.2cm]{\textbullet\textbullet\textbullet\textbullet}\\[4pt]
+  \wtbottone{Accedi}
+\end{browser}
+\wtnota{La pagina di login, di nuovo, con il messaggio\\ d'errore e lo stato 401.}
+\end{affianco}
 
 \subsection{Recuperare le informazioni di sessione}
 
@@ -124,6 +153,7 @@ function checkUserAuthentication(request) {
 Purtroppo, anche per analizzare i cookie siamo da soli. L'header \code{Cookie}
 si presenta così: \codel{Cookie: auth=true; username=luigi}.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=cookies.js]
 function parseCookies(request) {
   const list = {};
@@ -144,6 +174,23 @@ function parseCookies(request) {
   return list;
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Dall'header \code{Cookie} all'oggetto \code{list}.]
+\begin{tikzpicture}[
+    st/.style={mcod, anchor=west},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black},
+    lab/.style={mnota, anchor=west, text=accent!70!black}]
+  \node[st] at (0,0)     {"auth=true; username=luigi"};
+  \node[st] at (0,-0.9)  {["auth=true", " username=luigi"]};
+  \node[st] at (0,-1.8)  {name = "username"};
+  \node[st] at (0,-2.2)  {value = "luigi"};
+  \node[st] at (0,-3.1)  {\{ auth: "true", username: "luigi" \}};
+  \draw[a] (0.3,-0.2) -- (0.3,-0.7) node[lab, midway, xshift=4pt]{split(";")};
+  \draw[a] (0.3,-1.1) -- (0.3,-1.6) node[lab, midway, xshift=4pt]{split("="), trim};
+  \draw[a] (0.3,-2.4) -- (0.3,-2.9) node[lab, midway, xshift=4pt]{decodeURIComponent};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \info{Perché quel \code{rest.join}}{
   Il codice cerca di essere robusto quando il \textbf{valore} di un cookie
@@ -179,6 +226,8 @@ function handleRequest(request, response) {
 }
 \end{lstlisting}
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=todo-controller.js]
 function handleTodoListRequest(request, response, context = {}) {
   if (!context.isUserAuthenticated) {
@@ -195,6 +244,28 @@ function handleTodoListRequest(request, response, context = {}) {
   }
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Prima l'autenticazione, poi il metodo.]
+\begin{tikzpicture}[
+    dec/.style={diamond, aspect=2.2, draw=primary!60!black, fill=primary!8!white,
+      line width=0.7pt, font=\Lato\scriptsize, inner sep=1pt},
+    esito/.style={rounded corners=3pt, draw=neutral!50!black, fill=white, line width=0.7pt,
+      font=\FiraCodeNL\scriptsize, inner sep=3pt},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[dec] (q) at (0,0) {autenticato?};
+  \node[esito, draw=merr, text=merr] (e) at (2.6,0) {401};
+  \node[dec] (m) at (0,-1.6) {metodo?};
+  \node[esito] (g) at (-1.6,-3.0) {\ldots Get()};
+  \node[esito] (p) at (0.2,-3.0) {\ldots Post()};
+  \node[esito, draw=merr, text=merr] (x) at (1.8,-3.0) {405};
+  \draw[a] (q) -- node[mnota, above]{no} (e);
+  \draw[a] (q) -- node[mnota, right]{sì} (m);
+  \draw[a] (m) -- node[mcod, left, font=\FiraCodeNL\tiny]{GET} (g);
+  \draw[a] (m) -- node[mcod, right, font=\FiraCodeNL\tiny]{POST} (p);
+  \draw[a] (m) -- node[mnota, right]{altro} (x);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \section{I problemi dell'approccio a cookie}
 
@@ -283,6 +354,7 @@ Si possono usare gli oggetti \code{Map} di JavaScript: una prima mappa associa
 ciascun identificatore di sessione a una sessione, che è a sua volta una mappa
 di coppie chiave-valore.
 
+\begin{affianco}[0.56][c]
 \begin{lstlisting}[style=js, name=Session.js]
 class Session {
 
@@ -308,12 +380,31 @@ class Session {
   /* altri metodi ... */
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Una mappa di mappe: all'identificatore\\
+                 corrisponde la sessione dell'utente.]
+\begin{tikzpicture}
+  \mchiave{1.6cm}
+  \oggetto[fill=accent!14!white]{st}{(0,0)}{2.8cm}{sessionStore (Map)}
+    {ahs37\ldots/, 4fg23\ldots/}
+  \mchiave{1.4cm}
+  \oggetto{s1}{(4.2,0.35)}{2.6cm}{Map}{username/"john", auth/true}
+  \oggetto{s2}{(4.2,-1.55)}{2.6cm}{Map}{username/"billy", auth/true}
+  \node (d1) at ([xshift=-9pt]st-1.east) {};
+  \node (d2) at ([xshift=-9pt]st-2.east) {};
+  \riferimento{d1}{to[out=0, in=180] (s1.west)}
+  \riferimento{d2}{to[out=0, in=180] (s2.west)}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Usare le sessioni}
 
 Quando un utente effettua il login, creiamo una nuova sessione, vi memorizziamo
 i dati rilevanti e passiamo l'identificatore come cookie.
 
+\begin{affianco}[0.5][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=login.js]
 if (isAuthenticated) {
   // crea una nuova sessione per l'utente
@@ -330,9 +421,19 @@ if (isAuthenticated) {
   response.end();
 }
 \end{lstlisting}
+\risultato
+\begin{lstlisting}[style=http, name=Risposta generata]
+HTTP/1.1 300 Multiple Choices
+Location: /
+Set-Cookie: sessionId=ahs37...; max-age=3600
+\end{lstlisting}
+\wtnota{Al client arriva solo l'identificatore:\\
+        nome utente e \code{auth} restano sul server.}
+\end{affianco}
 
 Quando serve accedere ai dati di sessione:
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=router.js]
 function handleRequest(request, response) {
   let userSession = session.getSessionFromRequest(request);
@@ -345,6 +446,21 @@ function handleRequest(request, response) {
   /* resto del codice */
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Dal cookie alla sessione, dalla sessione al contesto.]
+\begin{tikzpicture}[
+    st/.style={rounded corners=3pt, draw=primary!55!black, fill=primary!6!white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, inner sep=3pt, align=center},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[st] (c) at (0,0) {Cookie: sessionId=ahs37\ldots};
+  \node[st, fill=accent!12!white, draw=accent!55!black] (s) at (0,-1.1) {sessionStore.get("ahs37\ldots")};
+  \node[st] (u) at (0,-2.2) {userSession\\ username: "john", auth: true};
+  \node[st, fill=green-gradient-1!45!white, draw=green-gradient-6] (x) at (0,-3.4)
+    {context\\ isUserAuthenticated: true};
+  \draw[a] (c) -- (s); \draw[a] (s) -- (u); \draw[a] (u) -- (x);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Il codice del router è praticamente identico a quello della versione con i
 cookie: cambia solo \textbf{da dove} arrivano i dati. Il cookie ora contiene un
