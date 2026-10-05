@@ -144,16 +144,40 @@ Il nome per esteso descrive con precisione il meccanismo:
         XML, \ldots).
 \end{itemize}
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=http, name=Scambio REST]
 GET /todos HTTP/1.1
 
 [{"todo": "A"}, {"todo": "B"}, ...]
 \end{lstlisting}
+\risultato
+\begin{immagine}[Il client tiene lo stato dell'applicazione,\\
+                 il server quello delle risorse.]
+\begin{tikzpicture}[    att/.style={rounded corners=3pt, draw=primary!65!black, fill=primary!12!white,
+      line width=0.7pt, font=\Lato\scriptsize\bfseries, minimum width=1.8cm,
+      minimum height=0.5cm, align=center},
+    vita/.style={dashed, draw=neutral!55!white, line width=0.7pt},
+    req/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=primary!70!black},
+    res/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=green-gradient-6},
+    msg/.style={mcod, above, inner sep=1.5pt}]
+  \node[att] (c) at (0,0) {client};
+  \node[att] (s) at (4.4,0) {server};
+  \node[mnota, anchor=north] at ([yshift=-1.75cm]c.south) {stato dell'applicazione};
+  \node[mnota, anchor=north] at ([yshift=-1.75cm]s.south) {stato delle risorse};
+  \draw[vita] (c.south) -- (0,-1.8);
+  \draw[vita] (s.south) -- (4.4,-1.8);
+  \draw[req] (0,-0.75) -- node[msg]{GET /todos} (4.4,-0.75);
+  \draw[res] (4.4,-1.4) -- node[msg]{rappresentazione JSON} (0,-1.4);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Formati di interscambio}
 
 I formati più usati sono \term{JSON} e \term{XML}.
 
+\begin{affianco}[0.45]
+\codicepiccolo
 \begin{lstlisting}[style=json, name=todos.json]
 {
   "todos": [
@@ -162,7 +186,8 @@ I formati più usati sono \term{JSON} e \term{XML}.
   ]
 }
 \end{lstlisting}
-
+\risultato
+\codicepiccolo
 \begin{lstlisting}[style=html, name=todos.xml]
 <?xml version="1.0" encoding="UTF-8" ?>
 <root>
@@ -172,6 +197,7 @@ I formati più usati sono \term{JSON} e \term{XML}.
   </todos>
 </root>
 \end{lstlisting}
+\end{affianco}
 
 JSON si è affermato perché è più compatto e, soprattutto, perché in JavaScript
 si trasforma in un oggetto con una sola chiamata.
@@ -287,11 +313,29 @@ Uno schema molto diffuso è basato sui \term{token}:
   composta da \textbf{tre parti} separate da un punto:
   \code{Header.Payload.Signature}.}
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=plain, name=Un token JWT]
 eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
 .eyJuYW1lIjoibHVpZ2kiLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE2NzAzOTg0MzJ9
 .fopBYrax8wcB7rnPjCcOMc62IT2lJdvyOdyixMWMZAQ
 \end{lstlisting}
+\risultato
+\begin{immagine}[Le tre parti, decodificate: solo la firma\\
+                 richiede la chiave segreta.]
+\begin{tikzpicture}[
+    p/.style={rounded corners=2pt, line width=0.7pt, font=\FiraCodeNL\scriptsize,
+      inner sep=3pt, minimum width=1.4cm, anchor=west},
+    d/.style={mcod, anchor=west, align=left}]
+  \node[p, draw=red-gradient-6, fill=red-gradient-1!40!white] (h) at (0,0) {Header};
+  \node[d] at (1.7,0) {\{"alg": "HS256", "typ": "JWT"\}};
+  \node[p, draw=accent!60!black, fill=accent!14!white] (y) at (0,-0.75) {Payload};
+  \node[d] at (1.7,-0.75) {\{"name": "luigi", "role": "admin",\\ \ "exp": 1670398432\}};
+  \node[p, draw=primary!60!black, fill=primary!12!white] (s) at (0,-1.6) {Signature};
+  \node[d] at (1.7,-1.6) {HMACSHA256(\ldots, secret\_key)};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \textbf{Header.} Contiene informazioni sul tipo di token e sulla funzione di
 hash usata per firmarlo, in formato JSON, codificate in Base64Url.
@@ -325,12 +369,31 @@ alla concatenazione di:
   \item una \textbf{chiave segreta} nota solo al server che emette il token.
 \end{itemize}
 
+\begin{affianco}[0.62][c]
+\codicepiccolo
 \begin{lstlisting}[style=js]
 HMACSHA256(
   base64UrlEncode(header) + "." + base64UrlEncode(payload),
   secret_key
 )
 \end{lstlisting}
+\risultato
+\begin{immagine}[Senza la chiave non si può ricalcolare la firma\\
+                 di un payload modificato.]
+\begin{tikzpicture}[
+    b/.style={rounded corners=2pt, line width=0.7pt, font=\FiraCodeNL\scriptsize,
+      inner sep=3pt},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[b, draw=red-gradient-6, fill=red-gradient-1!40!white] (h) at (0,0.6) {header};
+  \node[b, draw=accent!60!black, fill=accent!14!white] (p) at (0,0) {payload};
+  \node[b, draw=neutral!50!black, fill=neutral!10!white] (k) at (0,-0.6) {secret\_key};
+  \node[b, draw=neutral!60!black, fill=white, font=\Lato\scriptsize\bfseries] (f) at (2.0,0) {HMAC};
+  \node[b, draw=primary!60!black, fill=primary!12!white] (s) at (3.8,0) {signature};
+  \foreach \n in {h,p,k} \draw[a] (\n.east) -- (f.west);
+  \draw[a] (f) -- (s);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Funzioni di hash crittografiche}
 
@@ -351,7 +414,7 @@ Le funzioni di hash crittografiche sicure hanno due proprietà interessanti:
 
 \begin{center}
 \renewcommand{\arraystretch}{1.4}
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.0cm}@{\hspace{0.8cm}}>{\raggedright\arraybackslash}p{8.4cm}@{}}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.0cm}@{\hspace{0.8cm}}>{\raggedright\arraybackslash}p{9.8cm}@{}}
   \textbf{Input} & \textbf{Digest SHA2-256} \\
   \code{Web Technologies}
     & {\FiraCodeNL\scriptsize 72bdf1226df1010dfb47cffaed85f5b35ae15ec9b482388691fa7a662a114113} \\
@@ -370,20 +433,35 @@ Express.
 
 \subsection{Configurazione}
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=index.js]
 const app = express();
 const PORT = 3000;
 
 app.use(morgan('dev'));    // log delle richieste
-app.use(cors());           // l'API sara' accessibile da qualunque origine
+app.use(cors());           // accessibile da ogni origine
 app.use(express.json());   // analizza i corpi JSON
 \end{lstlisting}
+\risultato
+\begin{immagine}[Niente sessioni né template: l'API parla JSON.]
+\begin{tikzpicture}[
+    m/.style={rounded corners=2pt, draw=primary!55!black, fill=primary!8!white,
+      line width=0.6pt, font=\FiraCodeNL\scriptsize, minimum width=2.6cm,
+      minimum height=0.42cm},
+    a/.style={-{Stealth[length=3.5pt,width=3pt]}, line width=0.6pt, draw=neutral!45!black}]
+  \foreach \t [count=\i] in {morgan, cors, express.json} \node[m] (m\i) at (0,-\i*0.62) {\t};
+  \node[m, fill=accent!12!white, draw=accent!55!black] (r) at (0,-2.5) {router};
+  \draw[a] (m1) -- (m2); \draw[a] (m2) -- (m3); \draw[a] (m3) -- (r);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Si noti che sparisce \code{express.urlencoded} (non ci sono più form) e compare
 \code{express.json}. Su \code{cors()} torneremo nel capitolo sulla sicurezza.
 
 \subsection{Gestione degli errori}
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=index.js]
 app.use((err, req, res, next) => {
   console.log(err.stack);
@@ -393,6 +471,15 @@ app.use((err, req, res, next) => {
   });
 });
 \end{lstlisting}
+\risultato
+\begin{lstlisting}[style=http, name=Risposta d'errore]
+HTTP/1.1 404 Not Found
+Content-Type: application/json
+
+{"code": 404,
+ "description": "Todo non trovato"}
+\end{lstlisting}
+\end{affianco}
 
 La differenza rispetto alla web app tradizionale è tutta nell'ultima riga:
 \code{res.json()} al posto di \code{res.render()}. Anche gli errori devono
@@ -400,6 +487,8 @@ essere leggibili da un programma.
 
 \subsection{Autenticazione}
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=routes/authenticationRouter.js]
 authenticationRouter.post("/auth", async (req, res) => {
   let isAuthenticated = await AuthController.checkCredentials(req, res);
@@ -420,7 +509,28 @@ authenticationRouter.post("/signup", (req, res, next) => {
   })
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}[Il token ottenuto al login accompagna\\ ogni richiesta successiva.]
+\begin{tikzpicture}[    att/.style={rounded corners=3pt, draw=primary!65!black, fill=primary!12!white,
+      line width=0.7pt, font=\Lato\scriptsize\bfseries, minimum width=1.8cm,
+      minimum height=0.5cm, align=center},
+    vita/.style={dashed, draw=neutral!55!white, line width=0.7pt},
+    req/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=primary!70!black},
+    res/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=green-gradient-6},
+    msg/.style={mcod, above, inner sep=1.5pt}]
+  \node[att] (c) at (0,0) {client};
+  \node[att] (s) at (4.0,0) {API};
+  \draw[vita] (c.south) -- (0,-3.0);
+  \draw[vita] (s.south) -- (4.0,-3.0);
+  \draw[req] (0,-0.75) -- node[msg]{POST /auth \{usr, pwd\}} (4.0,-0.75);
+  \draw[res] (4.0,-1.4) -- node[msg]{200 "eyJhbGci\ldots"} (0,-1.4);
+  \draw[req] (0,-2.1) -- node[msg]{GET /todos} node[mcod, below, font=\FiraCodeNL\tiny]{Authorization: Bearer eyJ\ldots} (4.0,-2.1);
+  \draw[res] (4.0,-2.85) -- node[msg]{200 [ \ldots ]} (0,-2.85);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
+\begin{affianco}[0.6][c]
 \begin{lstlisting}[style=js, name=controllers/AuthController.js]
 import Jwt from "jsonwebtoken";
 
@@ -434,12 +544,28 @@ static isTokenValid(token, callback) {
   Jwt.verify(token, process.env.TOKEN_SECRET, callback);
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{sign} produce il token, \code{verify} lo controlla.]
+\begin{tikzpicture}[
+    b/.style={rounded corners=2pt, line width=0.7pt, font=\FiraCodeNL\scriptsize, inner sep=3pt},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[b, draw=accent!60!black, fill=accent!12!white] (p) at (0,0) {\{ user: "luigi" \}};
+  \node[b, draw=primary!60!black, fill=primary!10!white] (t) at (3.5,0) {token};
+  \draw[a] (p) -- node[mcod, above]{sign} (t);
+  \node[b, draw=green-gradient-6, fill=green-gradient-1!45!white] (ok) at (3.5,-1.3) {decodedToken};
+  \draw[a] (t) -- node[mcod, right]{verify} (ok);
+  \node[mnota, anchor=north] at (ok.south) {oppure \code{err} se scaduto o alterato};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 La chiave segreta viene letta da \code{process.env}, cioè dal file \code{.env}
 non versionato di cui abbiamo parlato nel capitolo precedente.
 
 \subsection{Middleware di autenticazione}
 
+\begin{affianco}[0.58][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=middleware/auth.js]
 export function enforceAuthentication(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -460,6 +586,25 @@ export function enforceAuthentication(req, res, next) {
   });
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[    dec/.style={diamond, aspect=2.4, draw=primary!60!black, fill=primary!8!white,
+      line width=0.7pt, font=\Lato\scriptsize, inner sep=1pt, align=center},
+    esito/.style={rounded corners=3pt, draw=neutral!50!black, fill=white, line width=0.7pt,
+      font=\FiraCodeNL\scriptsize, inner sep=3pt, align=center},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[dec] (q1) at (0,0) {c'è il\\ token?};
+  \node[dec] (q2) at (0,-1.7) {è valido?};
+  \node[esito, draw=merr, text=merr] (e1) at (2.4,0) {401};
+  \node[esito, draw=merr, text=merr] (e2) at (2.4,-1.7) {401};
+  \node[esito, draw=mok] (ok) at (0,-3.2) {req.username = \ldots\\ next()};
+  \draw[a] (q1) -- node[mnota, above]{no} (e1);
+  \draw[a] (q2) -- node[mnota, above]{no} (e2);
+  \draw[a] (q1) -- node[mnota, right]{sì} (q2);
+  \draw[a] (q2) -- node[mnota, right]{sì} (ok);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Autorizzazione}
 
@@ -470,6 +615,8 @@ richiesta \code{DELETE} per un elemento che non gli appartiene?
 Non basta verificare \textit{chi} è l'utente: bisogna verificare anche che abbia
 il \textbf{permesso} di interagire con quella risorsa.
 
+\begin{affianco}[0.62][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=middleware/authz.js]
 export async function ensureUsersModifyOnlyOwnTodos(req, res, next) {
   const user   = req.username;
@@ -487,7 +634,24 @@ export async function ensureUsersModifyOnlyOwnTodos(req, res, next) {
   }
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[    dec/.style={diamond, aspect=2.4, draw=primary!60!black, fill=primary!8!white,
+      line width=0.7pt, font=\Lato\scriptsize, inner sep=1pt, align=center},
+    esito/.style={rounded corners=3pt, draw=neutral!50!black, fill=white, line width=0.7pt,
+      font=\FiraCodeNL\scriptsize, inner sep=3pt, align=center},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[dec] (q) at (0,0) {il todo è\\ dell'utente?};
+  \node[esito, draw=mok] (ok) at (0,-1.6) {next()};
+  \node[esito, draw=merr, text=merr] (no) at (2.4,0) {403};
+  \draw[a] (q) -- node[mnota, right]{sì} (ok);
+  \draw[a] (q) -- node[mnota, above]{no} (no);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
+\begin{affianco}[0.62][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=routes/todoRouter.js]
 todoRouter.get("/todos/:id", ensureUsersModifyOnlyOwnTodos, (req, res, next) => {
   TodoController.findById(req).then((item) => {
@@ -500,6 +664,26 @@ todoRouter.get("/todos/:id", ensureUsersModifyOnlyOwnTodos, (req, res, next) => 
   })
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}[Una richiesta attraversa tre controlli\\ prima di arrivare ai dati.]
+\begin{tikzpicture}[
+    m/.style={rounded corners=2pt, draw=primary!55!black, fill=primary!8!white,
+      line width=0.6pt, font=\FiraCodeNL\scriptsize, minimum width=3.5cm,
+      minimum height=0.42cm},
+    a/.style={-{Stealth[length=3.5pt,width=3pt]}, line width=0.6pt, draw=neutral!45!black},
+    errx/.style={mcod, anchor=west, text=merr}]
+  \node[mcod] (r) at (0,0) {GET /todos/7};
+  \node[m] (m1) at (0,-0.7) {enforceAuthentication};
+  \node[m] (m2) at (0,-1.4) {ensureUsersModify\ldots};
+  \node[m, fill=accent!12!white, draw=accent!55!black] (m3) at (0,-2.1) {findById};
+  \node[mcod, text=mok] (ok) at (0,-2.8) {200 \{ \ldots \}};
+  \draw[a] (r) -- (m1); \draw[a] (m1) -- (m2); \draw[a] (m2) -- (m3); \draw[a] (m3) -- (ok);
+  \node[errx] at ([xshift=4pt]m1.east) {401};
+  \node[errx] at ([xshift=4pt]m2.east) {403};
+  \node[errx] at ([xshift=4pt]m3.east) {404};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \info{401 contro 403}{
   Sono due cose diverse e vanno usate con precisione. \code{401 Unauthorized}
@@ -547,6 +731,7 @@ Gli endpoint si chiamano \term{path}. Per ciascuno si specificano i metodi
 supportati e, per ciascun metodo, i parametri di ingresso attesi, l'eventuale
 corpo della richiesta e le possibili risposte.
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=plain, name=openapi.yaml]
 /auth:
   post:
@@ -571,6 +756,26 @@ corpo della richiesta e le possibili risposte.
       401:
         description: Invalid credentials
 \end{lstlisting}
+\risultato
+\begin{immagine}[Come la stessa specifica appare in Swagger UI.]
+\begin{tikzpicture}[
+    bar/.style={rounded corners=3pt, draw=green-gradient-6, fill=green-gradient-1!35!white,
+      line width=0.7pt, minimum width=6.0cm, minimum height=0.6cm, anchor=north west},
+    verb/.style={rounded corners=2pt, fill=green-gradient-6, text=white,
+      font=\Lato\scriptsize\bfseries, inner sep=3pt},
+    r/.style={font=\FiraCodeNL\scriptsize, anchor=west}]
+  \node[bar] (b) at (0,0) {};
+  \node[verb, anchor=west] (v) at ([xshift=4pt]b.west) {POST};
+  \node[r] at ([xshift=4pt]v.east) {/auth};
+  \node[mnota, anchor=east] at ([xshift=-4pt]b.east) {Authenticate user};
+  \node[mnota, anchor=north west, font=\Lato\scriptsize\bfseries] at (0.1,-0.75) {Request body \textcolor{merr}{* required}};
+  \node[r, anchor=north west] at (0.1,-1.15) {\{ "usr": "Kyle", "pwd": "p4ssw0rd" \}};
+  \node[mnota, anchor=north west, font=\Lato\scriptsize\bfseries] at (0.1,-1.65) {Responses};
+  \node[r, anchor=north west] at (0.1,-2.05) {200 \quad User authenticated};
+  \node[r, anchor=north west] at (0.1,-2.45) {401 \quad Invalid credentials};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{A che cosa serve una specifica}
 
@@ -619,6 +824,8 @@ npm install swagger-jsdoc
 npm install swagger-ui-express
 \end{lstlisting}
 
+\begin{affianco}[0.58][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=index.js]
 const swaggerSpec = swaggerJSDoc({
   definition: {
@@ -634,6 +841,19 @@ const swaggerSpec = swaggerJSDoc({
 // Swagger UI sara' disponibile su /api-docs
 app.use('/api-docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 \end{lstlisting}
+\risultato
+\begin{browser}[localhost:3000/api-docs]
+  {\Lato\bfseries\Large To-do List REST API}\ {\Lato\scriptsize\colorbox{neutral!30!white}{1.0.0}}\\[6pt]
+  \begin{tikzpicture}
+    \node[rounded corners=3pt, draw=green-gradient-6, fill=green-gradient-1!35!white,
+          line width=0.7pt, minimum width=5.4cm, minimum height=0.55cm] (b) at (0,0) {};
+    \node[rounded corners=2pt, fill=green-gradient-6, text=white,
+          font=\Lato\scriptsize\bfseries, inner sep=3pt, anchor=west] (v) at ([xshift=4pt]b.west) {POST};
+    \node[font=\FiraCodeNL\scriptsize, anchor=west] at ([xshift=4pt]v.east) {/auth};
+  \end{tikzpicture}
+\end{browser}
+\wtnota{La documentazione interattiva generata\\ dalle annotazioni nei router.}
+\end{affianco}
 
 \begin{lstlisting}[style=js, name=routes/authenticationRouter.js]
 /**
