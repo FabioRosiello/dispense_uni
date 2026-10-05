@@ -994,12 +994,33 @@
 % \wtcap{n}: il blocco n apre un capitolo, quindi il blocco n-1 chiude il
 % precedente e la sua "fine" viene registrata nella pagina del nuovo capitolo
 \newcommand{\wtcap}[1]{\expandafter\gdef\csname wtcap@#1\endcsname{}}
+% \wtsegue{n}: il blocco n contiene solo il titolo di una sezione, seguito
+% subito da una sottosezione. Il titolo deve allora viaggiare insieme al blocco
+% successivo: altrimenti, se la sottosezione passa alla pagina dopo, il titolo
+% della sezione resta da solo in fondo alla pagina.
+\newcommand{\wtsegue}[1]{\expandafter\gdef\csname wtsegue@#1\endcsname{}}
 \newcommand{\wtspazio}[1]{%
   \begingroup
   \edef\wtn{\the\numexpr\wtblocco+1\relax}%
   \edef\wtps{\zref@extractdefault{wtb\wtn s}{abspage}{0}}%
   \edef\wtpe{\zref@extractdefault{wtb\wtn e}{abspage}{0}}%
   \wtaltezza=#1\relax
+  \ifcsname wtsegue@\wtn\endcsname
+    % solo un titolo: serve lo spazio del blocco che lo segue, piu' il titolo
+    \edef\wtm{\the\numexpr\wtn+1\relax}%
+    \edef\wtqs{\zref@extractdefault{wtb\wtm s}{abspage}{0}}%
+    \edef\wtqe{\zref@extractdefault{wtb\wtm e}{abspage}{0}}%
+    \ifnum\wtqs>\z@
+      \ifnum\wtqe=\wtqs
+        \wtaltezza=\dimexpr\zposy{wtb\wtm s}sp-\zposy{wtb\wtm e}sp
+                   +4\baselineskip\relax
+      \else\ifcsname wtmem@\wtm\endcsname
+        \ifdim\csname wtmem@\wtm\endcsname<\maxdimen
+          \wtaltezza=\dimexpr\csname wtmem@\wtm\endcsname+4\baselineskip\relax
+        \fi
+      \fi\fi
+    \fi
+  \else
   \ifnum\wtps>\z@
     \ifnum\wtpe=\wtps
       % tutto in una pagina: altezza esatta, da ricordare
@@ -1030,6 +1051,7 @@
       \fi\fi\fi\fi
     \fi\fi
   \fi
+  \fi
   \ifdim\wtaltezza=\maxdimen
     \par\newpage
   \else
@@ -1043,6 +1065,8 @@
 \AtBeginDocument{\wttesta=\dimexpr\paperheight-\topmargin-1in-\headheight-\headsep-40pt\relax}
 \AddToHook{cmd/chapter/before}{\wtfineblocco\wtiniziablocco\immediate\write\@auxout{\string\wtcap{\the\wtblocco}}}
 \AddToHook{cmd/section/before}{\wtfineblocco\wtspazio{22\baselineskip}\wtiniziablocco}
-\AddToHook{cmd/subsection/before}{\wtfineblocco\wtspazio{8\baselineskip}\wtiniziablocco}
+\AddToHook{cmd/subsection/before}{\wtfineblocco
+  \if@nobreak\immediate\write\@auxout{\string\wtsegue{\the\wtblocco}}\fi
+  \wtspazio{8\baselineskip}\wtiniziablocco}
 \AddToHook{enddocument}{\wtfineblocco}
 \makeatother
