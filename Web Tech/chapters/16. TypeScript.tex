@@ -5,6 +5,7 @@ JavaScript ha un sistema di tipi peculiare, che abbiamo imparato ad
 
 È \term{tipizzato dinamicamente}:
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js]
 let x;
 console.log(typeof(x));   // undefined
@@ -13,15 +14,46 @@ console.log(typeof(x));   // number
 x = "Hello Web Technologies!";
 console.log(typeof(x));   // string
 \end{lstlisting}
+\risultato
+\begin{immagine}[La stessa variabile cambia tipo nel tempo.]
+\begin{tikzpicture}[
+    t/.style={rounded corners=2pt, draw=primary!60!black, fill=primary!12!white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, minimum width=1.7cm, minimum height=0.5cm},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[t] (a) at (0,0) {undefined};
+  \node[t] (b) at (2.3,0) {number};
+  \node[t] (c) at (4.6,0) {string};
+  \draw[a] (a) -- (b); \draw[a] (b) -- (c);
+  \node[mnota, anchor=north] at (a.south) {\code{let x}};
+  \node[mnota, anchor=north] at (b.south) {\code{x = 1.25e7}};
+  \node[mnota, anchor=north] at (c.south) {\code{x = "Hello\ldots"}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Ed è anche \term{tipizzato debolmente}, con una spiccata predilezione per le
 conversioni implicite:
 
+\begin{affianco}[0.6][c]
 \begin{lstlisting}[style=js]
 let y = "100" - 1 + "42";
 // string - number -> number, poi number + string -> string
 console.log(`${y}: ${typeof(y)}`);   // 9942: string
 \end{lstlisting}
+\risultato
+\begin{immagine}[Due conversioni implicite in una riga.]
+\begin{tikzpicture}[
+    v/.style={mcod},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black},
+    l/.style={mnota, above, text=accent!70!black}]
+  \node[v] (a) at (0,0) {"100" - 1};
+  \node[v] (b) at (2.2,0) {99 + "42"};
+  \node[v] (c) at (4.3,0) {"9942"};
+  \draw[a] (a) -- node[l]{\(-\) numerico} (b);
+  \draw[a] (b) -- node[l]{\(+\) concatena} (c);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \section{Il problema}
 
@@ -39,6 +71,8 @@ Man mano che la complessità dei programmi cresce, però:
 \end{itemize}
 
 \begin{esempio}{Bug che si scoprono solo a runtime}
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=bugs.js]
 let message = "Hello Web Technologies!";
 console.log(message.toLowerCase());   // hello web technologies!
@@ -51,6 +85,15 @@ console.log(employee.name);                  // Jordan Belfort
 let team = ["Jordan Belfort", "Donnie Azoff", "Chester Ming"];
 team.add("Nicky Koskoff");   // TypeError: team.add is not a function
 \end{lstlisting}
+\risultato
+\begin{console}
+hello web technologies!
+Uncaught TypeError: message is
+  not a function
+\end{console}
+\wtnota{L'esecuzione si ferma al primo errore;\\
+        il refuso \code{nome} non ne produce affatto.}
+\end{affianco}
 
 Il secondo caso è il più insidioso: un refuso in un nome di proprietà
 (\code{nome} invece di \code{name}) non produce \textbf{alcun} errore. Sarebbe
@@ -109,6 +152,7 @@ Il comando rende disponibile globalmente il compilatore \code{tsc}. I file
 TypeScript hanno tipicamente estensione \code{.ts}.
 
 \begin{esempio}{Il compilatore trova un bug nel JavaScript puro}
+\begin{affianco}[0.48]
 \begin{lstlisting}[style=ts, name=hello.ts]
 function greet(entity, date) {
   console.log(`Hello ${entity}, today is ${date}!`);
@@ -116,31 +160,28 @@ function greet(entity, date) {
 
 greet("Web Technologies");
 \end{lstlisting}
-
-Eseguito con Node, il file funziona (è JavaScript valido) ma stampa un risultato
-sbagliato:
-
+\risultato
 \begin{console}[Terminale]
 $ node hello.ts
 Hello Web Technologies, today is undefined!
 \end{console}
-
-Provando invece a compilarlo:
-
 \begin{console}[Terminale]
 $ tsc hello.ts
-hello.ts:6:1 - error TS2554: Expected 2 arguments, but got 1.
+hello.ts:5:1 - error TS2554:
+  Expected 2 arguments, but got 1.
 
-6 greet("Web Technologies");
+5 greet("Web Technologies");
   ~~~~~~~~~~~~~~~~~~~~~~~~~
-
-  hello.ts:2:24
-    2 function greet(entity, date) {
-                             ~~~~
-    An argument for 'date' was not provided.
-
-Found 1 error in hello.ts:6
+  hello.ts:1:24
+    An argument for 'date' was
+    not provided.
 \end{console}
+\end{affianco}
+
+A destra le due prove: eseguito con Node, il file funziona (è JavaScript
+valido) ma stampa un risultato sbagliato; compilato con \code{tsc}, l'errore
+viene segnalato prima dell'esecuzione.
+
 
 Il compilatore ha individuato il bug \textbf{pur avendo scritto soltanto
 JavaScript standard}, senza una sola annotazione di tipo.
@@ -152,16 +193,21 @@ Corretto il bug e compilato il file, \code{tsc} produce un \code{hello.js}
 eseguibile con Node. Il codice generato conserva commenti e indentazione, e
 sembra scritto da una persona. Un dettaglio però cambia:
 
+\begin{affianco}[0.42]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=hello.ts]
 console.log(`Hello ${entity}, today is ${date}!`);
 \end{lstlisting}
-
+\risultato
+\codicepiccolo
 \begin{lstlisting}[style=js, name=hello.js]
 console.log("Hello ".concat(entity, ", today is ").concat(date, "!"));
 \end{lstlisting}
+\end{affianco}
 
 I template literal sono una funzionalità di ES6 e, per impostazione predefinita,
-TypeScript ha come bersaglio ES3 (del 1999). TypeScript sa \textbf{riscrivere}
+TypeScript ha come bersaglio ES5 (del 2009; nelle versioni precedenti alla 5.0
+era addirittura ES3, del 1999). TypeScript sa \textbf{riscrivere}
 il codice da versioni più recenti a versioni più vecchie: è il
 \term{downleveling}. Possiamo usare le funzionalità moderne e far girare il
 risultato anche su browser antichi.
@@ -186,15 +232,18 @@ let isGreat: boolean = true;
 A questo punto il file \textbf{non è più JavaScript valido}: eseguirlo
 direttamente con Node produce un \code{SyntaxError}. Va compilato prima.
 
+\begin{affianco}[0.47][c]
 \begin{lstlisting}[style=ts]
-credits = "9 CFU";   // in JavaScript puro sarebbe legittimo
+credits = "9 CFU";   // in JavaScript sarebbe lecito
 \end{lstlisting}
-
+\risultato
 \begin{console}[Terminale]
 $ tsc primitive_types.ts
-primitive_types.ts:5:1 - error TS2322: Type 'string' is not assignable to
-type 'number'.
+primitive_types.ts:5:1 - error TS2322:
+  Type 'string' is not assignable to
+  type 'number'.
 \end{console}
+\end{affianco}
 
 \subsection{Array}
 
@@ -248,6 +297,8 @@ console.log(greet(42));
 Quando non si fornisce un'annotazione esplicita, TypeScript prova a
 \textbf{dedurre} il tipo dal contesto.
 
+\begin{affianco}[0.62][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts]
 function greet(name) {         // function greet(name: any): string
   return `Hello ${name}`;
@@ -260,6 +311,17 @@ course = { name: "Web Technologies", credits: 6 };
 // TS2322: Type '{name: string; credits: number;}' is not assignable
 // to type 'string'
 \end{lstlisting}
+\risultato
+\begin{immagine}[Ciò che mostra l'editor passando sopra\\ ai nomi: i tipi dedotti.]
+\begin{tikzpicture}[
+    tip/.style={fill=consolebg, text=consolefg, rounded corners=2pt,
+      font=\FiraCodeNL\scriptsize, inner sep=3pt, anchor=west}]
+  \node[tip] at (0,0)    {function greet(name: any): string};
+  \node[tip] at (0,-0.6) {let arr: number[]};
+  \node[tip] at (0,-1.2) {let course: string};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Quando non si specifica un tipo e TypeScript non riesce a dedurlo, il
 compilatore ripiega di norma su \code{any}. Il flag \code{noImplicitAny}
@@ -275,6 +337,8 @@ implicit_any.ts:3:16 - error TS7006: Parameter 'name' implicitly has an
 
 Un tipo oggetto si definisce elencando le sue proprietà e i loro tipi.
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=object_types.ts]
 function printCourse(course: { name: string, credits: number }) {
   console.log(`Course name: ${course.name}`);
@@ -284,11 +348,26 @@ function printCourse(course: { name: string, credits: number }) {
 printCourse({ name: "Web Technologies", credits: 6 });   // ok
 
 printCourse({ name: "Software Engineering" });
-// TS2453: Property 'credits' is missing
+// TS2345: Property 'credits' is missing
 
 printCourse({ name: "Algebra", credits: 6, year: "First" });
 // TS2353: Object literal may only specify known properties
 \end{lstlisting}
+\risultato
+\begin{immagine}[L'oggetto deve avere esattamente la forma attesa.]
+\begin{tikzpicture}[
+    f/.style={rounded corners=2pt, draw=neutral!55!black, fill=white, line width=0.6pt,
+      font=\FiraCodeNL\scriptsize, inner sep=3pt, anchor=west}]
+  \node[f, draw=primary!60!black, fill=primary!10!white] (t) at (0,0) {\{ name: string, credits: number \}};
+  \node[mnota, anchor=south west] at (t.north west) {atteso};
+  \node[f] (a) at (0,-0.75) {\{ name, credits \}};   \node[anchor=west] at ([xshift=3pt]a.east) {\mok};
+  \node[f] (b) at (0,-1.35) {\{ name \}};            \node[anchor=west] (bx) at ([xshift=3pt]b.east) {\merr};
+  \node[mnota, anchor=west] at (bx.east) {manca \code{credits}};
+  \node[f] (c) at (0,-1.95) {\{ name, credits, year \}}; \node[anchor=west] (cx) at ([xshift=3pt]c.east) {\merr};
+  \node[mnota, anchor=west] at (cx.east) {\code{year} in più};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Una proprietà si può dichiarare \textbf{opzionale} aggiungendo un \code{?} dopo
 il nome.
@@ -333,6 +412,8 @@ In questi casi bisogna \term{restringere} il tipo con controlli espliciti (per
 esempio \code{typeof} o \code{Array.isArray()}); TypeScript sa dedurre tipi
 specifici nei singoli rami.
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts]
 function printError(code: number | string) {
   if (typeof code === "string") {
@@ -342,12 +423,29 @@ function printError(code: number | string) {
   }
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Dentro ogni ramo il tipo è più preciso.]
+\begin{tikzpicture}[
+    t/.style={rounded corners=2pt, draw=primary!60!black, fill=primary!10!white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, inner sep=3pt},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[t] (u) at (0,0) {code: number | string};
+  \node[t, fill=green-gradient-1!45!white, draw=green-gradient-6] (s) at (-1.3,-1.4) {code: string};
+  \node[t, fill=accent!12!white, draw=accent!55!black] (n) at (1.4,-1.4) {code: number};
+  \draw[a] (u) -- node[mnota, left, align=right]{\code{typeof}\\ \code{=== "string"}} (s);
+  \draw[a] (u) -- node[mnota, right]{altrimenti} (n);
+  \node[mnota, anchor=north] at (s.south) {\code{toUpperCase()} \mok};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \section{Alias di tipo e interfacce}
 
 Volendo riusare lo stesso tipo più volte, si può assegnargli un nome con la
 parola chiave \code{type}.
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=aliases.ts]
 type Credits = number | string;
 
@@ -363,6 +461,17 @@ function printCourse(course: Course) {
 let webtech: Course = { name: "Web Technologies", credits: 6 };
 let softeng: Course = { name: "Software Engineering", credits: "10 CFU" };
 \end{lstlisting}
+\risultato
+\begin{immagine}[Un alias può comporre altri alias.]
+\begin{tikzpicture}[    f/.style={rounded corners=2pt, draw=primary!60!black, fill=primary!8!white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, inner sep=3pt, align=left},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[f] (c) at (0,0) {type Course\\ \ \ name: string\\ \ \ credits: \textcolor{accent!70!black}{Credits}};
+  \node[f, fill=accent!12!white, draw=accent!55!black] (k) at (3.3,-0.35) {type Credits\\ \ \ number | string};
+  \draw[a] ([yshift=-0.35cm]c.east) -- (k.west);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Le \term{interfacce} sono un altro modo di dare un nome ai tipi oggetto.
 
@@ -385,6 +494,7 @@ function printCourse(course: Course) {
   capacità, non ai \textbf{nomi}. Java, al contrario, ha un sistema di tipi
   \textit{nominativo}.}
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=ts, name=structural.ts]
 interface Person { name: string; age: number; }
 interface Pet    { name: string; age: number; }
@@ -399,12 +509,25 @@ let pet: Pet       = { name: "Chuck", age: 3 };
 printPerson(person);   // Name: Janet, age: 20
 printPerson(pet);      // Name: Chuck, age: 3   (!)
 \end{lstlisting}
+\risultato
+\begin{immagine}[Stessa forma, quindi stesso tipo:\\ i nomi non contano.]
+\begin{tikzpicture}[    f/.style={rounded corners=2pt, draw=primary!60!black, fill=primary!8!white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, inner sep=3pt, align=left},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[f] (p) at (0,0) {Person\\ \ \ name: string\\ \ \ age: number};
+  \node[f, fill=accent!12!white, draw=accent!55!black] (q) at (3.0,0) {Pet\\ \ \ name: string\\ \ \ age: number};
+  \node at (1.5,0) {\Large =};
+  \node[mnota, anchor=north] at (1.5,-0.8) {TypeScript \mok\quad Java \merr};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Un \code{Pet} viene accettato dove è atteso un \code{Person} perché ne ha la
 stessa forma. In Java sarebbe un errore di compilazione.
 
 \subsection{Estendere interfacce e tipi}
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=ts]
 interface Pet {
   name: string
@@ -416,8 +539,23 @@ interface Bird extends Pet {
 
 let chuck: Bird = { name: "Chuck", flies: true };
 let quentin: Bird = { flies: false };
-// TS2322: Property 'name' is missing
+// TS2741: Property 'name' is missing
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{Bird} ha tutto ciò che ha \code{Pet}, più \code{flies}.]
+\begin{tikzpicture}[
+    r/.style={draw=primary!60!black, fill=primary!8!white, line width=0.7pt,
+      font=\FiraCodeNL\scriptsize, minimum width=2.6cm, minimum height=0.45cm},
+    n/.style={r, fill=accent!12!white, draw=accent!55!black}]
+  \node[r] (n1) at (0,0) {name: string};
+  \node[n, anchor=north] (n2) at ([yshift=0.7pt]n1.south) {flies: boolean};
+  \draw[wtbrace] ([xshift=-3pt]n1.north west) -- ([xshift=-3pt]n1.south west)
+    node[midway, left=4pt, mnota]{Pet};
+  \draw[wtbrace, decoration={mirror=false}] ([xshift=3pt]n1.north east) -- ([xshift=3pt]n2.south east)
+    node[midway, right=4pt, mnota]{Bird};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Alias di tipo e interfacce sono molto simili e spesso intercambiabili. Una
 distinzione chiave: i \code{type} \textbf{non possono essere riaperti} per
@@ -488,6 +626,7 @@ alignment = "centre";
 Le \term{enumerazioni} permettono di definire un insieme di costanti con un
 nome.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=ts, name=enums.ts]
 interface Order { isPremium: boolean }
 
@@ -505,6 +644,14 @@ function computePriority(s: Order): Priority {
 
 console.log(Priority.Medium);   // 1
 \end{lstlisting}
+\risultato
+\begin{immagine}[Senza valori espliciti, le costanti\\ sono numerate da 0.]
+\begin{tikzpicture}
+  \mchiave{1.4cm}
+  \oggetto{e}{(0,0)}{2.4cm}{enum Priority}{Low/0, Medium/1, High/2}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \section{Tipi funzione}
 
@@ -519,6 +666,8 @@ fn = () => { return "Hello Web Tech" };       // ok
 fn = (x: string) => { return `Hello ${x}` };  // errore di tipo
 \end{lstlisting}
 
+\begin{affianco}[0.62][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=function_types.ts]
 enum Case { Uppercase, Lowercase }
 
@@ -535,6 +684,12 @@ function stringDecorator(x: string, mode: Case) {
 
 console.log(GREET("Web Technologies", stringDecorator));
 \end{lstlisting}
+\risultato
+\begin{console}
+>>> HELLO WEB TECHNOLOGIES <<<
+\end{console}
+\wtnota{\code{GREET} chiama la callback\\ con \code{Case.Uppercase}.}
+\end{affianco}
 
 \section{Generici}
 
@@ -563,18 +718,36 @@ solo con le stringhe.
 TypeScript permette di definire \term{variabili di tipo}, dichiarate dopo il
 nome della funzione fra \code{<} e \code{>}.
 
+\begin{affianco}[0.55][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=generics.ts]
 function identity<Type>(x: Type): Type {
   return x;
 }
 
-let s: string = identity<string>("Hello");   // Type impostato esplicitamente
+let s: string = identity<string>("Hello");   // Type esplicito
 let n: number = identity(42);                // dedotto automaticamente
 let o: { title: string, artist: string } = identity({
   title: "Sultans of swing",
   artist: "Dire Straits"
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}[Il tipo in uscita è quello in ingresso.]
+\begin{tikzpicture}[
+    t/.style={rounded corners=2pt, draw=primary!60!black, fill=primary!10!white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, inner sep=3pt},
+    fn/.style={mfun},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \foreach \t/\y in {string/0, number/-0.7, {\{ title, artist \}}/-1.4} {
+    \node[t, anchor=east] (i) at (-0.1,\y) {\t};
+    \node[t, anchor=west] (o) at (2.5,\y) {\t};
+    \draw[a] (i.east) -- (0.35,\y); \draw[a] (2.05,\y) -- (o.west);
+  }
+  \node[fn, minimum height=2.0cm, minimum width=1.6cm] at (1.2,-0.7) {identity};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Non è la stessa cosa di usare \code{any}: qui l'informazione sul tipo di
 ingresso viene \textbf{preservata}.
@@ -622,6 +795,7 @@ console.log(c.getRandomElement());
 
 \subsection{Vincoli sui generici}
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=ts, name=constraints.ts]
 class Animal { species: string; }
 class Bird extends Animal  { canFly: boolean; }
@@ -634,6 +808,22 @@ function animalInfo<T extends Animal>(animal: T): void {
 animalInfo(new Bird());              // ok
 animalInfo({ species: "Spider" });   // ok anche questo (!)
 \end{lstlisting}
+\risultato
+\begin{immagine}[Basta avere \code{species}: per la tipizzazione\\
+                 strutturale anche l'oggetto letterale è un \code{Animal}.]
+\begin{tikzpicture}[
+    c/.style={rounded corners=2pt, draw=primary!60!black, fill=primary!8!white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, inner sep=3pt},
+    a/.style={-{Stealth[length=5pt,width=4pt,open]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[c] (an) at (1.4,0) {Animal\\[-1pt] \scriptsize species};
+  \node[c] (b) at (0,-1.4) {Bird};
+  \node[c] (s) at (1.4,-1.4) {Snake};
+  \node[c, dashed, fill=white] (l) at (3.1,-1.4) {\{ species \}};
+  \draw[a] (b) -- (an); \draw[a] (s) -- (an);
+  \draw[a, dashed] (l) -- (an);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 L'ultima riga funziona per via della tipizzazione strutturale: l'oggetto
 letterale ha la stessa forma di \code{Animal}, quindi soddisfa il vincolo.
@@ -702,19 +892,23 @@ miliardo di dollari\guillemotright.
 Il flag \code{strictNullChecks} impone che \code{null} e \code{undefined} siano
 gestiti in modo esplicito.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=ts, name=strict.ts]
 let character = x.list.find((val: string) => {
   return val === "Amelie"
 });
 
-console.log(character.toUpperCase());   // character potrebbe essere undefined!
+// character potrebbe essere undefined!
+console.log(character.toUpperCase());
 \end{lstlisting}
-
+\risultato
 \begin{console}[Terminale]
 $ tsc -target es6 strict.ts
 $ tsc -target es6 -strictNullChecks strict.ts
-strict.ts:13:13 - error TS18048: 'character' is possibly 'undefined'.
+strict.ts:13:13 - error TS18048:
+  'character' is possibly 'undefined'.
 \end{console}
+\end{affianco}
 
 Senza il flag il codice compila e il bug esplode a runtime; con il flag viene
 intercettato subito. È il motivo per cui nei progetti nuovi conviene attivare
