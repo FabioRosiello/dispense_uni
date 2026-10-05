@@ -8,6 +8,11 @@ Copre **l'intero corso**: tutte le 24 lezioni, più la lezione bonus su CMS e
 GraphQL (inclusa come capitolo finale e segnalata come fuori programma).
 23 capitoli, 345 pagine.
 
+Il codice è quasi sempre accompagnato, **accanto**, da ciò che produce: il
+rendering nel browser, l'output in console o nel terminale, oppure uno schema
+(variabili e riferimenti in memoria, scope, alberi DOM, sequenze di richieste
+e risposte, diagrammi di flusso, tabelle del database).
+
 La dispensa contiene **solo i contenuti tecnici** visti a lezione, cioè quelli
 che possono essere oggetto d'esame. Le informazioni organizzative (crediti,
 calendario, modalità d'esame, esercitazioni facoltative) sono deliberatamente
@@ -22,7 +27,7 @@ escluse: restano sulle slide e sul sito del docente, dove vengono aggiornate.
 | `chapters/1. Introduzione al Web.tex` | Internet e Web, ipertesti, HTTP, URL, messaggi, status code, statelessness |
 | `chapters/2. HTML.tex` | Server HTTP, tag ed elementi, head e favicon, testo, link, tabelle, liste, riferimenti a caratteri, immagini, form, divisioni e `span`, tag semantici, DOM, DevTools (ispezione, scheda Rete, cache HTTP) |
 | `chapters/3. CSS.tex` | Regole e loro applicazione, inclusione, stile inline, selettori, combinatori, pseudo-classi (compreso `:nth-child()` senza selettore di tipo), pseudo-elementi, cascata, specificità, ereditarietà |
-| `chapters/4. Layout e Responsive Design.tex` | Unità di misura, box model (anche come lo mostrano i DevTools), display, float, positioning, Flexbox, Grid, media query, responsive design, meta viewport; ogni esempio con il risultato accanto al codice |
+| `chapters/4. Layout e Responsive Design.tex` | Unità di misura, box model (anche come lo mostrano i DevTools), display, float, positioning, Flexbox, Grid, media query, responsive design, meta viewport |
 | `chapters/5. JavaScript.tex` | Inclusione, strict mode, variabili e scope, hoisting e TDZ, tipi, operatori, `==` contro `===`, funzioni, closure, oggetti, `this`, costruttori, optional chaining, getter/setter |
 | `chapters/6. JavaScript avanzato.tex` | Prototipi ed ereditarietà, array, destrutturazione, iterabili, Map e Set, classi, gestione degli errori, moduli |
 | `chapters/7. JavaScript nel browser.tex` | `window`, DOM e BOM, ricerca e navigazione dei nodi, modifica del DOM, eventi, bubbling e delegazione, ordine di esecuzione degli script |
@@ -46,7 +51,7 @@ escluse: restano sulle slide e sul sito del docente, dove vengono aggiornate.
 | `fonts/` | Font usati dalla classe (Lato, Gobold, FiraCode, Lora, IcoMoon, …) |
 | `sources/` | Logo dell'ateneo, risorse della copertina, immagine di Fu-Tzu (`fu-tzu.jpg`, dalle slide) |
 | `build.ps1` | Script di compilazione |
-| `main.pdf` | PDF già compilato |
+| `DispensaWebTech.pdf` | PDF già compilato |
 
 ## Come compilare
 
@@ -90,7 +95,10 @@ selezionare **LuaLaTeX**. Nessuna altra configurazione è necessaria.
   non si divide mai fra due pagine (vedi sotto);
 - ambiente `devtools`: finestra dei DevTools, con i pannelli *Regole* e *Rete*;
 - ambiente `console`: console dei DevTools, per l'output di uno script. Ogni
-  riga del sorgente è una riga di output (niente `\\` da scrivere a mano).
+  riga del sorgente è una riga di output (niente `\\` da scrivere a mano);
+- ambiente `immagine`: uno schema TikZ nella colonna del risultato, centrato e
+  ridotto alla larghezza della colonna se serve, con una didascalia breve
+  facoltativa (`\begin{immagine}[didascalia]`).
 
 > **Attenzione:** `\info`, `\warning` e `\error` sono **macro**, quindi non
 > possono contenere un `lstlisting` (un ambiente verbatim non sopravvive
@@ -130,6 +138,31 @@ il risultato ci sono i controlli dei form come li mostra un browser
 l'ambiente `wtfieldset`), `\wtlink` e `\wtsopra` per i link, e i colori CSS
 con il loro valore esatto (`css-red`, `css-blue`, `css-hotpink`, …), da usare
 al posto degli omonimi di xcolor, ridefiniti dalla classe.
+
+Con il secondo argomento facoltativo, `\begin{affianco}[0.5][c]`, le due
+colonne sono centrate in verticale invece che allineate in alto: è la forma
+usata quando a destra c'è uno schema più basso del codice.
+
+### Schemi accanto al codice
+
+Nel preambolo c'è un piccolo vocabolario TikZ per gli schemi, usato in tutta la
+dispensa perché abbiano lo stesso aspetto:
+
+| Macro / stile | Disegna |
+|---|---|
+| `\variabile{id}{(pos)}{nome}{valore}` | una variabile: nome e casella del valore |
+| `\oggetto{id}{(pos)}{larghezza}{titolo}{chiave/valore, ...}` | un oggetto in memoria, con le sue proprietà (la colonna delle chiavi si allarga da sé) |
+| `\riferimento{da}{percorso}` | un riferimento: pallino e freccia verso l'oggetto |
+| `\scopo{livello}{nome}{etichetta}{(nodi)}` | il riquadro di uno scope, annidabile su tre livelli |
+| `\celle{id}{(pos)}{v0, v1, ...}` | le caselle consecutive di un array, con gli indici (`\mvuota` per un buco) |
+| `\dbtabella{id}{(pos)}{nome}{colonne}{righe}` | una tabella del database |
+| `\wtdialogo[campo]{messaggio}{pulsanti}` | una finestra `alert`/`confirm`/`prompt` |
+| `\wttoast[tipo]{titolo}{messaggio}` | una notifica di ngx-toastr (`success`, `error`, `warning`, `info`) |
+| `\ctabella{...}` | il risultato di `console.table` nei DevTools |
+| `mdom`, `mtesto`, `mcommento`, `mnuovo`, `mramo` | nodi e rami di un albero DOM |
+| `mfun`, `mvar`, `mnota`, `mcod`, `mrif`, `mcerca` | funzioni, caselle, note, codice e frecce negli schemi |
+
+`\mok` e `\merr` sono il segno di spunta verde e la croce rossa.
 
 Per i listati: `\begin{lstlisting}[style=html, name=file.html]`. Gli stili
 disponibili sono `html`, `css`, `js`, `ts`, `pug`, `php`, `json`, `shell`,
@@ -205,7 +238,10 @@ Tutte in `preamble/webtech-preamble.tex`, la classe non è stata toccata.
     memorizzate (`\wtmem` nel `.aux`) perché l'impaginazione non oscilli:
     servono **più compilazioni** (5-6 partendo da zero) perché si stabilizzi.
     Dopo modifiche importanti alla struttura dei capitoli conviene cancellare
-    `main.aux` e ricompilare da capo.
+    `main.aux` e ricompilare da capo;
+  - il titolo di una sezione seguito subito da una sottosezione viaggia
+    insieme a essa (`\wtsegue` nel `.aux`), così non resta da solo in fondo
+    alla pagina quando la sottosezione passa alla pagina successiva.
 
   Il prezzo è qualche spazio bianco in più in fondo alle pagine.
 
