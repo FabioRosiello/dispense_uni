@@ -19,6 +19,7 @@ Li affrontiamo uno alla volta, costruendo la stessa applicazione
 
 \section{Lo scheletro dell'applicazione}
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=app.js]
 import http from 'http';
 
@@ -32,6 +33,19 @@ function handleRequest(request, response) {
   /* gestione della richiesta */
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[A ogni richiesta il server emette l'evento\\
+                 \code{request}, gestito da \code{handleRequest}.]
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=neutral!45!black}]
+  \node[mnota] (br) at (0,0) {richiesta HTTP};
+  \node[wtnode, font=\FiraCodeNL\scriptsize] (sv) at (2.6,0) {server};
+  \node[mfun] (h) at (6.3,0) {handleRequest(req, res)};
+  \draw[a] (br) -- (sv);
+  \draw[a, draw=accent!70!black] (sv) -- node[mcod, above=2pt]{'request'} (h);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Rispetto all'esempio del capitolo precedente si nota una differenza stilistica:
 invece di passare la callback direttamente a \code{createServer}, la si registra
@@ -78,6 +92,7 @@ mostrare la homepage, mostrare la lista, azzerare l'applicazione, e così via.
 
 \subsection{Instradare in base al percorso}
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=router.js]
 function handleRequest(request, response) {
   switch (request.url) {
@@ -96,6 +111,23 @@ function handleRequest(request, response) {
   }
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[La tabella di instradamento realizzata dallo \code{switch}.]
+\begin{tikzpicture}[
+    u/.style={mcod, anchor=east, draw=primary!55!black, fill=primary!8!white,
+      rounded corners=2pt, minimum width=1.5cm, inner sep=3pt},
+    f/.style={mcod, anchor=west},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \foreach \u/\f/\c [count=\i] in {\slash/renderHomepage/black,
+      \slash reset/handleResetRequest/black,
+      \slash todo/handleTodoListRequest/black, altro/handleError 404/merr} {
+    \node[u] (u\i) at (1.5,-\i*0.6) {\u};
+    \node[f, text=\c] (f\i) at (2.2,-\i*0.6) {\f};
+    \draw[a] (u\i.east) -- (f\i.west);
+  }
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Instradare anche in base al metodo}
 
@@ -107,6 +139,8 @@ seconda del \textbf{metodo HTTP} usato:
   \item una \code{POST} su \code{/todos} prova a salvarne uno nuovo.
 \end{itemize}
 
+\begin{affianco}[0.56][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=router.js]
 function handleTodoListRequest(request, response, context = {}) {
   switch (request.method) {
@@ -119,6 +153,23 @@ function handleTodoListRequest(request, response, context = {}) {
   }
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Stesso percorso, codice diverso a seconda del metodo.]
+\begin{tikzpicture}[
+    u/.style={mcod, draw=primary!55!black, fill=primary!8!white,
+      rounded corners=2pt, inner sep=3pt},
+    m/.style={mcod, font=\FiraCodeNL\tiny\bfseries, text=accent!70!black},
+    f/.style={mcod, anchor=west},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[u] (t) at (0,0) {/todo};
+  \foreach \m/\f/\y/\c in {GET/\ldots Get()/0.7/black, POST/\ldots Post()/0/black,
+      altro/405/-0.7/merr} {
+    \node[f, text=\c] (x) at (2.1,\y) {\f};
+    \draw[a] (t.east) -- node[m, above, sloped]{\m} (x.west);
+  }
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \info{Il codice 405}{
   Quando il percorso esiste ma il metodo non è previsto, la risposta corretta
@@ -131,6 +182,8 @@ function handleTodoListRequest(request, response, context = {}) {
 Se il nostro output HTML include file statici (immagini, CSS, script), dobbiamo
 configurare il router perché li serva.
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=router.js]
 switch (request.url) {
   /* ... */
@@ -149,6 +202,22 @@ switch (request.url) {
     break;
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Ogni URL statica corrisponde a un file sul disco\\
+                 e a un \code{Content-Type}.]
+\begin{tikzpicture}[
+    u/.style={mcod, anchor=west, draw=primary!55!black, fill=primary!8!white,
+      rounded corners=2pt, inner sep=3pt},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[u] (u1) at (0,0) {/css/bootstrap.css};
+  \node[mcod, anchor=west] (f1) at (0.1,-0.55) {./static/css/\ldots};
+  \node[mnota, anchor=west] at (0.1,-0.95) {\code{text/css}};
+  \node[u] (u2) at (0,-1.6) {/img/node.png};
+  \node[mcod, anchor=west] (f2) at (0.1,-2.15) {./static/img/\ldots};
+  \node[mnota, anchor=west] at (0.1,-2.55) {\code{image/png}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Si noti che \code{fs.readFile} è \textbf{asincrona}: prende una callback che
 verrà invocata quando il file sarà stato letto. È esattamente il modello non
@@ -158,6 +227,8 @@ bloccante descritto nel capitolo precedente.
 
 Quando nessuna delle rotte note si applica, restituiamo un \code{404}.
 
+\begin{affianco}[0.58][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=router.js]
 switch (request.url) {
   /* altre rotte */
@@ -172,6 +243,13 @@ function handleError(request, response, statusCode, message) {
   response.end(renderedContent);
 }
 \end{lstlisting}
+\risultato
+\begin{browser}[localhost:3000/nonesiste]
+  {\Lora\bfseries\Huge 404}\\[4pt]
+  Pagina non trovata
+\end{browser}
+\wtnota{La pagina d'errore, generata\\ dal template \code{errorPage.pug}.}
+\end{affianco}
 
 \warning{Il routing non resta semplice a lungo}{
   Uno \code{switch} sembra sufficiente, ma il problema cresce in fretta con
@@ -224,6 +302,9 @@ console.log(html);   // html contiene il codice HTML generato
 \end{lstlisting}
 
 \begin{esempio}{Il primo template Pug}
+Il template a sinistra produce l'HTML a destra.
+
+\begin{affianco}[0.45]
 \begin{lstlisting}[style=pug, name=basic_example.pug]
 doctype html
 html(lang="it")
@@ -233,9 +314,7 @@ html(lang="it")
     h1(class="foo") Primo template Pug
     p Questo e' il nostro primo template Pug!
 \end{lstlisting}
-
-produce:
-
+\risultato
 \begin{lstlisting}[style=html, name=output.html]
 <!DOCTYPE html>
 <html lang="it">
@@ -246,6 +325,7 @@ produce:
   </body>
 </html>
 \end{lstlisting}
+\end{affianco}
 
 L'indentazione sostituisce i tag di chiusura, e gli attributi si scrivono fra
 parentesi tonde. Il risultato è molto più breve e, soprattutto, impossibile da
@@ -257,18 +337,21 @@ sbagliare nell'annidamento.
 Pug è molto più di un modo diverso di scrivere HTML. Tanto per cominciare, un
 template può \textbf{includerne} altri: è un grande aiuto per il riuso.
 
+\begin{affianco}[0.55]
 \begin{lstlisting}[style=pug, name=partials/head.pug]
 head
   title Hello Pug
   script(src='/js/script.js')
   link(rel='stylesheet' href='/style.css')
 \end{lstlisting}
-
+\risultato
 \begin{lstlisting}[style=pug, name=partials/footer.pug]
 footer#footer
   p Copyright (c) Web Tech
 \end{lstlisting}
+\end{affianco}
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=pug, name=index.pug]
 doctype html
 html
@@ -277,6 +360,26 @@ html
     h1 Hello Pug!
     include partials/footer.pug
 \end{lstlisting}
+\risultato
+\begin{immagine}[Gli \code{include} vengono sostituiti\\
+                 dal contenuto dei file indicati.]
+\begin{tikzpicture}[
+    f/.style={draw=primary!55!black, fill=primary!6!white, rounded corners=2pt,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, minimum width=2.6cm,
+      minimum height=0.5cm},
+    p/.style={f, draw=accent!55!black, fill=accent!12!white},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=accent!70!black}]
+  \node[f] (r1) at (0,0) {html};
+  \node[p] (r2) at (0,-0.6) {head (partials/head)};
+  \node[f] (r3) at (0,-1.2) {body: h1 Hello Pug!};
+  \node[p] (r4) at (0,-1.8) {footer (partials/footer)};
+  \node[mcod, anchor=west] (h) at (2.4,-0.6) {head.pug};
+  \node[mcod, anchor=west] (ft) at (2.4,-1.8) {footer.pug};
+  \draw[a] (h.west) -- (r2.east);
+  \draw[a] (ft.west) -- (r4.east);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Si noti \code{footer\#footer}: in Pug il cancelletto è l'abbreviazione per
 l'attributo \attr{id}, esattamente come nei selettori CSS.
@@ -326,6 +429,11 @@ parole chiave \code{block} ed \code{extends}.
 \end{figure}
 
 \begin{esempio}{Layout base e pagina figlia}
+A sinistra il layout: definisce tre \textbf{blocchi}, \code{heading},
+\code{content} e \code{footer}, e i blocchi \code{heading} e \code{footer}
+hanno un contenuto predefinito. A destra la pagina figlia, che lo estende.
+
+\begin{affianco}[0.5]
 \begin{lstlisting}[style=pug, name=base-layout.pug]
 doctype html
 html
@@ -338,11 +446,7 @@ html
     block footer
       footer Questo e' il footer predefinito.
 \end{lstlisting}
-
-Il template definisce tre \textbf{blocchi}: \code{heading}, \code{content} e
-\code{footer}. I blocchi \code{heading} e \code{footer} contengono un contenuto
-predefinito.
-
+\risultato
 \begin{lstlisting}[style=pug, name=index.pug]
 extends ./base-layout.pug
 
@@ -352,11 +456,13 @@ block content
 block footer
   footer Questo e' un footer specializzato.
 \end{lstlisting}
+\end{affianco}
 
 Il template figlio \textbf{sovrascrive} i blocchi \code{content} e
 \code{footer}; il blocco \code{heading} non viene sovrascritto e mostra il
 contenuto predefinito. Il risultato è:
 
+\begin{affianco}[0.6][c]
 \begin{lstlisting}[style=html, name=output.html]
 <!DOCTYPE html>
 <html>
@@ -368,6 +474,13 @@ contenuto predefinito. Il risultato è:
   </body>
 </html>
 \end{lstlisting}
+\risultato
+\begin{browser}[Pug Inheritance]
+  {\Lora\bfseries\LARGE Pug Inheritance}\\[6pt]
+  Il contenuto vero e proprio della homepage.\\[6pt]
+  Questo e' un footer specializzato.
+\end{browser}
+\end{affianco}
 \end{esempio}
 
 \subsection{Locals: passare i dati al template}
@@ -390,6 +503,7 @@ let html = pug.renderFile("./locals.pug", {
 console.log(html);
 \end{lstlisting}
 
+\begin{affianco}[0.55]
 \begin{lstlisting}[style=pug, name=locals.pug]
 - let footer = "una bella stringa"
 
@@ -397,12 +511,13 @@ h1 #{product.name.toUpperCase()}
 p Descrizione: #{product.description}
 footer #{footer}
 \end{lstlisting}
-
+\risultato
 \begin{lstlisting}[style=html, name=output.html]
 <h1>SAMSUNG S24</h1>
 <p>Descrizione: Smartphone</p>
 <footer>una bella stringa</footer>
 \end{lstlisting}
+\end{affianco}
 
 Il codice contenuto fra \code{\#\{} e \code{\}} viene valutato,
 \textbf{sottoposto a escaping} e inserito nell'output. L'escaping automatico
@@ -420,6 +535,7 @@ let user = { "isAdmin": true, "name": "Brendan" };
 let html = pug.renderFile("./conditionals.pug", { "user": user });
 \end{lstlisting}
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=pug, name=conditionals.pug]
 if !user
   a(href="/login") Per favore, autenticati.
@@ -428,6 +544,12 @@ else if user.isAdmin
 else
   p Bentornato, #{user.name}
 \end{lstlisting}
+\risultato
+\begin{browser}[con user.isAdmin = true]
+  Ai tuoi ordini, Brendan
+\end{browser}
+\wtnota{Solo il ramo scelto finisce nell'HTML.}
+\end{affianco}
 
 \subsection{Iterazioni}
 
@@ -440,6 +562,7 @@ let items = [
 let html = pug.renderFile("./iteration.pug", { "items": items });
 \end{lstlisting}
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=pug, name=iteration.pug]
 ul
   each item in items
@@ -447,6 +570,15 @@ ul
   else
     li Nessuna pizza disponibile al momento!
 \end{lstlisting}
+\risultato
+\begin{browser}[iteration]
+  \begin{itemize}[leftmargin=1.8em, itemsep=0pt, topsep=2pt, parsep=0pt]
+    \item Margherita - EUR 5.50
+    \item Marinara - EUR 5.00
+    \item Capricciosa - EUR 6.50
+  \end{itemize}
+\end{browser}
+\end{affianco}
 
 \begin{lstlisting}[style=html, name=output.html]
 <ul>
@@ -472,18 +604,23 @@ viene inviato con il metodo \code{POST}, quindi dobbiamo analizzare il corpo
 della richiesta per ottenere i nomi dei parametri e i loro valori. Non è così
 semplice come sembra.
 
+\begin{affianco}[0.58][c]
 \begin{lstlisting}[style=pug, name=todo.pug]
 form(action="/todo" method="POST")
   label(for="todo") Elemento da fare
   input(type="text" id="todo" name="todo" required)
   button(type="submit") Salva
 \end{lstlisting}
-
+\risultato
+\begin{browser}[todo]
+  Elemento da fare \wtcampo[2.6cm]{Learn Node.js}\ \wtbottone{Salva}
+\end{browser}
 \begin{lstlisting}[style=http, name=Richiesta generata]
 POST /todo HTTP/1.1
 
 todo=Learn+Node.js
 \end{lstlisting}
+\end{affianco}
 
 \subsection{Il corpo arriva a pezzi}
 
@@ -497,6 +634,7 @@ pezzo di dati diventa disponibile, e un evento \code{end} quando non c'è più
 nulla da consumare. Per leggere il corpo dobbiamo quindi operare in modo
 \textbf{asincrono}, sfruttando questi due eventi.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=body-parser.js]
 function parseRequestBody(request) {
   return new Promise((resolve, reject) => {
@@ -512,6 +650,25 @@ function parseRequestBody(request) {
   });
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[I pezzi arrivano con gli eventi \code{data};\\
+                 all'evento \code{end} si ricompone il corpo.]
+\begin{tikzpicture}[
+    ch/.style={draw=primary!55!black, fill=primary!12!white, line width=0.6pt,
+      font=\FiraCodeNL\scriptsize, minimum height=0.5cm, inner xsep=3pt},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
+  \node[ch] (c1) at (0,0) {todo=Le};
+  \node[ch] (c2) at (1.45,0) {arn+No};
+  \node[ch] (c3) at (2.85,0) {de.js};
+  \node[mcod, text=accent!70!black] (e) at (4.1,0) {end};
+  \foreach \c in {c1,c2,c3} \node[mcod, anchor=south, text=accent!70!black, font=\FiraCodeNL\tiny] at (\c.north) {data};
+  \node[ch, fill=green-gradient-1!45!white, draw=green-gradient-6] (b) at (2.0,-1.2)
+    {"todo=Learn+Node.js"};
+  \draw[a] (c2.south) -- node[mnota, right]{\code{Buffer.concat}} (b.north);
+  \node[mnota, anchor=north] at (b.south) {poi \code{resolve(data)}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Si notino i due meccanismi che abbiamo studiato separatamente e che qui si
 incontrano: gli \textbf{eventi} (capitolo 7) per raccogliere i pezzi, e una
@@ -523,6 +680,8 @@ Letto il corpo come stringa, si tratta di suddividerla per ottenere nomi e
 valori dei parametri. Ricordiamo che il corpo è una stringa della forma
 \code{p1=v1\&p2=v2\&...}, e che è \textbf{codificato come URL}.
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=body-parser.js]
 function parseRequestBodyString(body) {
   let data = {};
@@ -540,6 +699,22 @@ function parseRequestBodyString(body) {
   return data;
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Dalla stringa codificata all'oggetto.]
+\begin{tikzpicture}[
+    st/.style={mcod, anchor=west},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black},
+    lab/.style={mnota, anchor=west, text=accent!70!black}]
+  \node[st] (s0) at (0,0)     {"todo=Learn+Node.js\&when=oggi"};
+  \node[st] (s1) at (0,-0.9)  {["todo=Learn+Node.js", "when=oggi"]};
+  \node[st] (s2) at (0,-1.8)  {"todo" \quad "Learn Node.js"};
+  \node[st] (s3) at (0,-2.7)  {\{ todo: "Learn Node.js", when: "oggi" \}};
+  \draw[a] (0.3,-0.2) -- (0.3,-0.7) node[lab, midway, xshift=4pt]{split("\&")};
+  \draw[a] (0.3,-1.1) -- (0.3,-1.6) node[lab, midway, xshift=4pt]{split("="), + \(\rightarrow\) spazio, decode};
+  \draw[a] (0.3,-2.0) -- (0.3,-2.5) node[lab, midway, xshift=4pt]{data[nome] = valore};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \warning{Ricordarsi della codifica}{
   Il corpo è codificato come URL, esattamente come descritto nel capitolo su
