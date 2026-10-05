@@ -1,0 +1,715 @@
+\chapter{File descriptor, socket e un server TCP sequenziale}
+
+Finora ogni protocollo ci è arrivato come una \textbf{descrizione}: questi messaggi, in quest'ordine, con questi campi.
+Abbiamo letto richieste e risposte e detto che il client ne manda una e il server risponde, ma non ci siamo mai chiesti che
+cosa \textbf{fa} concretamente un programma perché un messaggio esca dalla macchina. Quel passo è una manciata di
+\textbf{chiamate di sistema}, e sono le stesse per tutti i protocolli visti.
+
+Nel capitolo precedente abbiamo incontrato le funzioni dei socket una per una. Qui le riprendiamo dal punto di vista di
+chi deve scrivere un server che funzioni davvero: che cosa sia un \emph{file descriptor}, perché \texttt{read} e
+\texttt{write} possono trasferire \textbf{meno} byte di quelli chiesti, come si gestiscono gli errori, e come è fatto un
+server TCP che serve un client dopo l'altro.
+
+% ══════════════════════════════════════════════════════════════
+\section{Programmi, processi e protocolli}
+% ══════════════════════════════════════════════════════════════
+
+Un'applicazione di rete è di norma una \textbf{coppia di programmi}, un client e un server, su due end system diversi.
+\begin{itemize}
+    \item Un \textbf{programma} è un file sul disco; un \textbf{processo} è quel file in esecuzione. A comunicare sono i
+          \textbf{processi}: la rete non vede mai il primo.
+    \item I due processi comunicano \textbf{leggendo e scrivendo sui socket}: nient'altro attraversa il confine tra i due.
+    \item Il lavoro dello sviluppatore è scrivere entrambi i lati, oppure un solo lato conforme a ciò che l'altro si aspetta.
+\end{itemize}
+
+Se il protocollo è \textbf{aperto} (pubblicato in un RFC) chiunque può scrivere l'uno o l'altro lato e i due
+interopereranno: un browser di un produttore parla con il server di un altro. Se è \textbf{proprietario}, un solo team
+scrive entrambi i lati. Un protocollo aperto usa la propria \textbf{porta well-known}; un protocollo nostro deve stare
+\textbf{lontano} da quelle porte.
+
+% ══════════════════════════════════════════════════════════════
+\section{Tutto è un file: il descriptor}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{File descriptor}{
+    Quando un processo chiede al kernel di aprire qualcosa (un file, una pipe, un socket) riceve in cambio un
+    \textbf{intero non negativo}: il \textbf{file descriptor}. È la «maniglia» del processo sull'oggetto aperto, ed è ciò
+    che si passa a \texttt{read} e \texttt{write}. Il processo non vede mai altro.
+}
+
+Tre descriptor esistono già prima che il nostro codice parta: \texttt{0} è lo \textbf{standard input}, \texttt{1} lo
+\textbf{standard output}, \texttt{2} lo \textbf{standard error}. In \texttt{<unistd.h>} hanno i nomi
+\texttt{STDIN\_FILENO}, \texttt{STDOUT\_FILENO} e \texttt{STDERR\_FILENO}. Il primo oggetto aperto dal programma riceve
+quindi, di norma, il descriptor \texttt{3}.
+
+\subsection{A che cosa punta un descriptor}
+
+L'intero è un \textbf{indice} in una tabella del processo. La riga della tabella punta a una voce condivisa, detta
+\emph{open file}, che a sua volta punta all'oggetto vero e proprio.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    cell/.style={draw=black!60, minimum width=3.0cm, minimum height=0.55cm, font=\scriptsize\ttfamily, anchor=west},
+    ent/.style={draw=netgreen!70!black, fill=netgreen!8, rounded corners=2pt, align=center, minimum width=2.6cm, minimum height=0.9cm},
+    obj/.style={draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, align=center, text width=4.4cm, minimum height=0.9cm},
+    a/.style={-{Stealth[length=2mm]}, thick, netgreen!70!black}]
+  \node[font=\scriptsize\itshape\sffamily, text=black!55] at (1.5,1.2) {una per processo};
+  \node[font=\scriptsize\itshape\sffamily, text=black!55] at (5.4,1.2) {una per ogni apertura};
+  \node[font=\scriptsize\itshape\sffamily, text=black!55] at (9.6,1.2) {l'oggetto};
+  \node[draw=black!60, fill=llink!60, minimum width=3.0cm, minimum height=0.5cm, font=\scriptsize\bfseries\sffamily] at (1.5,0.65) {tabella del processo};
+  \node[cell] (r0) at (0,0.1) {fd 0..2\ \ stdin/out/err};
+  \node[cell, fill=lapp!25] (r3) at (0,-0.45) {fd 3\ \ \ \ da open()};
+  \node[cell, fill=ltra!30] (r4) at (0,-1.0) {fd 4\ \ \ \ da socket()};
+  \node[ent] (o1) at (5.4,0.0) {\textbf{open file}\\flag, \textcolor{netorange}{offset}};
+  \node[ent] (o2) at (5.4,-1.4) {\textbf{open file}\\flag, \textcolor{netorange}{nessun offset}};
+  \node[obj] (in) at (9.6,0.0) {\textbf{inode}: un file sul disco\\permessi, dimensione, blocchi di dati};
+  \node[obj] (cn) at (9.6,-1.4) {\textbf{connessione}: un estremo TCP\\indirizzo del peer, buffer, numeri di sequenza};
+  \draw[a] (r3.east) -- (o1.west); \draw[a] (r4.east) -- (o2.west);
+  \draw[a] (o1) -- (in); \draw[a] (o2) -- (cn);
+\end{tikzpicture}
+\caption{Il descriptor è un indice: lo stesso tipo di intero può portare a un file sul disco o a una connessione TCP.}
+\end{figure}
+
+Un socket è uno di questi oggetti. È \textbf{lo stesso tipo di intero, ottenuto da una chiamata diversa}
+(\texttt{socket()} invece di \texttt{open()}): è questo il ponte che rende i socket simili ai file. La differenza si
+vede nella colonna di mezzo: un file ha una \textbf{posizione corrente} (l'offset), uno stream di rete no. Per questo
+\texttt{lseek()} funziona su \texttt{fd 3} e fallisce su \texttt{fd 4}: in un flusso non c'è una posizione verso cui
+spostarsi.
+
+% ══════════════════════════════════════════════════════════════
+\section{read e write}
+% ══════════════════════════════════════════════════════════════
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <unistd.h>
+
+ssize_t read (int fd,       void *buf, size_t count);
+ssize_t write(int fd, const void *buf, size_t count);
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{read} restituisce il numero di byte \textbf{effettivamente} letti, \texttt{0} alla fine dell'input,
+          $-1$ in caso di errore.
+    \item \texttt{write} restituisce il numero di byte \textbf{effettivamente} scritti, oppure $-1$ in caso di errore.
+\end{itemize}
+
+La parola chiave è \textbf{effettivamente}: nessuna delle due promette \texttt{count}.
+
+\subsection{read può restituire meno di quanto chiesto}
+
+\warning{Chiedo 1000 byte e ne ricevo 12: è un errore?}{
+    No. È il caso \textbf{normale} su tutto ciò che non è un file su disco: un terminale restituisce una riga, una pipe
+    ciò che contiene, un socket \textbf{ciò che è arrivato finora}.
+}
+
+\begin{itemize}
+    \item I 1000 byte del mittente possono essere ancora in viaggio, divisi in più pacchetti che arrivano in momenti
+          diversi.
+    \item Un segnale può interrompere la chiamata e accorciare la lettura.
+    \item \textbf{Conseguenza}: su un socket una sola \texttt{read} non basta quasi mai. Si \textbf{cicla} finché non si
+          ha tutto ciò che serve.
+    \item Un ritorno di \texttt{0} è diverso: non è una lettura corta, significa che \textbf{l'altro lato ha chiuso}.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    seg/.style={draw=black!60, fill=ltra!45, minimum height=0.5cm, inner sep=1pt, font=\scriptsize\ttfamily}]
+  \node[anchor=east] at (-0.2,0.6) {il mittente scrive};
+  \node[seg, minimum width=7.5cm, anchor=west] at (0,0.6) {1000 byte, con una sola write()};
+  \node[anchor=east] at (-0.2,-0.4) {il destinatario legge};
+  \node[seg, minimum width=0.6cm, anchor=west, fill=netblue!20] at (0,-0.4) {12};
+  \node[seg, minimum width=3.9cm, anchor=west, fill=netblue!20] at (0.68,-0.4) {536};
+  \node[seg, minimum width=2.84cm, anchor=west, fill=netblue!20] at (4.66,-0.4) {452};
+  \node[seg, minimum width=0.6cm, anchor=west, fill=netred!15] at (7.6,-0.4) {0};
+  \node[anchor=north, text=black!60] at (0.3,-0.75) {1\textsuperscript{a} read};
+  \node[anchor=north, text=black!60] at (2.6,-0.75) {2\textsuperscript{a} read};
+  \node[anchor=north, text=black!60] at (6.1,-0.75) {3\textsuperscript{a} read};
+  \node[anchor=north, text=netred, align=center] at (7.9,-0.75) {chiuso};
+\end{tikzpicture}
+\caption{Una sola \texttt{write} di 1000 byte può arrivare in tre \texttt{read} diverse (le quantità sono un esempio).
+         Solo lo 0 finale dice che non arriverà più nulla.}
+\end{figure}
+
+\subsection{write può scrivere meno di quanto chiesto}
+
+Se \texttt{write} restituisce 600 su 1000, \textbf{400 byte non sono stati inviati}: il buffer di invio del kernel era
+pieno, e \texttt{write} ha preso quello che poteva. Bisogna \textbf{riprovare con il resto}, ripartendo dall'offset
+indicato dal valore restituito.
+
+\begin{lstlisting}[language={[POSIX]C}]
+/* scrive tutti gli n byte, riprovando dopo le scritture parziali */
+int write_all(int fd, const char *p, size_t n) {
+    while (n > 0) {
+        ssize_t w = write(fd, p, n);
+        if (w < 0) return -1;      /* errore vero */
+        p += w;                    /* si riparte da dove ci si era fermati */
+        n -= w;
+    }
+    return 0;
+}
+\end{lstlisting}
+
+Con i messaggi brevi la scrittura parziale non capita quasi mai: è proprio per questo che la si scopre tardi, quando fa
+più male.
+
+\error{Scrivere su un socket chiuso}{
+    Scrivere su un socket che il peer ha già chiuso è peggio di una scrittura parziale: il processo riceve un
+    \textbf{segnale} (\texttt{SIGPIPE}) e \textbf{termina senza alcun messaggio}. Ci torneremo quando il codice diventerà
+    un server che deve sopravvivere ai propri client.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Quando una chiamata fallisce: $-1$ ed errno}
+% ══════════════════════════════════════════════════════════════
+
+Quasi tutte le chiamate di sistema segnalano il fallimento nello stesso modo, restituendo $-1$, e lasciano il
+\textbf{motivo} in una variabile globale, \texttt{errno}.
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <errno.h>
+
+int fd = open("data.txt", O_RDONLY);
+if (fd < 0) {                  /* -1: qualcosa e' andato storto */
+    perror("open");            /* stampa  open: No such file or directory */
+    exit(EXIT_FAILURE);
+}
+\end{lstlisting}
+
+\texttt{errno} contiene il codice; \texttt{perror} stampa la nostra stringa, i due punti e il messaggio corrispondente
+a quel codice. Da qui in poi il controllo sarà scritto su una riga sola, ma \textbf{non va mai omesso}.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il socket}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Socket}{
+    Un \textbf{socket} è un estremo di un canale di comunicazione bidirezionale tra due processi, identificato da un
+    descriptor.
+}
+
+\begin{itemize}
+    \item È stato introdotto in \textbf{BSD 4.2} nel 1983 ed è ancora lo standard \emph{de facto}: Unix, macOS e Windows
+          (con nomi leggermente diversi).
+    \item I due processi possono stare sulla stessa macchina o su due macchine ai capi del mondo: le chiamate non cambiano.
+    \item Non è legato a TCP/IP: la stessa API serve altre famiglie di protocolli, ed è per questo che le chiamate hanno un
+          aspetto così generico.
+    \item Essendo un descriptor, accetta \texttt{read}, \texttt{write} e \texttt{close}: le chiamate che già conosciamo.
+\end{itemize}
+
+\subsection{Dominio, tipo, protocollo}
+
+I tre argomenti di \texttt{socket()} scelgono che cosa significa l'API generica.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l l}
+\toprule
+\multicolumn{2}{l}{\textbf{Dominio}: quale famiglia} \\
+\midrule
+AF\_INET  & IPv4 \\
+AF\_INET6 & IPv6 \\
+AF\_LOCAL & due processi sulla stessa macchina, attraverso il file system \\
+\midrule
+\multicolumn{2}{l}{\textbf{Tipo}: quale genere di canale} \\
+\midrule
+SOCK\_STREAM & un flusso di byte: connesso, ordinato, affidabile \\
+SOCK\_DGRAM  & messaggi indipendenti: nessuna connessione, nessuna garanzia \\
+SOCK\_RAW    & il pacchetto costruito a mano, sotto il livello di trasporto \\
+\bottomrule
+\end{tabular}
+\caption{I primi due argomenti di \texttt{socket()}.}
+\end{table}
+
+Il terzo argomento sceglie un protocollo dentro la famiglia, e \texttt{0} significa «quello usuale»: \textbf{TCP} per uno
+stream, \textbf{UDP} per i datagrammi.
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <sys/socket.h>
+
+int fd = socket(AF_INET, SOCK_STREAM, 0);    /* IPv4, TCP */
+if (fd < 0) { perror("socket"); exit(EXIT_FAILURE); }
+\end{lstlisting}
+
+\texttt{socket()} restituisce un descriptor, esattamente come \texttt{open()}. L'estremo esiste ma è \textbf{anonimo}:
+non ha ancora un indirizzo e non è collegato a niente. Tutto ciò che segue (\texttt{bind}, \texttt{connect},
+\texttt{listen}, \texttt{accept}) prende questo descriptor come primo argomento.
+
+\subsection{Le quattro fasi, con e senza connessione}
+
+Client e server, con o senza connessione, \textbf{creano} il socket, si \textbf{scambiano messaggi} e lo
+\textbf{distruggono}. Solo il lato orientato alla connessione ha una \textbf{fase di mezzo}, la connessione: tutto ciò
+che cambia nel codice tra UDP e TCP deriva da quell'unico riquadro (si veda la figura delle due sequenze nel capitolo
+precedente).
+
+\subsection{Un indirizzo per l'estremo}
+
+\begin{lstlisting}[language={[POSIX]C}]
+struct sockaddr {              /* quella generica: e' cio' che prendono le chiamate */
+    sa_family_t sa_family;
+    char        sa_data[14];   /* 14 byte, il cui significato dipende dalla famiglia */
+};
+
+struct sockaddr_in {           /* quella IPv4: e' quella che si riempie */
+    short          sin_family; /* AF_INET                              */
+    unsigned short sin_port;   /* porta     \                          */
+    struct in_addr sin_addr;   /* indirizzo  > gli stessi 14 byte      */
+    char           sin_zero[8];/* zeri      /                          */
+};
+\end{lstlisting}
+
+Ogni famiglia ha la propria struttura, ma le chiamate prendono un puntatore a quella \textbf{generica}: da qui il cast
+\texttt{(struct sockaddr *)} che si vede ovunque. Per riempirla servono \texttt{htons} e \texttt{inet\_pton}, perché la
+rete scrive i numeri a modo suo: l'ordine dei byte è l'argomento della prossima lezione.
+
+% ══════════════════════════════════════════════════════════════
+\section{Le chiamate lato server}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{bind(): un indirizzo locale}
+
+\begin{lstlisting}[language={[POSIX]C}]
+int bind(int fd, const struct sockaddr *addr, socklen_t len);
+\end{lstlisting}
+
+\begin{itemize}
+    \item Associa il socket a un indirizzo e una porta \textbf{locali}: il punto in cui il processo sarà raggiungibile.
+    \item \textbf{Server}: obbligatoria. Un client non può bussare a una porta il cui numero nessuno ha concordato prima.
+    \item \textbf{Client}: facoltativa, e di norma omessa: il kernel assegna una porta libera al momento della connessione.
+    \item Restituisce \texttt{0} o $-1$. L'errore che si incontra in pratica è \textbf{address already in use}, quando la
+          porta è ancora occupata.
+\end{itemize}
+
+\subsection{listen() e accept()}
+
+\begin{lstlisting}[language={[POSIX]C}]
+int listen(int fd, int backlog);
+int accept(int fd, struct sockaddr *addr, socklen_t *len);
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{listen} \textbf{non aspetta nulla}: rende il socket \textbf{passivo} e apre dietro di lui una
+          \textbf{coda}. \texttt{backlog} è quante connessioni completate possono attendere prima che il kernel cominci a
+          rifiutarle o ignorarle.
+    \item Le connessioni si completano e \textbf{si accodano da sole}; \texttt{accept} estrae la prima, una chiamata per
+          ogni client.
+    \item \texttt{accept} si blocca finché non ce n'è una, poi restituisce un \textbf{descriptor nuovo}, non un codice di
+          ritorno.
+    \item Attraverso \texttt{addr} dice anche \textbf{chi} si è connesso; se non interessa si passa \texttt{NULL}.
+    \item \texttt{len} entra come dimensione della nostra struttura ed esce come dimensione effettivamente usata: per
+          questo è un puntatore.
+\end{itemize}
+
+\subsection{Il server ha due tipi di socket}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \foreach \y/\n in {1.4/1, 0/2, -1.4/3} {
+    \node (c\n) at (0,\y) {\icon[0.75cm]{pc}};
+    \node[left=0pt of c\n] {client \n};
+  }
+  \node[draw=netblue, thick, rounded corners, minimum width=6.0cm, minimum height=4.6cm] (srv) at (6.4,0) {};
+  \node[anchor=north east] at (srv.north east) {\icon[0.45cm]{server}\ server};
+  \node[draw, very thick, netred, fill=netred!10, rounded corners, align=center, minimum width=2.2cm] (l) at (4.4,0)
+    {\texttt{listen\_fd = 3}\\socket di ascolto};
+  \foreach \y/\n/\f in {1.4/1/4, 0/2/5, -1.4/3/6}
+    \node[draw, fill=ltra!50, rounded corners, align=center, minimum width=2.4cm] (s\n) at (7.9,\y)
+      {\texttt{fd = \f}\\connessione col client \n};
+  \foreach \n in {1,2,3} {
+    \draw[msg, netred, dashed] (c\n) -- (l);
+    \draw[msg, netgreen, {Stealth}-{Stealth}, thick] (c\n.east) to[bend left=12] (s\n.west);
+  }
+  \node[text=netred, anchor=north] at (4.4,-0.7) {solo connessioni};
+  \node[text=netgreen!70!black, anchor=north] at (7.9,-2.0) {qui passano i dati};
+\end{tikzpicture}
+\caption{Un server con tre client tiene \textbf{quattro} descriptor: uno di ascolto e uno per ogni connessione.}
+\end{figure}
+
+\begin{itemize}
+    \item Il \textbf{socket di ascolto} si crea una volta sola, si lega alla porta nota e \textbf{non trasporta mai
+          dati}.
+    \item Ogni \texttt{accept} restituisce un \textbf{socket di connessione}, dedicato a un solo client e inutile per
+          qualunque altro.
+    \item I dati passano solo sul secondo tipo; il primo continua ad ascoltare mentre la conversazione avviene altrove.
+    \item Il three-way handshake che crea la connessione avviene nel livello di trasporto ed è \textbf{invisibile} a
+          entrambi i programmi.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Le chiamate lato client}
+% ══════════════════════════════════════════════════════════════
+
+\begin{lstlisting}[language={[POSIX]C}]
+int connect(int fd, const struct sockaddr *addr, socklen_t len);
+\end{lstlisting}
+
+\begin{itemize}
+    \item Il client non ha bisogno di \texttt{bind}, \texttt{listen} e \texttt{accept}: una sola chiamata fa tutto.
+    \item \texttt{connect} ritorna solo quando la connessione è \textbf{stabilita}, oppure quando è fallita. In mezzo si
+          svolge l'handshake, e il processo semplicemente aspetta.
+    \item Dopo il ritorno, lo stesso descriptor è un canale bidirezionale verso il socket di connessione del server.
+\end{itemize}
+
+\subsection{Leggere e scrivere su un socket connesso}
+
+\begin{lstlisting}[language={[POSIX]C}]
+n = write(fd, "hello\n", 6);        /* nessun indirizzo: e' gia' fissato */
+n = read (fd, buf, sizeof buf);
+\end{lstlisting}
+
+Una volta connesso, il descriptor si comporta come qualunque altro: le chiamate di inizio capitolo funzionano senza
+modifiche, e non si passa alcuna destinazione perché la coppia di indirizzi è stata fissata dalla connessione.
+\texttt{send} e \texttt{recv} sono le versioni specifiche dei socket: stessi argomenti più un campo \texttt{flags}, che
+per ora non ci serve. Tutte restituiscono \textbf{quanto è stato effettivamente trasferito}: i due casi visti prima ora
+sono sul percorso critico.
+
+\subsection{close(), e come il peer capisce che ce ne siamo andati}
+
+\begin{itemize}
+    \item \texttt{close} dice che \textbf{questo processo} ha finito con il descriptor, e lo rilascia.
+    \item Su una connessione avvia anche la chiusura: la \texttt{read} successiva del peer restituisce \texttt{0}.
+    \item Quello \texttt{0} è l'\textbf{unico} «fine messaggio» che l'API dà gratis, e costa la connessione.
+    \item La chiusura è \textbf{simmetrica}: la connessione è davvero finita quando entrambi i lati hanno chiuso.
+\end{itemize}
+
+\error{Quale descriptor si sta chiudendo?}{
+    Un server che chiude il \textbf{socket di ascolto} invece del socket di connessione serve un client e poi non ne
+    accetta più nessuno. Con quattro descriptor aperti, chiudere quello sbagliato è l'errore classico.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il client e il server, per intero}
+% ══════════════════════════════════════════════════════════════
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={client.c}]
+int main(void) {
+    char buf[256];
+    struct sockaddr_in srv;
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) { perror("socket"); exit(EXIT_FAILURE); }
+    memset(&srv, 0, sizeof srv);
+    srv.sin_family = AF_INET;
+    srv.sin_port   = htons(5000);
+    inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);   /* non INADDR_ANY */
+    if (connect(fd, (struct sockaddr *) &srv, sizeof srv) < 0) {
+        perror("connect"); exit(EXIT_FAILURE); }
+    write(fd, "hello\n", 6);
+    ssize_t n = read(fd, buf, sizeof buf - 1);         /* spazio per il '\0' */
+    if (n > 0) { buf[n] = '\0'; printf("%s", buf); }
+    close(fd);
+    return 0;
+}
+\end{lstlisting}
+
+Quattro chiamate fanno il lavoro: \texttt{socket}, \texttt{connect}, \texttt{write}, \texttt{read}. Il resto è riempire
+un indirizzo. \texttt{inet\_pton} («presentation to network») converte \texttt{"127.0.0.1"} nel formato binario della
+rete; nel capitolo precedente si usava \texttt{inet\_addr}, più vecchia, che non distingue un errore dall'indirizzo
+\texttt{255.255.255.255}.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={server.c: il socket di ascolto}]
+struct sockaddr_in me;
+int yes = 1;
+int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+if (listen_fd < 0) { perror("socket"); exit(EXIT_FAILURE); }
+setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
+memset(&me, 0, sizeof me);
+me.sin_family      = AF_INET;
+me.sin_port        = htons(5000);
+me.sin_addr.s_addr = htonl(INADDR_ANY);    /* qualunque interfaccia locale */
+if (bind(listen_fd, (struct sockaddr *) &me, sizeof me) < 0) {
+    perror("bind"); exit(EXIT_FAILURE); }
+if (listen(listen_fd, 16) < 0) {
+    perror("listen"); exit(EXIT_FAILURE); }
+\end{lstlisting}
+
+\texttt{SO\_REUSEADDR} permette di \textbf{riavviare subito} il server, invece di aspettare che la vecchia porta venga
+rilasciata (la connessione chiusa resta per qualche minuto nello stato \texttt{TIME\_WAIT}, e senza questa opzione
+\texttt{bind} fallirebbe con \emph{address already in use}).
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={server.c: il ciclo di accept}]
+static void serve(int fd) {             /* un'intera conversazione */
+    char buf[256];
+    ssize_t n;
+    while ((n = read(fd, buf, sizeof buf)) > 0)
+        if (write(fd, buf, n) != n) break;   /* scrittura parziale: si rinuncia */
+    if (n < 0) perror("read");
+}
+
+for (;;) {
+    struct sockaddr_in cli;
+    socklen_t len = sizeof cli;             /* socklen_t, non int */
+    int fd = accept(listen_fd, (struct sockaddr *) &cli, &len);
+    if (fd < 0) { perror("accept"); continue; }
+    serve(fd);
+    close(fd);                              /* il socket del client, non il nostro */
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{serve} è un server \emph{echo}: rimanda indietro ciò che riceve, finché \texttt{read} non restituisce
+          \texttt{0} (il client ha chiuso) o $-1$.
+    \item Se \texttt{accept} fallisce il server \textbf{non termina}: stampa l'errore e torna ad aspettare.
+    \item Dopo la conversazione si chiude \texttt{fd}, il socket del client, e si torna ad \texttt{accept}: il socket di
+          ascolto resta aperto per sempre.
+\end{itemize}
+
+\info{Che cosa si potrebbe migliorare}{
+    In \texttt{serve} una scrittura parziale fa abbandonare il client. È una scelta prudente per un esempio, ma con la
+    funzione \texttt{write\_all} vista prima il server potrebbe semplicemente completare l'invio.
+}
+
+\subsection{Provarli sulla stessa macchina}
+
+\begin{lstlisting}[language=bash, title={Il server, provato con nc prima di scrivere il client}]
+$ ./server &
+$ ss -tln | grep 5000
+LISTEN 0 16 0.0.0.0:5000 0.0.0.0:*
+$ nc 127.0.0.1 5000          # non e' il nostro codice
+hello
+hello
+$ ss -tn | grep 5000
+ESTAB 0 0 127.0.0.1:47122 127.0.0.1:5000
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{ss -tln} mostra i socket TCP in ascolto (\texttt{LISTEN}), con la coda da 16 e l'indirizzo
+          \texttt{0.0.0.0}, cioè \texttt{INADDR\_ANY}.
+    \item \texttt{nc} (\emph{netcat}) è un client TCP generico: quello che scriviamo viene inviato al server, e quello che
+          arriva viene stampato. La prima riga \texttt{hello} l'abbiamo scritta noi, la seconda è l'eco del server.
+    \item \texttt{ss -tn} mostra le connessioni stabilite (\texttt{ESTAB}): la porta 47122 è quella scelta dal kernel per
+          il client, che non ha chiamato \texttt{bind}.
+\end{itemize}
+
+Client e server comunicano attraverso \texttt{127.0.0.1} (\emph{localhost}): nulla raggiunge il cavo. Provare il
+server con \texttt{nc} \textbf{prima} di scrivere il client è un'ottima abitudine: se qualcosa non va, si sa già quale dei
+due programmi è sbagliato.
+
+% ══════════════════════════════════════════════════════════════
+\section{Un socket trasporta byte, non tipi}
+% ══════════════════════════════════════════════════════════════
+
+Abbiamo scritto \texttt{write(fd, \&x, sizeof x)} e compila. Sull'altra macchina sarà comunque sbagliato, per tre motivi.
+\begin{itemize}
+    \item \textbf{Dimensione}: \texttt{int} non ha la stessa larghezza ovunque; sulla rete sono sicuri solo i tipi a
+          larghezza fissa come \texttt{uint32\_t}.
+    \item \textbf{Ordine}: le due macchine possono memorizzare i byte di un numero in ordini opposti (argomento della
+          prossima lezione).
+    \item \textbf{Confini}: nel flusso nulla dice dove finisce un valore o un messaggio. Questo problema spetta a noi.
+\end{itemize}
+
+La risposta più semplice a tutti e tre è inviare \textbf{testo}: è ciò che hanno scelto HTTP, SMTP e il formato delle
+query DNS che vediamo nei comandi.
+
+\subsection{Codificare un messaggio come testo}
+
+\begin{lstlisting}[language={[POSIX]C}]
+char msg[128] = "";                  /* invio: numeri -> una riga */
+for (int i = 0; i < n; i++) {
+    char field[16];
+    snprintf(field, sizeof field, "%d ", a[i]);
+    strncat(msg, field, sizeof msg - strlen(msg) - 1);
+}
+write(fd, msg, strlen(msg));
+
+char *tok = strtok(line, " ");       /* ricezione: riga -> numeri */
+while (tok != NULL) {
+    vals[k++] = atoi(tok);
+    tok = strtok(NULL, " ");
+}
+\end{lstlisting}
+
+Con \texttt{a = \{7, 42, -3\}} si invia la stringa \texttt{"7 42 -3 "}, e il destinatario ricostruisce gli stessi tre
+numeri qualunque sia la sua architettura. Entrambi i lati devono però concordare sul \textbf{separatore} e
+sull'\textbf{ordine dei campi}: \textbf{quell'accordo è il protocollo applicativo}.
+
+\subsection{Dove finisce un messaggio?}
+
+\warning{Il client invia due righe. Quante read servono al server?}{
+    Non si può sapere. Può essere una sola chiamata che restituisce entrambe le righe, oppure tre chiamate che
+    restituiscono pezzi della prima. TCP è un \textbf{flusso di byte} e conserva l'ordine, nient'altro.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    seg/.style={draw=black!60, minimum height=0.5cm, inner sep=2pt, font=\scriptsize\ttfamily, anchor=west}]
+  \node[anchor=east] at (-0.2,0.6) {due write};
+  \node[seg, fill=ltra!45, minimum width=3.0cm] at (0,0.6) {ciao\textbackslash n};
+  \node[seg, fill=lapp!45, minimum width=3.6cm] at (3.05,0.6) {come va?\textbackslash n};
+  \node[anchor=east] at (-0.2,-0.3) {una read};
+  \node[seg, fill=netblue!15, minimum width=6.65cm] at (0,-0.3) {ciao\textbackslash ncome va?\textbackslash n};
+  \node[anchor=east] at (-0.2,-1.2) {tre read};
+  \node[seg, fill=netblue!15, minimum width=1.5cm] at (0,-1.2) {ci};
+  \node[seg, fill=netblue!15, minimum width=2.5cm] at (1.55,-1.2) {ao\textbackslash ncome};
+  \node[seg, fill=netblue!15, minimum width=2.55cm] at (4.1,-1.2) {\ va?\textbackslash n};
+\end{tikzpicture}
+\caption{Gli stessi byte possono arrivare raggruppati in modi diversi: i confini tra le \texttt{write} non viaggiano.}
+\end{figure}
+
+\begin{itemize}
+    \item Le nostre chiamate \texttt{write} \textbf{non sono messaggi}: i confini tra una e l'altra non vengono trasmessi.
+    \item Il destinatario quindi non può sapere che un messaggio è completo, a meno che non glielo dica il
+          \textbf{protocollo}.
+    \item I modi sono due, e ogni protocollo ne sceglie uno: un \textbf{delimitatore} da cercare, oppure una
+          \textbf{lunghezza} annunciata prima.
+    \item HTTP li usa entrambi: una riga vuota chiude l'intestazione, poi \texttt{Content-Length} conta i byte del corpo.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Un client alla volta}
+% ══════════════════════════════════════════════════════════════
+
+\warning{Due client si connettono a un secondo di distanza. Che cosa vede il secondo?}{
+    La sua \texttt{connect} riesce \textbf{subito}, perché la connessione la completa il kernel, e poi \textbf{nulla},
+    finché il server non ha finito di servire il primo.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    bx/.style={draw=netgreen!70!black, fill=netgreen!12, rounded corners=2pt, minimum height=0.5cm, anchor=west, font=\scriptsize\ttfamily}]
+  \node[anchor=east, font=\scriptsize\bfseries\sffamily] at (-0.2,0) {server};
+  \node[bx, minimum width=1.2cm] at (0,0) {accept};
+  \node[bx, minimum width=3.6cm] at (1.3,0) {serve(C1)};
+  \node[bx, minimum width=1.2cm] at (5.0,0) {accept};
+  \node[bx, minimum width=3.0cm] at (6.3,0) {serve(C2)};
+  \node[anchor=east, font=\scriptsize\bfseries\sffamily] at (-0.2,-0.9) {client 1};
+  \node[bx, minimum width=3.6cm, font=\scriptsize\sffamily] at (1.3,-0.9) {connesso, scambia dati};
+  \node[anchor=east, font=\scriptsize\bfseries\sffamily] at (-0.2,-1.8) {client 2};
+  \node[draw=netorange, dashed, thick, fill=netorange!8, rounded corners=2pt, minimum height=0.5cm, minimum width=3.1cm, anchor=west, font=\scriptsize\sffamily, text=netorange!90!black] at (2.2,-1.8) {in coda: nessuna risposta};
+  \node[bx, minimum width=3.0cm, font=\scriptsize\sffamily] at (6.3,-1.8) {connesso, scambia dati};
+  \draw[-{Stealth[length=2mm]}, netorange] (2.25,-2.6) -- (2.25,-2.1);
+  \node[anchor=north west, text=netorange!90!black] at (1.6,-2.6) {\texttt{connect()} è già ritornata};
+  \draw[-{Stealth[length=2mm]}, thick, black!60] (0,-3.3) -- (9.6,-3.3) node[right] {tempo};
+\end{tikzpicture}
+\caption{Con un server sequenziale il secondo client resta in coda per tutta la conversazione del primo.}
+\end{figure}
+
+Il server \textbf{non è lento}: è occupato dentro \texttt{serve}. Un client che non invia mai nulla blocca tutti gli
+altri. Provando il server di questo capitolo con due \texttt{nc}, con il primo tenuto aperto per due secondi, il secondo
+ottiene l'eco solo dopo circa due secondi e mezzo, quando il primo ha chiuso.
+
+Un server che serve un client alla volta è \textbf{corretto} e \textbf{inutilizzabile}: da qui partiranno le prossime
+lezioni.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il progetto: una chat in nove versioni}
+% ══════════════════════════════════════════════════════════════
+
+Per il resto del corso si scrive \textbf{un solo programma}, invece di un esercizio nuovo ogni settimana: un
+\textbf{servizio di chat a righe}.
+\begin{itemize}
+    \item Ogni versione mantiene funzionante la precedente e ne rimuove \textbf{un} limite.
+    \item Prima la \textbf{concorrenza}: processi, thread, un solo processo che osserva molte connessioni insieme, un pool
+          di worker.
+    \item Poi il \textbf{protocollo}: delimitazione vera dei messaggi e codici di errore, e una versione su datagrammi
+          che deve sopravvivere alle perdite.
+    \item Infine lo si \textbf{osserva dall'esterno}: i pacchetti che genera, e quanto costa sotto carico.
+\end{itemize}
+Ogni limite si scopre \textbf{eseguendo} la versione precedente, non perché qualcuno lo dice.
+
+\begin{esercizio}{Iterazione 1: una chat TCP sequenziale}
+Scrivere:
+\begin{itemize}
+    \item un \textbf{server} (\texttt{chatd}) che accetta un client alla volta e, per ogni riga che riceve, rimanda
+          indietro la stessa riga preceduta da un contatore;
+    \item un \textbf{client} (\texttt{chat}) che legge righe dal terminale e stampa ciò che torna indietro.
+\end{itemize}
+Le righe sono separate da \texttt{\textbackslash n}, e una riga è completa solo quando lo si è visto: \textbf{ciclare
+sulla read}. Il client si ferma alla fine dell'input e chiude; il server nota lo \texttt{0} e torna ad \texttt{accept}.
+I nomi \texttt{chatd} e \texttt{chat} restano gli stessi per tutte e nove le versioni. Provare su \texttt{127.0.0.1},
+prima il server con \texttt{nc}, poi con il proprio client. Infine aprire un secondo client e rispondere: che cosa vede, e
+che cosa mostra \texttt{ss -tn} mentre aspetta?
+
+\svolgimento
+Il punto delicato è proprio la riga: una \texttt{read} può restituire mezza riga, o due righe insieme. Il server tiene
+quindi un buffer con la riga in costruzione, e risponde solo quando incontra \texttt{\textbackslash n}.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={chatd.c: la conversazione}]
+static void serve(int fd) {
+    char buf[512], line[512];
+    size_t len = 0;                    /* byte della riga in costruzione */
+    int counter = 0;
+    ssize_t n;
+    while ((n = read(fd, buf, sizeof buf)) > 0) {
+        for (ssize_t i = 0; i < n; i++) {
+            if (len < sizeof line - 1) line[len++] = buf[i];
+            if (buf[i] == '\n') {      /* riga completa: si risponde */
+                char out[600];
+                int k = snprintf(out, sizeof out, "%d: %.*s",
+                                 ++counter, (int) len, line);
+                if (write_all(fd, out, k) < 0) return;
+                len = 0;
+            }
+        }
+    }
+    if (n < 0) perror("read");
+}
+\end{lstlisting}
+
+Il resto di \texttt{chatd.c} è identico al server del capitolo: socket di ascolto, \texttt{SO\_REUSEADDR},
+\texttt{bind}, \texttt{listen} e il ciclo di \texttt{accept}. Il client legge dal terminale con \texttt{fgets} e, per
+la risposta, legge dal socket finché non vede un \texttt{\textbackslash n}:
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={chat.c: il ciclo principale}]
+/* legge finche' non ha visto un '\n'; 0 se il server ha chiuso */
+static ssize_t read_line(int fd, char *buf, size_t size) {
+    size_t len = 0;
+    while (len < size - 1) {
+        ssize_t n = read(fd, buf + len, 1);
+        if (n <= 0) return n;
+        if (buf[len++] == '\n') break;
+    }
+    buf[len] = '\0';
+    return len;
+}
+
+/* ... socket() e connect() come nel client del capitolo ... */
+while (fgets(line, sizeof line, stdin) != NULL) {   /* fine input: Ctrl-D */
+    if (write_all(fd, line, strlen(line)) < 0) { perror("write"); break; }
+    if (read_line(fd, reply, sizeof reply) <= 0) break;
+    fputs(reply, stdout);
+}
+close(fd);
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash, title={Una prova}]
+$ ./chatd &
+$ printf 'ciao\ncome va?\n' | ./chat
+1: ciao
+2: come va?
+\end{lstlisting}
+
+Il contatore riparte da 1 a ogni nuovo client, perché è una variabile locale di \texttt{serve}. Anche inviando una riga
+spezzata in due \texttt{write} (per esempio \texttt{"meta' "} e poi \texttt{"riga\textbackslash n"}), il server
+risponde una volta sola, con \texttt{1: meta' riga}: il buffer ha fatto il suo lavoro.
+
+Il secondo client, mentre il primo è collegato, vede la \texttt{connect} riuscire e poi nessuna risposta. In
+\texttt{ss -tn} la sua connessione compare già come \texttt{ESTAB}: il kernel l'ha completata e messa in coda, ma
+nessuno ha ancora chiamato \texttt{accept} per lui.
+\end{esercizio}
+
+\info{Leggere un byte alla volta}{
+    \texttt{read\_line} legge un byte per chiamata: è semplice e corretto, ma fa una chiamata di sistema per ogni carattere.
+    Va bene per il client di una chat; un server molto carico userebbe invece un buffer, come fa \texttt{serve}.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Un \textbf{descriptor} è la maniglia del processo su qualcosa che il kernel ha aperto, e un socket è uno di questi.
+    \item \texttt{read} e \texttt{write} restituiscono \textbf{quanto è stato effettivamente trasferito}: su un socket, raramente
+          ciò che si è chiesto. Si cicla; lo \texttt{0} di \texttt{read} significa che l'altro lato ha chiuso.
+    \item Le chiamate falliscono con $-1$ e lasciano il motivo in \texttt{errno}; \texttt{perror} lo stampa.
+    \item Server: \texttt{socket}, \texttt{bind}, \texttt{listen}, \texttt{accept}. Client: \texttt{socket}, \texttt{connect}.
+    \item Il server tiene un \textbf{socket di ascolto} che non trasporta mai dati e un \textbf{socket di connessione} per ogni client.
+    \item Un flusso trasporta \textbf{byte}: i confini dei messaggi non esistono, a meno che il protocollo non li crei con un
+          delimitatore o una lunghezza.
+    \item Un server che serve un client alla volta è corretto e inutilizzabile: è da qui che si parte.
+\end{itemize}
+}

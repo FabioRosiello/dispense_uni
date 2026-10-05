@@ -27,6 +27,17 @@
 \gdef\documentlstlabel{Listato}
 \gdef\documentlsttitle{Listati}
 \lstset{mathescape=false, upquote=true, title={}}
+
+% FiraCode SENZA legature: la classe usa lo stile FiraCodeStyle, che nei listati
+% disegna "!=" come un unico simbolo di disuguaglianza, "<=" come minore-o-uguale
+% e "->" come una freccia. In un listato C chi copia il codice deve vedere
+% esattamente i caratteri da digitare.
+\newfontfamily\FiraCodeNL{FiraCode}[
+  Path = fonts/, Extension = .ttf,
+  UprightFont = *-Regular, BoldFont = *-Bold,
+  Ligatures = NoCommon, Contextuals = NoAlternate]
+\let\FiraCode\FiraCodeNL
+\lstset{basicstyle=\linespread{1.15}\footnotesize\FiraCodeNL, literate={}}
 \captionsetup[lstlisting]{labelformat=empty, font={footnotesize,sf}, textfont={color=primary!80!black}, skip=2pt}
 \lstdefinelanguage{http}{morekeywords={GET,POST,HEAD,PUT,DELETE,HTTP/1.1,HTTP/1.0}, sensitive=true}
 
@@ -190,3 +201,65 @@
   },
   pinint/.style={circle, draw, inner sep=0pt, minimum size=4.5pt, fill=white},
 }
+
+% ============================================================
+%  UN CONCETTO NON SI SPEZZA FRA DUE PAGINE
+% ============================================================
+% Ogni listato è chiuso in una minipage (una scatola indivisibile): se non
+% entra in fondo alla pagina passa intero alla successiva. Il listato più
+% lungo della dispensa ha 56 righe, quindi sta sempre in una pagina.
+% La frase che introduce un listato, una figura, una tabella o una lista
+% resta attaccata a ciò che introduce, e un paragrafo non si divide.
+\newcommand{\rpdattacca}{\par\nopagebreak}
+\AddToHook{env/lstlisting/before}{\rpdattacca\noindent\begin{minipage}{\linewidth}}
+% dopo un listato si può andare a pagina nuova: due listati consecutivi
+% non devono restare incollati in un blocco più alto di una pagina
+\AddToHook{env/lstlisting/after}{\end{minipage}\par\penalty0 }
+\AddToHook{env/figure/before}{\rpdattacca}
+\AddToHook{env/table/before}{\rpdattacca}
+\interlinepenalty=10000
+\makeatletter
+\@beginparpenalty=10000
+\@itempenalty=10000
+\makeatother
+% Un titolo non resta da solo in fondo alla pagina
+\AddToHook{cmd/section/before}{\Needspace{12\baselineskip}}
+\AddToHook{cmd/subsection/before}{\Needspace{7\baselineskip}}
+
+% Il linguaggio [POSIX]C della classe dichiara "*" come otherkeyword: listings
+% consuma cosi' l'asterisco di "*/" e i commenti /* ... */ non si chiudono piu',
+% colorando come commento tutto il codice successivo. Lo ridefiniamo senza "*".
+\lstdefinelanguage[POSIX]{C}
+                  []{}
+                  { alsoletter={\#},
+                    sensitive=true,
+                    %% Handle directives
+                    moredelim=*[s][{\color{violet!60!white}}]{\#include\ <}{.h>},
+                    moredelim=*[l][{\color{blue!65!white}}]\#if,
+                    moredelim=*[l][{\color{blue!65!white}}]\#endif,
+                    moredelim=*[s][{\color{violet!60!white!70!black}}]{\#include\ "}{.h"},
+                    moredelim=*[l][{\color{blue!90!white!70!black}}]\#define,
+                    moredelim=*[s][{\color{turquoise!70!black}}]{[}{]},
+                    %% Comments
+                    comment=[l]//,
+                    morecomment=[s]{/*}{*/},
+                    % Strings
+                    string=[b]{"},
+                    morestring=[b]{'},
+                    % Modifiers
+                    keywords=[0]{const, unsigned, signed, static, volatile, typedef, struct, union, enum, atomic_t},
+                    % Primitives
+                    keywords=[1]{int, float, double, long, short, char, void, bool},
+                    % Logical constructs
+                    keywords=[2]{if, else, return, for, while, do},
+                    % Operators
+                    otherkeywords={&},
+                    keywords=[3]{&},
+                    % API structs
+                    % Colors
+                    directivestyle=\color{blue!85!white},
+                    keywordstyle=[0]\color{cherryred},
+                    keywordstyle=[1]\color{green!75!black},
+                    keywordstyle=[2]\color{cherryred},
+                    keywordstyle=[3]\color{naplesyellow!75!black},
+                  }[keywords,comments,strings,directives]
