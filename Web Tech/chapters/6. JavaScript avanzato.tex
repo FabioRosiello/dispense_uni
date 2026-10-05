@@ -18,34 +18,11 @@ oggetti. JavaScript la realizza in un modo particolare, detto
   oggetto. Quando accediamo a una proprietà di un oggetto e questa manca,
   JavaScript la cerca risalendo la \term{catena dei prototipi}.}
 
-\begin{figure}[H]
-  \centering
-  \begin{tikzpicture}[font=\Lato\small,
-      o/.style={rounded corners=3pt, draw=primary!65!black, line width=0.9pt,
-                fill=primary!8!white, minimum width=3.0cm, minimum height=1.0cm,
-                align=center},
-      a/.style={-{Stealth[length=6pt,width=5pt]}, line width=1pt,
-                draw=accent!70!black}]
-
-    \node[o] (a) at (0,0)    {\code{cat}\\[2pt]\scriptsize name: "Garfield"};
-    \node[o] (b) at (0,-2.0) {\code{pet}\\[2pt]\scriptsize legs: 4};
-    \node[o, draw=neutral!55!white, fill=neutral!8!white] (c) at (0,-4.0)
-      {\code{Object.prototype}\\[2pt]\scriptsize toString(), valueOf()\ldots};
-    \node[font=\Lato\small, text=neutral!35!black] (n) at (0,-5.4) {\code{null}};
-
-    \draw[a] (a) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (b);
-    \draw[a] (b) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (c);
-    \draw[a] (c) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (n);
-
-    \node[font=\Lato\scriptsize, anchor=west, align=left, text=neutral!25!black]
-      at (2.6,-1.0) {la ricerca di una proprietà\\ risale la catena finché non\\
-                     la trova, o finché non\\ arriva a \code{null}};
-  \end{tikzpicture}
-  \caption{La catena dei prototipi.}
-  \label{fig:proto-chain}
-\end{figure}
+La ricerca di una proprietà risale la catena un anello alla volta, finché non
+la trova o finché non arriva a \code{null}.
 
 \begin{esempio}{Impostare un prototipo}
+\begin{affianco}[0.6][c]
 \begin{lstlisting}[style=js, name=prototipi.js]
 let pet = {
   legs: 4,
@@ -60,6 +37,26 @@ cat.greet();              // "..."
 console.log(cat.legs);    // 4
 console.log(cat.__proto__);  // Object { legs: 4, greet: greet() }
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{cat} non ha \code{legs} né \code{greet}:\\
+                 li trova risalendo la catena dei prototipi.]
+\begin{tikzpicture}[
+    pr/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+      draw=accent!70!black}]
+  \mchiave{1.0cm}
+  \oggetto{c}{(0,0)}{2.6cm}{cat}{}
+  \oggetto{p}{(0,-1.65)}{2.6cm}{pet}{legs/4, greet/function}
+  \oggetto[fill=neutral!12!white]{op}{(0,-3.75)}{2.6cm}{Object.prototype}
+    {toString/function, \ldots/}
+  \node[mcod, text=neutral!35!black] (n) at (0,-5.55) {null};
+  \draw[pr] (c-box.south) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (p.north);
+  \draw[pr] (p-box.south) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (op.north);
+  \draw[pr] (op-box.south) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (n.north);
+  \draw[mcerca] ([xshift=-4pt]c-1.west) to[out=180, in=180]
+    node[mnota, left]{\code{cat.legs}?} ([xshift=-4pt]p-1.west);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \code{\_\_proto\_\_} è un getter/setter per la vera proprietà
 \code{[[Prototype]]}. Nel JavaScript moderno si preferiscono
@@ -73,6 +70,7 @@ Questo è il punto che genera più confusione: i prototipi intervengono
 cancellazione agiscono \textbf{direttamente sull'oggetto}.
 
 \begin{esempio}{Scrittura e prototipo}
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=scrittura-proto.js]
 let pet = { legs: 4 }
 
@@ -82,12 +80,31 @@ let snake = { name: "Salazar" }
 Object.setPrototypeOf(cat, pet);
 Object.setPrototypeOf(snake, pet);
 
-snake.legs = 0;   // NON modifica pet: crea una proprieta' propria su snake
+snake.legs = 0;   // NON tocca pet: crea legs su snake
 
-console.log(`Cat legs: ${cat.legs}`);      // Cat legs: 4   (letta dal prototipo)
-console.log(`Snake legs: ${snake.legs}`);  // Snake legs: 0 (propria)
-console.log(`Pet legs: ${pet.legs}`);      // Pet legs: 4   (intatta)
+console.log(`Cat legs: ${cat.legs}`);      // 4 (dal prototipo)
+console.log(`Snake legs: ${snake.legs}`);  // 0 (propria)
+console.log(`Pet legs: ${pet.legs}`);      // 4 (intatta)
 \end{lstlisting}
+\risultato
+\begin{immagine}[La scrittura crea \code{legs} su \code{snake}:\\
+                 il prototipo resta com'era.]
+\begin{tikzpicture}[
+    pr/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+      draw=accent!70!black}]
+  \mchiave{1.0cm}
+  \oggetto{p}{(1.7,0)}{2.3cm}{pet}{legs/4}
+  \oggetto{c}{(0,-2.2)}{2.6cm}{cat}{name/"Garfield"}
+  \oggetto{s}{(3.4,-2.2)}{2.6cm}{snake}{name/"Salazar", legs/0}
+  \node[draw=accent!60!black, line width=1.1pt, fit=(s-2), inner sep=0pt] {};
+  \node[mnota, anchor=west, text=accent!60!black] at ([xshift=3pt]s-2.east)
+    {propria};
+  \draw[pr] (c.north) -- ([xshift=0.35cm]p-box.south west);
+  \draw[pr] (s.north) -- ([xshift=-0.35cm]p-box.south east);
+  \node[wtlab] at (1.7,-1.3) {\code{[[Prototype]]}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Assegnando \code{snake.legs = 0} non si è toccato \code{pet}: si è creata una
 proprietà \textbf{propria} su \code{snake}, che da quel momento
@@ -100,6 +117,7 @@ Possiamo creare oggetti con le funzioni costruttore, come \code{new Pet()}.
 Quando \code{Pet.prototype} è un oggetto, l'operatore \code{new} lo usa per
 impostare il \code{[[Prototype]]} dell'oggetto appena creato.
 
+\begin{affianco}[0.53][c]
 \begin{lstlisting}[style=js, name=costruttore-proto.js]
 let pet = { eats: true };
 
@@ -112,6 +130,22 @@ Duck.prototype = pet;
 let chuck = new Duck("Chuck");   // chuck.__proto__ == pet
 console.log(chuck.eats);         // true
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{new} collega \code{chuck} all'oggetto\\
+                 contenuto in \code{Duck.prototype}.]
+\begin{tikzpicture}[
+    pr/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+      draw=accent!70!black}]
+  \mchiave{0.95cm}
+  \node[mfun] (d) at (0,0) {Duck};
+  \oggetto{p}{(3.6,0)}{2.0cm}{pet}{eats/true}
+  \oggetto{c}{(3.6,-2.0)}{2.4cm}{chuck}{name/"Chuck"}
+  \draw[pr] (d.east) -- node[wtlab, above]{\code{prototype}} (p-box.west |- d.east);
+  \draw[pr] (c.north) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (p-box.south);
+  \draw[mrif, dashed] (d.south) |- node[wtlab, pos=0.25, left]{\code{new}} (c-box.west);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 E se alla funzione costruttore non assegniamo nessun \code{prototype}? In quel
 caso viene usato un \term{prototipo predefinito}: un oggetto con una sola
@@ -136,11 +170,13 @@ ciclo \code{for..in} né in \code{Object.keys}.
   semplicemente, si \textbf{aggiungono} proprietà al prototipo esistente invece
   di sostituirlo.}
 
-Il codice seguente crea esattamente gli oggetti della figura: una funzione
-costruttore \code{Pet} senza un \code{prototype} assegnato a mano, e due oggetti
-creati con \code{new}. I controlli in fondo verificano, una per una, le frecce
-del disegno.
+Il codice a sinistra crea esattamente gli oggetti dello schema a destra: una
+funzione costruttore \code{Pet} senza un \code{prototype} assegnato a mano, e due
+oggetti creati con \code{new}. I controlli in fondo verificano, una per una, le
+frecce del disegno.
 
+\begin{affianco}[0.55][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=costruttore-predefinito.js]
 function Pet(name, age) {
   this.name = name;
@@ -151,7 +187,7 @@ function Pet(name, age) {
 let chuck = new Pet("Chuck", 3);
 let rick  = new Pet("Rick", 7);
 
-// le frecce della figura
+// le frecce dello schema
 Pet.prototype.constructor === Pet;                          // true
 Object.getPrototypeOf(chuck) === Pet.prototype;             // true
 Object.getPrototypeOf(rick)  === Pet.prototype;             // true
@@ -160,44 +196,34 @@ Object.getPrototypeOf(Pet.prototype) === Object.prototype;  // true
 // constructor non e' una proprieta' di chuck: arriva dal prototipo
 chuck.hasOwnProperty("constructor");   // false
 chuck.constructor === Pet;             // true
-chuck.toString();                      // "[object Object]", da Object.prototype
+chuck.toString();     // "[object Object]", da Object.prototype
 \end{lstlisting}
-
-\begin{figure}[H]
-  \centering
-  \begin{tikzpicture}[font=\Lato\footnotesize,
-      o/.style={rounded corners=3pt, draw=primary!65!black, line width=0.8pt,
-                fill=primary!8!white, minimum width=2.9cm, minimum height=1.0cm,
-                align=center},
-      pt/.style={o, draw=accent!60!black, fill=accent!9!white},
-      g/.style={o, draw=neutral!55!white, fill=neutral!7!white},
-      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
-                draw=neutral!45!black}]
-
-    \node[o]  (fn) at (0,1.6)   {\code{Pet}\\\scriptsize (funzione)};
-    \node[pt] (pr) at (5.0,1.6) {\code{Pet.prototype}\\\scriptsize constructor: Pet};
-    \node[g]  (op) at (11.0,1.6) {\code{Object.prototype}\\\scriptsize toString()\ldots};
-
-    \node[o] (c1) at (3.4,-1.4) {\code{chuck}\\\scriptsize name: Chuck, age: 3};
-    \node[o] (c2) at (7.0,-1.4) {\code{rick}\\\scriptsize name: Rick, age: 7};
-
-    % Pet <-> Pet.prototype
-    \draw[a] ([yshift=6pt]fn.east) -- node[wtlab, above]{\code{prototype}}
-             ([yshift=6pt]pr.west);
-    \draw[a] ([yshift=-6pt]pr.west) -- node[wtlab, below]{\code{constructor}}
-             ([yshift=-6pt]fn.east);
-
-    % Pet.prototype -> Object.prototype
-    \draw[a] (pr.east) -- node[wtlab, above]{\code{[[Prototype]]}} (op.west);
-
-    % gli oggetti creati puntano al prototipo
-    \draw[a] (c1.north) -- ([xshift=-16pt]pr.south);
-    \draw[a] (c2.north) -- ([xshift=16pt]pr.south);
-    \node[wtlab] at (5.0,0.1) {\code{[[Prototype]]}};
-  \end{tikzpicture}
-  \caption{Costruttore, prototipo e oggetti creati.}
-  \label{fig:constructor-proto}
-\end{figure}
+\risultato
+\begin{immagine}[Costruttore, prototipo predefinito e oggetti creati.]
+\begin{tikzpicture}[
+    pr/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+      draw=accent!70!black},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+      draw=neutral!45!black}]
+  \mchiave{1.0cm}
+  \oggetto[fill=neutral!12!white]{op}{(2.2,2.9)}{2.8cm}{Object.prototype}
+    {toString/function}
+  \oggetto[fill=accent!14!white]{pp}{(2.2,0.9)}{2.8cm}{Pet.prototype}
+    {constructor/Pet}
+  \node[mfun] (fn) at (-1.35,0.67) {Pet};
+  \oggetto{c}{(0.85,-1.2)}{2.3cm}{chuck}{name/"Chuck", age/3}
+  \oggetto{r}{(3.55,-1.2)}{2.3cm}{rick}{name/"Rick", age/7}
+  \draw[pr] (pp.north) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}}
+    (op-box.south);
+  \draw[a] ([yshift=5pt]fn.east) -- node[wtlab, above]{\code{prototype}}
+    ([yshift=5pt]fn.east -| pp-box.west);
+  \draw[a] ([yshift=-5pt]fn.east -| pp-box.west) -- node[wtlab, below]{\code{constructor}}
+    ([yshift=-5pt]fn.east);
+  \draw[pr] (c.north) -- ([xshift=-0.5cm]pp-box.south);
+  \draw[pr] (r.north) -- ([xshift=0.5cm]pp-box.south);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Questo meccanismo ci permette, dato un oggetto, di risalire al costruttore che
 lo ha creato, e di usarlo per crearne uno nuovo dello stesso tipo:
@@ -221,6 +247,7 @@ console.log(chuck.name);   // "Bob" (!)
 
 \subsection{Due modi per aggiungere metodi}
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=metodi-proto.js]
 function describe() {
   console.log(`I'm ${this.name} and my age is ${this.age}`);
@@ -229,10 +256,10 @@ function describe() {
 function Pet(name, age) {
   this.name = name;
   this.age  = age;
-  this.describe = describe;   // (1) un metodo su OGNI oggetto creato
+  this.describe = describe;   // (1) su OGNI oggetto creato
 }
 
-Pet.prototype.describe = describe;   // (2) un solo metodo, sul prototipo
+Pet.prototype.describe = describe;   // (2) uno solo, condiviso
 
 let chuck = new Pet('Chuck', 3);
 let rick  = new Pet('Rick', 7);
@@ -240,6 +267,31 @@ let rick  = new Pet('Rick', 7);
 chuck.describe();
 rick.describe();
 \end{lstlisting}
+\risultato
+\begin{immagine}[Con (1) ogni oggetto ha il suo \code{describe};\\
+                 con (2) basta quello sul prototipo.]
+\begin{tikzpicture}[
+    pr/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+      draw=accent!70!black}]
+  \mchiave{1.15cm}
+  \oggetto[fill=accent!14!white]{pp}{(1.6,1.6)}{2.6cm}{Pet.prototype}
+    {describe/}
+  \oggetto{c}{(0,-0.5)}{2.4cm}{chuck}{name/"Chuck", age/3, describe/}
+  \oggetto{r}{(3.2,-0.5)}{2.4cm}{rick}{name/"Rick", age/7, describe/}
+  \node[mfun] (f) at (1.6,-3.2) {function describe};
+  \draw[pr] (c.north) -- ([xshift=-0.45cm]pp-box.south);
+  \draw[pr] (r.north) -- ([xshift=0.45cm]pp-box.south);
+  \node (d1) at ([xshift=-9pt]c-3.east) {};
+  \node (d2) at ([xshift=-9pt]r-3.east) {};
+  \node (dp) at ([xshift=-9pt]pp-1.east) {};
+  \riferimento{d1}{to[out=-90, in=150] (f.north west)}
+  \riferimento{d2}{to[out=-90, in=30] (f.north east)}
+  \riferimento{dp}{to[out=0, in=0, looseness=1.6] (f.east)}
+  \node[mnota, text=accent!60!black] at (-1.65,-1.4) {(1)};
+  \node[mnota, text=accent!60!black] at (4.9,1.6) {(2)};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \info{Quale dei due conviene}{
   Con la soluzione (1) ogni oggetto riceve una \textbf{propria copia} del
@@ -254,6 +306,7 @@ Gli \term{array} permettono di memorizzare sequenze ordinate di valori. Si
 dichiarano con la sintassi letterale a parentesi quadre o con il costruttore
 \code{Array}.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=array.js]
 // sintassi letterale
 let a = ["HTML", "CSS", "JS"];
@@ -263,6 +316,15 @@ console.log(a);   // Array(3) [ "HTML", "CSS", "JS" ]
 let b = new Array("HTML", "CSS", "JS");
 console.log(b);   // Array(3) [ "HTML", "CSS", "JS" ]
 \end{lstlisting}
+\risultato
+\begin{immagine}[Tre caselle, numerate a partire da 0.]
+\begin{tikzpicture}
+  \node[mnome, anchor=east] at (-0.1,0) {a};
+  \celle{a}{(0,0)}{"HTML", "CSS", "JS"}
+  \node[mnota, anchor=west] at ([xshift=8pt]a-box.east) {\code{length}: 3};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Indicizzazione}
 
@@ -270,6 +332,7 @@ Gli array sono indicizzati \textbf{a partire da 0}. I singoli valori si leggono
 e si scrivono con la notazione a parentesi quadre. La proprietà \code{length}
 contiene l'\textbf{indice massimo più uno}.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=indici.js]
 let a = ["HTML", "CSS", "JS"];
 
@@ -281,6 +344,17 @@ console.log(a[2]);       // JavaScript
 console.log(a[3]);       // React
 console.log(a.length);   // 4
 \end{lstlisting}
+\risultato
+\begin{immagine}[Dopo le due assegnazioni: \code{a[2]} è stata\\
+                 sovrascritta, \code{a[3]} è nuova.]
+\begin{tikzpicture}
+  \node[mnome, anchor=east] at (-0.1,0) {a};
+  \celle{a}{(0,0)}{"HTML", "CSS", "JavaScript", "React"}
+  \node[draw=accent!60!black, line width=1.1pt, fit=(a-2)(a-3), inner sep=0pt] {};
+  \node[mnota, anchor=west] at ([xshift=8pt]a-box.east) {\code{length}: 4};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{La proprietà length}
 
@@ -288,6 +362,7 @@ Si sarà notata la definizione insolita di \code{length}: non è il
 \textbf{conteggio} dei valori nell'array.
 
 \begin{esempio}{length non conta gli elementi}
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=length.js]
 let a = [1, 2, 3, 4, 5];
 a[999] = 998;
@@ -297,9 +372,27 @@ console.log(a[5]);       // undefined
 console.log(a[999]);     // 998
 console.log(a[2000]);    // undefined
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{length} vale l'indice più alto più uno,\\
+                 anche se in mezzo ci sono 994 caselle vuote.]
+\begin{tikzpicture}
+  \noindici
+  \node[mnome, anchor=east] at (-0.1,0) {a};
+  \celle{a}{(0,0)}{1, 2, 3, 4, 5, \mvuota\ \ldots\ \mvuota, 998}
+  \node[mcella, fill=neutral!10!white, draw=neutral!50!black, fit=(a-5),
+        inner sep=0pt] {};
+  \node at (a-5) {\Lato\scriptsize\itshape\color{neutral!45!black}994 caselle vuote};
+  \foreach \i in {0,...,4} \node[mindice, anchor=north] at ([yshift=-1pt]a-\i.south) {\i};
+  \node[mindice, anchor=north] at ([yshift=-1pt]a-5.south) {5 \ldots\ 998};
+  \node[mindice, anchor=north] at ([yshift=-1pt]a-6.south) {999};
+  \node[mnota, anchor=north] at ([yshift=-14pt]a-box.south) {\code{length}: 1000};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Un'altra cosa interessante è che \code{length} è \textbf{scrivibile}:
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=length2.js]
 let a = [1, 2, 3, 4, 5];
 
@@ -311,6 +404,18 @@ console.log(a);    // [1, 2, 3, <2 empty slots>]
 
 a.length = 0;      // svuota l'array
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}
+  \node[mcod, anchor=east] at (-0.2,0) {length = 3};
+  \celle{a}{(0,0)}{1, 2, 3}
+  \node[mcod, anchor=east] at (-0.2,-0.95) {length = 5};
+  \celle{b}{(0,-0.95)}{1, 2, 3, \mvuota, \mvuota}
+  \node[mcod, anchor=east] at (-0.2,-1.9) {length = 0};
+  \node[mnota, anchor=west] at (0,-1.9) {(nessuna casella)};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Assegnare a \code{length} un valore più piccolo è il modo più rapido (e più
 sorprendente) di troncare un array.
@@ -320,6 +425,7 @@ sorprendente) di troncare un array.
 
 Un array può contenere dati di tipo diverso, funzioni comprese.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=eterogeneo.js]
 let a = [
   "JavaScript",
@@ -331,6 +437,20 @@ let a = [
 console.log(a[1].name);        // John
 a[3]("Web Technologies");      // Hello Web Technologies
 \end{lstlisting}
+\risultato
+\begin{immagine}[Una casella può contenere qualunque valore,\\
+                 anche un riferimento a un oggetto o a una funzione.]
+\begin{tikzpicture}
+  \mchiave{0.75cm}
+  \node[mnome, anchor=east] at (-0.1,0) {a};
+  \celle{a}{(0,0)}{"JavaScript", \phantom{xx}, 12, \phantom{xx}}
+  \oggetto{o}{(1.6,-1.7)}{2.2cm}{Object}{name/"John", job/"Dev"}
+  \node[mfun] (f) at (4.3,-1.95) {function (name)};
+  \riferimento{a-1}{-- (a-1 |- o.north)}
+  \riferimento{a-3}{-- (a-3 |- f.north)}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Metodi per aggiungere e rimuovere}
 
@@ -345,9 +465,22 @@ a[3]("Web Technologies");      // Hello Web Technologies
 \end{tabular}
 \end{center}
 
-\begin{figure}[H]
-  \centering
-  \begin{tikzpicture}[font=\FiraCodeNL\footnotesize,
+\begin{affianco}[0.45][c]
+\begin{lstlisting}[style=js, name=metodi-array.js]
+let a = [1];      // [1]
+a.push(2);        // [1, 2]
+a.unshift(0);     // [0, 1, 2]
+
+let x = a.pop();     // [0, 1]
+let y = a.shift();   // [1]
+
+console.log(x);   // 2
+console.log(y);   // 0
+\end{lstlisting}
+\risultato
+\begin{immagine}[I quattro metodi fondamentali (in viola\\
+                 l'elemento aggiunto o rimosso).]
+\begin{tikzpicture}[font=\FiraCodeNL\footnotesize,
       c/.style={draw=primary!60!black, fill=primary!10!white, line width=0.7pt,
                 minimum size=0.55cm},
       n/.style={c, draw=accent!60!black, fill=accent!16!white},
@@ -384,27 +517,13 @@ a[3]("Web Technologies");      // Hello Web Technologies
       \node[c] at (3.4,0) {B}; \node[c] at (3.95,0) {C};
     \end{scope}
   \end{tikzpicture}
-  \caption{I quattro metodi fondamentali degli array (in viola l'elemento
-           aggiunto o rimosso).}
-  \label{fig:array-methods}
-\end{figure}
-
-\begin{lstlisting}[style=js, name=metodi-array.js]
-let a = [1];      // [1]
-a.push(2);        // [1, 2]
-a.unshift(0);     // [0, 1, 2]
-
-let x = a.pop();     // [0, 1]
-let y = a.shift();   // [1]
-
-console.log(x);   // 2
-console.log(y);   // 0
-\end{lstlisting}
+\end{immagine}
+\end{affianco}
 
 \info{Tutti i metodi, visualizzati}{
   Gli array hanno molti altri metodi (\code{slice}, \code{splice},
   \code{map}, \code{filter}, \code{find}, \code{includes}, \code{sort},
-  \ldots). Una visualizzazione di ciascuno, nello stesso stile della figura, si
+  \ldots). Una visualizzazione di ciascuno, nello stesso stile dello schema, si
   trova su \urlx{https://js-arrays-visualized.com/}.}
 
 \subsection{Iterazione}
@@ -412,6 +531,7 @@ console.log(y);   // 0
 Gli array si possono percorrere con un \code{for} sugli indici, con la sintassi
 \code{for..of}, oppure con il metodo \code{forEach}.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=iterazione.js]
 let a = ["a", "b", "c"];
 a[4] = "e";              // lascia un buco in posizione 3
@@ -430,6 +550,28 @@ for (let key in a) {
   console.log(a[key]);   // a, b, c, e   (salta il buco!)
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{for}, \code{for..of} e \code{forEach} passano da\\
+                 tutti gli indici; \code{for..in} salta il buco.]
+\begin{tikzpicture}[
+    si/.style={circle, fill=mok, inner sep=1.6pt},
+    lab/.style={mnota, anchor=east}]
+  \node[mnome, anchor=east] at (-0.1,0) {a};
+  \celle{a}{(0,0)}{"a", "b", "c", \mvuota, "e"}
+  \node[lab] at (-0.1,-0.9) {\code{for}, \code{for..of}};
+  \node[lab] at (-0.1,-1.75) {\code{for..in}};
+  \foreach \i in {0,...,4} {
+    \node[si] at (a-\i |- 0,-0.9) {};
+  }
+  \node[mindice, anchor=north, text=neutral!40!black] at ([yshift=-4pt]a-3 |- 0,-0.9)
+    {undefined};
+  \foreach \i in {0,1,2,4} {
+    \node[si] at (a-\i |- 0,-1.75) {};
+  }
+  \node at (a-3 |- 0,-1.75) {\merr};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \warning{Non usare for..in sugli array}{
   Poiché gli array sono oggetti, \code{for..in} funziona, ma è una cattiva idea
@@ -444,6 +586,7 @@ for (let key in a) {
 Gli elementi di un array possono essere altri array: è così che si definiscono
 le matrici.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=matrice.js]
 let matrix = [
   [1, 2, 3],
@@ -455,18 +598,41 @@ console.log(matrix[0][0]);   // 1
 console.log(matrix[1][1]);   // 5
 console.log(matrix[2][2]);   // 9
 \end{lstlisting}
+\risultato
+\begin{immagine}[Un array di array: il primo indice sceglie la riga,\\
+                 il secondo la colonna.]
+\begin{tikzpicture}[
+    m/.style={mcella, minimum width=0.62cm},
+    d/.style={m, fill=accent!14!white, draw=accent!55!black}]
+  \foreach \r in {0,1,2} {
+    \node[mcod, anchor=east] at (-0.15,-\r*0.62) {matrix[\r]};
+    \foreach \c in {0,1,2} {
+      \pgfmathtruncatemacro{\v}{\r*3+\c+1}
+      \ifnum\r=\c
+        \node[d] at (\c*0.62+0.31,-\r*0.62) {\v};
+      \else
+        \node[m] at (\c*0.62+0.31,-\r*0.62) {\v};
+      \fi
+    }
+  }
+  \foreach \c in {0,1,2}
+    \node[mindice] at (\c*0.62+0.31,0.45) {[\c]};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \section{Assegnamenti destrutturanti}
 
 Una sintassi speciale che permette di \guillemotleft spacchettare\guillemotright\ un array in più
 variabili.
 
+\begin{affianco}[0.56][c]
 \begin{lstlisting}[style=js, name=destrutturazione.js]
-let [x, y] = ["a", "b", "c"];   // gli elementi in eccesso vengono scartati
+let [x, y] = ["a", "b", "c"];   // l'eccesso viene scartato
 console.log(x);      // a
 console.log(y);      // b
 
-let [a, b, ...rest] = [1, 2, 3, 4, 5];   // il resto finisce in rest
+let [a, b, ...rest] = [1, 2, 3, 4, 5];   // il resto in rest
 console.log(a);      // 1
 console.log(b);      // 2
 console.log(rest);   // [3, 4, 5]
@@ -478,18 +644,65 @@ function greet(msg, ...names) {
 
 greet("Hello", "Ann", "Bob", "Carl");   // Hello to Ann,Bob,Carl
 \end{lstlisting}
+\risultato
+\begin{immagine}[Ogni variabile prende la casella nella sua posizione;\\
+                 \code{...rest} raccoglie tutte quelle rimaste.]
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.75pt,
+      draw=accent!70!black},
+    v/.style={mvar, minimum width=0.62cm}]
+  \noindici
+  % [x, y] = ["a", "b", "c"]
+  \celle{p}{(0,0)}{"a", "b", "c"}
+  \node[v] (x) at (p-0 |- 0,-1.05) {"a"};
+  \node[mnome, anchor=north] at (x.south) {x};
+  \node[v] (y) at (p-1 |- 0,-1.05) {"b"};
+  \node[mnome, anchor=north] at (y.south) {y};
+  \draw[a] (p-0) -- (x); \draw[a] (p-1) -- (y);
+  \node[mnota, text=merr, anchor=north] at ([yshift=-3pt]p-2.south) {scartato};
+  % [a, b, ...rest] = [1, 2, 3, 4, 5]
+  \celle{q}{(2.9,0)}{1, 2, 3, 4, 5}
+  \node[v] (va) at (q-0 |- 0,-1.05) {1};
+  \node[mnome, anchor=north] at (va.south) {a};
+  \node[v] (vb) at (q-1 |- 0,-1.05) {2};
+  \node[mnome, anchor=north] at (vb.south) {b};
+  \draw[a] (q-0) -- (va); \draw[a] (q-1) -- (vb);
+  \node[mvar, minimum width=1.6cm] (vr) at (q-3 |- 0,-1.05) {[3, 4, 5]};
+  \node[mnome, anchor=north] at (vr.south) {rest};
+  \draw[wtbrace] ([yshift=-1pt]q-4.south east) -- ([yshift=-1pt]q-2.south west);
+  \draw[a] ([yshift=-5pt]q-3.south) -- (vr);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \section{Iterabili}
 
 Il ciclo \code{for..of} funziona con gli \term{oggetti iterabili}. Gli array
 sono iterabili, e lo sono anche le stringhe.
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=iterabili.js]
 let string = "Web Technologies!";
 for (let char of string) {
   console.log(char);   // W, e, b, , T, e, ...
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Una stringa è iterabile: \code{for..of} la visita\\
+                 un carattere alla volta.]
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.75pt,
+      draw=accent!70!black}]
+  \noindici
+  \tikzset{mcella/.append style={minimum width=0.5cm}}
+  \celle{s}{(0,0)}{W, e, b, \textvisiblespace, T, e, c, h, \ldots}
+  \foreach \i/\j in {0/1, 1/2, 2/3, 3/4, 4/5} {
+    \draw[a] ([yshift=-3pt]s-\i.south) to[out=-60, in=-120] ([yshift=-3pt]s-\j.south);
+  }
+  \node[mnota, anchor=north west] at ([yshift=-14pt]s-0.south west) {\code{char} assume un valore per giro};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 E se avessimo un oggetto nostro che rappresenta una collezione di valori e
 volessimo usarlo in un \code{for..of}?
@@ -523,6 +736,7 @@ Per rendere un oggetto iterabile bisogna implementare il metodo speciale
 \end{itemize}
 
 \begin{esempio}{Implementare Symbol.iterator}
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=symbol-iterator.js]
 let range = { min: 1, max: 10, step: 3 }
 
@@ -545,6 +759,35 @@ range[Symbol.iterator] = function () {
 for (let value of range)
   console.log(value);   // 1, 4, 7, 10
 \end{lstlisting}
+\risultato
+\begin{immagine}[Il dialogo fra il ciclo e l'iteratore: una chiamata\\
+                 a \code{Symbol.iterator}, poi \code{next()} a ogni giro.]
+\begin{tikzpicture}[
+    att/.style={rounded corners=3pt, draw=primary!65!black, fill=primary!12!white,
+      line width=0.7pt, font=\Lato\scriptsize\bfseries, minimum width=2.2cm,
+      minimum height=0.55cm},
+    vita/.style={dashed, draw=neutral!55!white, line width=0.7pt},
+    chiama/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=primary!70!black},
+    torna/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.7pt,
+      draw=neutral!50!black, dashed},
+    msg/.style={mcod, above, inner sep=1.5pt}]
+  \node[att] (f) at (0,0) {for..of};
+  \node[att] (r) at (5.2,0) {range};
+  \draw[vita] (f.south) -- (0,-6.5);
+  \draw[vita] (r.south) -- (5.2,-6.5);
+  \draw[chiama] (0,-0.75) -- node[msg]{range[Symbol.iterator]()} (5.2,-0.75);
+  \node[att, fill=accent!12!white, draw=accent!55!black] (it) at (5.2,-1.55) {iteratore};
+  \draw[torna] (it.west) -- node[msg]{iteratore} (0,-1.55);
+  \foreach \y/\v in {-2.35/{\{done: false, value: 1\}}, -3.35/{\{done: false, value: 4\}},
+                     -4.35/{\ldots\ value: 7, poi 10 \ldots}, -5.35/{\{done: true\}}} {
+    \draw[chiama] (0,\y) -- node[msg]{next()} (5.2,\y);
+    \draw[torna] (5.2,\y-0.45) -- node[msg]{\v} (0,\y-0.45);
+  }
+  \node[mnota, anchor=west, text=mok] at (0.1,-6.2) {il ciclo termina};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 È anche possibile lavorare direttamente con l'iteratore. Il ciclo seguente è
 equivalente al \code{for..of} qui sopra:
@@ -581,6 +824,8 @@ oggetti? Non proprio: le mappe ammettono chiavi di \textbf{qualunque tipo}.
 \end{center}
 
 \begin{esempio}{Mappe contro oggetti}
+\begin{affianco}[0.55][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=mappe.js]
 let map = new Map();
 let o = {};
@@ -597,6 +842,20 @@ o[true] = "Bool"; o["true"] = "String";
 
 console.log(o);   // Object { 1: "String", true: "String" }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Nella mappa le chiavi conservano il tipo; nell'oggetto\\
+                 diventano stringhe e due coppie si sovrascrivono.]
+\begin{tikzpicture}
+  \mchiave{1.05cm}
+  \oggetto[fill=accent!14!white]{m}{(0,0)}{2.6cm}{Map (4 chiavi)}
+    {1/"Num", "1"/"Str", true/"Bool", "true"/"Str"}
+  \oggetto{o}{(3.4,0)}{2.6cm}{Object (2 chiavi)}
+    {"1"/"String", "true"/"String"}
+  \node[mnota, anchor=north west, align=left] at ([yshift=-4pt]o-box.south west)
+    {\code{1} e \code{"1"} sono\\ la stessa chiave \code{"1"}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 La differenza è netta: nell'oggetto le chiavi vengono \textbf{convertite in
 stringa}, quindi \code{1} e \code{"1"} sono la stessa chiave e i valori si
@@ -646,6 +905,7 @@ valori \textbf{senza ripetizioni}.
 \end{tabular}
 \end{center}
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=insiemi.js]
 let set = new Set();
 
@@ -663,6 +923,30 @@ for (let user of set) {
   console.log(user.name);       // Eric, Stan, Kyle
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Aggiungere un valore già presente non cambia nulla.]
+\begin{tikzpicture}[
+    el/.style={rounded corners=2pt, draw=primary!65!black, fill=white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, minimum height=0.5cm},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.75pt,
+      draw=neutral!45!black}]
+  \node[el] (e) at (0,0) {eric};
+  \node[el] (s1) at (1.1,0) {stan};
+  \node[el] (k) at (2.2,0) {kyle};
+  \begin{pgfonlayer}{background}
+  \node[draw=accent!60!black, fill=accent!7!white, rounded corners=8pt,
+        line width=0.8pt, fit=(e)(s1)(k), inner sep=7pt,
+        label={[mnota]above:\code{set} \quad \code{size}: 3}] (set) {};
+  \end{pgfonlayer}
+  \node[el, draw=neutral!45!white, text=neutral!50!black] (e2) at (4.6,0.4) {eric};
+  \node[el, draw=neutral!45!white, text=neutral!50!black] (k2) at (4.6,-0.4) {kyle};
+  \draw[a] (e2.west) -- node[fill=white, inner sep=0pt]{\merr} ([yshift=0.25cm]set.east);
+  \draw[a] (k2.west) -- node[fill=white, inner sep=0pt]{\merr} ([yshift=-0.25cm]set.east);
+  \node[mnota, anchor=west] at ([xshift=4pt]e2.east) {già presente};
+  \node[mnota, anchor=west] at ([xshift=4pt]k2.east) {già presente};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \section{Classi}
 
@@ -671,6 +955,7 @@ classi sono modelli per creare oggetti. In JavaScript i costruttori e
 \code{new} servono già a questo, ma il linguaggio offre anche un costrutto
 \code{class} più evoluto.
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=classi.js]
 class Pet {
   constructor(name) { this.name = name }
@@ -680,6 +965,27 @@ class Pet {
 
 let pet = new Pet("Chuck");
 \end{lstlisting}
+\risultato
+\begin{immagine}[Che cosa produce \code{class Pet \{...\}}.]
+\begin{tikzpicture}[
+    pr/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+      draw=accent!70!black},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+      draw=neutral!45!black}]
+  \mchiave{1.1cm}
+  \node[mfun, align=left] (fn) at (0,0)
+    {function Pet(name) \{\\ \ \ this.name = name\\ \}};
+  \oggetto[fill=accent!14!white]{pp}{(4.2,0.3)}{2.4cm}{Pet.prototype}
+    {method1/function, method2/function, constructor/Pet}
+  \draw[a] ([yshift=5pt]fn.east) -- node[wtlab, above]{\code{prototype}}
+    ([yshift=5pt]fn.east -| pp-box.west);
+  \oggetto{o}{(4.2,-2.0)}{2.4cm}{pet}{name/"Chuck"}
+  \draw[pr] (o.north) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (pp-box.south);
+  \node[mnota, anchor=north] at ([yshift=-3pt]fn.south)
+    {il corpo viene dal \code{constructor}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \code{new Pet()} crea un nuovo oggetto e invoca il metodo \code{constructor}
 con gli argomenti dati, che imposta la proprietà \code{name} sull'oggetto. Il
@@ -738,6 +1044,7 @@ for (let key in rex) console.log(key);   // solo "name", non "bark"
 
 Come gli oggetti, anche le classi supportano proprietà e accessori.
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=classi-props.js]
 class Duck {
   species = "Duck";                    // proprieta'
@@ -759,12 +1066,31 @@ let duck = new Duck("Chuck");
 duck.greet();                        // Quack!
 console.log(duck.fullDescription);   // Chuck the Duck
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{species} e \code{name} sono proprietà di ogni\\
+                 oggetto; i metodi e il getter stanno sul prototipo.]
+\begin{tikzpicture}[
+    pr/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+      draw=accent!70!black}]
+  \oggetto[fill=accent!14!white]{pp}{(0,0)}{3.2cm}{Duck.prototype}
+    {greet/function, fullDescription/get, [Symbol.iterator]/function}
+  \oggetto{d}{(0,-2.6)}{3.2cm}{duck}{species/"Duck", name/"Chuck"}
+  \draw[pr] (d.north) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}}
+    (pp-box.south);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Ereditarietà fra classi}
 
 Le classi JavaScript possono ereditare da altre classi con la parola chiave
 \code{extends}.
 
+Internamente, \code{extends} è realizzato proprio tramite la proprietà
+\code{[[Prototype]]}: il prototipo di \code{Duck.prototype} è
+\code{Pet.prototype}.
+
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=ereditarieta.js]
 class Pet {
   describe() { console.log("I'm a pet"); }
@@ -772,47 +1098,37 @@ class Pet {
 }
 
 class Duck extends Pet {
-  greet() { console.log("Quack!"); }   // sovrascrive il metodo del padre
+  greet() { console.log("Quack!"); }   // sovrascrive
 }
 
 let chuck = new Duck();
 chuck.describe();   // I'm a pet   (ereditato)
 chuck.greet();      // Quack!      (sovrascritto)
 \end{lstlisting}
-
-Internamente, \code{extends} è realizzato proprio tramite la proprietà
-\code{[[Prototype]]}: il prototipo di \code{Duck.prototype} è
-\code{Pet.prototype}.
-
-\begin{figure}[H]
-  \centering
-  \begin{tikzpicture}[font=\Lato\footnotesize,
-      o/.style={rounded corners=3pt, draw=primary!65!black, line width=0.8pt,
-                fill=primary!8!white, minimum width=2.9cm, minimum height=0.9cm,
-                align=center},
-      g/.style={o, draw=neutral!55!white, fill=neutral!7!white},
-      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
-                draw=accent!70!black}]
-
-    \node[o] (dp) at (0,0)    {\code{Duck.prototype}\\\scriptsize greet()};
-    \node[o] (pp) at (0,-1.7) {\code{Pet.prototype}\\\scriptsize describe(), greet()};
-    \node[g] (op) at (0,-3.4) {\code{Object.prototype}};
-
-    \node[o] (ch) at (4.6,0.9) {\code{chuck}};
-
-    \draw[a] (dp) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (pp);
-    \draw[a] (pp) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (op);
-    \draw[a] (ch) to[out=180, in=60] node[wtlab, pos=0.6]{\code{[[Prototype]]}} (dp.north east);
-
-    \node[font=\Lato\scriptsize, anchor=west, align=left, text=neutral!25!black]
-      at (3.2,-1.7) {\code{chuck.greet()} trova subito\\ il metodo su
-                     \code{Duck.prototype};\\[4pt]
-                     \code{chuck.describe()} non lo trova\\ e risale a
-                     \code{Pet.prototype}};
-  \end{tikzpicture}
-  \caption{L'ereditarietà fra classi è ereditarietà fra prototipi.}
-  \label{fig:class-inheritance}
-\end{figure}
+\risultato
+\begin{immagine}[L'ereditarietà fra classi è ereditarietà fra prototipi.]
+\begin{tikzpicture}[
+    pr/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+      draw=accent!70!black}]
+  \mchiave{1.4cm}
+  \oggetto{c}{(0,0)}{2.6cm}{chuck}{}
+  \oggetto[fill=accent!14!white]{dp}{(0,-1.55)}{2.6cm}{Duck.prototype}
+    {greet/function}
+  \oggetto[fill=accent!14!white]{pp}{(0,-3.35)}{2.6cm}{Pet.prototype}
+    {describe/function, greet/function}
+  \oggetto[fill=neutral!12!white]{op}{(0,-5.55)}{2.6cm}{Object.prototype}{}
+  \draw[pr] (c-box.south) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (dp.north);
+  \draw[pr] (dp-box.south) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (pp.north);
+  \draw[pr] (pp-box.south) -- node[wtlab, right, xshift=2pt]{\code{[[Prototype]]}} (op.north);
+  \draw[mcerca] ([xshift=-4pt]c-1.west) to[out=180, in=180]
+    node[mnota, left]{\code{greet}?} ([xshift=-4pt]dp-1.west);
+  \draw[mcerca] ([xshift=-4pt]c-1.west) to[out=190, in=180, looseness=1.4]
+    node[mnota, left, pos=0.6]{\code{describe}?} ([xshift=-4pt]pp-1.west);
+  \node[mnota, anchor=west, text=neutral!45!black] at ([xshift=4pt]pp-2.east)
+    {(oscurato)};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \section{Gestione degli errori}
 
@@ -821,24 +1137,32 @@ programma sbaglia, perché l'utente fornisce input inattesi, e così via. Quando
 accade, di norma lo script si ferma immediatamente e stampa un messaggio in
 console.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=errore.js]
 let myvar = 0;
 for (let num of [1, 2, 3, 4, 5]) {
-  mvvar += num;    // ReferenceError: mvvar is not defined (refuso!)
+  mvvar += num;    // refuso: mvvar non esiste!
 }
 console.log(myvar);
 \end{lstlisting}
+\risultato
+\begin{console}
+Uncaught ReferenceError: mvvar is not defined
+\end{console}
+\wtnota{Lo script si ferma: \code{console.log(myvar)}\\ non viene mai eseguita.}
+\end{affianco}
 
 \subsection{try / catch / finally}
 
 Il costrutto \code{try/catch/finally} permette di gestire gli errori.
 Concettualmente è lo stesso costrutto di Java, con qualche differenza.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=trycatch.js]
 "use strict";
 try {
   console.log("starting");
-  x = 1;                            // dimenticata la parola chiave let
+  x = 1;                            // manca il let
   console.log("assignment done");   // non viene eseguita
 } catch (error) {
   console.log(error.name);
@@ -847,13 +1171,35 @@ try {
   console.log("done");
 }
 \end{lstlisting}
-
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[
+    blk/.style={rounded corners=3pt, draw=primary!65!black, fill=primary!6!white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, minimum width=2.1cm,
+      minimum height=0.6cm},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+      draw=merr},
+    b/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=mok, dashed}]
+  \node[blk] (t) at (0,0) {try};
+  \node[blk, draw=merr, fill=red-gradient-1!35!white] (c) at (0,-1.3) {catch (error)};
+  \node[blk] (f) at (0,-2.6) {finally};
+  \draw[a] (t) -- node[mnota, left, text=merr]{errore} (c);
+  \draw[a] (c) -- (f);
+  \draw[b] (t.east) to[out=-30, in=30] node[mnota, right, text=mok, align=left]
+    {nessun\\ errore} (f.east);
+  \node[mnota, anchor=east] at ([xshift=-4pt]t.west) {\code{x = 1} \merr};
+\end{tikzpicture}
+\end{immagine}
 \begin{console}
 starting
 ReferenceError
 x is not defined
 done
 \end{console}
+\end{affianco}
+
+
 
 \warning{L'errore c'è solo in modalità strict}{
   Le slide omettono la riga \code{"use strict"}, che qui è stata aggiunta. Senza
@@ -892,6 +1238,7 @@ L'operatore \code{instanceof} verifica se la proprietà \code{prototype} di un
 dato costruttore compare \textbf{da qualche parte} nella catena dei prototipi di
 un oggetto.
 
+\begin{affianco}[0.45][c]
 \begin{lstlisting}[style=js, name=instanceof.js]
 function Pet(name, species, age) {
   this.name = name;
@@ -904,15 +1251,11 @@ const pet = new Pet('Chuck', 'Duck', 3);
 console.log(pet instanceof Pet);      // true
 console.log(pet instanceof Object);   // true
 \end{lstlisting}
-
-Perché anche \code{pet instanceof Object} è vero? Basta seguire la catena dei
-prototipi di \code{pet}. Il primo anello è \code{Pet.prototype}, cioè il
-prototipo predefinito di \code{Pet}; il secondo è \code{Object.prototype}.
-Entrambi i costruttori hanno il proprio \code{prototype} nella catena.
-
-\begin{figure}[H]
-  \centering
-  \begin{tikzpicture}[font=\Lato\footnotesize,
+\risultato
+\begin{immagine}[\code{pet instanceof Pet} e \code{pet instanceof Object}:\\
+                 risalendo la catena (in viola) si incontrano\\
+                 sia \code{Pet.prototype} sia \code{Object.prototype}.]
+\begin{tikzpicture}[font=\Lato\footnotesize,
       o/.style={rounded corners=3pt, draw=primary!65!black, line width=0.8pt,
                 fill=primary!8!white, minimum width=3.1cm, minimum height=1.0cm,
                 align=center},
@@ -942,11 +1285,14 @@ Entrambi i costruttori hanno il proprio \code{prototype} nella catena.
     \draw[a] ([yshift=-6pt]op.east) -- node[wtlab, below]{\code{constructor}}
              ([yshift=-6pt]fo.west);
   \end{tikzpicture}
-  \caption{\code{pet instanceof Pet} e \code{pet instanceof Object}: risalendo
-           la catena (in viola) si incontrano sia \code{Pet.prototype} sia
-           \code{Object.prototype}.}
-  \label{fig:instanceof}
-\end{figure}
+\end{immagine}
+\end{affianco}
+
+Perché anche \code{pet instanceof Object} è vero? Basta seguire la catena dei
+prototipi di \code{pet}, a destra. Il primo anello è \code{Pet.prototype}, cioè il
+prototipo predefinito di \code{Pet}; il secondo è \code{Object.prototype}.
+Entrambi i costruttori hanno il proprio \code{prototype} nella catena.
+
 
 In altre parole, \code{obj instanceof C} equivale a questa funzione, che risale
 la catena un anello alla volta finché non trova \code{C.prototype} o arriva in
@@ -983,6 +1329,7 @@ vengono catturati o finché non si raggiunge la cima dell'albero delle chiamate
 (nel qual caso l'esecuzione dello script viene interrotta bruscamente e l'errore
 finisce in console). Si sollevano con la parola chiave \code{throw}.
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=throw.js]
 try {
   throw new Error("Oops!");
@@ -991,9 +1338,25 @@ try {
   console.log(err.message);   // Oops!
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{throw} lancia un oggetto: \code{catch} lo riceve\\
+                 nel suo parametro.]
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt, draw=merr}]
+  \mchiave{1.2cm}
+  \node[mcod] (t) at (0,0) {throw new Error("Oops!")};
+  \oggetto[fill=red-gradient-1!45!white, draw=merr]{e}{(0,-1.25)}{2.6cm}{Error}
+    {name/"Error", message/"Oops!"}
+  \draw[a] (t) -- (e.north);
+  \variabile[minimum width=0.55cm]{v}{(-2.5,-1.48)}{err}{}
+  \riferimento{v}{-- (e-box.west |- v)}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 È possibile definire tipi di errore propri, estendendo \code{Error}:
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=errore-custom.js]
 class MyError extends Error {
   constructor(message = "Whoops") {
@@ -1009,6 +1372,26 @@ try {
   console.log(err.message);   // Whoops
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{err} è sia un \code{MyError} sia un \code{Error}:\\
+                 entrambi i prototipi sono nella sua catena.]
+\begin{tikzpicture}[
+    pr/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+      draw=accent!70!black}]
+  \mchiave{1.2cm}
+  \oggetto[fill=red-gradient-1!45!white]{e}{(0,0)}{2.6cm}{err}
+    {name/"MyError", message/"Whoops"}
+  \oggetto[fill=accent!14!white]{mp}{(0,-1.85)}{2.6cm}{MyError.prototype}{}
+  \oggetto[fill=accent!14!white]{ep}{(0,-3.35)}{2.6cm}{Error.prototype}{}
+  \oggetto[fill=neutral!12!white]{op}{(0,-4.85)}{2.6cm}{Object.prototype}{}
+  \draw[pr] (e-box.south) -- (mp.north);
+  \draw[pr] (mp-box.south) -- (ep.north);
+  \draw[pr] (ep-box.south) -- (op.north);
+  \node[mnota, anchor=west] at ([xshift=6pt]mp-box.east) {\code{instanceof MyError}};
+  \node[mnota, anchor=west] at ([xshift=6pt]ep-box.east) {\code{instanceof Error}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \section{Moduli}
 
@@ -1043,6 +1426,7 @@ usano le direttive \code{export} e \code{import} per scambiarsi funzionalità.
 Supponiamo di voler riutilizzare del codice scritto per altri progetti: un file
 \code{pet.js} e un file \code{greet.js}.
 
+\begin{affianco}[0.52]
 \begin{lstlisting}[style=js, name=pet.js]
 function Pet(name, age) {
   this.name = name; this.age = age;
@@ -1054,7 +1438,7 @@ function greet(pet) {
   console.log(`${msg}, I'm ${pet.name}`);
 }
 \end{lstlisting}
-
+\risultato
 \begin{lstlisting}[style=js, name=greet.js]
 let msg = "Howdy";
 
@@ -1062,6 +1446,7 @@ function greet(name, message = msg) {
   console.log(`${message}, ${name}`);
 }
 \end{lstlisting}
+\end{affianco}
 
 \begin{lstlisting}[style=js, name=script.js]
 let chuck = new Pet("Chuck", 7);   // Pet e' definita in pet.js
@@ -1071,11 +1456,28 @@ greet("Web Technologies");         // vorremmo: Howdy, Web Technologies
 
 Si potrebbe pensare di includere semplicemente tutti gli script nella pagina:
 
+\begin{affianco}[0.45][c]
 \begin{lstlisting}[style=html]
 <script src="./pet.js"></script>
 <script src="./greet.js"></script>
 <script src="./script.js"></script>
 \end{lstlisting}
+\risultato
+\begin{immagine}[Un solo scope globale per tutti gli script:\\
+                 \code{greet.js} sovrascrive \code{msg} e \code{greet}.]
+\begin{tikzpicture}[
+    r/.style={mcod, anchor=west, minimum height=0.48cm},
+    da/.style={mnota, anchor=west, text=neutral!45!black}]
+  \node[r] (r1) at (0,0)     {Pet};
+  \node[da] at (2.6,0)       {da \code{pet.js}};
+  \node[r] (r2) at (0,-0.55) {msg = "Howdy"};
+  \node[da, text=merr] at (2.6,-0.55) {il \code{"Hello"} di \code{pet.js} è perso};
+  \node[r] (r3) at (0,-1.1)  {greet(name, ...)};
+  \node[da, text=merr] (n3) at (2.6,-1.1) {la \code{greet} di \code{pet.js} è persa};
+  \scopo{1}{g}{scope globale}{(r1)(r2)(r3)(n3)}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Ma non funziona: entrambi i file definiscono \code{msg} e \code{greet} nello
 stesso scope globale, e il secondo sovrascrive il primo. Per farlo funzionare
@@ -1084,25 +1486,27 @@ identificatori diversi. Il che vanifica lo scopo stesso del riutilizzo.
 \end{esempio}
 
 \begin{esempio}{La soluzione con i moduli}
+\begin{affianco}[0.52]
 \begin{lstlisting}[style=js, name=pet-module.js]
 export function Pet(name, age) {
   this.name = name; this.age = age;
 }
 
-let msg = "Hello";              // non serve esportarla
+let msg = "Hello";   // non esportata
 
 export function greet(pet) {
   console.log(`${msg}, I'm ${pet.name}`);
 }
 \end{lstlisting}
-
+\risultato
 \begin{lstlisting}[style=js, name=greet-module.js]
-let msg = "Howdy";              // non serve esportarla
+let msg = "Howdy";   // non esportata
 
 export function greet(name, message = msg) {
   console.log(`${message}, ${name}`);
 }
 \end{lstlisting}
+\end{affianco}
 
 Nel documento HTML basta includere lo script principale, dichiarandolo come
 modulo:
@@ -1111,6 +1515,7 @@ modulo:
 <script type="module" src="./script-module.js"></script>
 \end{lstlisting}
 
+\begin{affianco}[0.52][c]
 \begin{lstlisting}[style=js, name=script-module.js]
 import { Pet, greet as greetPet } from './pet-module.js';
 import { greet } from './greet-module.js';
@@ -1119,6 +1524,33 @@ let chuck = new Pet("Chuck", 7);
 greetPet(chuck);              // Hello, I'm Chuck
 greet("Web Technologies");    // Howdy, Web Technologies
 \end{lstlisting}
+\risultato
+\begin{immagine}[Ogni modulo ha il suo scope: \code{msg} resta privato,\\
+                 passa solo ciò che è esportato e importato.]
+\begin{tikzpicture}[
+    r/.style={mcod, anchor=west, minimum height=0.45cm},
+    ex/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=accent!70!black}]
+  % pet-module.js
+  \node[r] (p1) at (0,0) {export Pet};
+  \node[r] (p2) at (0,-0.5) {export greet};
+  \node[r, text=neutral!50!black] (p3) at (0,-1.0) {msg = "Hello"};
+  \scopo{2}{pm}{pet-module.js}{(p1)(p2)(p3)}
+  % greet-module.js
+  \node[r] (g1) at (0,-2.3) {export greet};
+  \node[r, text=neutral!50!black] (g2) at (0,-2.8) {msg = "Howdy"};
+  \scopo{2}{gm}{greet-module.js}{(g1)(g2)}
+  % script-module.js
+  \node[r] (s1) at (4.0,-0.6) {Pet};
+  \node[r] (s2) at (4.0,-1.1) {greetPet};
+  \node[r] (s3) at (4.0,-1.6) {greet};
+  \scopo{3}{sm}{script-module.js}{(s1)(s2)(s3)}
+  \draw[ex] (p1.east) to[out=0, in=180] (s1.west);
+  \draw[ex] (p2.east) to[out=0, in=180] node[mnota, above, sloped, pos=0.55]{as} (s2.west);
+  \draw[ex] (g1.east) to[out=0, in=180] (s3.west);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Due cose da notare. Le variabili \code{msg} non danno più conflitto, perché
 ciascuna vive nello \textbf{scope del proprio modulo}. E la clausola \code{as}
@@ -1140,21 +1572,27 @@ nomi insieme in fondo al file, e ogni modulo può avere al più un
 \term{export predefinito} (\code{export default}), che si importa senza
 parentesi graffe e con il nome che si preferisce.
 
+\begin{affianco}[0.45]
 \begin{lstlisting}[style=js, name=geometria.js]
 const PI = 3.14;
 function area(r) { return PI * r * r; }
 
-export { PI, area };                  // export di piu' nomi insieme
-export default class Circle { /* ... */ }   // export predefinito
+export { PI, area };       // piu' nomi insieme
+export default class Circle { // predefinito
+  /* ... */
+}
 \end{lstlisting}
-
+\risultato
 \begin{lstlisting}[style=js, name=main.js]
-import Circle, { area } from './geometria.js';   // default + nominato
-import * as geo from './geometria.js';           // tutto in un oggetto
+import Circle, { area } from './geometria.js';
+                            // default + nominato
+import * as geo from './geometria.js';
+                            // tutto in un oggetto
 
 area(1);    // 3.14
 geo.PI;     // 3.14
 \end{lstlisting}
+\end{affianco}
 
 \subsection{Cose da sapere sui moduli}
 

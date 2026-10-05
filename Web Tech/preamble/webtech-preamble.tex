@@ -624,16 +624,26 @@
 \setlength{\mchiavew}{1.25cm}
 \newcommand{\mchiave}[1]{\setlength{\mchiavew}{#1}}
 \newlength{\mobjw}
+\newlength{\mkeyw}
 \newlength{\mrigaw}
 \newsavebox{\wtimgmisura}
 \NewDocumentCommand{\oggetto}{O{} m m m m m}{%
   \global\mobjw=#4\relax
+  \global\mkeyw=\mchiavew
   \ifx\relax#6\relax\else
+    % la colonna delle chiavi si allarga per la chiave più lunga
+    \foreach \mk/\mv in {#6} {%
+      \pgfinterruptpicture
+        \global\setbox\wtimgmisura\hbox{\FiraCodeNL\scriptsize\mk}%
+      \endpgfinterruptpicture
+      \ifdim\dimexpr\wd\wtimgmisura+6pt\relax>\mkeyw
+        \global\mkeyw=\dimexpr\wd\wtimgmisura+6pt\relax
+      \fi}%
     \foreach \mk/\mv in {#6} {%
       % dentro tikzpicture il font è \nullfont: si misura fuori dalla figura
       \pgfinterruptpicture
         \global\setbox\wtimgmisura\hbox{\FiraCodeNL\scriptsize
-          \makebox[\mchiavew][l]{\mk}\mv}%
+          \makebox[\mkeyw][l]{\mk}\mv}%
       \endpgfinterruptpicture
       \setlength{\mrigaw}{\wd\wtimgmisura}%
       \ifdim\dimexpr\mrigaw+8pt\relax>\mobjw
@@ -650,7 +660,7 @@
     \foreach \mk/\mv [count=\mi] in {#6} {%
       \node[mriga, minimum width=\mobjw, text width=\dimexpr\mobjw-6pt\relax,
             anchor=north] (#2-\mi) at ([yshift=0.7pt]\wtprev.south)
-        {\makebox[\mchiavew][l]{\color{primary!55!black}\mk}\mv};
+        {\makebox[\mkeyw][l]{\color{primary!55!black}\mk}\mv};
       \xdef\wtprev{#2-\mi}%
     }%
   \fi
@@ -674,12 +684,38 @@
 % l'etichetta.
 \NewDocumentCommand{\scopo}{O{} m m m m}{%
   \node[fit={#5}, inner sep=0pt] (#3-in) {};
-  \coordinate (#3-top) at ([yshift=9pt]#3-in.north west);
+  \node[mscopolab, anchor=south west] (#3-lab)
+    at ([yshift=1pt]#3-in.north west) {#4};
   \begin{pgfonlayer}{liv#2}
-    \node[mscopo#2, fit=(#3-in)(#3-top), #1] (#3) {};
-  \end{pgfonlayer}
-  \node[mscopolab, anchor=north west]
-    at ([xshift=3pt, yshift=-2pt]#3.north west) {#4};}
+    \node[mscopo#2, fit=(#3-in)(#3-lab), #1] (#3) {};
+  \end{pgfonlayer}}
+
+% \celle[stile]{nome}{(posizione)}{v0, v1, ...}: le caselle consecutive di un
+% array, con l'indice sotto ciascuna. La posizione è il bordo sinistro della
+% prima casella; crea i nodi nome-0, nome-1, ... e nome-box. Con \mvuota si
+% disegna una casella vuota (un "buco"), con \noindici prima della chiamata si
+% omettono gli indici.
+\tikzset{
+  mcella/.style={draw=primary!65!black, fill=primary!3!white, line width=0.7pt,
+    minimum height=0.5cm, minimum width=0.75cm, inner xsep=4pt,
+    font=\FiraCodeNL\scriptsize},
+  mindice/.style={font=\FiraCodeNL\tiny, text=neutral!45!black, inner sep=1pt},
+}
+\newcommand{\mvuota}{{\Lato\itshape\color{neutral!50!black}vuota}}
+\newif\ifmindici \mindicitrue
+\newcommand{\noindici}{\mindicifalse}
+\NewDocumentCommand{\celle}{O{} m m m}{%
+  \coordinate (#2-inizio) at #3;
+  \xdef\wtprev{#2-inizio}%
+  \foreach \v [count=\i from 0] in {#4} {%
+    \node[mcella, anchor=west, #1] (#2-\i)
+      at ([xshift=-0.7pt]\wtprev.east |- #2-inizio) {\v};
+    \ifmindici
+      \node[mindice, anchor=north] at ([yshift=-1pt]#2-\i.south) {\i};
+    \fi
+    \xdef\wtprev{#2-\i}%
+  }
+  \node[fit=(#2-0)(\wtprev), inner sep=0pt] (#2-box) {};}
 
 % Segni di riuscita e di errore negli schemi
 \newcommand{\mok}{{\color{mok}\itick}}
