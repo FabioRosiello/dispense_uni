@@ -106,6 +106,8 @@ viste), un meccanismo di \textbf{rendering delle viste} e una
 C'è un solo documento HTML, e non contiene alcun contenuto: soltanto un
 \tg{div} vuoto. È \code{main.js} a fare tutto il lavoro.
 
+\begin{affianco}[0.5][c]
+\codicepiccolo
 \begin{lstlisting}[style=html, name=index.html]
 <!DOCTYPE html>
 <html lang="it">
@@ -119,6 +121,25 @@ C'è un solo documento HTML, e non contiene alcun contenuto: soltanto un
   </body>
 </html>
 \end{lstlisting}
+\risultato
+\begin{immagine}[L'albero del documento appena caricato:\\
+                 il contenitore \code{\#app} è vuoto.]
+\begin{tikzpicture}
+  \node[mdom] (h) at (2.1,0) {<html>};
+  \node[mdom] (he) at (0.2,-0.9) {<head>};
+  \node[mdom] (b) at (3.7,-0.9) {<body>};
+  \node[mdom] (t) at (-0.5,-1.8) {<title>};
+  \node[mdom] (l) at (0.9,-1.8) {<link>};
+  \node[mdom] (d) at (2.7,-1.8) {<div id="app">};
+  \node[mdom] (s) at (4.9,-1.8) {<script>};
+  \draw[mramo] (h.south) -- (he.north); \draw[mramo] (h.south) -- (b.north);
+  \draw[mramo] (he.south) -- (t.north); \draw[mramo] (he.south) -- (l.north);
+  \draw[mramo] (b.south) -- (d.north); \draw[mramo] (b.south) -- (s.north);
+  \node[mnota, anchor=north, text=neutral!45!black] at ([yshift=-3pt]d.south)
+    {\itshape nessun figlio};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{La struttura di base}
 
@@ -127,6 +148,7 @@ barra di navigazione, un contenitore per il contenuto principale e un piè di
 pagina. La barra e il piè di pagina non cambieranno passando da una vista
 all'altra; il contenuto sì.
 
+\begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=main.js]
 let nav = document.createElement("nav");
 nav.id = "nav";
@@ -139,6 +161,21 @@ footer.id = "footer";
 
 app.append(nav, content, footer);
 \end{lstlisting}
+\risultato
+\begin{immagine}[Dopo \code{append}: tre figli nuovi dentro \code{\#app}.]
+\begin{tikzpicture}
+  \node[mdom, anchor=west] (d) at (0,0) {<div id="app">};
+  \node[mnuovo, anchor=west] (n) at (0.7,-0.75) {<nav id="nav">};
+  \node[mnuovo, anchor=west] (m) at (0.7,-1.5) {<main id="content">};
+  \node[mnuovo, anchor=west] (f) at (0.7,-2.25) {<footer id="footer">};
+  \foreach \x in {n,m,f} \draw[mramo] ([xshift=0.35cm]d.south west) |- (\x.west);
+  \node[mnota, anchor=west] at (4.3,-0.75) {non cambia};
+  \node[mnota, anchor=west, text=accent!75!black, font=\Lato\scriptsize\bfseries]
+    at (4.3,-1.5) {cambia con la vista};
+  \node[mnota, anchor=west] at (4.3,-2.25) {non cambia};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Le rotte}
 
@@ -156,15 +193,31 @@ const routes = {
 };
 \end{lstlisting}
 
+\begin{affianco}[0.42][c]
 \begin{lstlisting}[style=js, name=views/about.js]
 export default () => /*html*/`
   <h1>About</h1>
   <p>
-    Questa e' una single page app. Navigare verso pagine diverse non
+    Questa e' una single page app.
+    Navigare verso pagine diverse non
     provoca un ricaricamento completo!
   </p>
 `;
 \end{lstlisting}
+\risultato
+\begin{browser}[localhost:5173/about]
+  {\wtuifont\color{neutral!45!black}\hfill\textit{nav}\par}\vspace{-9pt}
+  \wtlink{Home}\enspace\wtlink{About}\enspace\wtlink{Web Technologies}
+  \par\vspace{3pt}{\color{accent!40!white}\hrule}\vspace{4pt}
+  {\wtuifont\color{accent!70!black}\hfill\textit{main\#content}\par}\vspace{-6pt}
+  {\Lora\bfseries\LARGE About\par}\vspace{6pt}
+  Questa e' una single page app. Navigare verso pagine diverse non provoca un
+  ricaricamento completo!
+  \par\vspace{4pt}{\color{accent!40!white}\hrule}\vspace{2pt}
+  {\wtuifont\color{neutral!45!black}\hfill\textit{footer}\par}
+\end{browser}
+\wtnota{Solo la parte centrale viene sostituita da \code{about()}.}
+\end{affianco}
 
 La generazione della vista è ridotta all'osso: una funzione che restituisce una
 stringa HTML. Può diventare molto più complessa --- tanto per cominciare, si
@@ -172,49 +225,111 @@ potrebbe usare un motore di template.
 
 \subsection{Il router}
 
+\begin{affianco}[0.42][c]
 \begin{lstlisting}[style=js, name=main.js]
 function router() {
-  let view = routes[location.pathname];   // rotta per il percorso corrente
+  // rotta per il percorso corrente
+  let view = routes[location.pathname];
 
   if (view) {
-    document.title = view.title;          // aggiorna il titolo della pagina
-    content.innerHTML = view.render();    // aggiorna il contenuto
+    document.title = view.title;
+    content.innerHTML = view.render();
   } else {
-    // nessuna rotta corrisponde: sostituisce la voce di cronologia e va a "/"
+    // nessuna rotta: si torna a "/"
     history.replaceState("", "", "/");
     router();
   }
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[
+    dec/.style={diamond, aspect=2.4, draw=primary!60!black, fill=primary!8!white,
+      line width=0.7pt, font=\Lato\scriptsize, inner sep=1pt, align=center},
+    esito/.style={rounded corners=3pt, draw=neutral!50!black, fill=white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, inner sep=3pt, align=left},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt,
+      draw=neutral!45!black}]
+  \node[esito] (p) at (0,0) {location.pathname};
+  \node[dec] (q) at (0,-1.35) {c'è una\\rotta?};
+  \node[esito, draw=mok] (ok) at (0,-2.9)
+    {document.title = view.title\\\#content $\leftarrow$ view.render()};
+  \node[esito, draw=orange-gradient-6] (no) at (3.6,-1.35)
+    {replaceState(\ldots, "/")\\router()};
+  \draw[a] (p) -- (q);
+  \draw[a] (q) -- node[mnota, right]{sì} (ok);
+  \draw[a] (q) -- node[mnota, above]{no} (no);
+  \draw[a] (no.north) |- node[mnota, pos=0.25, right]{ora è \code{/}} (p.east);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{I collegamenti di navigazione}
 
+\begin{affianco}[0.42][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=main.js]
 for (let route in routes) {
   let link = document.createElement("a");
   link.href = route;
   link.innerText = routes[route].title;
-  link.setAttribute("data-link", "");   // attributo personalizzato
+  // attributo personalizzato, senza valore
+  link.setAttribute("data-link", "");
   nav.append(link);
 }
 
 footer.innerHTML = renderFooter();
 \end{lstlisting}
+\risultato
+\begin{lstlisting}[style=html, name=DOM generato]
+<nav id="nav">
+  <a href="/" data-link>Home</a>
+  <a href="/about" data-link>About</a>
+  <a href="/webtech" data-link>Web Technologies</a>
+</nav>
+\end{lstlisting}
+\begin{browser}[localhost:5173]
+  \wtlink{Home}\enspace\wtlink{About}\enspace\wtlink{Web Technologies}
+\end{browser}
+\end{affianco}
 
 In una SPA possono coesistere collegamenti che devono comportarsi normalmente
 (per esempio verso siti esterni) e collegamenti che devono soltanto provocare un
 cambio di vista. Nell'esempio i secondi sono identificati dall'attributo
 \code{data-link}.
 
+\begin{affianco}[0.46][c]
 \begin{lstlisting}[style=js, name=main.js]
 window.addEventListener("click", e => {
   if (e.target.matches("[data-link]")) {
-    e.preventDefault();                        // niente ricaricamento
-    history.pushState("", "", e.target.href);  // nuova voce di cronologia
-    router();                                  // aggiorna la vista
+    e.preventDefault(); // niente ricaricamento
+    // nuova voce di cronologia
+    history.pushState("", "", e.target.href);
+    router();           // aggiorna la vista
   }
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}[Clic su \textit{About}: cambia la URL e cresce la cronologia,\\
+                 ma al server non parte alcuna richiesta.]
+\begin{tikzpicture}[
+    v/.style={mcella, minimum width=1.7cm},
+    cur/.style={mcella, minimum width=1.7cm, draw=accent!60!black,
+      fill=accent!14!white},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=neutral!45!black}]
+  \node[mnota, font=\Lato\scriptsize\bfseries] at (0,0.75) {prima};
+  \node[cur] (a1) at (0,0) {/};
+  \node[mnota, font=\Lato\scriptsize\bfseries] at (4,1.25) {dopo il clic};
+  \node[v] (b1) at (4,0) {/};
+  \node[cur, anchor=south] (b2) at ([yshift=-0.7pt]b1.north) {/about};
+  \draw[a] (1.1,0.25) -- node[mnota, above]{\code{pushState}} (2.9,0.25);
+  \node[mnota, anchor=west] at ([xshift=3pt]b2.east) {voce\\corrente};
+  \node[mnota, anchor=north, text=neutral!45!black] at (2,-0.45)
+    {\itshape cronologia della scheda};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Si riconosce qui la \textbf{delegazione degli eventi} studiata nel capitolo 7:
 un solo gestore registrato su \code{window} serve tutti i collegamenti, compresi
@@ -227,10 +342,28 @@ in due situazioni: quando l'utente preme il pulsante \guillemotleft indietro\gui
 \code{popstate}) e quando la pagina viene ricaricata per intero (evento
 \code{DOMContentLoaded}).
 
+\begin{affianco}[0.48][c]
 \begin{lstlisting}[style=js, name=main.js]
 window.addEventListener("popstate", router);
 window.addEventListener("DOMContentLoaded", router);
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.75pt,
+      draw=neutral!45!black}]
+  \node[wtnodeplain, font=\Lato\scriptsize, text width=1.7cm] (i) at (0,0.65)
+    {pulsante\\\guillemotleft indietro\guillemotright};
+  \node[wtnodeplain, font=\Lato\scriptsize, text width=1.7cm] (r) at (0,-0.65)
+    {ricaricamento\\completo};
+  \node[mfun, minimum height=1.9cm] (ro) at (4.4,0) {router()};
+  \draw[a] (i.east) -- node[mcod, above]{popstate} (i.east -| ro.west);
+  \draw[a] (r.east) -- node[mcod, above]{DOMContentLoaded} (r.east -| ro.west);
+  \node[mnota, anchor=west] (v) at (5.9,0) {vista di\\\code{location.pathname}};
+  \draw[a] (ro.east) -- (v.west);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \warning{Il server deve collaborare}{
   Se l'utente ricarica la pagina mentre si trova su \code{/about}, il browser
@@ -267,6 +400,8 @@ dettagli.
 I componenti hanno un ruolo centrale in tutti i framework di front-end.
 
 \begin{esempio}{Un componente con le Web Components API}
+\begin{affianco}[0.5][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=components/counter.js]
 let count = 0;
 
@@ -284,11 +419,28 @@ class Counter extends HTMLElement {
 
 customElements.define("click-counter", Counter);
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.75pt,
+      draw=mref, dashed}]
+  \oggetto{reg}{(0,0)}{3.6cm}{customElements}{click-counter/{$\to$ Counter}}
+  \node[mnuovo] (c) at (0,-1.9) {<click-counter>};
+  \node[mdom] (b) at (0,-2.9) {<button>};
+  \node[mtesto] (t) at (0,-3.8) {Clicks : 0};
+  \draw[mramo] (c.south) -- (b.north); \draw[mramo] (b.south) -- (t.north);
+  \draw[a] (reg-1.south) -- node[mnota, right]{\code{new Counter()}} (c.north);
+  \node[mnota, anchor=west] at ([xshift=6pt]b.east)
+    {creato dal\\costruttore};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Stiamo definendo un nuovo \code{HTMLElement} chiamato \code{<click-counter>},
 associato alla classe \code{Counter}. Il browser userà quella classe ogni volta
 che incontrerà un elemento \code{<click-counter>} nel DOM.
 
+\begin{affianco}[0.42][c]
 \begin{lstlisting}[style=js, name=views/home.js]
 import "../components/counter.js";
 
@@ -298,6 +450,16 @@ export default () => /*html*/`
   <click-counter></click-counter>
 `;
 \end{lstlisting}
+\risultato
+\begin{browser}[localhost:5173]
+  \wtlink{Home}\enspace\wtlink{About}\enspace\wtlink{Web Technologies}
+  \par\vspace{4pt}
+  {\Lora\bfseries\LARGE Home\par}\vspace{6pt}
+  Semplice contatore di clic\par\vspace{6pt}
+  \wtbottone{Clicks : 3}
+\end{browser}
+\wtnota{La vista dopo tre clic sul pulsante.}
+\end{affianco}
 
 Dal punto di vista della vista, il componente è indistinguibile da un tag HTML
 qualunque: è precisamente l'incapsulamento che cercavamo.
