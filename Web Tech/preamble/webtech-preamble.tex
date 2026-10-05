@@ -499,18 +499,26 @@
 %     \begin{browser}[file.html] ... \end{browser}
 %   \end{affianco}
 % Le due colonne sono allineate in alto e formano un blocco unico, che non
-% viene mai diviso fra due pagine.
+% viene mai diviso fra due pagine. Con il secondo argomento facoltativo [c]
+% le colonne sono centrate in verticale l'una rispetto all'altra (utile
+% quando a destra c'è uno schema più basso del codice).
 \newlength{\wtcodew}
 \newlength{\wtresw}
 \newlength{\wtgap}
 \setlength{\wtgap}{0.5cm}
-\NewDocumentEnvironment{affianco}{O{0.56}}{%
+\NewDocumentEnvironment{affianco}{O{0.56} O{t}}{%
   \par\addvspace{6pt}\noindent
   \setlength{\wtcodew}{#1\linewidth}%
   \setlength{\wtresw}{\linewidth-\wtcodew-\wtgap}%
-  \def\risultato{\end{minipage}\hspace{\wtgap}%
-    \begin{minipage}[t]{\wtresw}\vspace{0pt}}%
-  \begin{minipage}[t]{\wtcodew}\vspace{0pt}%
+  \if c#2%
+    \def\risultato{\end{minipage}\hspace{\wtgap}%
+      \begin{minipage}[c]{\wtresw}}%
+    \begin{minipage}[c]{\wtcodew}%
+  \else
+    \def\risultato{\end{minipage}\hspace{\wtgap}%
+      \begin{minipage}[t]{\wtresw}\vspace{0pt}}%
+    \begin{minipage}[t]{\wtcodew}\vspace{0pt}%
+  \fi
   \lstset{xleftmargin=0pt, xrightmargin=0pt, aboveskip=0pt, belowskip=5pt}%
   \renewcommand{\wtbrowserbefore}{0pt}%
   \renewcommand{\wtbrowserafter}{6pt}%
@@ -524,6 +532,158 @@
 % Didascalia breve sotto un risultato (per esempio i dati inviati da un form)
 \newcommand{\wtnota}[1]{%
   {\par\centering\Lato\footnotesize\color{neutral!30!black}#1\par}\vspace{4pt}}
+
+% ============================================================
+%  SCHEMA ACCANTO AL CODICE
+% ============================================================
+% Nella colonna di destra di "affianco":
+%   \begin{immagine}[didascalia facoltativa]
+%     \begin{tikzpicture} ... \end{tikzpicture}
+%   \end{immagine}
+% Lo schema viene centrato nella colonna e, se è più largo, ridotto alla sua
+% larghezza (nel log compare "Schema ridotto", per accorgersene).
+\newsavebox{\wtimgbox}
+\NewDocumentEnvironment{immagine}{o}
+  {\begin{lrbox}{\wtimgbox}}
+  {\end{lrbox}%
+   \par\noindent\makebox[\linewidth]{%
+     \ifdim\wd\wtimgbox>\linewidth
+       \typeout{Schema ridotto: \the\wd\wtimgbox\space -> \the\linewidth
+                (riga \the\inputlineno)}%
+       \resizebox{\linewidth}{!}{\usebox{\wtimgbox}}%
+     \else
+       \usebox{\wtimgbox}%
+     \fi}\par
+   \IfValueT{#1}{\vspace{4pt}\wtnota{#1}}}
+
+% ============================================================
+%  SCHEMI DELLA MEMORIA (variabili, oggetti, riferimenti, scope)
+% ============================================================
+% Livelli per gli scope annidati: il più esterno va disegnato sotto agli altri
+\pgfdeclarelayer{liv1}
+\pgfdeclarelayer{liv2}
+\pgfdeclarelayer{liv3}
+\pgfsetlayers{liv1,liv2,liv3,background,main}
+
+\colorlet{mref}{accent!70!black}
+\colorlet{mok}{green-gradient-6!85!black}
+\colorlet{merr}{red-gradient-6!90!black}
+\tikzset{
+  % casella di una variabile: \node[mvar] (x) {42};
+  mvar/.style={draw=neutral!55!black, fill=white, line width=0.7pt,
+    minimum height=0.5cm, minimum width=1.4cm, inner sep=2pt,
+    font=\FiraCodeNL\scriptsize},
+  % nome della variabile, a sinistra della casella
+  mnome/.style={font=\FiraCodeNL\scriptsize, text=primary!60!black,
+    inner sep=2pt},
+  % intestazione e righe di un oggetto (vedi \oggetto)
+  mtesta/.style={draw=primary!65!black, fill=primary!16!white,
+    line width=0.7pt, minimum height=0.46cm, inner sep=2pt,
+    font=\Lato\scriptsize\bfseries, text=primary!35!black},
+  mriga/.style={draw=primary!65!black, fill=primary!3!white,
+    line width=0.7pt, minimum height=0.46cm, inner sep=3pt,
+    font=\FiraCodeNL\scriptsize, align=left},
+  % freccia di un riferimento e pallino da cui parte
+  mrif/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
+    draw=mref},
+  mpunto/.style={circle, fill=mref, inner sep=1.4pt},
+  % freccia "di lettura": dove il motore va a cercare un nome
+  mcerca/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+    draw=green-gradient-6!80!black, dashed},
+  % nota esplicativa nello schema
+  mnota/.style={font=\Lato\scriptsize, text=neutral!20!black, align=left,
+    inner sep=2pt},
+  % codice dentro uno schema
+  mcod/.style={font=\FiraCodeNL\scriptsize, inner sep=2pt},
+  % riquadro di una funzione (oggetto funzione)
+  mfun/.style={draw=accent!60!black, fill=accent!8!white, line width=0.7pt,
+    rounded corners=6pt, minimum height=0.5cm, inner sep=3pt,
+    font=\FiraCodeNL\scriptsize},
+  % scope: \scopo{livello}{nome}{etichetta}{(nodo1) (nodo2) ...}
+  mscopo1/.style={draw=neutral!50!white, fill=neutral!6!white,
+    line width=0.7pt, rounded corners=5pt, inner sep=7pt},
+  mscopo2/.style={draw=primary!45!white, fill=primary!6!white,
+    line width=0.7pt, rounded corners=5pt, inner sep=7pt},
+  mscopo3/.style={draw=accent!45!white, fill=accent!7!white,
+    line width=0.7pt, rounded corners=5pt, inner sep=7pt},
+  mscopolab/.style={font=\Lato\scriptsize\bfseries, text=neutral!25!black,
+    inner sep=1.5pt},
+}
+
+% \oggetto[stile della testata]{nome}{(posizione)}{larghezza}{titolo}
+%         {chiave/valore, chiave/valore, ...}
+% Crea i nodi "nome" (testata), "nome-1", "nome-2", ... (righe) e "nome-box"
+% (tutto l'oggetto). La posizione è quella del centro della testata, salvo
+% un'ancora diversa nel primo argomento (per esempio anchor=north west).
+% Senza righe ({}) disegna un oggetto vuoto. La larghezza della colonna delle
+% chiavi si cambia con \mchiave{...} prima della chiamata.
+% La larghezza indicata è quella minima: se una riga è più lunga, l'oggetto si
+% allarga quanto serve (le righe non vanno mai a capo). Un valore che contiene
+% una virgola va tra graffe: sep/{","}.
+\newlength{\mchiavew}
+\setlength{\mchiavew}{1.25cm}
+\newcommand{\mchiave}[1]{\setlength{\mchiavew}{#1}}
+\newlength{\mobjw}
+\newlength{\mrigaw}
+\newsavebox{\wtimgmisura}
+\NewDocumentCommand{\oggetto}{O{} m m m m m}{%
+  \global\mobjw=#4\relax
+  \ifx\relax#6\relax\else
+    \foreach \mk/\mv in {#6} {%
+      % dentro tikzpicture il font è \nullfont: si misura fuori dalla figura
+      \pgfinterruptpicture
+        \global\setbox\wtimgmisura\hbox{\FiraCodeNL\scriptsize
+          \makebox[\mchiavew][l]{\mk}\mv}%
+      \endpgfinterruptpicture
+      \setlength{\mrigaw}{\wd\wtimgmisura}%
+      \ifdim\dimexpr\mrigaw+8pt\relax>\mobjw
+        \global\mobjw=\dimexpr\mrigaw+8pt\relax
+      \fi}%
+  \fi
+  \node[mtesta, minimum width=\mobjw, #1] (#2) at #3 {#5};
+  \xdef\wtprev{#2}%
+  \ifx\relax#6\relax
+    \node[mriga, minimum width=\mobjw, anchor=north] (#2-1)
+      at ([yshift=0.7pt]\wtprev.south) {\phantom{x}};
+    \xdef\wtprev{#2-1}%
+  \else
+    \foreach \mk/\mv [count=\mi] in {#6} {%
+      \node[mriga, minimum width=\mobjw, text width=\dimexpr\mobjw-6pt\relax,
+            anchor=north] (#2-\mi) at ([yshift=0.7pt]\wtprev.south)
+        {\makebox[\mchiavew][l]{\color{primary!55!black}\mk}\mv};
+      \xdef\wtprev{#2-\mi}%
+    }%
+  \fi
+  \node[fit=(#2)(\wtprev), inner sep=0pt] (#2-box) {};}
+
+% \variabile[stile]{nome del nodo}{(posizione)}{nome mostrato}{valore}
+% Il nome compare a sinistra della casella (nodo "nome-nome"). Per un
+% riferimento si lascia il valore vuoto e si usa \riferimento.
+\NewDocumentCommand{\variabile}{O{} m m m m}{%
+  \node[mvar, #1] (#2) at #3 {#5};
+  \node[mnome, anchor=east] (#2-nome) at ([xshift=-2pt]#2.west) {#4};}
+
+% \riferimento[stile del percorso]{nodo di partenza}{percorso fino alla meta}
+% es.: \riferimento{a}{-- (obj.west)}  oppure  \riferimento{a}{to[bend left] (obj)}
+\NewDocumentCommand{\riferimento}{O{} m m}{%
+  \draw[mrif, #1] (#2.center) #3;
+  \node[mpunto] at (#2.center) {};}
+
+% \scopo[stile]{livello 1-3}{nome}{etichetta}{(nodo) (nodo) ...}
+% Il riquadro racchiude i nodi indicati e lascia in alto lo spazio per
+% l'etichetta.
+\NewDocumentCommand{\scopo}{O{} m m m m}{%
+  \node[fit={#5}, inner sep=0pt] (#3-in) {};
+  \coordinate (#3-top) at ([yshift=9pt]#3-in.north west);
+  \begin{pgfonlayer}{liv#2}
+    \node[mscopo#2, fit=(#3-in)(#3-top), #1] (#3) {};
+  \end{pgfonlayer}
+  \node[mscopolab, anchor=north west]
+    at ([xshift=3pt, yshift=-2pt]#3.north west) {#4};}
+
+% Segni di riuscita e di errore negli schemi
+\newcommand{\mok}{{\color{mok}\itick}}
+\newcommand{\merr}{{\color{merr}\icross}}
 
 % ============================================================
 %  CONTROLLI DEI FORM, COME LI DISEGNA UN BROWSER
@@ -599,6 +759,19 @@
 
 % Pannello "Regole" (stili) dell'ispettore
 \newcommand{\dtfont}{\FiraCodeNL\scriptsize}
+% Risultato di console.table, dentro \begin{devtools}{Console}:
+%   \ctabella{name & 'Hannibal' \\ age & 7}
+\newcommand{\ctabella}[1]{%
+  \par\vspace{6pt}\noindent\hspace*{8pt}%
+  {\dtfont\renewcommand{\arraystretch}{1.3}\color{neutral!45!white}%
+   \begin{tabular}{|>{\color{neutral!15!black}}l|>{\color{codestring}}l|}
+     \hline
+     \multicolumn{1}{|>{\color{neutral!15!black}}l|}{\textbf{(index)}} &
+     \multicolumn{1}{>{\color{neutral!15!black}}l|}{\textbf{Values}} \\
+     \hline
+     #1 \\
+     \hline
+   \end{tabular}}\par\vspace{6pt}}
 % \dtregola{selettore}{origine}: intestazione di una regola
 \newcommand{\dtregola}[2]{%
   \par\noindent\hspace*{6pt}{\dtfont\textcolor{dtsel}{#1} \{}%
