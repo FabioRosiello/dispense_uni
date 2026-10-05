@@ -27,6 +27,8 @@ I cookie del sito corrente sono accessibili tramite la proprietà
 \code{document.cookie}. Il suo valore è una stringa di coppie
 \code{nome=valore} separate da \code{;}, e ogni coppia è un cookie distinto.
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=html, name=cookie.html]
 <h1>Hello!</h1>
 <script>
@@ -39,6 +41,13 @@ I cookie del sito corrente sono accessibili tramite la proprietà
   document.querySelector("h1").innerHTML = `Hello, ${name}!`;
 </script>
 \end{lstlisting}
+\risultato
+\wtdialogo[Ann]{Please, state your name:}{\wtbottone{Annulla}\ \wtbottone[primary!70!black][white][primary!70!black]{OK}}
+\wtnota{Solo alla prima visita, o dopo che\\ il cookie è scaduto (10 secondi).}
+\begin{browser}[cookie.html]
+  {\Lora\bfseries\Huge Hello, Ann!}
+\end{browser}
+\end{affianco}
 
 \subsection{localStorage}
 
@@ -58,6 +67,8 @@ coppie chiave/valore nel browser:
         protocollo e porta.
 \end{itemize}
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=html, name=localstorage.html]
 <h1>Hello!</h1>
 <script>
@@ -70,6 +81,19 @@ coppie chiave/valore nel browser:
   document.querySelector("h1").innerHTML = `Hello, ${name}!`;
 </script>
 \end{lstlisting}
+\risultato
+\begin{browser}[localstorage.html]
+  {\Lora\bfseries\Huge Hello, Ann!}
+\end{browser}
+\begin{immagine}[Il dato resta nel browser anche chiudendolo:\\
+                 il \code{prompt} non compare più.]
+\begin{tikzpicture}
+  \mchiave{1.2cm}
+  \oggetto[fill=neutral!12!white]{ls}{(0,0)}{4.2cm}{localStorage di http://localhost:3000}
+    {name/"Ann"}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{sessionStorage e IndexedDB}
 
@@ -102,6 +126,7 @@ molto tempo, per esempio quando si attende l'input dell'utente, il
 completamento di una richiesta di rete o la fine di un calcolo complesso. Le
 istruzioni successive, magari importanti, restano bloccate ad aspettare.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=sincrono.js]
 function firstOperation(value)  { return 1 + value; }
 function secondOperation(value) { return 2 + value; }
@@ -115,6 +140,20 @@ function setupPage() {
   console.log(`Result is ${result}`);
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Esecuzione sincrona: ogni operazione\\ attende la fine della precedente.]
+\begin{tikzpicture}[
+    op/.style={draw=primary!60!black, fill=primary!12!white, line width=0.6pt,
+      minimum height=0.5cm, font=\FiraCodeNL\scriptsize, anchor=west},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=neutral!45!black}]
+  \node[op, minimum width=1.6cm] (o1) at (0,0) {first};
+  \node[op, minimum width=1.6cm] (o2) at (o1.east) {second};
+  \node[op, minimum width=1.6cm] (o3) at (o2.east) {third};
+  \node[op, minimum width=1.0cm, fill=accent!14!white, draw=accent!60!black] (o4) at (o3.east) {log};
+  \draw[a] (0,-0.55) -- node[mnota, below]{tempo} (6.0,-0.55);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{Callback}
 
@@ -127,6 +166,7 @@ effetti, delle callback.
 
 Riscriviamo l'esempio precedente in stile asincrono, con le callback.
 
+\begin{affianco}[0.52][c]
 \begin{lstlisting}[style=js, name=callback.js]
 function firstOperation(value, cb)  { cb(1 + value); }
 function secondOperation(value, cb) { cb(2 + value); }
@@ -144,6 +184,33 @@ function setupPage() {
   console.log("Done");
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Ogni passo vive dentro la callback del precedente:\\
+                 la piramide cresce verso destra.]
+\begin{tikzpicture}[
+    lv/.style={draw, rounded corners=3pt, line width=0.7pt, anchor=north west,
+      inner sep=0pt}]
+  \draw[lv, draw=primary!60!black, fill=primary!5!white] (0,0) rectangle (5.6,-2.6);
+  \node[mcod, anchor=north west] at (0.05,-0.03) {firstOperation(result, r1 => \{};
+  \draw[lv, draw=primary!60!black, fill=primary!11!white] (0.4,-0.5) rectangle (5.4,-2.4);
+  \node[mcod, anchor=north west] at (0.45,-0.53) {secondOperation(r1, r2 => \{};
+  \draw[lv, draw=primary!60!black, fill=primary!18!white] (0.8,-1.0) rectangle (5.2,-2.2);
+  \node[mcod, anchor=north west] at (0.85,-1.03) {thirdOperation(r2, r3 => \{};
+  \draw[lv, draw=accent!60!black, fill=accent!14!white] (1.2,-1.5) rectangle (5.0,-2.0);
+  \node[mcod] at (3.1,-1.75) {console.log(r3)};
+\end{tikzpicture}
+\end{immagine}
+\begin{console}[Console, chiamando setupPage()]
+Result is 6
+Done
+\end{console}
+\end{affianco}
+
+Qui le tre operazioni invocano la callback \textbf{subito}, quindi
+\textit{Result is 6} compare prima di \textit{Done}. Con operazioni davvero
+asincrone, per esempio basate su \code{setTimeout} o su una richiesta di rete,
+l'ordine si invertirebbe: \code{setupPage} terminerebbe stampando \textit{Done}
+e il risultato arriverebbe dopo.
 
 \error{Callback Hell}{
   L'indentazione che si allarga a destra ha un nome: \term{Callback Hell},
@@ -171,7 +238,8 @@ Le \term{Promise} sono il modo di \guillemotleft collegare\guillemotright\ produ
 
 \subsection{Creare una Promise}
 
-Un oggetto \code{Promise} si crea con il costruttore apposito.
+Un oggetto \code{Promise} si crea con il costruttore apposito (lo schema del
+suo ciclo di vita è più avanti, accanto al primo esempio completo).
 
 \begin{lstlisting}[style=js]
 let promise = new Promise(function (resolve, reject) {
@@ -191,37 +259,6 @@ dell'executor termina, deve invocare
         l'oggetto errore.
 \end{itemize}
 
-\begin{figure}[H]
-  \centering
-  \begin{tikzpicture}[font=\Lato\small,
-      s/.style={rounded corners=4pt, line width=1pt, align=center,
-                minimum width=3.6cm, minimum height=1.15cm},
-      a/.style={-{Stealth[length=6pt,width=5pt]}, line width=1pt}]
-
-    \node[s, draw=neutral!55!white, fill=neutral!9!white] (p) at (0,0)
-      {\scriptsize Status \textbf{"pending"}\\ \scriptsize Result
-       \code{undefined}};
-
-    \node[s, draw=green-gradient-6, fill=green-gradient-1!50!white] (f) at (6.6,1.5)
-      {\scriptsize Status \textbf{"fulfilled"}\\ \scriptsize Result
-       \code{result}};
-
-    \node[s, draw=red-gradient-6, fill=red-gradient-1!40!white] (r) at (6.6,-1.5)
-      {\scriptsize Status \textbf{"rejected"}\\ \scriptsize Reason
-       \code{error}};
-
-    \draw[a, draw=green-gradient-6] (p.east) to[out=20, in=180]
-      node[wtlab, above, pos=0.55]{\code{resolve(result)}} (f.west);
-    \draw[a, draw=red-gradient-6] (p.east) to[out=-20, in=180]
-      node[wtlab, below, pos=0.55]{\code{reject(error)}} (r.west);
-
-    \node[font=\Lato\scriptsize, text=neutral!35!black, anchor=south]
-      at (0,0.75) {\code{new Promise(executor)}};
-  \end{tikzpicture}
-  \caption{Il ciclo di vita di una Promise.}
-  \label{fig:promise-lifecycle}
-\end{figure}
-
 \info{Stato e risultato sono privati}{
   \textit{Status} e \textit{Result} sono proprietà \textbf{interne}: non si
   possono leggere direttamente dal codice. L'unico modo di accedere al risultato
@@ -230,11 +267,13 @@ dell'executor termina, deve invocare
   \term{settled} (\guillemotleft sistemata\guillemotright), e da quel momento il suo stato non
   cambia più.}
 
+\begin{affianco}[0.52][c]
 \begin{lstlisting}[style=js, name=promise.js]
 let promise = new Promise(function (resolve, reject) {
   let number = Math.random();
 
-  setTimeout(() => {     // setTimeout riceve una callback e un tempo in ms
+  // setTimeout riceve una callback e un tempo in ms
+  setTimeout(() => {
     if (number > 0.5) {
       resolve(number);
     } else {
@@ -245,6 +284,26 @@ let promise = new Promise(function (resolve, reject) {
 
 console.log(promise);    // Promise { <state>: "pending" }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Il ciclo di vita di una Promise.]
+\begin{tikzpicture}[font=\Lato\small,
+    st/.style={rounded corners=4pt, line width=0.9pt, align=center,
+      minimum width=2.9cm, minimum height=1.0cm, font=\Lato\scriptsize},
+    a/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt}]
+  \node[st, draw=neutral!55!white, fill=neutral!9!white] (p) at (0,0)
+    {state \textbf{"pending"}\\ result \code{undefined}};
+  \node[st, draw=green-gradient-6, fill=green-gradient-1!50!white] (f) at (4.6,1.25)
+    {state \textbf{"fulfilled"}\\ result \code{number}};
+  \node[st, draw=red-gradient-6, fill=red-gradient-1!40!white] (r) at (4.6,-1.25)
+    {state \textbf{"rejected"}\\ reason \code{error}};
+  \draw[a, draw=green-gradient-6] (p.east) to[out=30, in=180]
+    node[wtlab, above, pos=0.75, xshift=-6pt]{\code{resolve(number)}} (f.west);
+  \draw[a, draw=red-gradient-6] (p.east) to[out=-30, in=180]
+    node[wtlab, below, pos=0.75, xshift=-6pt]{\code{reject(error)}} (r.west);
+  \node[mnota, anchor=south] at (p.north) {\code{new Promise(executor)}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \subsection{then, catch e finally}
 
@@ -276,6 +335,7 @@ Promise è \textit{settled} (in un senso o nell'altro), ed è pensato per le
 operazioni di pulizia che vanno eseguite in ogni caso.
 
 \begin{esempio}{L'ordine di esecuzione}
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=promise-ordine.js]
 let promise = new Promise(function (resolve, reject) {
   let number = Math.random();
@@ -299,13 +359,34 @@ promise.then(
 
 console.log("There");
 \end{lstlisting}
-
+\risultato
+\begin{immagine}[Il codice sincrono finisce subito; i gestori\\
+                 partono un secondo dopo, quando la Promise si sistema.]
+\begin{tikzpicture}[
+    ev/.style={mcod, anchor=west},
+    tk/.style={draw=neutral!50!black, line width=0.6pt}]
+  \draw[-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=neutral!45!black]
+    (0,0) -- (6.2,0) node[mnota, anchor=west]{t};
+  \foreach \x/\l in {0/0 s, 4.5/1 s} {
+    \draw[tk] (\x,0.08) -- (\x,-0.08);
+    \node[mnota, anchor=north] at (\x,-0.1) {\l};
+  }
+  \fill[primary!25!white] (0,0.12) rectangle (0.5,0.42);
+  \node[ev] at (0.05,1.15) {Here};
+  \node[ev] at (0.05,0.75) {There};
+  \fill[mok!45] (4.5,0.12) rectangle (4.9,0.42);
+  \node[ev] at (4.45,1.15) {Promise settled};
+  \node[ev] at (4.45,0.75) {Done: 0.6};
+  \node[mnota, anchor=west, text=neutral!40!black] at (1.2,0.27) {nessun codice in esecuzione};
+\end{tikzpicture}
+\end{immagine}
 \begin{console}
 Here
 There
 Promise settled
 Done: 0.6      (oppure "Number too small: 0.3")
 \end{console}
+\end{affianco}
 
 L'ordine è il punto centrale: \code{"There"} viene stampato \textbf{prima} del
 risultato, perché il codice non si è fermato ad aspettare la Promise. È
@@ -318,6 +399,7 @@ E se dovessimo eseguire una \textbf{sequenza} di passi asincroni? È qui che
 entra in gioco il \term{promise chaining}, e che si vede il vantaggio rispetto
 alle callback annidate.
 
+\begin{affianco}[0.57][c]
 \begin{lstlisting}[style=js, name=chaining.js]
 let promise = new Promise(function (resolve, reject) {
   setTimeout(() => { resolve(1); }, 1000);
@@ -332,7 +414,24 @@ promise
 
 console.log("There");
 \end{lstlisting}
-
+\risultato
+\begin{immagine}[Ogni \code{.then()} crea una nuova Promise,\\
+                 che si risolve con il valore restituito dal gestore.]
+\begin{tikzpicture}[
+    pr/.style={rounded corners=4pt, draw=green-gradient-6, fill=green-gradient-1!40!white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, minimum width=1.05cm,
+      minimum height=0.55cm},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=accent!70!black}]
+  \foreach \v [count=\i from 0] in {1,2,4,8} {
+    \node[pr] (p\i) at (\i*1.75,0) {\v};
+  }
+  \node[mnota, anchor=south] at (p0.north) {\code{promise}};
+  \foreach \i/\j in {0/1,1/2,2/3} {
+    \draw[a] (p\i) -- node[mcod, above, font=\FiraCodeNL\tiny]{.then} (p\j);
+  }
+  \node[mnota, anchor=north, align=center] at ([yshift=-3pt]p3.south) {mai letto};
+\end{tikzpicture}
+\end{immagine}
 \begin{console}
 Here
 There
@@ -340,6 +439,7 @@ There
 2
 4
 \end{console}
+\end{affianco}
 
 Come funziona, se la Promise originale si risolve una sola volta con il valore
 1? Il punto è che \textbf{ogni invocazione di \code{.then()} restituisce una
@@ -350,6 +450,7 @@ Promise, che alimenta il \code{.then()} successivo.
 \begin{warningbox}{{Concatenare non è registrare più gestori}}
   I due frammenti seguenti sembrano simili ma fanno cose molto diverse.
 
+\begin{affianco}[0.6][c]
 \begin{lstlisting}[style=js]
 // concatenazione: stampa 1, poi 2, poi 4
 promise
@@ -357,13 +458,41 @@ promise
   .then((r) => { console.log(r); return r * 2; })
   .then((r) => { console.log(r); return r * 2; });
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[
+    pr/.style={circle, draw=green-gradient-6, fill=green-gradient-1!40!white,
+      line width=0.7pt, font=\FiraCodeNL\tiny, minimum size=0.5cm, inner sep=0pt},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=accent!70!black}]
+  \foreach \v [count=\i from 0] in {1,2,4,8} \node[pr] (c\i) at (\i*0.95,0) {\v};
+  \foreach \i/\j in {0/1,1/2,2/3} \draw[a] (c\i) -- (c\j);
+  \node[mnota, anchor=north] at ([yshift=-2pt]c1.south east) {una catena};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
+\begin{affianco}[0.6][c]
 \begin{lstlisting}[style=js]
-// tre gestori indipendenti sulla STESSA promise: stampa 1, 1, 1
+// tre gestori sulla STESSA promise: stampa 1, 1, 1
 promise.then((r) => { console.log(r); return r * 2; });
 promise.then((r) => { console.log(r); return r * 2; });
 promise.then((r) => { console.log(r); return r * 2; });
 \end{lstlisting}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[
+    pr/.style={circle, draw=green-gradient-6, fill=green-gradient-1!40!white,
+      line width=0.7pt, font=\FiraCodeNL\tiny, minimum size=0.5cm, inner sep=0pt},
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=accent!70!black}]
+  \node[pr] (c0) at (0,0) {1};
+  \foreach \y [count=\i] in {0.6,0,-0.6} {
+    \node[pr] (d\i) at (1.4,\y) {2};
+    \draw[a] (c0) -- (d\i);
+  }
+  \node[mnota, anchor=west] at ([xshift=4pt]d2.east) {tre rami};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
   Nel primo caso si costruisce una catena, in cui ogni anello riceve il
   risultato del precedente. Nel secondo si registrano tre gestori indipendenti
@@ -372,6 +501,7 @@ promise.then((r) => { console.log(r); return r * 2; });
 \end{warningbox}
 
 \begin{esempio}{Errori in una catena}
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=catena-errori.js]
 promise.finally(() => {
   console.log("Promise settled");
@@ -389,6 +519,29 @@ promise.finally(() => {
   console.warn(error.message);
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}[Dopo il \code{throw} la catena salta\\
+                 i \code{.then()} fino al primo \code{.catch()}.]
+\begin{tikzpicture}[
+    st/.style={rounded corners=3pt, line width=0.7pt, font=\FiraCodeNL\scriptsize,
+      minimum width=2.2cm, minimum height=0.55cm},
+    ok/.style={st, draw=green-gradient-6, fill=green-gradient-1!40!white},
+    ko/.style={st, draw=red-gradient-6, fill=red-gradient-1!40!white},
+    sk/.style={st, draw=neutral!45!white, fill=neutral!6!white, text=neutral!45!black, dashed},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=neutral!45!black}]
+  \node[ok] (n1) at (0,0)    {.finally};
+  \node[ok] (n2) at (0,-0.9) {.then};
+  \node[ko] (n3) at (0,-1.8) {.then  throw};
+  \node[sk] (n4) at (0,-2.7) {.then};
+  \node[ok] (n5) at (0,-3.6) {.catch};
+  \draw[a] (n1) -- (n2); \draw[a] (n2) -- (n3);
+  \draw[a, draw=merr] (n3.east) to[out=0, in=0, looseness=1.4]
+    node[mnota, right, text=merr]{errore} (n5.east);
+  \draw[a, draw=neutral!35!white, dashed] (n3) -- (n4);
+  \node[mnota, anchor=east, text=neutral!45!black] at ([xshift=-4pt]n4.west) {saltato};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Quando un anello della catena fallisce, tutti i \code{.then()} successivi
 vengono \textbf{saltati} fino al primo \code{.catch()}. È lo stesso
@@ -423,6 +576,7 @@ rappresenta il completamento di tutte. Il risultato è un array, in cui ogni
 Promise di ingresso contribuisce con un elemento, \textbf{nell'ordine di
 partenza} e non in quello di completamento.
 
+\begin{affianco}[0.57][c]
 \begin{lstlisting}[style=js, name=promise-all.js]
 let prom = Promise.all([
   new Promise(resolve => setTimeout(() => resolve(3), 3000)),
@@ -432,6 +586,26 @@ let prom = Promise.all([
   console.log(result);   // Array(3) [3, 2, 1]
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}[Le tre Promise finiscono in ordine inverso,\\
+                 ma il risultato segue l'ordine dell'array.]
+\begin{tikzpicture}[x=1.45cm,
+    sec/.style={x=1.45cm},
+    ok/.style={fill=green-gradient-1!60!white, draw=green-gradient-6, line width=0.6pt},
+    ko/.style={fill=red-gradient-1!50!white, draw=red-gradient-6, line width=0.6pt},
+    ax/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.7pt, draw=neutral!45!black},
+    v/.style={mcod, anchor=west}]
+  \foreach \t/\y/\v in {3/0/3, 2/-0.5/2, 1/-1.0/1} {
+    \draw[ok] (0,\y) rectangle (\t,\y-0.3);
+    \node[v] at (\t,\y-0.15) {\v};
+  }
+  \draw[ax] (0,-1.5) -- (3.6,-1.5) node[mnota, anchor=west]{s};
+  \foreach \x in {0,1,2,3} \node[mnota, anchor=north] at (\x,-1.5) {\x};
+  \draw[dashed, draw=accent!60!black] (3,0.15) -- (3,-1.5);
+  \node[mcod, anchor=south, text=accent!70!black] at (3,0.15) {[3, 2, 1]};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 \end{esempio}
 
 \begin{esempio}{Promise.allSettled}
@@ -440,6 +614,8 @@ let prom = Promise.all([
 si sistemino e restituisce un array di oggetti che descrivono lo stato di
 ciascuna.
 
+\begin{affianco}[0.62][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=promise-allsettled.js]
 let p = Promise.allSettled([
   new Promise((res, rej) => { setTimeout(() => rej(new Error("Oops")), 1000) }),
@@ -450,12 +626,26 @@ let p = Promise.allSettled([
   console.warn(err.message);   // non viene eseguito
 });
 \end{lstlisting}
+\risultato
+\begin{console}
+Array [
+  { status: "rejected",
+    reason: Error: Oops },
+  { status: "fulfilled",
+    value: 1 }
+]
+\end{console}
+\wtnota{Nessun rifiuto arriva al \code{.catch()}:\\
+        l'esito di ciascuna è nell'array.}
+\end{affianco}
 \end{esempio}
 
 \begin{esempio}{Promise.race e Promise.any}
 \code{Promise.race} si sistema appena una delle Promise di ingresso si sistema,
 e ne assume il risultato (o l'errore).
 
+\begin{affianco}[0.62][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=promise-race.js]
 let p = Promise.race([
   new Promise((res, rej) => { setTimeout(() => rej(new Error("Oops")), 2000) }),
@@ -471,10 +661,34 @@ let p2 = Promise.race([
   console.warn(err.message);   // Oops: qui arriva prima il rifiuto
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{race}: vince la prima che si sistema,\\
+                 in un senso o nell'altro.]
+\begin{tikzpicture}[x=1.4cm,
+    sec/.style={x=1.45cm},
+    ok/.style={fill=green-gradient-1!60!white, draw=green-gradient-6, line width=0.6pt},
+    ko/.style={fill=red-gradient-1!50!white, draw=red-gradient-6, line width=0.6pt},
+    ax/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.7pt, draw=neutral!45!black},
+    v/.style={mcod, anchor=west}]
+  \node[mcod, anchor=east] at (-0.1,0.1) {p};
+  \draw[ko] (0,0.25) rectangle (2,-0.05);
+  \draw[ok] (0,-0.15) rectangle (1,-0.45);
+  \node[v] at (1,-0.3) {1 \mok};
+  \node[mcod, anchor=east] at (-0.1,-1.15) {p2};
+  \draw[ko] (0,-1.0) rectangle (1,-1.3);
+  \node[v] at (1,-1.15) {Oops \merr};
+  \draw[ok] (0,-1.4) rectangle (2,-1.7);
+  \draw[ax] (0,-2.0) -- (2.6,-2.0) node[mnota, anchor=west]{s};
+  \foreach \x in {0,1,2} \node[mnota, anchor=north] at (\x,-2.0) {\x};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 \code{Promise.any} è simile, ma attende la prima Promise \textbf{risolta},
 ignorando i rifiuti.
 
+\begin{affianco}[0.62][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=promise-any.js]
 let p = Promise.any([
   new Promise((res, rej) => { setTimeout(() => res(3), 3000) }),
@@ -484,6 +698,25 @@ let p = Promise.any([
   console.log(result);   // 1
 });
 \end{lstlisting}
+\risultato
+\begin{immagine}[\code{any}: il rifiuto a 1 s viene ignorato,\\
+                 vince la prima risolta (a 2 s).]
+\begin{tikzpicture}[x=1.4cm,
+    sec/.style={x=1.45cm},
+    ok/.style={fill=green-gradient-1!60!white, draw=green-gradient-6, line width=0.6pt},
+    ko/.style={fill=red-gradient-1!50!white, draw=red-gradient-6, line width=0.6pt},
+    ax/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.7pt, draw=neutral!45!black},
+    v/.style={mcod, anchor=west}]
+  \draw[ok] (0,0) rectangle (3,-0.3);
+  \draw[ko] (0,-0.45) rectangle (1,-0.75);
+  \node[v, text=neutral!45!black] at (1,-0.6) {ignorato};
+  \draw[ok] (0,-0.9) rectangle (2,-1.2);
+  \node[v] at (2,-1.05) {1 \mok};
+  \draw[ax] (0,-1.5) -- (3.5,-1.5) node[mnota, anchor=west]{s};
+  \foreach \x in {0,1,2,3} \node[mnota, anchor=north] at (\x,-1.5) {\x};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Se \textbf{tutte} rifiutano, \code{Promise.any} rifiuta con un
 \code{AggregateError} che raccoglie tutti gli errori.
@@ -537,6 +770,7 @@ async function g() {
 }
 \end{lstlisting}
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=async-uso.js]
 console.log("Here");
 
@@ -549,18 +783,31 @@ f().then(console.log).catch(console.warn);
 
 console.log("There");
 \end{lstlisting}
-
+\risultato
+\begin{immagine}[\code{f()} restituisce una Promise: il \code{.then()}\\
+                 scatta dopo il codice sincrono.]
+\begin{tikzpicture}[
+    pr/.style={rounded corners=4pt, draw=green-gradient-6, fill=green-gradient-1!40!white,
+      line width=0.7pt, font=\FiraCodeNL\scriptsize, minimum height=0.55cm, inner xsep=5pt},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=neutral!45!black}]
+  \node[mcod] (c) at (0,0) {f()};
+  \node[pr] (p) at (3.3,0) {Promise: fulfilled, 1};
+  \draw[a] (c) -- node[mnota, above]{restituisce} (p);
+\end{tikzpicture}
+\end{immagine}
 \begin{console}
 Here
 There
 1
 \end{console}
+\end{affianco}
 
 \subsection{await}
 
 La parola chiave \code{await} si può usare \textbf{solo dentro funzioni async},
 e sospende l'esecuzione finché una Promise non è sistemata.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=await.js]
 console.log("Here");
 
@@ -578,13 +825,34 @@ f().then(console.log);
 
 console.log("There");
 \end{lstlisting}
-
+\risultato
+\begin{immagine}[\code{await} sospende solo \code{f}: intanto il resto\\
+                 del programma prosegue e stampa \textit{There}.]
+\begin{tikzpicture}[x=1.15cm,
+    lane/.style={mnota, anchor=east},
+    run/.style={fill=primary!22!white, draw=primary!55!black, line width=0.5pt},
+    wait/.style={fill=neutral!8!white, draw=neutral!45!white, dashed, line width=0.5pt},
+    v/.style={mcod, anchor=south}]
+  \node[lane] at (-0.1,0) {programma};
+  \node[lane] at (-0.1,-0.8) {\code{f}};
+  \draw[run] (0,0.15) rectangle (0.5,-0.15);  \node[v] at (0.25,0.15) {Here};
+  \draw[run] (0.5,-0.65) rectangle (0.9,-0.95);
+  \draw[run] (0.9,0.15) rectangle (1.4,-0.15); \node[v] at (1.15,0.15) {There};
+  \draw[wait] (0.9,-0.65) rectangle (4.5,-0.95);
+  \node[mnota] at (2.7,-0.8) {in attesa (2 s)};
+  \draw[run] (4.5,-0.65) rectangle (5.0,-0.95);
+  \node[v, anchor=north] at (4.75,-0.95) {After Await\ldots};
+  \draw[-{Stealth[length=5pt,width=4pt]}, line width=0.7pt, draw=neutral!45!black]
+    (0,-1.55) -- (5.4,-1.55) node[mnota, anchor=west]{t};
+\end{tikzpicture}
+\end{immagine}
 \begin{console}
 Here
 There
 After Await. Result is Done!
 Done!
 \end{console}
+\end{affianco}
 
 \info{Perché async/await è più leggibile}{
   \code{await} permette di scrivere codice asincrono che \textbf{si legge come
@@ -603,6 +871,8 @@ JavaScript può anche \textbf{scaricare dati} da Internet. Nel JavaScript
 tradizionale si usavano oggetti \code{XMLHttpRequest} e delle callback per
 gestire gli eventi di stato.
 
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=html, name=xhr.html]
 <h1>Cat Facts</h1>
 <button id="btn">Click Here To Load a Cat Fact</button>
@@ -623,6 +893,14 @@ gestire gli eventi di stato.
   }
 </script>
 \end{lstlisting}
+\risultato
+\begin{browser}[Cat Facts]
+  {\Lora\bfseries\Huge Cat Facts}\\[6pt]
+  \wtbottone{Click Here To Load a Cat Fact}\\[6pt]
+  Cats sleep 70\% of their lives.
+\end{browser}
+\wtnota{Dopo il clic, il paragrafo si riempie\\ con il testo arrivato dal server.}
+\end{affianco}
 
 \subsection{L'API fetch}
 
@@ -645,12 +923,13 @@ La Promise restituita da \code{fetch} si risolve \textbf{appena arrivano gli
 header} della risposta. A quel punto possiamo già controllare il codice di stato
 e gli header, ma il \textbf{corpo} potrebbe non essere ancora disponibile.
 
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=fetch-response.js]
 async function f() {
   let response = await fetch("./example.json");
 
-  // un header specifico
-  console.log(response.headers.get('Content-Type'));   // application/json
+  // un header specifico (qui vale application/json)
+  console.log(response.headers.get('Content-Type'));
 
   // iterazione su tutti gli header della risposta
   for (let [key, value] of response.headers) {
@@ -666,6 +945,23 @@ async function f() {
   }
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[La Promise di \code{fetch} si risolve con gli header;\\
+                 il corpo si legge dopo, con un'altra Promise.]
+\begin{tikzpicture}[
+    fase/.style={rounded corners=3pt, draw=primary!60!black, fill=primary!8!white,
+      line width=0.7pt, font=\Lato\scriptsize, align=center, minimum width=2.5cm,
+      minimum height=0.9cm},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=neutral!45!black}]
+  \node[fase] (h) at (0,0) {arrivano gli header\\ \code{status}, \code{headers}};
+  \node[fase, fill=accent!10!white, draw=accent!60!black] (b) at (3.6,0)
+    {arriva il corpo\\ \code{.json()}, \code{.text()}\ldots};
+  \draw[a] (h) -- (b);
+  \node[mcod, anchor=south] at (h.north) {await fetch(...)};
+  \node[mcod, anchor=south] at (b.north) {await response.json()};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Per ottenere il corpo, l'oggetto \code{Response} offre diversi metodi, anch'essi
 basati su Promise.
@@ -689,6 +985,7 @@ basati su Promise.
   funzionerà, perché il contenuto del corpo è già stato consumato.}
 
 \begin{esempio}{Leggere una risposta JSON}
+\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=fetch-json.js]
 async function f() {
   let response = await fetch("https://catfact.ninja/fact");
@@ -701,12 +998,34 @@ async function f() {
   }
 }
 \end{lstlisting}
+\risultato
+\begin{immagine}[Una richiesta, una risposta JSON, poi il DOM.]
+\begin{tikzpicture}[
+    att/.style={rounded corners=3pt, draw=primary!65!black, fill=primary!12!white,
+      line width=0.7pt, font=\Lato\scriptsize\bfseries, minimum width=2.1cm,
+      minimum height=0.55cm},
+    vita/.style={dashed, draw=neutral!55!white, line width=0.7pt},
+    req/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=primary!70!black},
+    res/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=green-gradient-6},
+    msg/.style={mcod, above}]
+  \node[att] (b) at (0,0) {browser};
+  \node[att] (s) at (4.4,0) {catfact.ninja};
+  \draw[vita] (b.south) -- (0,-2.6);
+  \draw[vita] (s.south) -- (4.4,-2.6);
+  \draw[req] (0,-0.75) -- node[msg]{GET /fact} (4.4,-0.75);
+  \draw[res] (4.4,-1.4) -- node[msg]{200 OK \{"fact": "...", ...\}} (0,-1.4);
+  \node[mnota, anchor=east, align=right] at (-0.1,-2.1) {\code{response.json()}\\ e \code{innerHTML}};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
 
 Da confrontare con la versione basata su \code{XMLHttpRequest} vista poco fa:
 stesso risultato, molto meno codice e nessuna callback annidata.
 \end{esempio}
 
 \begin{esempio}{Scaricare dati binari con blob}
+\begin{affianco}[0.62][c]
+\codicepiccolo
 \begin{lstlisting}[style=html, name=fetch-blob.html]
 <input id="msg" placeholder="Insert your message here" type="text">
 <button id="btn">Generate QR</button>
@@ -727,6 +1046,27 @@ stesso risultato, molto meno codice e nessuna callback annidata.
   }
 </script>
 \end{lstlisting}
+\risultato
+\begin{browser}[fetch-blob.html]
+  \wtcampo[2.6cm]{Hello}\ \wtbottone{Generate QR}\\[6pt]
+  \begin{tikzpicture}[x=0.11cm, y=0.11cm]
+    \pgfmathsetseed{7}
+    \fill[white] (0,0) rectangle (21,21);
+    \foreach \i in {0,...,20} \foreach \j in {0,...,20} {
+      \pgfmathrandominteger{\r}{0}{1}
+      \ifnum\r=1 \fill[black] (\i,\j) rectangle ++(1,1); \fi
+    }
+    % i tre quadrati di posizionamento
+    \foreach \x/\y in {0/14, 14/14, 0/0} {
+      \fill[white] (\x-0.0,\y-0.0) rectangle ++(7,7);
+      \fill[black] (\x,\y) rectangle ++(7,7);
+      \fill[white] (\x+1,\y+1) rectangle ++(5,5);
+      \fill[black] (\x+2,\y+2) rectangle ++(3,3);
+    }
+  \end{tikzpicture}
+\end{browser}
+\wtnota{L'immagine arriva come \code{Blob} e viene\\ mostrata tramite una URL locale.}
+\end{affianco}
 
 Il \code{Blob} scaricato viene trasformato in una URL locale temporanea con
 \code{URL.createObjectURL()}, che si può assegnare direttamente all'attributo
