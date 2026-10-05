@@ -6,7 +6,7 @@ Federico II, corso di laurea in Informatica.
 
 Copre **l'intero corso**: tutte le 24 lezioni, più la lezione bonus su CMS e
 GraphQL (inclusa come capitolo finale e segnalata come fuori programma).
-23 capitoli, 345 pagine.
+23 capitoli, 348 pagine.
 
 Il codice è quasi sempre accompagnato, **accanto**, da ciò che produce: il
 rendering nel browser, l'output in console o nel terminale, oppure uno schema

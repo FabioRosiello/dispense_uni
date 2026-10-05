@@ -269,6 +269,36 @@ collegati al PC via TCP/IP. Ogni componente dei server lavora su un proprio arte
 annunci immobiliari.
 \end{esempio}
 
+\begin{esempio}{Valori etichettati e ambienti di esecuzione}
+\begin{center}
+\begin{tikzpicture}
+  \nodo{bc}{(0,2.6)}{2.6}{1.4}{\textbf{BrowserClient}\\[1pt]\rule{2.3cm}{0.4pt}\\browser}
+  \nodo{rc}{(3.3,2.6)}{3.0}{1.4}{\textbf{Rich Client}\\{\tiny\{OS = Windows\}}\\[-1pt]\rule{2.6cm}{0.4pt}\\herculesClient.exe}
+  \nodo{ws}{(0.9,-1.2)}{3.6}{2.4}{\textbf{Web server}\\{\tiny\{OS = Solaris\}}\\{\tiny\{web server = apache\}}\\{\tiny\{number deployed = 3\}}\\[-1pt]\rule{3.2cm}{0.4pt}\\herculesWeb.war}
+  \nodo{as}{(7.6,-2.6)}{5.0}{5.3}{\textbf{Application Server}}
+  \node[draw=black!70, fill=white, font=\scriptsize, align=center, inner sep=3pt, minimum width=4.2cm] (jg) at (10.1,1.7)
+    {\textbf{JoveGL.exe}\\{\tiny\{vendor = romanSoft\}}\\{\tiny\{component = General Ledger\}}};
+  \nodo{ejb}{(8.3,-1.1)}{3.4}{1.6}{\textbf{EJB Container}\\[-1pt]\rule{3.0cm}{0.4pt}\\{\tiny herculesBase.ear}\\[-3pt]{\tiny herculesAR.ear}}
+  \nodo{db}{(8.3,-2.3)}{3.4}{0.8}{\textbf{Oracle DBMS}}
+  \draw[line width=0.8pt] (1.3,2.6) -- node[font=\tiny, left]{http/Internet} (1.3,1.2);
+  \draw[line width=0.8pt] (4.8,2.6) -- (4.8,1.9) -- node[font=\tiny, above]{http/LAN} (3.8,1.9) -- (3.8,1.2);
+  \draw[line width=0.8pt] (4.5,0.2) -- node[font=\tiny, above]{Java RMI / LAN} (7.6,0.2);
+  \draw[line width=0.8pt] (10.0,-1.1) -- node[font=\tiny, right]{JDBC} (10.0,-1.5);
+\end{tikzpicture}
+\end{center}
+Questo esempio introduce due elementi nuovi.
+\begin{itemize}
+  \item I \textbf{valori etichettati} (\textit{tagged values}), tra parentesi graffe nella forma \texttt{\{nome = valore\}}, aggiungono
+        informazioni su un nodo o un artefatto: il sistema operativo, il software installato, quante copie del nodo esistono
+        (\texttt{number deployed = 3}: i web server sono tre).
+  \item Un nodo può contenerne altri. \textbf{EJB Container} e \textbf{Oracle DBMS} non sono macchine ma \textbf{ambienti di
+        esecuzione} (\textit{execution environment}) software, che girano dentro la macchina Application Server e ospitano a loro
+        volta gli artefatti (i file \texttt{.ear}).
+\end{itemize}
+Le connessioni sono etichettate con il protocollo: i client parlano HTTP con il web server, che a sua volta usa Java RMI per
+raggiungere l'application server; il container accede al database via JDBC.
+\end{esempio}
+
 \info{Quando si disegnano}{
   I diagrammi di deployment sono diagrammi \textbf{architetturali}: si usano nella fase di \textbf{progettazione dell'architettura}
   e in quella di \textbf{implementazione}. A volte però servono già in \textbf{fase di analisi}, quando il problema stesso impone
@@ -818,10 +848,42 @@ La prima volta che si accende la lampada non c'è nessuna storia da ricordare, e
 Alla riaccensione, \texttt{on()} entra attraverso la \textbf{H}, e la lampada torna al livello che aveva quando è stata spenta.
 \end{esempio}
 
-\info{History profonda}{
-  Esiste anche lo pseudostato di history \textbf{profonda} (\textit{deep history}), disegnato \textbf{H*}, che ricorda lo stato attivo
-  a \textbf{tutti} i livelli di annidamento, non solo al primo.
+\dfn{Pseudostato history (deep)}{
+  Si disegna come \textbf{H*} cerchiato. Funziona come la history shallow, ma ripristina l'\textbf{intera configurazione} della
+  regione: lo stato attivo a \textbf{tutti} i livelli di annidamento, compresi i sottostati dei sottostati.
 }
+
+\begin{esempio}{Un lettore musicale con la radio}
+\begin{center}
+\begin{tikzpicture}
+  \node[stato, minimum width=1.6cm] (off) at (0,-1.4) {Off};
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!15] (2.6,-4.2) rectangle (11.6,0.9);
+  \node[font=\scriptsize\bfseries] at (7.1,0.65) {On};
+  \node[iniziale] (i1) at (3.1,0.0) {};
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!30] (3.7,-3.9) rectangle (8.2,0.4);
+  \node[font=\scriptsize\bfseries] at (5.95,0.15) {PlayingMusic};
+  \draw[tr] (i1) -- (3.7,0.0);
+  \node[iniziale] (i2) at (4.2,-0.6) {};
+  \node[stato, fill=q3!45, minimum width=2.4cm] (fn) at (6.1,-0.9) {FindNextSong};
+  \node[stato, fill=q3!45, minimum width=2.4cm] (ps) at (6.1,-2.9) {PlaySong};
+  \draw[tr] (i2) -- ($(fn.west)+(0,0.3)$);
+  \draw[tr] ($(fn.south)+(0.5,0)$) -- node[right, font=\tiny]{done()} ($(ps.north)+(0.5,0)$);
+  \draw[tr] ($(ps.north)+(-0.5,0)$) -- node[left, font=\tiny]{played()} ($(fn.south)+(-0.5,0)$);
+  \node[stato, fill=q3!30, minimum width=1.9cm] (pr) at (10.1,-0.2) {PlayRadio};
+  \draw[tr] (8.2,-0.2) -- node[above, font=\tiny]{radio()} (pr);
+  \draw[tr] (pr.south) |- node[above, font=\tiny, pos=0.75]{music()} (8.2,-3.0);
+  \node[circle, draw, fill=white, font=\tiny, inner sep=0.5pt, minimum size=0.4cm] (h) at (3.15,-3.0) {H*};
+  \draw[tr] (off.north) |- node[above, font=\tiny, pos=0.75]{on()} (2.6,0.3);
+  \draw[tr] (off.east) -- node[above, font=\tiny, pos=0.55]{resume()} ++(1.5,0) -- (h.north);
+  \draw[tr] (2.6,-3.6) -- node[above, font=\tiny]{stop()} (0,-3.6) -- (off.south);
+\end{tikzpicture}
+\end{center}
+\texttt{on()} accende il lettore dall'inizio: si entra in PlayingMusic e si cerca la prossima canzone. \texttt{resume()} invece
+entra attraverso \textbf{H*}: se il lettore era stato fermato mentre suonava una canzone, torna in \textbf{PlaySong}, cioè nel
+sottostato \textbf{di secondo livello} (On $\to$ PlayingMusic $\to$ PlaySong). Una history shallow avrebbe ricordato solo
+PlayingMusic, e si sarebbe ripartiti dal suo stato iniziale, FindNextSong. Se invece era stato fermato mentre ascoltava la
+radio, torna in PlayRadio.
+\end{esempio}
 
 % ============================================================
 \section{Il diagramma di attività}
@@ -1040,18 +1102,122 @@ arriva a un nodo finale.
   prerequisiti non è ancora finito.
 }
 
+\begin{esempio}{Il compito tra docente e studente: nodi oggetto e datastore}
+\begin{center}
+\begin{tikzpicture}[obj/.style={draw=black!75, fill=white, line width=0.7pt, font=\scriptsize, align=center,
+                                minimum width=1.9cm, minimum height=0.75cm}]
+  \draw[line width=0.8pt] (0,0.5) rectangle (12.0,-12.2);
+  \draw[line width=0.8pt] (6.0,0.5) -- (6.0,-12.2);
+  \draw[line width=0.6pt] (0,0) -- (12.0,0);
+  \node[font=\scriptsize\bfseries] at (3.0,0.25) {Teacher};
+  \node[font=\scriptsize\bfseries] at (9.0,0.25) {Student};
+  \node[iniziale] (i) at (3.4,-0.5) {};
+  \node[azione, minimum width=2.4cm] (ia) at (3.4,-1.4) {Issue Assignment};
+  \node[obj] (o1) at (6.0,-1.4) {Assignment};
+  \node[azione, minimum width=2.4cm] (sa) at (9.4,-1.4) {Study Assignment};
+  \node[decisione] (d1) at (9.4,-2.6) {};
+  \node[obj] (o2) at (6.0,-2.6) {Assignment\\{}[Pending]};
+  \node[azione, minimum width=2.6cm] (ca) at (9.4,-3.9) {Complete Assignment};
+  \node[decisione] (d2) at (9.4,-5.2) {};
+  \node[azione, minimum width=2.4cm] (sb) at (9.4,-6.6) {Submit Assignment};
+  \node[obj] (o3) at (6.0,-6.6) {Assignment\\{}[Completed]};
+  % scadenza
+  \draw[line width=0.8pt, draw=ph4!80!black, fill=ph4!8] (3.15,-5.3) -- (3.65,-5.3) -- (3.15,-6.0) -- (3.65,-6.0) -- cycle;
+  \node[font=\tiny] at (3.4,-6.25) {Deadline};
+  \node[barra, minimum width=1.4cm] (j1) at (3.4,-6.9) {};
+  \node[azione, minimum width=2.2cm] (gw) at (3.4,-8.0) {Grade Work};
+  \node[barra, minimum width=1.4cm] (f2) at (3.4,-9.1) {};
+  \node[obj, draw=black!75] (ds) at (1.0,-9.1) {{\tiny «datastore»}\\Student Grade Sheet};
+  \node[azione, minimum width=2.2cm] (rw) at (3.4,-10.3) {Return Work};
+  \node[obj] (o4) at (6.0,-10.3) {Assignment\\{}[Graded]};
+  \node[azione, minimum width=2.4cm] (gg) at (9.4,-10.3) {Get Graded Work};
+  \node[decisione] (m) at (11.3,-10.3) {};
+  \node[finale] (f) at (11.3,-11.5) {};
+  \draw[tr] (i) -- (ia); \draw[tr] (ia) -- (o1); \draw[tr] (o1) -- (sa);
+  \draw[tr] (sa) -- (d1);
+  \draw[tr] (d1) -- node[etich, above]{[hard]} (o2);
+  \draw[tr] (d1) -- node[etich, right]{[easy]} (ca);
+  \draw[tr] (ca) -- (d2);
+  \draw[tr] (d2) -- node[etich, left]{[done]} (sb);
+  \draw[tr] (d2) -- node[etich, above]{[give up]} (11.3,-5.2) -- (m);
+  \draw[tr] (sb) -- (o3);
+  \draw[tr] (o3) -- ($(j1.east)+(0,0)$);
+  \draw[tr] (3.4,-6.08) -- (j1);
+  \draw[tr] (j1) -- (gw); \draw[tr] (gw) -- (f2);
+  \draw[tr] (f2) -- (ds);
+  \draw[tr] (f2) -- (rw); \draw[tr] (rw) -- (o4); \draw[tr] (o4) -- (gg); \draw[tr] (gg) -- (m);
+  \draw[tr] (m) -- (f);
+\end{tikzpicture}
+\end{center}
+I rettangoli a cavallo tra le corsie sono \textbf{nodi oggetto}: rappresentano l'oggetto che passa da un'attività all'altra (qui il
+compito), e tra parentesi quadre il suo \textbf{stato} in quel momento (\textit{Pending}, \textit{Completed}, \textit{Graded}).
+Lo stereotipo \textbf{«datastore»} indica un archivio persistente: i voti restano nel registro anche dopo che l'attività è
+terminata. Il docente corregge solo quando sono arrivati sia il compito sia la scadenza (join con il segnale di tempo).
+
+Si noti anche una scelta discutibile del diagramma originale: se il compito è difficile (\textit{[hard]}) il flusso finisce nel
+nodo oggetto \textit{Assignment [Pending]} e lì si ferma, senza arrivare né al docente né a un nodo finale. Andrebbe chiarito che
+cosa succede a un compito rimasto in sospeso.
+\end{esempio}
+
 \info{Altri esempi nelle slide}{
-  Le slide riportano altri diagrammi con swimlane: il prelievo al bancomat (corsie Customer, ATM Machine e Bank), un processo di
-  vendita con le corsie Customer, Sales, Contracts, Legal e Fulfillment, e la consegna dei compiti tra Teacher e Student. Vale la pena
-  provare a leggerli con le regole di questo capitolo.
+  Le slide riportano altri due diagrammi con swimlane: il prelievo al bancomat (corsie Customer, ATM Machine e Bank) e un processo di
+  vendita con le corsie Customer, Sales, Contracts, Legal e Fulfillment. Vale la pena provare a leggerli con le regole di questo
+  capitolo.
 }
 
 \subsection{Macro-attività}
 
 Il limite dei diagrammi di attività è probabilmente la descrizione \textbf{troppo dettagliata} dei problemi. Per gestire diversi
 livelli di astrazione si possono racchiudere i compiti complessi in \textbf{macro-attività} generiche, da dettagliare separatamente
-in altri diagrammi. Ad esempio, un'attività \textit{Deliver Order} può comparire come un solo rettangolo nel diagramma generale ed
-essere espansa in un diagramma a parte che mostra la scelta tra consegna normale ed espressa.
+in altri diagrammi.
+
+\begin{center}
+\begin{tikzpicture}
+  % diagramma generale
+  \node[iniziale] (i) at (0,0) {};
+  \node[azione, minimum width=2.0cm] (ro) at (0,-0.9) {Receive Order};
+  \node[barra, minimum width=2.8cm] (fk) at (0,-1.8) {};
+  \node[azione, minimum width=1.8cm] (fo) at (-1.1,-2.7) {Fill Order};
+  \node[azione, minimum width=2.0cm, minimum height=0.9cm, line width=1.3pt, text depth=8pt] (do) at (-1.1,-4.0) {Deliver Order};
+  \node[azione, minimum width=1.9cm] (si) at (1.2,-2.7) {Send Invoice};
+  \node[azione, minimum width=1.9cm] (rp) at (1.2,-4.0) {Receive\\Payment};
+  \node[barra, minimum width=2.8cm] (jn) at (0,-5.0) {};
+  \node[azione, minimum width=2.0cm] (co) at (0,-5.9) {Close Order};
+  \node[finale] (f) at (0,-6.8) {};
+  \draw[tr] (i) -- (ro); \draw[tr] (ro) -- (fk);
+  \draw[tr] (-1.1,-1.84) -- (fo); \draw[tr] (1.2,-1.84) -- (si);
+  \draw[tr] (fo) -- (do); \draw[tr] (si) -- (rp);
+  \draw[tr] (do) -- (-1.1,-4.96); \draw[tr] (rp) -- (1.2,-4.96);
+  \draw[tr] (jn) -- (co); \draw[tr] (co) -- (f);
+  % simbolo del rastrello
+  \begin{scope}[shift={($(do.south east)+(-0.3,0.08)$)}, line width=0.6pt]
+    \draw (0,0) -- (0,0.18); \draw (-0.1,0.09) -- (0.1,0.09); \draw (-0.1,0.09) -- (-0.1,0); \draw (0.1,0.09) -- (0.1,0);
+  \end{scope}
+  \node[note, anchor=east] (rk) at (-2.4,-4.6) {il rastrello indica\\un sotto-diagramma};
+  \draw[-{Stealth[length=1.4mm]}, dotted, black!55] (rk.east) -- ($(do.south east)+(-0.4,0.1)$);
+  % dettaglio
+  \begin{scope}[xshift=5.8cm, yshift=-1.4cm]
+    \draw[rounded corners=10pt, line width=0.8pt, draw=ph4!80!black, fill=ph4!3] (0,-3.4) rectangle (7.6,0.6);
+    \node[font=\scriptsize\bfseries, anchor=north west] at (0.2,0.5) {Deliver Order};
+    \node[draw=black!70, fill=white, font=\scriptsize, minimum width=1.1cm, minimum height=0.7cm] (in) at (0,-1.4) {Order};
+    \node[draw=black!70, fill=white, font=\scriptsize, minimum width=1.1cm, minimum height=0.7cm] (out) at (7.6,-1.4) {Order};
+    \node[decisione] (d) at (1.6,-1.4) {};
+    \node[azione, minimum width=2.1cm] (rd) at (4.6,-0.4) {Regular Delivery};
+    \node[azione, minimum width=2.1cm] (od) at (4.6,-2.4) {Overnight Delivery};
+    \draw[tr] (in) -- (d);
+    \draw[tr] (d) |- node[etich, pos=0.75, above]{[else]} (rd);
+    \draw[tr] (d) |- node[etich, pos=0.72, above]{[Rush Order]} (od);
+    \draw[tr] (rd) -| ($(out.north)+(-0.3,0)$);
+    \draw[tr] (od) -| ($(out.south)+(-0.3,0)$);
+    \node[note, anchor=north, align=center] at ($(in.south)+(0,-0.5)$) {parametro\\di ingresso};
+    \node[note, anchor=north, align=center] at ($(out.south)+(0,-0.5)$) {parametro\\di uscita};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+
+Nel diagramma generale \textit{Deliver Order} è un'unica attività, marcata con il simbolo del \textbf{rastrello}, che indica che ha
+un diagramma di dettaglio. Il dettaglio, a destra, è un'attività con un \textbf{nome} e dei \textbf{parametri}: i rettangoli sul
+bordo sono l'ordine in ingresso e quello in uscita. Dentro si sceglie tra consegna normale ed espressa.
 
 \subsection{I segnali}
 
@@ -1195,15 +1361,17 @@ distributore non passa mai in Attesa scelta prodotto. Per questo l'inserimento d
   \item Il \textbf{diagramma dei componenti} mostra i componenti (file, eseguibili, database, librerie, sottosistemi), le
         \textbf{interfacce} fornite (pallina) e richieste (presa) e le \textbf{porte}; non dice dove girano.
   \item Il \textbf{diagramma di deployment} mostra l'architettura \textbf{fisica}: \textbf{nodi} (parallelepipedi, \textit{istanza : tipo}),
-        componenti e \textbf{artefatti} al loro interno, \textbf{connessioni} fisiche.
+        componenti e \textbf{artefatti} al loro interno, \textbf{connessioni} fisiche; i \textbf{valori etichettati} \texttt{\{nome = valore\}}
+        aggiungono dettagli, e un nodo può contenere \textbf{ambienti di esecuzione}.
   \item Il \textbf{diagramma di stato} descrive come un sistema o un oggetto reagisce agli eventi. Le transizioni hanno etichetta
         \textbf{trigger [guardia] / azioni}; se più transizioni sono attivabili ne scatta una sola, in modo non deterministico.
   \item Un diagramma di stato si implementa con \textbf{switch annidati} o, meglio, con il \textbf{pattern State}: una sottoclasse
         per stato, un metodo per evento, e il polimorfismo al posto dello switch.
   \item Gli stati possono avere attività \textbf{entry}, \textbf{do} ed \textbf{exit}, essere \textbf{compositi} (anche con
-        \textbf{regioni parallele}) e usare lo pseudostato \textbf{history} (H) per ricordare il sottostato attivo.
+        \textbf{regioni parallele}) e usare lo pseudostato \textbf{history} per ricordare il sottostato attivo: \textbf{H} solo al primo livello,
+        \textbf{H*} a tutti i livelli.
   \item Il \textbf{diagramma di attività} estende il diagramma di flusso con la concorrenza: \textbf{branch/merge} (rombo, un solo
-        ramo), \textbf{fork/join} (barra, tutti i rami), \textbf{swimlane}, \textbf{macro-attività} e \textbf{segnali} (tempo,
-        ricevuti, inviati).
+        ramo), \textbf{fork/join} (barra, tutti i rami), \textbf{swimlane}, \textbf{nodi oggetto} e
+        \textbf{datastore}, \textbf{macro-attività} e \textbf{segnali} (tempo, ricevuti, inviati).
 \end{itemize}
 }

@@ -1,0 +1,584 @@
+\chapter{Esercizi sui diagrammi di stato}
+
+Questo capitolo raccoglie gli esercizi della lezione dedicata ai diagrammi di stato. Per ognuno riportiamo il testo, il
+ragionamento che porta alla soluzione, la soluzione proposta a lezione ridisegnata e un commento. In alcuni casi il commento
+segnala un punto in cui la soluzione proposta \textbf{va corretta o completata}: sono proprio questi i dettagli su cui si
+perdono punti all'esame, quindi vale la pena leggerli con attenzione.
+
+\section{Un metodo per affrontare gli esercizi}
+
+\Needspace{12\baselineskip}
+Prima di disegnare conviene rispondere, nell'ordine, a quattro domande.
+\begin{enumerate}
+  \item \textbf{Quali sono gli stati?} Sono le situazioni in cui il sistema \textbf{reagisce in modo diverso} agli stessi eventi.
+        Un buon indizio sono gli aggettivi e le espressioni del testo come «acceso», «in attesa», «in fase di stampa».
+  \item \textbf{Quali sono gli eventi?} Sono le azioni dell'utente (premere un pulsante), i messaggi di altri sistemi (una
+        richiesta via rete) e i \textbf{timer} («una volta al giorno», «ogni secondo»).
+  \item \textbf{Ci sono stati che si raggruppano?} Se un evento ha lo stesso effetto da molti stati (ad esempio «spegni» da
+        qualunque stato di funzionamento), quegli stati vanno racchiusi in uno \textbf{stato composito}, e la transizione parte
+        dal suo bordo. Se due comportamenti procedono \textbf{indipendentemente}, servono \textbf{regioni parallele}.
+  \item \textbf{Serve ricordare dove si era?} Se il testo dice «riprende», «torna come prima», «ripristina», serve uno
+        pseudostato \textbf{history}.
+\end{enumerate}
+
+\info{{Contatori, guardie e azioni}}{
+  Quando il testo parla di quantità (punti vita, secondi trascorsi, punteggi), quelle quantità \textbf{non} diventano stati: si
+  tengono in variabili, che si modificano nelle \textbf{azioni} (\texttt{/ hp -= 5}) e si controllano nelle \textbf{guardie}
+  (\texttt{[hp < 30]}). È la stessa idea del contatore del Capitolo 9.
+}
+
+% ============================================================
+\section{Esercizio 1: una finestra del desktop}
+
+\begin{esercizio}{La finestra}
+Si descriva con uno statechart il comportamento di una generica finestra (ad esempio minimizzata, massimizzata, in modalità
+finestra, \ldots) in un ambiente desktop basato su finestre, come quello di Microsoft Windows.
+
+\textbf{Ragionamento.} Una finestra aperta può essere \textbf{visibile} oppure \textbf{ridotta a icona}. Quando è visibile, può
+essere in modalità finestra o massimizzata. Quando la si riapre dalla barra delle applicazioni, deve tornare \textbf{come era
+prima}: massimizzata se lo era. Serve quindi uno stato composito Visible con dentro i due sottostati, e uno pseudostato history.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[stato, minimum width=1.9cm, minimum height=3.6cm] (min) at (0,0) {};
+  \node[font=\scriptsize\bfseries, anchor=north] at (min.north) {Minimized};
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!18] (2.9,-1.9) rectangle (8.0,1.9);
+  \node[font=\scriptsize\bfseries] at (5.45,1.62) {Visible};
+  \node[iniziale] (i0) at (5.45,2.75) {};
+  \draw[tr] (i0) -- (5.45,1.9);
+  \node[iniziale] (i1) at (4.0,0.75) {};
+  \node[stato, fill=q3!35, minimum width=1.9cm] (win) at (6.2,0.75) {Windowed};
+  \node[stato, fill=q3!35, minimum width=1.9cm] (max) at (6.2,-1.05) {Maximized};
+  \draw[tr] (i1) -- (win);
+  \draw[tr] ($(win.south)+(-0.4,0)$) -- node[left, font=\tiny]{maximize()} ($(max.north)+(-0.4,0)$);
+  \draw[tr] ($(max.north)+(0.4,0)$) -- node[right, font=\tiny]{maximize()} ($(win.south)+(0.4,0)$);
+  \node[circle, draw, fill=white, font=\tiny, inner sep=1pt, minimum size=0.36cm] (h) at (3.6,-1.05) {H};
+  \draw[tr] (2.9,0.2) -- node[above, font=\tiny]{minimize()} (min.east |- 0,0.2);
+  \draw[tr] (min.east |- 0,-1.05) -- node[above, font=\tiny]{taskbarClick()} (h);
+  \node[finale] (f) at (9.4,0) {};
+  \draw[tr] (8.0,0) -- node[above, font=\tiny]{close()} (f);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item All'apertura si entra in \textbf{Visible} e, dallo stato iniziale interno, in \textbf{Windowed}.
+  \item Lo stesso evento \texttt{maximize()} fa passare da Windowed a Maximized e viceversa: è il pulsante che alterna le due
+        modalità.
+  \item \texttt{minimize()} parte dal \textbf{bordo} di Visible, quindi vale da entrambi i sottostati.
+  \item \texttt{taskbarClick()} entra attraverso la \textbf{H}: la finestra torna massimizzata se lo era quando è stata ridotta a
+        icona, in modalità finestra altrimenti.
+\end{itemize}
+\end{esercizio}
+
+\warning{Che cosa si potrebbe migliorare}{
+  Nel modello \texttt{close()} esce solo da Visible: una finestra ridotta a icona non si può chiudere. In Windows invece si può
+  chiudere anche dalla barra delle applicazioni (tasto destro, \textit{Chiudi finestra}). Per modellarlo basta racchiudere
+  Minimized e Visible in un altro stato composito (ad esempio \textbf{Open}) e far partire \texttt{close()} dal suo bordo.
+}
+
+% ============================================================
+\section{Esercizio 2: l'orologio con la radio}
+
+\begin{esercizio}{La radiosveglia}
+Un orologio da tavolo, una volta acceso, mostra l'orario corrente sul proprio display LCD e, se l'utente preme un apposito
+pulsante, può anche sintonizzarsi su stazioni radio e riprodurne le trasmissioni dalle casse integrate. Tramite un pulsante
+«next station» è possibile passare alla stazione radio successiva, che verrà riprodotta dopo una breve fase di ricerca e
+sintonizzazione.
+
+\textbf{Ragionamento.} Quando l'orologio è acceso fa \textbf{due cose indipendenti}: mostra l'ora, sempre, e gestisce la radio,
+che può essere accesa o spenta. Due comportamenti indipendenti si modellano con due \textbf{regioni parallele} dello stato On.
+Dentro la radio accesa c'è a sua volta un piccolo ciclo: sintonizzazione, poi riproduzione.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[iniziale] (i) at (0,1.6) {};
+  \node[stato, minimum width=1.6cm] (off) at (0,0) {Off};
+  \draw[tr] (i) -- (off);
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!18] (2.1,-3.5) rectangle (11.4,2.2);
+  \node[font=\scriptsize\bfseries] at (6.75,1.95) {On};
+  \draw[dashed, line width=0.7pt] (2.1,0.75) -- (11.4,0.75);
+  % regione 1
+  \node[iniziale] (r1) at (2.8,1.3) {};
+  \node[stato, fill=q3!35, minimum width=1.9cm] (st) at (5.4,1.3) {Show Time};
+  \draw[tr] (r1) -- (st);
+  % regione 2
+  \node[iniziale] (r2) at (2.8,0.0) {};
+  \node[stato, fill=q3!35, minimum width=1.7cm] (roff) at (4.3,0.0) {RadioOff};
+  \draw[tr] (r2) -- (roff);
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!32] (6.4,-3.2) rectangle (11.0,0.45);
+  \node[font=\scriptsize\bfseries] at (8.7,0.2) {RadioOn};
+  \node[iniziale] (r3) at (7.0,-0.55) {};
+  \node[stato, fill=q3!50, minimum width=2.2cm] (tun) at (9.0,-0.55) {Tuning};
+  \node[stato, fill=q3!50, minimum width=2.2cm] (pl) at (9.0,-2.3) {Playing};
+  \draw[tr] (r3) -- (tun);
+  \draw[tr] ($(tun.south)+(0.45,0)$) -- node[right, font=\tiny]{done()} ($(pl.north)+(0.45,0)$);
+  \draw[tr] ($(pl.north)+(-0.45,0)$) -- node[left, font=\tiny]{nextStation()} ($(tun.south)+(-0.45,0)$);
+  \draw[tr] (roff.east) -- node[above, font=\tiny]{radio()} (6.4,0.0);
+  \draw[tr] (6.4,-2.6) -- node[above, font=\tiny]{radio()} (4.3,-2.6) -- (roff.south);
+  % accensione e spegnimento
+  \draw[tr] (off.east) -- node[above, font=\tiny]{on()} (2.1,0);
+  \draw[tr] (2.1,-3.1) -- node[above, font=\tiny]{off()} (0,-3.1) -- (off.south);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item Accendendo l'orologio (\texttt{on()}) si entra in On, e quindi in \textbf{entrambe} le regioni: si mostra l'ora e la radio è
+        spenta.
+  \item \texttt{radio()} accende la radio: si entra in RadioOn e subito in \textbf{Tuning}. Finita la sintonizzazione
+        (\texttt{done()}) si passa in Playing; \texttt{nextStation()} riporta in Tuning per cercare la stazione successiva.
+  \item Premendo di nuovo \texttt{radio()} si spegne la radio da qualunque sottostato di RadioOn (la transizione parte dal bordo),
+        mentre l'ora continua a essere mostrata.
+  \item \texttt{off()} parte dal bordo di On: spegne tutto, e termina entrambe le regioni.
+\end{itemize}
+\end{esercizio}
+
+\info{Perché le regioni parallele}{
+  Senza regioni parallele servirebbero stati come «ora + radio spenta», «ora + sintonizzazione», «ora + riproduzione»: il numero di
+  stati si moltiplica. Con le regioni, i comportamenti indipendenti si descrivono separatamente e si \textbf{combinano} da soli. Qui
+  la regione dell'ora è banale, ma rende esplicito che l'ora resta visibile qualunque cosa faccia la radio.
+}
+
+% ============================================================
+\section{Esercizio 3: la schermata di login}
+
+\begin{esercizio}{Il login}
+La schermata di login di un'applicazione permette agli utenti di inserire le proprie credenziali ed accedere. Se il nome utente
+inserito non è tra quelli presenti nel sistema, viene mostrato un warning dedicato. Altrimenti, se il nome è presente ma la password
+è errata, viene mostrato un diverso warning e viene abilitato un pulsante per accedere alla funzionalità di reset password. Se le
+credenziali sono corrette, si accede al sistema.
+
+\textbf{Ragionamento.} Ogni «aspetto» diverso della schermata è uno stato: vuota, compilata, con il warning sul nome utente, con il
+warning sulla password (e il pulsante di reset), accesso riuscito. Lo stesso evento \texttt{submit} porta in stati diversi a
+seconda dei dati: si usano \textbf{guardie} mutuamente esclusive.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[iniziale] (i) at (0,1.2) {};
+  \node[stato, minimum width=1.9cm] (empty) at (0,0) {LoginEmpty};
+  \node[stato, minimum width=1.9cm] (fill) at (3.6,0) {LoginFilled};
+  \node[stato, minimum width=2.7cm] (ue) at (10.0,1.4) {LoginUsernameError};
+  \node[stato, minimum width=2.7cm] (pe) at (10.0,-1.4) {LoginPasswordError};
+  \node[stato, minimum width=1.9cm] (ok) at (3.6,-3.1) {LoginSuccess};
+  \node[finale] (f) at (7.6,-3.1) {};
+  \draw[tr] (i) -- (empty);
+  \draw[tr] (empty) -- node[above, font=\tiny]{fill(usr,pwd)} (fill);
+  \draw[tr] ($(fill.north)+(0.5,0)$) |- node[etich, pos=0.75]{submit(usr,pwd) [!userExists(usr)]} (ue.west);
+  \draw[tr] (ue.north) |- ++(0,0.45) -| node[etich, pos=0.25]{fill(usr,pwd)} ($(fill.north)+(-0.5,0)$);
+  \draw[tr] ($(fill.east)+(0,0.12)$) -| node[etich, pos=0.3, text width=4.2cm]{submit(usr,pwd) [userExists(usr) \&\\ !checkLogin(usr,pwd)]} ($(pe.north)+(-0.6,0)$);
+  \draw[tr] (pe.west) -- node[etich, pos=0.5]{fill(usr,pwd)} ($(fill.south east)+(0,-0.05)$ |- pe.west) -- ($(fill.south east)+(-0.25,0)$);
+  \draw[tr] (fill.south) -- node[etich, text width=4.2cm]{submit(usr,pwd) [userExists(usr) \&\\ checkLogin(usr,pwd)]} (ok.north);
+  \draw[tr] (ok) -- node[above, font=\tiny]{redirectTimeout()} (f);
+  % aggiunta
+  \node[stato, minimum width=2.4cm, draw=swred, fill=swred!8, dashed] (rp) at (10.0,-3.6) {ResetPassword};
+  \draw[tr, draw=swred, dashed] (pe.south) -- node[right, font=\tiny, text=swred]{resetPassword()} (rp.north);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item Compilando i campi si passa da LoginEmpty a LoginFilled. Da qui \texttt{submit} porta in \textbf{tre} stati diversi, e le
+        tre guardie coprono tutti i casi senza sovrapporsi: utente inesistente; utente esistente con password errata; utente
+        esistente con password corretta.
+  \item Dai due stati di errore, ricompilando i campi (\texttt{fill}) si torna in LoginFilled e si può riprovare.
+  \item Dopo l'accesso riuscito, un timer (\texttt{redirectTimeout()}) porta fuori dalla schermata di login.
+\end{itemize}
+\end{esercizio}
+
+\warning{Che cosa va aggiunto alla soluzione proposta}{
+  Il testo dice che con la password errata «viene abilitato un pulsante per accedere alla funzionalità di reset password», ma la
+  soluzione proposta a lezione non modella mai la pressione di quel pulsante: il pulsante esiste, ma premerlo non fa nulla. Nel
+  disegno qui sopra è aggiunta in rosso la transizione \texttt{resetPassword()} verso uno stato \textbf{ResetPassword}, che esce
+  solo da LoginPasswordError: è proprio lì che il pulsante è abilitato.
+
+  La nota della slide segnala un altro limite, voluto: in questo modello l'utente non può chiudere la schermata prima di aver
+  completato il login, perché l'unico stato finale si raggiunge da LoginSuccess.
+}
+
+% ============================================================
+\section{Esercizio 4: la stampante}
+
+\begin{esercizio}{La stampante di rete}
+Una stampante, previa accensione, resta in attesa di ricevere via rete documenti da stampare. In presenza di richieste, la
+stampante procede alla stampa. Quando è accesa e non è in fase di stampa, la stampante, una volta al giorno, effettua la pulizia
+delle testine. Inoltre, sempre con cadenza giornaliera, la stampante scarica e installa aggiornamenti dalla casa madre. In questo
+caso, la stampante interrompe qualsiasi attività in corso per effettuare l'aggiornamento, e le riprende ad aggiornamento
+effettuato.
+
+\textbf{Ragionamento.} Le frasi chiave sono tre.
+\begin{itemize}
+  \item «Quando non è in fase di stampa \ldots\ effettua la pulizia»: la pulizia parte solo dallo stato di attesa (Idle), non da
+        Printing.
+  \item «Interrompe \textbf{qualsiasi} attività»: l'aggiornamento parte dal bordo di uno stato composito che racchiude tutte le
+        attività normali (Available).
+  \item «Le \textbf{riprende}»: al ritorno serve una \textbf{history}.
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[iniziale] (i) at (0,1.7) {};
+  \node[stato, minimum width=1.4cm] (off) at (0,0.6) {Off};
+  \draw[tr] (i) -- (off);
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!15] (1.8,-4.6) rectangle (13.3,2.0);
+  \node[font=\scriptsize\bfseries] at (7.55,1.75) {On};
+  \node[iniziale] (ion) at (2.3,0.6) {};
+  % Available
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!28] (2.9,-4.3) rectangle (8.2,1.4);
+  \node[font=\scriptsize\bfseries] at (5.55,1.15) {Available};
+  \draw[tr] (ion) -- (2.9,0.6);
+  \node[iniziale] (ia) at (3.3,0.6) {};
+  \node[stato, fill=q3!45, minimum width=1.5cm] (idle) at (4.0,-0.5) {Idle};
+  \node[stato, fill=q3!45, minimum width=1.5cm] (pr) at (7.1,-0.5) {Printing};
+  \node[stato, fill=q3!45, minimum width=1.5cm] (cl) at (4.0,-2.9) {Cleaning};
+  \draw[tr] (ia) -- (idle);
+  \draw[tr] ($(idle.east)+(0,0.15)$) -- node[etich, above]{request()} ($(pr.west)+(0,0.15)$);
+  \draw[tr] ($(pr.west)+(0,-0.15)$) -- node[etich, below]{done()} ($(idle.east)+(0,-0.15)$);
+  \draw[tr] ($(idle.south)+(0.3,0)$) -- node[etich, right]{cleaningTimeout()} ($(cl.north)+(0.3,0)$);
+  \draw[tr] ($(cl.north)+(-0.3,0)$) -- node[etich, left]{cleaningDone()} ($(idle.south)+(-0.3,0)$);
+  \node[circle, draw, fill=white, font=\tiny, inner sep=1pt, minimum size=0.36cm] (h) at (7.3,-3.6) {H};
+  % Updating
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!28] (10.0,-4.3) rectangle (12.9,1.4);
+  \node[font=\scriptsize\bfseries] at (11.45,1.15) {Updating};
+  \node[iniziale] (iu) at (11.45,0.7) {};
+  \node[stato, fill=q3!45, minimum width=2.0cm] (dl) at (11.45,-0.3) {Downloading};
+  \node[stato, fill=q3!45, minimum width=2.0cm] (ins) at (11.45,-1.9) {Installing};
+  \node[finale] (fu) at (11.45,-3.2) {};
+  \draw[tr] (iu) -- (dl);
+  \draw[tr] (dl) -- node[right, font=\tiny]{completed()} (ins);
+  \draw[tr] (ins) -- node[right, font=\tiny]{installed()} (fu);
+  \draw[tr] (8.2,0.6) -- node[above, font=\tiny]{updateTimeout()} (10.0,0.6);
+  \draw[tr] (10.0,-3.6) -- node[above, font=\tiny]{updateDone()} (h);
+  \draw[tr] (1.8,-3.9) -- node[above, font=\tiny]{off()} (0,-3.9) -- (off.south);
+  \draw[tr] (off.east) -- node[above, font=\tiny]{on()} (1.8,0.6);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item Accesa la stampante si entra in On, quindi in \textbf{Available}, quindi in \textbf{Idle}.
+  \item Da Idle una richiesta avvia la stampa; un timer giornaliero avvia la pulizia. Da Printing la pulizia non può partire: la
+        transizione \texttt{cleaningTimeout()} esce solo da Idle.
+  \item Il timer degli aggiornamenti esce dal \textbf{bordo} di Available: interrompe stampa, pulizia o attesa, qualunque cosa
+        la stampante stesse facendo.
+  \item Finito l'aggiornamento si torna in Available attraverso la \textbf{H}: la stampante riprende l'attività interrotta.
+\end{itemize}
+\end{esercizio}
+
+\warning{Che cosa si potrebbe migliorare}{
+  \begin{itemize}
+    \item Updating termina con il suo stato finale interno (dopo \texttt{installed()}), ma per uscirne la soluzione usa un evento
+          in più, \texttt{updateDone()}. È più coerente usare una \textbf{transizione di completamento}: una transizione
+          \textbf{senza trigger} che parte dal bordo di Updating e scatta da sola quando lo stato composito raggiunge il suo stato
+          finale. Così non serve inventare un evento che il testo non menziona.
+    \item Il modello non dice che cosa succede alle richieste di stampa che arrivano \textbf{durante} l'aggiornamento: in Updating
+          l'evento \texttt{request()} non ha transizioni, quindi viene ignorato e il documento va perso. Una stampante reale le
+          metterebbe in coda: va almeno chiarito con il committente.
+  \end{itemize}
+}
+
+\info{Shallow o deep?}{
+  Qui basta la history \textbf{shallow} (H) perché Idle, Printing e Cleaning sono stati semplici. Se Printing avesse a sua volta dei
+  sottostati (ad esempio «riscaldamento» e «stampa pagina») e volessimo riprendere esattamente dal sottostato interrotto, servirebbe
+  la history \textbf{deep} (H*).
+}
+
+% ============================================================
+\section{Esercizio 5: il malware}
+
+\begin{esercizio}{Il malware}
+Un malware, una volta installato su un PC, rimane latente fino a quando l'utente non apre Internet Explorer. A quel punto, il malware
+si attiva e, in parallelo, ricerca informazioni sensibili nei dischi rigidi e nella memoria del PC. Terminate queste attività, il
+malware sfrutta una vulnerabilità di Internet Explorer per inviare le informazioni raccolte a un server remoto. Se Internet Explorer
+viene chiuso prima dell'invio delle informazioni, il malware salva le informazioni trovate e riprova ad inviarle al successivo avvio
+di Internet Explorer.
+
+\textbf{Ragionamento.} «In parallelo» indica due \textbf{regioni parallele}. «Terminate queste attività» indica che si esce dallo
+stato composito solo quando \textbf{entrambe} le regioni hanno finito, cioè una \textbf{transizione di completamento}. A quel punto
+bisogna sapere se Internet Explorer è ancora aperto: lo decide una \textbf{guardia}.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[iniziale] (i) at (0,1.2) {};
+  \node[stato, minimum width=1.4cm] (idle) at (0,0) {Idle};
+  \draw[tr] (i) -- (idle);
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!18] (2.4,-2.0) rectangle (7.6,2.0);
+  \node[font=\scriptsize\bfseries] at (5.0,1.75) {Active};
+  \draw[dashed, line width=0.7pt] (2.4,0) -- (7.6,0);
+  \node[iniziale] (a1) at (2.9,0.9) {};
+  \node[stato, fill=q3!35, minimum width=2.4cm] (sm) at (4.7,0.9) {SearchingMemory};
+  \node[finale] (f1) at (7.1,0.9) {};
+  \draw[tr] (a1) -- (sm); \draw[tr] (sm) -- node[above, font=\tiny]{done()} (f1);
+  \node[iniziale] (a2) at (2.9,-1.0) {};
+  \node[stato, fill=q3!35, minimum width=2.4cm] (sd) at (4.7,-1.0) {SearchingDisks};
+  \node[finale] (f2) at (7.1,-1.0) {};
+  \draw[tr] (a2) -- (sd); \draw[tr] (sd) -- node[above, font=\tiny]{done()} (f2);
+  \draw[tr] (idle) -- node[above, font=\tiny]{IEOpened()} (2.4,0);
+  % dopo Active
+  \node[stato, minimum width=2.4cm, align=left] (up) at (11.9,1.3) {\makebox[2.4cm]{\textbf{UploadingData}}\\[-2pt]\rule{2.4cm}{0.4pt}\\do / upload()};
+  \node[stato, minimum width=2.4cm] (sw) at (10.5,-2.1) {SaveDataAndWait};
+  \node[finale] (fe) at (15.3,1.3) {};
+  \draw[tr] (7.6,1.3) -- node[above, font=\tiny]{[dataAcquired \& IEOpen]} (up.west);
+  \draw[tr] (5.0,-2.0) |- node[etich, pos=0.7, above]{[dataAcquired \& !IEOpen]} (sw.west);
+  \draw[tr] ($(up.south)+(-0.7,0)$) -- node[etich, left, pos=0.4]{IEClosed()} ($(sw.north)+(0.7,0)$);
+  \draw[tr] (sw.east) -| node[etich, right, pos=0.75]{IEOpened()} ($(up.south)+(0.6,0)$);
+  \draw[tr] (up.east) -- node[etich, above]{uploadDone()} (fe);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item All'apertura di Internet Explorer il malware si attiva ed entra in \textbf{Active}: le due ricerche partono insieme, una per
+        regione. Ciascuna termina nel proprio stato finale.
+  \item Quando \textbf{tutte e due} le regioni sono nel loro stato finale, Active è completato e scatta una delle due transizioni
+        senza trigger, a seconda della guardia: se Internet Explorer è ancora aperto si inviano i dati, altrimenti li si salva e si
+        aspetta.
+  \item Se Internet Explorer viene chiuso durante l'invio si passa in SaveDataAndWait; alla riapertura si riprova l'invio.
+\end{itemize}
+\end{esercizio}
+
+\info{Le transizioni di completamento}{
+  Le due frecce che escono da Active non hanno trigger: hanno solo una guardia. Sono \textbf{transizioni di completamento}: scattano
+  quando lo stato da cui partono ha \textbf{finito il suo lavoro}, cioè, per uno stato composito, quando ogni sua regione ha
+  raggiunto il proprio stato finale. Le due guardie sono complementari, quindi ne scatta sempre esattamente una.
+}
+
+% ============================================================
+\section{Esercizio 6: il giocatore di un videogioco}
+
+\begin{esercizio}{Il giocatore}
+In un videogame, il giocatore inizia la partita con una salute pari a 100 HP. Durante la partita, il giocatore può subire attacchi
+diretti, che diminuiscono la salute residua di 5 HP. Inoltre, il giocatore può essere avvelenato. L'avvelenamento prevede una fase
+iniziale che dura 5 secondi, in cui il giocatore subisce 2 HP di danno al secondo, e una fase acuta, che dura 3 secondi e durante la
+quale il giocatore subisce 10 HP di danno al secondo. Mentre il giocatore è avvelenato in fase acuta, i danni inflitti da attacchi
+diretti raddoppiano. Quando la salute scende al di sotto della soglia critica di 30 HP, il giocatore passa in modalità «berserk».
+Quando è in questa modalità, il giocatore è immune all'avvelenamento e si cura di 5 HP al secondo, ma subisce danni doppi dai colpi
+diretti. Quando i punti salute scendono a zero, il giocatore muore e la partita termina.
+
+\textbf{Ragionamento.} Le quantità (salute, secondi trascorsi) vanno in due variabili, \texttt{hp} e \texttt{counter}. Gli stati sono
+le situazioni in cui il giocatore reagisce in modo diverso: sano, avvelenato (in due fasi), berserk. Il passare del tempo si
+modella con un evento \texttt{timeout1sec()} che arriva ogni secondo. La morte può avvenire da qualunque stato: tutto il gioco sta
+dentro uno stato composito Alive, da cui si esce con una guardia sulla salute.
+
+\begin{center}
+\begin{tikzpicture}[lab/.style={font=\tiny, inner sep=1pt}]
+  \node[iniziale] (i) at (0.5,1.0) {};
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!15] (0,-6.0) rectangle (15.4,0.5);
+  \node[font=\scriptsize\bfseries] at (7.7,0.25) {Alive};
+  \node[font=\tiny, anchor=west] at (0.15,0.0) {entry / hp = 100};
+  \draw[tr] (i) -- (0.5,0.5);
+  % Healthy e Berserk
+  \node[iniziale] (ih) at (0.6,-1.4) {};
+  \node[stato, fill=q3!35, minimum width=1.8cm] (he) at (2.6,-1.4) {Healthy};
+  \draw[tr] (ih) -- (he);
+  \path (he) edge[tr, loop above, out=110, in=70, min distance=8mm] node[lab, above]{directHit() / hp -= 5} (he);
+  \node[stato, fill=q3!35, minimum width=1.8cm] (be) at (2.6,-4.2) {Berserk};
+  \draw[tr] ($(he.south)+(0.4,0)$) -- node[lab, right]{[hp < 30]} ($(be.north)+(0.4,0)$);
+  \draw[tr] ($(be.north)+(-0.4,0)$) -- node[lab, left]{[hp >= 30]} ($(he.south)+(-0.4,0)$);
+  \path (be) edge[tr, loop left, min distance=8mm] node[lab, left, align=right]{timeout1sec()\\/ hp += 5} (be);
+  \path (be) edge[tr, loop below, out=-110, in=-70, min distance=8mm] node[lab, below]{directHit() / hp -= 10} (be);
+  % Poisoned
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!30] (5.6,-5.0) rectangle (15.1,-0.6);
+  \node[font=\scriptsize\bfseries] at (10.35,-0.85) {Poisoned};
+  \node[font=\tiny, anchor=west] at (5.75,-1.15) {entry / counter = 0};
+  \draw[tr] (he.east) -- node[lab, above]{poisoned()} (5.6,-1.4);
+  \node[iniziale] (ip) at (9.6,-1.5) {};
+  \node[stato, fill=q3!50, minimum width=2.0cm] (ini) at (9.6,-2.4) {InitialPhase};
+  \node[stato, fill=q3!50, minimum width=2.0cm] (acu) at (9.6,-4.1) {AcutePhase};
+  \draw[tr] (ip) -- (ini);
+  \draw[tr] (ini) -- node[lab, right]{[counter == 5]} (acu);
+  \path (ini) edge[tr, loop right, min distance=8mm] node[lab, right, align=left]{timeout1sec() [counter < 5]\\/ hp -= 2; counter++} (ini);
+  \path (acu) edge[tr, loop right, min distance=8mm] node[lab, right, align=left]{timeout1sec() [counter < 8]\\/ hp -= 10; counter++} (acu);
+  \path (ini) edge[tr, loop left, min distance=8mm] node[lab, left]{directHit() / hp -= 5} (ini);
+  \path (acu) edge[tr, loop left, min distance=8mm] node[lab, left]{directHit() / hp -= 10} (acu);
+  \draw[tr] (5.6,-3.6) -- node[lab, above]{[hp < 30]} (be.east |- 0,-3.6) ;
+  \draw[tr] ($(acu.south)+(0,0)$) -- (9.6,-5.5) -- node[lab, above]{[counter == 8]} (1.6,-5.5) -- (1.6,-1.4) -- (he.west);
+  % morte
+  \node[finale] (f) at (7.7,-6.9) {};
+  \draw[tr] (7.7,-6.0) -- node[lab, right]{[hp <= 0]} (f);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item Entrando in Alive la salute vale 100 (\texttt{entry}). Da sano, ogni colpo toglie 5 HP.
+  \item L'avvelenamento porta in \textbf{Poisoned}, che azzera il contatore dei secondi (\texttt{entry}). Nella fase iniziale ogni
+        secondo toglie 2 HP; dopo 5 secondi si passa alla fase acuta, dove ogni secondo toglie 10 HP e i colpi diretti valgono
+        doppio. Dopo altri 3 secondi (contatore a 8) l'avvelenamento finisce e si torna sani.
+  \item Sotto i 30 HP si passa in \textbf{Berserk}, anche durante l'avvelenamento: la transizione parte dal bordo di Poisoned e lo
+        interrompe. In Berserk non c'è la transizione \texttt{poisoned()}: è così che si modella l'immunità.
+  \item Quando la salute arriva a zero si esce da Alive, da qualunque stato.
+\end{itemize}
+\end{esercizio}
+
+\Needspace{24\baselineskip}
+\error{Che cosa va corretto nella soluzione proposta}{
+  Il disegno qui sopra contiene già tre correzioni rispetto alla soluzione mostrata a lezione. Vale la pena vederle una per una,
+  perché sono errori tipici.
+  \begin{itemize}
+    \item \textbf{La fase acuta dura un secondo di troppo.} La soluzione proposta usa \texttt{[counter <= 8]} sull'autotransizione
+          della fase acuta e \texttt{[counter > 8]} per uscire. Entrando in fase acuta \texttt{counter} vale 5: i tick avvengono
+          con \texttt{counter} pari a 5, 6, 7 \textbf{e 8}, cioè quattro secondi e 40 HP di danno invece di 30. Le guardie corrette
+          sono \texttt{[counter < 8]} e \texttt{[counter == 8]}.
+    \item \textbf{Nella fase iniziale le guardie si sovrappongono.} Con \texttt{[counter <= 5]} sull'autotransizione e
+          \texttt{[counter = 5]} sul passaggio alla fase acuta, quando \texttt{counter} vale 5 sono vere \textbf{entrambe} le
+          guardie. Il modello funziona solo grazie a una regola implicita: la transizione senza evento scatta subito, prima che
+          arrivi il tick successivo. Con \texttt{[counter < 5]} le guardie diventano mutuamente esclusive e il modello non dipende
+          più da questo dettaglio.
+    \item \textbf{Il giocatore potrebbe non morire mai.} La soluzione proposta esce da Alive con \texttt{[hp = 0]}. Ma la salute
+          scende a passi di 2, 5 o 10: con 3 HP, un colpo diretto la porta a $-2$, e la guardia \texttt{hp = 0} non sarà mai vera.
+          La guardia corretta è \texttt{[hp <= 0]}.
+  \end{itemize}
+}
+
+\info{Una lezione generale sulle guardie con i contatori}{
+  Quando un contatore deve contare $n$ eventi, conviene verificare a mano i valori estremi: con che valore entra, con quali valori
+  scatta l'autotransizione, con quale valore si esce. E le guardie su una quantità che varia «a salti» vanno scritte con
+  \texttt{<=} o \texttt{>=}, mai con \texttt{==}, a meno di essere certi che il valore esatto venga raggiunto.
+}
+
+% ============================================================
+\section{Esercizio 7: un game di tennis}
+
+\begin{esercizio}{Il punteggio di un game}
+Si modelli l'andamento del punteggio di un game di una partita di tennis.
+
+\textbf{Ragionamento.} Ricordiamo le regole. Ogni giocatore parte da 0 e, a ogni punto vinto, passa a 15, 30, 40. Con 40, vincendo
+un altro punto vince il game, a meno che anche l'avversario sia a 40: in quel caso si è in \textbf{parità} (\textit{deuce}). Dalla
+parità, chi vince il punto va in \textbf{vantaggio}; se vince anche il punto successivo vince il game, altrimenti si torna in parità.
+I punteggi da 0 a 40 si tengono in due variabili \texttt{P1} e \texttt{P2}; parità e vantaggio, invece, cambiano il modo in cui si
+reagisce ai punti, quindi sono \textbf{stati}. L'evento \texttt{P1*} indica «punto vinto dal giocatore 1».
+
+\begin{center}
+\begin{tikzpicture}[lab/.style={font=\tiny, inner sep=1pt, fill=white}]
+  \node[iniziale] (i) at (0,1.0) {};
+  \node[stato, minimum width=2.2cm] (pg) at (0,0) {Punto in gioco};
+  \draw[tr] (i) -- node[lab, right]{/ P1 = 0; P2 = 0} (pg);
+  \path (pg) edge[tr, loop left, min distance=10mm] node[lab, left, align=right]{P1* [P1 < 30 || (P1 == 30 \&\& P2 < 40)]\\/ P1 = prossimo(P1)} (pg);
+  \path (pg) edge[tr, loop right, min distance=10mm] node[lab, right, align=left]{P2* [P2 < 30 || (P2 == 30 \&\& P1 < 40)]\\/ P2 = prossimo(P2)} (pg);
+  \node[stato, minimum width=1.6cm] (de) at (0,-2.6) {Deuce};
+  \draw[tr] ($(pg.south)+(-0.5,0)$) -- node[lab, left, align=right]{P1* [P1 == 30 \&\& P2 == 40]} ($(de.north)+(-0.5,0)$);
+  \draw[tr] ($(pg.south)+(0.5,0)$) -- node[lab, right, align=left]{P2* [P2 == 30 \&\& P1 == 40]} ($(de.north)+(0.5,0)$);
+  \node[stato, minimum width=1.9cm] (v1) at (-2.6,-4.4) {Vantaggio P1};
+  \node[stato, minimum width=1.9cm] (v2) at (2.6,-4.4) {Vantaggio P2};
+  \draw[tr] ($(de.south west)+(0.2,0)$) -- node[lab, left]{P1*} ($(v1.north)+(0.3,0)$);
+  \draw[tr] ($(v1.north)+(0.8,0)$) -- node[lab, right]{P2*} ($(de.south west)+(0.55,0)$);
+  \draw[tr] ($(de.south east)+(-0.2,0)$) -- node[lab, right]{P2*} ($(v2.north)+(-0.3,0)$);
+  \draw[tr] ($(v2.north)+(-0.8,0)$) -- node[lab, left]{P1*} ($(de.south east)+(-0.55,0)$);
+  \node[stato, minimum width=1.9cm] (fg) at (0,-6.3) {Fine game};
+  \node[finale] (f) at (0,-7.4) {};
+  \draw[tr] (fg) -- (f);
+  \draw[tr] (v1.south) |- node[lab, pos=0.7]{P1* / vince P1} ($(fg.west)+(0,0.15)$);
+  \draw[tr] (v2.south) |- node[lab, pos=0.7]{P2* / vince P2} ($(fg.east)+(0,0.15)$);
+  \draw[tr] (pg.west) ++(0,-0.25) -- ++(-3.8,0) |- node[lab, pos=0.25, align=center]{P1* [P1 == 40 \&\& P2 < 40]\\/ vince P1} ($(fg.west)+(0,-0.15)$);
+  \draw[tr] (pg.east) ++(0,-0.25) -- ++(3.8,0) |- node[lab, pos=0.25, align=center]{P2* [P2 == 40 \&\& P1 < 40]\\/ vince P2} ($(fg.east)+(0,-0.15)$);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item In \textbf{Punto in gioco} ogni punto fa avanzare il punteggio di chi lo vince (0, 15, 30, 40), finché non si verifica uno
+        dei casi speciali.
+  \item Se un giocatore a 40 vince un punto mentre l'altro è sotto i 40, vince il game.
+  \item Se un giocatore a 30 vince il punto mentre l'altro è già a 40, si arriva a 40 pari: \textbf{Deuce}.
+  \item Da Deuce si va in vantaggio; dal vantaggio si vince il game oppure si torna in parità.
+\end{itemize}
+\end{esercizio}
+
+\error{Che cosa va corretto nella soluzione proposta}{
+  \begin{itemize}
+    \item \textbf{Guardie sovrapposte che portano a un vicolo cieco.} La soluzione proposta usa per l'autotransizione la guardia
+          \texttt{[P1 : 0, 15, 30]} («P1 vale 0, 15 o 30»). Ma quando P1 vale 30 e P2 vale 40, è vera \textbf{anche} la guardia
+          della transizione verso Deuce. Se scattasse l'autotransizione, P1 diventerebbe 40 restando in Punto in gioco, con il
+          punteggio 40--40: da lì nessuna transizione è più attivabile correttamente (la vittoria richiede l'avversario sotto i 40,
+          Deuce richiede P1 a 30), e il game non finisce più. Nel disegno l'autotransizione esclude il caso
+          \texttt{P1 == 30 \&\& P2 == 40}, e lo stesso vale, simmetricamente, per P2.
+    \item \textbf{Manca lo stato finale}, e lo stato iniziale è sostituito da uno stato «Inizio partita» con un evento «Inizio game».
+          Per un game basta uno pseudostato iniziale (che azzera i punteggi) e uno stato finale dopo Fine game.
+    \item L'azione \texttt{P1++} va intesa come «passa al punteggio successivo» (da 30 si va a 40, non a 31): nel disegno l'abbiamo
+          scritta \texttt{prossimo(P1)} per non lasciare dubbi.
+  \end{itemize}
+}
+
+% ============================================================
+\section{Esercizio 8: una partita di tennis}
+
+\begin{esercizio}{La partita intera}
+Si modelli l'andamento del punteggio di un'intera partita di tennis (tre set su cinque).
+
+\textbf{Ragionamento.} Un set si vince arrivando ad almeno 6 game con almeno 2 game di vantaggio (6--4, 7--5), oppure 7--6. La
+partita si vince arrivando a 3 set. La soluzione proposta a lezione estende il diagramma del game aggiungendo, \textbf{sullo stesso
+livello}, gli stati \textit{Game vinto P1/P2} e \textit{Set vinto P1/P2}, con contatori \texttt{GameP1}, \texttt{GameP2},
+\texttt{SetP1}, \texttt{SetP2}. Il risultato funziona, ma ha oltre venti transizioni con guardie lunghe che si incrociano, ed è
+molto difficile da leggere e da verificare.
+
+Gli stati compositi permettono una soluzione molto più leggibile, organizzata su tre livelli come la partita stessa: la
+partita contiene i set, il set contiene i game, e il game è \textbf{esattamente} il diagramma dell'esercizio precedente.
+
+\begin{center}
+\begin{tikzpicture}[lab/.style={font=\tiny, inner sep=1pt, fill=white, align=center}]
+  \node[iniziale] (i) at (0.4,0.9) {};
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!12] (0,-5.6) rectangle (13.0,0.4);
+  \node[font=\scriptsize\bfseries] at (6.5,0.15) {Partita};
+  \node[font=\tiny, anchor=west] at (0.15,-0.15) {entry / SetP1 = 0; SetP2 = 0};
+  \draw[tr] (i) -- (0.4,0.4);
+  % Set
+  \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!25] (0.4,-4.6) rectangle (9.2,-0.5);
+  \node[font=\scriptsize\bfseries] at (4.8,-0.75) {Set};
+  \node[font=\tiny, anchor=west] at (0.55,-1.05) {entry / GameP1 = 0; GameP2 = 0};
+  \node[iniziale] (is) at (1.2,-2.3) {};
+  \node[stato, fill=q3!45, minimum width=2.6cm, minimum height=1.1cm, align=center] (g) at (3.4,-2.3)
+    {\textbf{Game}\\[-1pt]{\tiny (il diagramma}\\[-3pt]{\tiny dell'Esercizio 7)}};
+  \draw[tr] (is) -- (g);
+  \node[decisione] (dg) at (6.6,-2.3) {};
+  \draw[tr] (g) -- node[lab, above]{/ GameX++} (dg);
+  \node[font=\tiny, text=black!60] at (6.6,-1.85) {vincitore: X};
+  \draw[tr] (dg.south) |- node[lab, pos=0.75]{[set non finito]} ($(g.south)+(0,-0.9)$) -- (g.south);
+  \node[finale] (fs) at (8.6,-2.3) {};
+  \draw[tr] (dg) -- node[lab, above]{[set finito]} (fs);
+  % dopo il set
+  \node[decisione] (dp) at (10.6,-2.3) {};
+  \draw[tr] (9.2,-2.3) -- node[lab, above]{/ SetX++} (dp);
+  \draw[tr] (dp.south) |- node[lab, pos=0.75]{[SetX < 3]} (4.8,-5.1) -- (4.8,-4.6);
+  \node[finale] (fp) at (12.4,-2.3) {};
+  \draw[tr] (dp) -- node[lab, above]{[SetX == 3]} (fp);
+  \node[finale] (fe) at (6.5,-6.5) {};
+  \draw[tr] (6.5,-5.6) -- (fe);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item \textbf{Game} è uno stato composito che contiene, tale e quale, il diagramma del game: quando il game finisce (stato
+        finale interno), una transizione di completamento incrementa i game vinti da chi ha vinto e arriva a un
+        \textbf{rombo}.
+  \item Il rombo è lo pseudostato di \textbf{scelta} (\textit{choice}): come nei diagrammi di attività, sceglie un'uscita in base
+        alle guardie. Se il set non è finito si gioca un altro game (rientrando in Game, i punteggi ripartono da zero); altrimenti
+        il set termina.
+  \item Allo stesso modo, finito il set, si incrementano i set vinti e si decide se giocare un altro set (rientrando in Set, i
+        game ripartono da zero) o chiudere la partita.
+  \item La condizione «set finito» si scrive una volta sola: \texttt{(GameX >= 6 \&\& GameX - GameY >= 2) || GameX == 7}, dove X è
+        chi ha appena vinto il game e Y l'avversario.
+\end{itemize}
+\end{esercizio}
+
+\info{{Cosa manca, in entrambe le soluzioni}}{
+  Con le regole moderne, sul 6--6 non si gioca un game normale ma un \textbf{tie-break}, che ha un punteggio diverso (1, 2, 3, \ldots,
+  fino ad almeno 7 con 2 punti di vantaggio). La soluzione proposta lo ignora e considera semplicemente il 7--6. Nel modello
+  gerarchico aggiungerlo è facile: basta un secondo stato composito \textbf{TieBreak} accanto a Game, in cui si entra dal rombo con la
+  guardia \texttt{[GameP1 == 6 \&\& GameP2 == 6]}. Nel modello piatto, invece, servirebbero molte altre transizioni.
+}
+
+\warning{Quando usare gli stati compositi}{
+  Il confronto fra le due soluzioni dell'Esercizio 8 è il motivo per cui esistono gli stati compositi: un diagramma piatto con
+  decine di transizioni incrociate è formalmente corretto, ma nessuno riesce a verificarlo. Se nel testo compare una struttura
+  «annidata» (una partita fatta di set, fatti di game, fatti di punti), il diagramma dovrebbe rispecchiarla.
+}
+
+% ============================================================
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item Gli \textbf{stati} sono le situazioni in cui il sistema reagisce in modo diverso agli stessi eventi; le \textbf{quantità}
+        (salute, tempo, punteggi) vanno in variabili, aggiornate nelle azioni e controllate nelle guardie.
+  \item Un evento che vale «da qualunque stato» suggerisce uno \textbf{stato composito} con la transizione sul bordo; comportamenti
+        indipendenti suggeriscono \textbf{regioni parallele}; «riprende» o «torna come prima» suggeriscono una \textbf{history}.
+  \item Una transizione \textbf{senza trigger} che esce da uno stato composito scatta quando lo stato \textbf{completa} il suo lavoro
+        (tutte le regioni nel loro stato finale).
+  \item Le guardie delle transizioni con lo stesso evento devono essere \textbf{mutuamente esclusive}; con i contatori vanno
+        verificati a mano i valori estremi, e le soglie raggiunte «a salti» vanno scritte con \texttt{<=} o \texttt{>=}.
+  \item Per strutture annidate (partita, set, game) gli stati compositi e lo pseudostato di \textbf{scelta} (rombo) producono
+        diagrammi molto più leggibili di un grafo piatto.
+\end{itemize}
+}
