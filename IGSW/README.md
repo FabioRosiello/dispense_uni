@@ -14,6 +14,7 @@ Questa cartella contiene i sorgenti LaTeX di `../Dispensa.pdf`.
 - `chapters/chapter_7.tex` — UML e il diagramma delle classi (L_05, UML Recap)
 - `chapters/chapter_8.tex` — Diagrammi dei package e di sequenza (L_05, UML Recap)
 - `chapters/chapter_9.tex` — Altri diagrammi UML: componenti, deployment, stati, attività (L_06)
+- `chapters/chapter_10.tex` — Esercizi sui diagrammi di stato, con soluzioni ridisegnate e correzioni (L_06-E)
 - `unina_doc_class.cls`, `fonts/`, `sources/` — template Unina Docs (da `Materiale/Dispense.rar`)
 - `Images/` — immagini tratte dalle slide del corso
 
