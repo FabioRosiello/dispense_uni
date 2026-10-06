@@ -1777,6 +1777,56 @@ Click handled
 \end{console}
 \end{affianco}
 
+Prima di vedere gli altri modi di registrare un gestore, conviene dare un nome
+a ciò che stiamo facendo: un gestore di eventi è una \term{callback}.
+
+\dfn{Callback}{
+  Una \term{callback} è una funzione passata come argomento a un'altra
+  funzione, con l'aspettativa che sia \textbf{quest'ultima} a invocarla, al
+  momento opportuno.}
+
+In JavaScript le funzioni sono valori come gli altri: si possono mettere in una
+variabile, assegnare a una proprietà e \textbf{passare come argomento}. Chi
+riceve la funzione decide se, quando e quante volte chiamarla.
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=js, name=callback-base.js]
+function eseguiDueVolte(f) {
+  f();          // e' eseguiDueVolte a chiamare f
+  f();
+}
+
+function saluta() { console.log("Ciao!"); }
+
+eseguiDueVolte(saluta);   // passo la funzione,
+                          // senza chiamarla
+\end{lstlisting}
+\risultato
+\begin{immagine}[\code{saluta} viaggia come argomento;\\
+                 la chiama chi la riceve.]
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=neutral!45!black},
+    c/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=accent!70!black}]
+  \node[mfun] (e) at (0,0) {eseguiDueVolte};
+  \node[mdom] (s) at (4.0,0) {saluta};
+  \draw[a] (s.north) to[bend right=35]
+    node[mnota, above]{passata come argomento \code{f}} (e.north);
+  \draw[c] (e.south) to[bend right=25] node[mnota, below]{\code{f()}, due volte} (s.south);
+\end{tikzpicture}
+\end{immagine}
+\begin{console}
+Ciao!
+Ciao!
+\end{console}
+\end{affianco}
+
+Un gestore di eventi funziona allo stesso modo, ma chi riceve la funzione è il
+\textbf{browser}: gli diciamo quale funzione eseguire, e sarà lui a chiamarla
+ogni volta che l'evento si verifica. Le callback torneranno nel prossimo
+capitolo, dove sono alla base della programmazione asincrona.
+
 I gestori si possono anche definire dinamicamente da JavaScript, scrivendo la
 proprietà \code{on<evento>} sull'elemento oppure usando il metodo
 \code{addEventListener}.
@@ -2013,27 +2063,32 @@ console mostra le quattro righe:
 </body>
 \end{lstlisting}
 \risultato
-\begin{immagine}
-\begin{tikzpicture}[
-    box/.style={draw, rounded corners=3pt, line width=0.7pt, font=\FiraCodeNL\scriptsize,
-      anchor=north west, inner sep=0pt},
+\begin{immagine}[In viola i nodi con un gestore, in grigio quelli senza:\\
+                 l'evento li attraversa tutti, risalendo.]
+\begin{tikzpicture}[y=0.78cm,
+    hnd/.style={mnuovo},
+    no/.style={mcommento},
     num/.style={circle, fill=accent!70!black, text=white,
       font=\Lato\tiny\bfseries, inner sep=1pt, minimum size=10pt},
-    up/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.9pt, draw=accent!70!black}]
-  \draw[box, draw=neutral!50!black, fill=neutral!6!white] (0,0) rectangle (5.0,-3.1);
-  \node[anchor=north west, mnota] at (0.05,-0.02) {document};
-  \draw[box, draw=primary!60!black, fill=primary!6!white] (0.3,-0.45) rectangle (4.7,-2.85);
-  \node[anchor=north west, mcod] at (0.35,-0.47) {<section>};
-  \draw[box, draw=primary!60!black, fill=primary!12!white] (0.6,-0.9) rectangle (4.4,-2.6);
-  \node[anchor=north west, mcod] at (0.65,-0.92) {<article>};
-  \draw[box, draw=accent!60!black, fill=accent!14!white] (0.9,-1.35) rectangle (4.1,-2.35);
-  \node[anchor=north west, mcod] at (0.95,-1.37) {<p>};
-  \node[font=\Lora\small] at (2.5,-1.95) {Bubbling};
-  \draw[up] (3.75,-2.2) -- (3.75,0.15);
-  \node[num] at (3.75,-1.6) {1};
-  \node[num] at (3.75,-1.12) {2};
-  \node[num] at (3.75,-0.67) {3};
-  \node[num] at (3.75,-0.22) {4};
+    up/.style={-{Stealth[length=5pt,width=4pt]}, line width=1pt, draw=accent!70!black}]
+  \node[hnd] (d) at (0,0)  {document};
+  \node[no]  (h) at (0,-1) {<html>};
+  \node[no]  (b) at (0,-2) {<body>};
+  \node[hnd] (s) at (0,-3) {<section>};
+  \node[hnd] (a) at (0,-4) {<article>};
+  \node[hnd, line width=1.3pt] (p) at (0,-5) {<p>};
+  \node[mtesto] (t) at (0,-6) {\#text "Bubbling"};
+  \foreach \u/\v in {d/h, h/b, b/s, s/a, a/p, p/t} \draw[mramo] (\u) -- (\v);
+  % la risalita
+  \draw[up] (1.5,-5) -- (1.5,0.3);
+  \foreach \y/\n/\c in {-5/1/p, -4/2/article, -3/3/section, 0/4/document} {
+    \node[num] at (1.5,\y) {\n};
+    \node[mcod, anchor=west, text=neutral!35!black] at (1.75,\y) {\c};
+  }
+  \node[mnota, anchor=west, text=neutral!45!black] at (1.75,-1.5)
+    {nessun gestore:\\ si passa oltre};
+  \node[mnota, anchor=east, text=accent!65!black] at ([xshift=-6pt]p.west)
+    {clic qui\\ \code{event.target}};
 \end{tikzpicture}
 \end{immagine}
 \begin{console}
@@ -2120,20 +2175,33 @@ sull'oggetto evento.
 </body>
 \end{lstlisting}
 \risultato
-\begin{immagine}
-\begin{tikzpicture}[
-    box/.style={draw, rounded corners=3pt, line width=0.7pt, inner sep=0pt},
-    up/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.9pt, draw=accent!70!black}]
-  \draw[box, draw=primary!60!black, fill=primary!6!white] (0.3,-0.45) rectangle (4.7,-2.85);
-  \node[anchor=north west, mcod] at (0.35,-0.47) {<section>};
-  \draw[box, draw=primary!60!black, fill=primary!12!white] (0.6,-0.9) rectangle (4.4,-2.6);
-  \node[anchor=north west, mcod] at (0.65,-0.92) {<article>};
-  \draw[box, draw=accent!60!black, fill=accent!14!white] (0.9,-1.35) rectangle (4.1,-2.35);
-  \node[anchor=north west, mcod] at (0.95,-1.37) {<p>};
-  \node[font=\Lora\small] at (2.5,-1.95) {Bubbling};
-  \draw[up] (3.75,-2.2) -- (3.75,-0.75);
-  \node at (3.75,-0.62) {\merr};
-  \node[mnota, anchor=west] at (4.8,-0.62) {\code{stopPropagation()}};
+\begin{immagine}[La risalita si interrompe all'\code{<article>}:\\
+                 il gestore di \code{<section>} non viene eseguito.]
+\begin{tikzpicture}[y=0.78cm,
+    hnd/.style={mnuovo},
+    num/.style={circle, fill=accent!70!black, text=white,
+      font=\Lato\tiny\bfseries, inner sep=1pt, minimum size=10pt},
+    up/.style={-{Stealth[length=5pt,width=4pt]}, line width=1pt, draw=accent!70!black}]
+  \node[mcommento] (b) at (0,-2) {<body>};
+  \node[hnd, draw=neutral!45!white, fill=neutral!5!white, text=neutral!45!black,
+        dashed] (s) at (0,-3) {<section>};
+  \node[hnd] (a) at (0,-4) {<article>};
+  \node[hnd, line width=1.3pt] (p) at (0,-5) {<p>};
+  \node[mtesto] (t) at (0,-6) {\#text "Bubbling"};
+  \foreach \u/\v in {b/s, s/a, a/p, p/t} \draw[mramo] (\u) -- (\v);
+  \draw[mramo, dashed] (b.north) -- ++(0,0.35);
+  % la risalita, fermata sopra article
+  \draw[up] (1.5,-5) -- (1.5,-3.55);
+  \node[num] at (1.5,-5) {1};
+  \node[mcod, anchor=west, text=neutral!35!black] at (1.75,-5) {p};
+  \node[num] at (1.5,-4) {2};
+  \node[mcod, anchor=west, text=neutral!35!black] at (1.75,-4)
+    {ARTICLE + \code{stopPropagation()}};
+  \node at (1.5,-3.4) {\merr};
+  \node[mnota, anchor=west, text=merr] at (1.75,-3)
+    {non eseguito};
+  \node[mnota, anchor=east, text=accent!65!black] at ([xshift=-6pt]p.west)
+    {clic qui};
 \end{tikzpicture}
 \end{immagine}
 \begin{console}[Console, dopo un clic sul paragrafo]

@@ -157,12 +157,13 @@ function setupPage() {
 
 \subsection{Callback}
 
-\dfn{Callback}{
-  Una \term{callback} è una funzione passata come argomento a un'altra
-  funzione, con l'aspettativa che venga invocata al momento opportuno.}
-
-Ci ricordano qualcosa? I gestori di eventi del capitolo precedente sono, in
-effetti, delle callback.
+Le \term{callback} le abbiamo già incontrate nel capitolo precedente, parlando
+dei gestori di eventi: sono funzioni passate come argomento a un'altra
+funzione, con l'aspettativa che sia quest'ultima a invocarle, al momento
+opportuno. Un gestore di eventi, in effetti, è proprio una callback, che il
+browser chiama quando l'evento si verifica. Lo stesso meccanismo serve a
+gestire qualunque operazione che richiede tempo: invece di aspettarne il
+risultato, si passa all'operazione la funzione da chiamare quando avrà finito.
 
 Riscriviamo l'esempio precedente in stile asincrono, con le callback.
 
@@ -235,6 +236,28 @@ Nella programmazione capita spesso di avere:
 \end{enumerate}
 
 Le \term{Promise} sono il modo di \guillemotleft collegare\guillemotright\ produttori e consumatori.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      att/.style={rounded corners=4pt, line width=0.9pt, align=center,
+        minimum width=3.4cm, minimum height=1.25cm, font=\Lato\scriptsize},
+      a/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt}]
+    \node[att, draw=primary!65!black, fill=primary!10!white] (p) at (0,0)
+      {\textbf{produttore}\\ lavora, ci mette tempo\\ \code{resolve(valore)}};
+    \node[att, draw=green-gradient-6, fill=green-gradient-1!40!white] (pr) at (5.3,0)
+      {\textbf{Promise}\\ oggi \code{pending},\\ un giorno \textit{settled}};
+    \node[att, draw=accent!65!black, fill=accent!10!white] (c) at (10.6,0)
+      {\textbf{consumatore}\\ registra cosa fare\\ \code{.then(...)}};
+    \draw[a, draw=primary!65!black] (p) -- node[mnota, above]{la sistema} (pr);
+    \draw[a, draw=accent!65!black] (c) -- node[mnota, above]{la riceve} (pr);
+    \draw[a, draw=green-gradient-6, dashed] (pr.south) to[bend right=18]
+      node[mnota, below]{quando si sistema, chiama i gestori del consumatore}
+      (c.south);
+  \end{tikzpicture}
+  \caption{La Promise sta fra chi produce un risultato e chi lo usa: nessuno
+           dei due deve aspettare l'altro.}
+\end{figure}
 
 \subsection{Creare una Promise}
 
@@ -320,8 +343,25 @@ promise.then(
 \end{lstlisting}
 
 Si può anche registrare una sola funzione, quella per il caso di successo.
+
+\begin{lstlisting}[style=js]
+promise.then(
+  (result) => { /* invocata se la promise e' fulfilled */ }
+)
+\end{lstlisting}
+
 Quando invece interessa solo il caso di errore si può passare \code{null} come
-primo argomento, oppure — meglio — usare il metodo equivalente \code{.catch()}.
+primo argomento,
+
+\begin{lstlisting}[style=js]
+promise.then(
+  null,
+  function (error) { /* invocata se la promise e' rejected */ }
+)
+\end{lstlisting}
+
+\noindent oppure, in modo più leggibile, usare il metodo equivalente
+\code{.catch()}.
 
 \begin{lstlisting}[style=js]
 promise.catch(
@@ -802,6 +842,18 @@ There
 \end{console}
 \end{affianco}
 
+Togliendo il commento alla riga del \code{throw}, \code{f()} restituirebbe
+invece una Promise \textbf{rifiutata}, e in console comparirebbe l'avviso
+prodotto da \code{.catch(console.warn)} con l'errore \textit{Ouch}.
+
+\info{Passare console.log come callback}{
+  \code{f().then(console.log)} è un'abbreviazione di
+  \code{f().then(result => console.log(result))}. Non stiamo
+  \textbf{chiamando} \code{console.log} (mancano le parentesi), ma la
+  \textbf{passiamo} a \code{.then()} come callback: sarà la Promise a invocarla,
+  con il risultato come argomento. È lo stesso ragionamento visto per i gestori
+  di eventi.}
+
 \subsection{await}
 
 La parola chiave \code{await} si può usare \textbf{solo dentro funzioni async},
@@ -926,9 +978,9 @@ e gli header, ma il \textbf{corpo} potrebbe non essere ancora disponibile.
 \begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=fetch-response.js]
 async function f() {
-  let response = await fetch("./example.json");
+  let response = await fetch("./example.json"); // non esiste
 
-  // un header specifico (qui vale application/json)
+  // un header specifico
   console.log(response.headers.get('Content-Type'));
 
   // iterazione su tutti gli header della risposta
@@ -962,6 +1014,19 @@ async function f() {
 \end{tikzpicture}
 \end{immagine}
 \end{affianco}
+
+Nelle slide il file \code{example.json} \textbf{non esiste}, eppure il codice
+non finisce in un errore: il server risponde comunque, con stato \code{404}, e
+la Promise di \code{fetch} si \textbf{risolve} con quella risposta.
+\code{response.ok} vale \code{true} solo per gli stati da 200 a 299, quindi qui
+vale \code{false} e viene stampato \textit{Some error occurred}.
+
+\warning{Una risposta di errore non è una Promise rifiutata}{
+  La Promise di \code{fetch} viene rifiutata solo quando la risposta
+  \textbf{non arriva affatto}: rete assente, server irraggiungibile, richiesta
+  bloccata dal browser. Un \code{404} o un \code{500} sono risposte HTTP a
+  tutti gli effetti, e vanno riconosciute controllando \code{response.ok} (o
+  \code{response.status}), non con un \code{.catch()}.}
 
 Per ottenere il corpo, l'oggetto \code{Response} offre diversi metodi, anch'essi
 basati su Promise.
