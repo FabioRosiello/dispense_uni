@@ -15,6 +15,7 @@ Questa cartella contiene i sorgenti LaTeX di `../Dispensa.pdf`.
 - `chapters/chapter_8.tex` — Diagrammi dei package e di sequenza (L_05, UML Recap)
 - `chapters/chapter_9.tex` — Altri diagrammi UML: componenti, deployment, stati, attività (L_06)
 - `chapters/chapter_10.tex` — Esercizi sui diagrammi di stato, con soluzioni ridisegnate e correzioni (L_06-E)
+- `chapters/chapter_11.tex` — System Design e buone pratiche di progettazione: obiettivi di progetto, scomposizione, coesione, accoppiamento, Legge di Demetra, schede CRC (L_09, L_11, L_12)
 - `unina_doc_class.cls`, `fonts/`, `sources/` — template Unina Docs (da `Materiale/Dispense.rar`)
 - `Images/` — immagini tratte dalle slide del corso
 
@@ -39,5 +40,6 @@ cp main.pdf ../Dispensa.pdf
   concetto si spezzi tra due pagine
 - `esempio` ed `esercizio` sono composti in una scatola: se stanno in una pagina non si
   spezzano mai (passano interi alla pagina successiva)
+- nei listati le legature di FiraCode sono disattivate (`\FiraCodeNL`): `!=` e `>=` restano come nel sorgente
 - i titoli dei riquadri che contengono una virgola vanno racchiusi in doppie graffe:
   `\info{{Titolo, con virgola}}{...}`

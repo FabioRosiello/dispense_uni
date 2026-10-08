@@ -1,0 +1,1347 @@
+\chapter{System Design e buone pratiche di progettazione}
+% Il codice in linea (\code) non va a capo: un po' di elasticita' in piu' evita righe che sbordano
+\emergencystretch=2.5em
+
+Con i requisiti e i modelli di analisi abbiamo descritto \textbf{che cosa} il sistema deve fare. Da qui in avanti ci occupiamo
+di \textbf{come} farlo. Questo capitolo raccoglie le lezioni dedicate al \textit{System Design} e segue due fili:
+\begin{itemize}
+  \item le \textbf{attività} della progettazione di sistema: fissare gli obiettivi di progetto e scomporre il sistema in
+        sottosistemi;
+  \item le \textbf{regole di buona progettazione}, valide per qualunque software orientato agli oggetti: coesione,
+        accoppiamento, Legge di Demetra e progettazione guidata dalle responsabilità.
+\end{itemize}
+La fase era già stata presentata a grandi linee nel Capitolo 3 (\textit{Fase 2: System Design}); qui la riprendiamo in
+dettaglio.
+
+% ============================================================
+\section{Dove siamo nel processo}
+
+\waterfallbar{2}
+
+Nel modello a cascata il System Design segue la Requirements Engineering. In ingresso riceve i requisiti, i casi d'uso e il
+modello di dominio; in uscita produce l'\textbf{architettura del sistema}. I requisiti vengono assegnati ai sottosistemi
+software, i sottosistemi alle risorse hardware, e si scelgono i \textbf{pattern architetturali} da adottare.
+
+\dfn{System Design}{
+  Il \term{System Design} è l'insieme delle attività con cui l'ingegnere del software trasforma il \textbf{modello di analisi}
+  nel \textbf{modello di progetto del sistema}.
+
+  L'obiettivo finale del System Design e del successivo Object Design è produrre un nuovo documento, scritto in linguaggio
+  \textbf{tecnico e formale}, da consegnare ai programmatori perché possano implementare il software descritto nel documento
+  dei requisiti.
+}
+
+La progettazione si svolge su due livelli, che corrispondono alle fasi 2 e 3 della cascata.
+
+\Needspace{14\baselineskip}
+\begin{center}
+\begin{tikzpicture}
+  \node[card=ph2, text width=6.6cm, align=left, anchor=north] (sd) at (0,0)
+    {\textbf{\color{ph2!80!black}System Design}\\[3pt]
+     \begin{enumerate}[leftmargin=1.2em, itemsep=1pt, topsep=1pt]
+       \item definire gli \textbf{obiettivi di progetto};
+       \item definire l'\textbf{architettura}, scomponendo il sistema in sottosistemi, che team diversi possono implementare
+             \textbf{in parallelo};
+       \item scegliere le \textbf{strategie} di costruzione: hardware e software, gestione dei dati persistenti, flusso di
+             controllo globale, politiche di controllo degli accessi\ldots
+     \end{enumerate}};
+  \node[card=ph3, text width=6.6cm, align=left, anchor=north] (od) at (7.6,0)
+    {\textbf{\color{ph3!80!black}Object Design}\\[3pt]
+     \begin{itemize}[leftmargin=1.2em, itemsep=1pt, topsep=1pt]
+       \item data l'architettura, specificare i \textbf{dettagli implementativi} dei singoli sottosistemi;
+       \item scegliere le strategie di implementazione migliori, ad esempio i \textbf{design pattern}.
+     \end{itemize}};
+  \draw[flow] (sd.east |- 0,-1.2) -- (od.west |- 0,-1.2);
+\end{tikzpicture}
+\end{center}
+
+\Needspace{16\baselineskip}
+\subsection{Cambia l'interlocutore}
+
+Con la progettazione il punto di vista cambia radicalmente. Finora abbiamo lavorato \textbf{per il cliente} e con il
+cliente, usando un linguaggio da non addetti ai lavori. Nel System Design i nostri interlocutori sono i \textbf{team di
+programmatori} che dovranno implementare il sistema: chi legge i nostri documenti è un esperto di informatica, e il
+linguaggio diventa tecnico.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[card=ph1, text width=5.4cm] (a) at (0,0)
+    {\textbf{Analisi}\\[2pt] parliamo con il \textbf{cliente}\\ linguaggio per profani, poco formale\\
+     \textit{casi d'uso, scenari, mock-up}};
+  \node[card=ph2, text width=5.4cm] (p) at (7.4,0)
+    {\textbf{Progettazione}\\[2pt] parliamo con i \textbf{programmatori}\\ linguaggio tecnico e formale\\
+     \textit{sottosistemi, interfacce, classi}};
+  \draw[flow] (a) -- node[note, above]{cambio di} node[note, below]{destinatario} (p);
+\end{tikzpicture}
+\end{center}
+
+% ============================================================
+\section{Le attività della progettazione di sistema}
+
+Il System Design si articola in tre macro-attività.
+\begin{enumerate}
+  \item \textbf{Identificare gli obiettivi di progetto.} Gli sviluppatori stabiliscono quali caratteristiche di qualità vanno
+        ottimizzate e con quale priorità.
+  \item \textbf{Progettare la scomposizione in sottosistemi.} A partire dai casi d'uso e dai modelli di analisi, si divide
+        il sistema in parti più piccole, usando stili architetturali standard.
+  \item \textbf{Raffinare la scomposizione per soddisfare gli obiettivi.} La prima scomposizione di solito non soddisfa gli
+        obiettivi di progetto: la si raffina finché non li soddisfa.
+\end{enumerate}
+
+Nel dettaglio, la progettazione di sistema tocca otto aspetti, riassunti in figura. In questo capitolo trattiamo i primi
+due, evidenziati, insieme alle regole generali che guidano la scomposizione.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    passo/.style={rectangle, rounded corners=3pt, draw=#1!70!black, fill=#1!8, line width=0.8pt,
+                  text width=3.25cm, align=left, font=\scriptsize, inner sep=4pt, minimum height=1.55cm},
+    passo/.default=swgray,
+    ramo/.style={line width=0.7pt, draw=swgray!80}]
+  \node[chip=swgray, font=\small\bfseries, inner sep=5pt] (c) at (5.85,0) {System Design};
+  % riga superiore: passi 1-4
+  \node[passo=ph2, anchor=south] (p1) at (0,1.0)
+    {\textbf{1. Obiettivi di progetto}\\ definizione\\ compromessi (\textit{trade-off})};
+  \node[passo=ph2, anchor=south] (p2) at (3.9,1.0)
+    {\textbf{2. Scomposizione del sistema}\\ livelli e partizioni\\ coesione e accoppiamento};
+  \node[passo, anchor=south] (p3) at (7.8,1.0)
+    {\textbf{3. Concorrenza}\\ identificazione dei thread};
+  \node[passo, anchor=south] (p4) at (11.7,1.0)
+    {\textbf{4. Mapping hardware/software}\\ hardware dedicato, \textit{buy or build}\\ allocazione, connettività};
+  % riga inferiore: passi 5-8
+  \node[passo, anchor=north] (p5) at (0,-1.0)
+    {\textbf{5. Gestione dei dati}\\ oggetti persistenti\\ file, database\\ strutture dati};
+  \node[passo, anchor=north] (p6) at (3.9,-1.0)
+    {\textbf{6. Risorse globali}\\ controllo degli accessi\\ sicurezza};
+  \node[passo, anchor=north] (p7) at (7.8,-1.0)
+    {\textbf{7. Controllo del software}\\ monolitico, a eventi\\ processi concorrenti};
+  \node[passo, anchor=north] (p8) at (11.7,-1.0)
+    {\textbf{8. Condizioni limite}\\ inizializzazione\\ terminazione, guasti};
+  \foreach \p in {p1,p2,p3,p4} \draw[ramo] (c.north) -- (\p.south);
+  \foreach \p in {p5,p6,p7,p8} \draw[ramo] (c.south) -- (\p.north);
+\end{tikzpicture}
+\caption{Gli otto aspetti del System Design. In questo capitolo: obiettivi di progetto e scomposizione.}
+\end{figure}
+
+% ============================================================
+\section{Gli obiettivi di progetto}
+
+Identificare le \textbf{qualità} su cui il sistema deve puntare è il primo passo della progettazione.
+\begin{itemize}
+  \item Molti obiettivi di progetto derivano dai \textbf{requisiti non funzionali} (Capitolo 5) o dal dominio applicativo;
+        altri sono indicati direttamente dal cliente.
+  \item Vanno \textbf{formalizzati esplicitamente}, perché ogni decisione di progetto importante deve essere presa in base
+        allo \textbf{stesso insieme di criteri}. Se ogni sviluppatore ottimizza ciò che gli sembra più importante, il
+        risultato è incoerente.
+\end{itemize}
+
+\Needspace{18\baselineskip}
+\subsection{I criteri di progetto}
+
+Gli obiettivi si scelgono da un lungo elenco di qualità desiderabili, organizzabili in cinque gruppi. Molte di queste
+qualità le abbiamo già incontrate nel modello ISO/IEC 25010 del Capitolo 4: nella terza colonna indichiamo la
+caratteristica corrispondente.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}>{\bfseries}l p{6.3cm} p{4.6cm}@{}}
+  \toprule
+  \normalfont\textbf{Gruppo} & \textbf{Esempi di criteri} & \textbf{In ISO/IEC 25010} \\
+  \midrule
+  \color{q1}Prestazioni   & tempo di risposta, throughput, memoria richiesta & efficienza prestazionale \\
+  \color{q6}Affidabilità  & robustezza, disponibilità, tolleranza ai guasti, sicurezza & affidabilità, sicurezza \\
+  \color{q5}Costi         & di sviluppo, di manutenzione, di gestione & (non è una qualità del prodotto) \\
+  \color{q2}Manutenzione  & estendibilità, modificabilità, adattabilità, portabilità & manutenibilità, flessibilità \\
+  \color{q8}Usabilità     & facilità d'uso e di apprendimento & usabilità \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{I compromessi di progetto}
+
+Nella pratica si riesce a tenere conto solo di un \textbf{piccolo sottoinsieme} di questi criteri: non è realistico, ad
+esempio, sviluppare un software che sia allo stesso tempo molto sicuro e poco costoso. Gli sviluppatori devono quindi
+\textbf{dare priorità} agli obiettivi, tenendo conto anche di vincoli gestionali come i tempi e il budget. I compromessi
+più frequenti sono quattro.
+
+\Needspace{20\baselineskip}
+\begin{center}
+\begin{tikzpicture}[
+    tradeoff/.style={rectangle, rounded corners=3pt, draw=#1!70!black, fill=#1!7, line width=0.8pt,
+                     text width=6.7cm, align=left, font=\scriptsize, inner sep=5pt, minimum height=2.15cm}]
+  \node[tradeoff=q1, anchor=north west] (t1) at (0,0)
+    {{\small\bfseries Memoria \textit{vs} velocità}\\[2pt]
+     Se il software non rispetta i requisiti di tempo di risposta o throughput, si usa più memoria per renderlo veloce
+     (cache, ridondanza). Se non rispetta quelli di memoria, si comprimono i dati a scapito della velocità.};
+  \node[tradeoff=q2, anchor=north west] (t2) at (7.5,0)
+    {{\small\bfseries Tempi di rilascio \textit{vs} funzionalità}\\[2pt]
+     Se i tempi sono stretti, si può rilasciare in tempo una versione con \textbf{meno funzionalità} di quelle richieste,
+     rimandando le altre.};
+  \node[tradeoff=q6, anchor=north west] (t3) at (0,-2.45)
+    {{\small\bfseries Tempi di rilascio \textit{vs} qualità}\\[2pt]
+     Con tempi stretti, il project manager può rilasciare nei tempi un software con difetti noti e correggerli dopo,
+     oppure rilasciarlo in ritardo con meno difetti.};
+  \node[tradeoff=q5, anchor=north west] (t4) at (7.5,-2.45)
+    {{\small\bfseries Tempi di rilascio \textit{vs} personale}\\[2pt]
+     Può essere necessario \textbf{aggiungere persone} al progetto per aumentarne la produttività (ma attenzione, vedi
+     il riquadro qui sotto).};
+\end{tikzpicture}
+\end{center}
+
+\warning{La legge di Brooks}{
+  Aggiungere persone funziona solo se lo si fa \textbf{per tempo}. Fred Brooks, in \textit{The Mythical Man-Month} (1975),
+  osservò che \textit{aggiungere personale a un progetto software in ritardo lo fa ritardare ancora di più}: i nuovi arrivati
+  vanno formati da chi già lavora al progetto, e il numero di canali di comunicazione cresce con il quadrato delle persone.
+  Il compromesso tempi/personale va quindi valutato all'inizio, non a progetto già in ritardo.
+}
+
+\begin{esempio}{Obiettivi di progetto per la gestione delle emergenze}
+Gli esempi delle slide su database e sottosistemi (\textit{Resource}, \textit{Map}, \textit{Incident Management}) vengono da
+un sistema per la gestione delle emergenze: gli operatori registrano gli incidenti, consultano una mappa e assegnano le
+risorse (ambulanze, vigili del fuoco). Per un sistema del genere una scelta ragionevole di priorità è:
+\begin{enumerate}
+  \item \textbf{affidabilità e disponibilità}: il sistema deve funzionare proprio quando c'è un'emergenza;
+  \item \textbf{tempo di risposta}: un incidente registrato deve comparire subito sulla mappa degli operatori;
+  \item \textbf{usabilità}: gli operatori lavorano sotto stress, l'interfaccia non deve indurli in errore.
+\end{enumerate}
+Il \textbf{costo} passa in secondo piano: si accetta di spendere di più, ad esempio per server ridondanti, pur di garantire
+la disponibilità. È un compromesso costo/affidabilità deciso \textbf{una volta per tutte} e scritto nel documento di
+progetto, in modo che ogni scelta successiva lo rispetti.
+\end{esempio}
+
+% ============================================================
+\section{Criteri generali: progettare per il cambiamento}
+
+Molti criteri di progetto dipendono strettamente dal problema da risolvere: trovare il miglior equilibrio fra i vincoli è
+compito dell'analista, che si basa sulla propria esperienza e sensibilità. Esistono però anche criteri \textbf{generali},
+validi per qualunque software orientato agli oggetti. Applicati correttamente, migliorano in modo significativo la
+\textbf{qualità interna} del codice senza introdurre svantaggi particolari. Il resto del capitolo è dedicato a questi
+criteri.
+
+Il primo è un atteggiamento: quando progettiamo una classe dobbiamo sforzarci di pensare a quali \textbf{cambiamenti}
+potranno essere richiesti in futuro.
+
+\dfn{Progettare per anticipare il cambiamento}{
+  Le scelte iniziali devono \textbf{facilitare l'evoluzione futura} del software (\textit{designing to anticipate change}).
+  È uno dei requisiti fondamentali di un buon progetto, ed è anche un criterio con cui il progetto viene valutato.
+}
+
+Ricordiamo dal Capitolo 2 che la manutenzione rappresenta la parte più consistente del costo di un software: un progetto
+che rende economici i cambiamenti ripaga questo investimento per tutta la vita del sistema.
+
+% ============================================================
+\section{La scomposizione in sottosistemi}
+
+Per ridurre la complessità della soluzione si scompone il sistema in parti più piccole, i \term{sottosistemi}.
+\begin{itemize}
+  \item Un sottosistema corrisponde tipicamente alla porzione di lavoro che un \textbf{singolo sviluppatore o un team} può
+        svolgere in modo indipendente.
+  \item Se i sottosistemi sono relativamente indipendenti, i team possono lavorarci con un \textbf{costo di comunicazione}
+        minimo.
+  \item Se un sottosistema è ancora complesso, si applica di nuovo lo stesso principio e lo si scompone in sottosistemi più
+        semplici.
+\end{itemize}
+
+\Needspace{22\baselineskip}
+\subsection{Perché scomporre conviene}
+
+Indichiamo con $P$ un problema, con $C(P)$ la sua complessità e con $E(P)$ lo sforzo necessario a risolverlo. Dati due
+problemi $P_1$ e $P_2$, è intuitivo che
+\[
+  C(P_1) > C(P_2) \;\Rightarrow\; E(P_1) > E(P_2).
+\]
+Si osserva però anche che la complessità di due problemi affrontati \textbf{insieme} è maggiore della somma delle loro
+complessità prese separatamente:
+\[
+  C(P_1 + P_2) > C(P_1) + C(P_2) \qquad\text{e quindi}\qquad E(P_1 + P_2) > E(P_1) + E(P_2).
+\]
+
+\noindent\begin{minipage}[c]{0.56\textwidth}
+Il motivo sono le \textbf{interazioni}: risolvendo i due problemi insieme bisogna tenere conto anche di come ogni parte
+dell'uno influenza ogni parte dell'altro. In figura, sei elementi tutti potenzialmente legati fra loro hanno
+$6\cdot 5/2 = 15$ collegamenti possibili; divisi in due gruppi da tre, con un solo punto di contatto, i collegamenti sono
+$3 + 3 + 1 = 7$. È l'argomento a favore del \textit{divide et impera}, a patto che i pezzi siano davvero
+\textbf{indipendenti}: è quello che misureremo con coesione e accoppiamento.
+\end{minipage}\hfill
+\begin{minipage}[c]{0.4\textwidth}
+\centering
+\begin{tikzpicture}[pt/.style={circle, fill=#1, inner sep=0pt, minimum size=0.22cm}, pt/.default=swgray]
+  \foreach \i in {1,...,6} \coordinate (a\i) at ({60*\i}:0.95);
+  \foreach \i in {1,...,6} \foreach \j in {1,...,6} {\ifnum\i<\j \draw[swgray!60, line width=0.5pt] (a\i) -- (a\j);\fi}
+  \foreach \i in {1,...,6} \node[pt=swred] at (a\i) {};
+  \node[note, align=center] at (0,-1.45) {insieme: 15 legami};
+  \begin{scope}[shift={(3.4,0)}]
+    \coordinate (b1) at (-0.75,0.7); \coordinate (b2) at (-1.05,-0.2); \coordinate (b3) at (-0.35,-0.45);
+    \coordinate (c1) at (0.75,0.7);  \coordinate (c2) at (1.05,-0.2);  \coordinate (c3) at (0.35,-0.45);
+    \draw[swgreen!70, line width=0.5pt] (b1)--(b2)--(b3)--(b1) (c1)--(c2)--(c3)--(c1);
+    \draw[swblue, line width=0.8pt] (b3) -- (c3);
+    \foreach \p in {b1,b2,b3,c1,c2,c3} \node[pt=swgreen] at (\p) {};
+    \node[note, align=center] at (0,-1.45) {scomposti: 7 legami};
+  \end{scope}
+\end{tikzpicture}
+\end{minipage}
+
+\subsection{Modellare i sottosistemi}
+
+In UML un sottosistema si rappresenta con un \textbf{package} (Capitolo 8): una collezione di classi, associazioni,
+operazioni e vincoli fra loro correlati. Anche i linguaggi offrono costrutti per lo stesso concetto: i \code{package} in
+Java, i \code{namespace} in C++ e C\#.
+
+\dfn{Servizi e interfaccia di un sottosistema}{
+  Un sottosistema è caratterizzato dai \term{servizi} che offre agli altri sottosistemi. L'insieme delle operazioni
+  disponibili agli altri sottosistemi forma l'\term{interfaccia del sottosistema}: comprende i nomi delle operazioni, i loro
+  parametri, i loro tipi e i valori restituiti.
+}
+
+Il System Design si concentra sulla definizione dei servizi offerti da ogni sottosistema, in termini di
+\textbf{operazioni}, \textbf{parametri} e \textbf{comportamento ad alto livello}. I dettagli interni restano all'Object
+Design.
+
+\begin{esempio}{Accesso diretto al database o tramite un sottosistema dedicato}
+Torniamo al sistema per le emergenze. Nella prima versione (a sinistra) tutti i sottosistemi accedono \textbf{direttamente}
+al database.
+\begin{itemize}
+  \item Non si riesce a specificare con chiarezza le responsabilità dei moduli: chi \textit{gestisce} i dati, chi li
+        \textit{salva}?
+  \item Tutti i sottosistemi dipendono dall'interfaccia del database: se cambia il DBMS, va modificato il codice di
+        \textbf{tutte} le classi che vi accedono.
+\end{itemize}
+Nella seconda versione (a destra) si introduce il sottosistema \textbf{DataAccess}, l'unico che gestisce l'input/output con
+il database. Se cambia il DBMS, si modifica \textbf{solo} DataAccess.
+
+\begin{center}
+\begin{tikzpicture}
+  % versione 1
+  \umlpkg{r1}{(0,2.2)}{1.9}{0.75}{\shortstack{Resource\\Management}}
+  \umlpkg{m1}{(2.3,2.2)}{1.9}{0.75}{\shortstack{Map\\Management}}
+  \umlpkg{i1}{(4.6,2.2)}{1.9}{0.75}{\shortstack{Incident\\Management}}
+  \umlpkg{d1}{(2.3,0)}{1.9}{0.6}{Database}
+  \draw[dipend, draw=swred] (r1.south) -- (d1.north west);
+  \draw[dipend, draw=swred] (m1.south) -- (d1.north);
+  \draw[dipend, draw=swred] (i1.south) -- (d1.north east);
+  \node[note, text=swred] at (3.25,-0.45) {tre dipendenze dal DBMS};
+  % versione 2
+  \begin{scope}[shift={(8.2,0)}]
+    \umlpkg{r2}{(0,3.2)}{1.9}{0.75}{\shortstack{Resource\\Management}}
+    \umlpkg{m2}{(2.3,3.2)}{1.9}{0.75}{\shortstack{Map\\Management}}
+    \umlpkg{i2}{(4.6,3.2)}{1.9}{0.75}{\shortstack{Incident\\Management}}
+    \umlpkg{a2}{(2.3,1.55)}{1.9}{0.6}{DataAccess}
+    \umlpkg{d2}{(2.3,0)}{1.9}{0.6}{Database}
+    \draw[dipend] (r2.south) -- (a2.north west);
+    \draw[dipend] (m2.south) -- (a2.north);
+    \draw[dipend] (i2.south) -- (a2.north east);
+    \draw[dipend, draw=swgreen, line width=0.9pt] (a2.south) -- (d2.north);
+    \node[note, text=swgreen] at (3.25,-0.45) {una sola dipendenza dal DBMS};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+Nelle slide il testo dice \textit{«modifico solo il sottosistema Storage»}, ma nel diagramma lo stesso sottosistema si
+chiama \textit{DataAccess}: sono la stessa cosa.
+\end{esempio}
+
+\subsection{Quanti sottosistemi?}
+
+L'esempio ha ridotto le relazioni fra i sottosistemi, ma ha \textbf{aumentato la complessità}: c'è un sottosistema in più
+da progettare, implementare e attraversare a ogni accesso ai dati. Inseguendo la riduzione delle dipendenze si rischia di
+aggiungere livelli di astrazione che costano tempo di sviluppo e di esecuzione.
+
+\Needspace{20\baselineskip}
+\noindent\begin{minipage}[c]{0.44\textwidth}
+Il grafico, tratto da Pressman, mostra il compromesso. Al crescere del numero di componenti:
+\begin{itemize}
+  \item il \textbf{costo di sviluppo} di ciascun componente diminuisce, perché ogni componente è più piccolo e semplice;
+  \item il \textbf{costo di integrazione} aumenta, perché ci sono più interfacce da definire e più pezzi da far
+        collaborare.
+\end{itemize}
+Il costo totale ha quindi un \textbf{minimo}: troppi pochi componenti sono difficili da sviluppare, troppi sono difficili
+da integrare.
+\end{minipage}\hfill
+\begin{minipage}[c]{0.53\textwidth}
+\centering
+\begin{tikzpicture}[x=0.62cm, y=0.62cm]
+  \foreach \n in {1,...,12} {
+    \pgfmathsetmacro{\integ}{0.03*\n*\n+0.15}
+    \pgfmathsetmacro{\svil}{6.2/\n+0.25}
+    \fill[q6!35, draw=q6!70!black, line width=0.4pt] (\n-0.38,0) rectangle (\n+0.38,\integ);
+    \fill[sworange!75, draw=q6!70!black, line width=0.4pt] (\n-0.38,\integ) rectangle (\n+0.38,\integ+\svil);
+  }
+  \draw[-{Stealth[length=2mm]}, line width=0.8pt] (0.3,0) -- (13.2,0) node[below left, note, align=right]
+    {numero di componenti};
+  \draw[-{Stealth[length=2mm]}, line width=0.8pt] (0.3,0) -- (0.3,8.2) node[above right, note] {costo del software};
+  \draw[dashed, line width=0.7pt, swblue] (5,0) -- (5,4.0);
+  \node[note, text=swblue, anchor=north, align=center] at (5,-0.1) {numero\\ ottimale};
+  \node[note, anchor=west] at (7.4,7.4) {\textcolor{sworange!90!black}{\rule{6pt}{6pt}} costo di sviluppo};
+  \node[note, anchor=west] at (7.4,6.7) {\textcolor{q6!60}{\rule{6pt}{6pt}} costo di integrazione};
+\end{tikzpicture}
+\end{minipage}
+
+\subsection{L'indipendenza funzionale}
+
+La divisione in sottosistemi è guidata da due fattori qualitativi fondamentali, la \term{coesione} e
+l'\term{accoppiamento}. L'obiettivo è l'\textbf{indipendenza funzionale} dei sottosistemi, che si massimizza con
+\textbf{alta coesione} e \textbf{basso accoppiamento}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    pt/.style={circle, fill=swgray, inner sep=0pt, minimum size=0.2cm},
+    mod/.style={rounded corners=5pt, draw=#1!70!black, fill=#1!6, line width=0.8pt},
+    int/.style={swgreen!80!black, line width=0.6pt},
+    ext/.style={swred, line width=0.7pt}]
+  % --- buona scomposizione ---
+  \foreach \k/\x in {A/0, B/2.6, C/5.2} {
+    \draw[mod=swgreen] (\x-0.9,-0.9) rectangle (\x+0.9,0.9);
+    \coordinate (\k1) at (\x-0.45,0.45); \coordinate (\k2) at (\x+0.45,0.45);
+    \coordinate (\k3) at (\x-0.45,-0.45); \coordinate (\k4) at (\x+0.45,-0.45);
+    \draw[int] (\k1)--(\k2)--(\k4)--(\k3)--(\k1)--(\k4) (\k2)--(\k3);
+  }
+  \draw[ext] (A2) to[bend left=20] (B1);
+  \draw[ext] (B4) to[bend right=20] (C3);
+  \foreach \k in {A,B,C} \foreach \i in {1,...,4} \node[pt] at (\k\i) {};
+  \node[font=\scriptsize\bfseries, text=swgreen!70!black] at (2.6,-1.35) {alta coesione, basso accoppiamento};
+  % --- cattiva scomposizione ---
+  \begin{scope}[shift={(8.4,0)}]
+    \foreach \k/\x in {A/0, B/2.6, C/5.2} {
+      \draw[mod=swred] (\x-0.9,-0.9) rectangle (\x+0.9,0.9);
+      \coordinate (\k1) at (\x-0.45,0.45); \coordinate (\k2) at (\x+0.45,0.45);
+      \coordinate (\k3) at (\x-0.45,-0.45); \coordinate (\k4) at (\x+0.45,-0.45);
+    }
+    \draw[int] (A1)--(A3) (B2)--(B4) (C1)--(C2);
+    \draw[ext] (A2) -- (B1) (A4) -- (B3) (A2) to[bend left=25] (C1) (B2) -- (C1) (B4) -- (C3)
+               (A4) to[bend right=25] (C4) (B3) to[bend right=30] (C3) (A1) to[bend left=35] (B2);
+    \foreach \k in {A,B,C} \foreach \i in {1,...,4} \node[pt] at (\k\i) {};
+    \node[font=\scriptsize\bfseries, text=swred] at (2.6,-1.35) {bassa coesione, alto accoppiamento};
+  \end{scope}
+\end{tikzpicture}
+\caption{Gli stessi elementi raggruppati in due modi. In verde i legami interni ai moduli, in rosso quelli fra moduli. A
+         sinistra ogni modulo è quasi autosufficiente; a destra quasi ogni legame attraversa i confini.}
+\end{figure}
+
+% ============================================================
+\section{Coesione}
+
+\dfn{Coesione}{
+  La \term{coesione} misura quanto sono \textbf{strettamente correlate e focalizzate} le responsabilità (o i servizi
+  offerti) di un modulo. Se ogni unità è responsabile di un \textbf{unico compito}, diciamo che ha \textbf{alta coesione}.
+}
+
+L'alta coesione è una proprietà desiderabile del codice, perché permette di:
+\begin{itemize}
+  \item capire meglio il ruolo di una classe;
+  \item riusare una classe;
+  \item mantenere una classe;
+  \item limitare e concentrare le modifiche al codice;
+  \item usare nomi appropriati, efficaci e comunicativi.
+\end{itemize}
+
+La coesione si valuta a due livelli di \textbf{granularità}:
+\begin{itemize}
+  \item \textbf{coesione dei metodi}: un metodo dovrebbe essere responsabile di un solo compito ben definito;
+  \item \textbf{coesione delle classi}: ogni classe dovrebbe rappresentare un solo concetto ben definito.
+\end{itemize}
+
+\subsection{Il principio di singola responsabilità}
+
+\dfn{Single Responsibility Principle (SRP)}{
+  Una classe dovrebbe avere \textbf{una sola responsabilità}, cioè \textbf{un solo motivo per cambiare}.
+}
+
+Una responsabilità è quindi un \textbf{motivo di cambiamento}: le responsabilità di una classe sono i suoi \textit{assi di
+cambiamento}. Se una classe ha due responsabilità, nel progetto queste sono \textbf{accoppiate} e devono cambiare insieme.
+Una classe con più di una responsabilità diventa \textbf{fragile}: si rompe ogni volta che cambia uno qualunque dei
+requisiti da cui dipende.
+
+\begin{esempio}{Un report con troppe responsabilità}
+La classe \code{Report} recupera i dati, li formatta e stampa il report. L'esempio delle slide è in C\#; qui lo riportiamo
+in Java.
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[c]{0.62\textwidth}
+\begin{lstlisting}[language=Java]
+public class Report {
+  private List<ReportDataElement> getData() {
+    System.out.println("Getting data...");
+    return new ArrayList<>();
+  }
+  private void formatReport() {
+    System.out.println("Formatting report...");
+  }
+  public void print() {
+    getData();
+    formatReport();
+    System.out.println("Printing report...");
+  }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.33\textwidth}
+\centering
+\begin{tikzpicture}
+  \umlclass[2.6cm]{rep}{(0,0)}{Report}{}{getData()\\formatReport()\\print()}
+\end{tikzpicture}
+
+\vspace{4pt}
+{\scriptsize Tre motivi per cambiare:\\ la sorgente dei dati, il formato,\\ il dispositivo di stampa.\par}
+\end{minipage}
+
+Applicando l'SRP si separano le tre responsabilità in tre classi; \code{Report} si limita a chiedere la stampa.
+
+\begin{center}
+\begin{tikzpicture}
+  \umlclass[2.4cm]{r}{(0,0)}{Report}{}{print()}
+  \umlclass[2.4cm]{p}{(4.2,0)}{ReportPrinter}{}{print()}
+  \umlclass[2.4cm]{f}{(2.4,-2.3)}{ReportFormatter}{}{formatReport()}
+  \umlclass[2.4cm]{d}{(6.0,-2.3)}{DataAccess}{}{getData()}
+  \draw[assoc] (r.east) -- (p.west);
+  \draw[assoc] (p.south) ++(-0.5,0) |- ++(0,-0.45) -| (f.north);
+  \draw[assoc] (p.south) ++(0.5,0) |- ++(0,-0.45) -| (d.north);
+\end{tikzpicture}
+\end{center}
+
+\Needspace{24\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[language=Java]
+public class DataAccess {
+  public List<ReportDataElement> getData() {
+    System.out.println("Getting data...");
+    return new ArrayList<>();
+  }
+}
+
+public class ReportFormatter {
+  public void formatReport() {
+    System.out.println("Formatting report...");
+  }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[language=Java]
+public class ReportPrinter {
+  public void print() {
+    DataAccess dataAccess = new DataAccess();
+    ReportFormatter reportFormatter =
+        new ReportFormatter();
+    dataAccess.getData();
+    reportFormatter.formatReport();
+    System.out.println("Printing report...");
+  }
+}
+
+public class Report {
+  public void print() {
+    ReportPrinter reportPrinter = new ReportPrinter();
+    reportPrinter.print();
+  }
+}
+\end{lstlisting}
+\end{minipage}
+
+Ora ogni motivo di cambiamento tocca una sola classe:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}ll@{}}
+  \toprule
+  \textbf{Se cambia\ldots} & \textbf{si modifica solo\ldots} \\
+  \midrule
+  la sorgente dei dati (un altro database, un file, un servizio web) & \code{DataAccess} \\
+  il formato del report (PDF, HTML, tabella) & \code{ReportFormatter} \\
+  il modo di stampare (stampante, schermo, e-mail) & \code{ReportPrinter} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\end{esempio}
+
+\info{{Coesione sì, ma l'accoppiamento?}}{
+  Nella versione divisa \code{ReportPrinter} crea con \code{new} le classi \textbf{concrete} \code{DataAccess} e
+  \code{ReportFormatter}: per stampare un report letto da un file invece che da un database bisognerebbe comunque
+  modificare \code{ReportPrinter}. La coesione è migliorata, ma l'accoppiamento resta alto. Vedremo nella sezione
+  sull'accoppiamento come ridurlo con le \textbf{interfacce}.
+
+  Si noti anche che nel codice delle slide i dati letti da \code{getData()} non vengono passati a \code{formatReport()}:
+  è uno schema che si limita a stampare messaggi. In una versione reale i dati scorrerebbero da \code{DataAccess} a
+  \code{ReportFormatter}, ad esempio con \code{formatReport(dati)}.
+}
+
+\subsection{I vantaggi della coesione}
+
+\Needspace{8\baselineskip}
+\begin{itemize}
+  \item \textbf{Riuso}: se tutte le classi rispettano l'SRP, è più probabile riusarne qualcuna.
+  \item \textbf{Chiarezza}: il codice è più pulito, perché le classi non fanno cose inattese.
+  \item \textbf{Nomi}: se una classe ha una sola responsabilità, trovarle un buon nome è facile.
+  \item \textbf{Leggibilità}: chiarezza, nomi migliori e file più corti migliorano molto la leggibilità.
+\end{itemize}
+
+\Needspace{14\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\gbox{Indicatori di alta coesione}{swgreen}{\raggedright
+\begin{itemize}[leftmargin=1.1em]
+  \item la classe ha responsabilità moderate, limitate a una sola area funzionale;
+  \item collabora con altre classi per completare i compiti;
+  \item ha un numero limitato di metodi, cioè di funzionalità fortemente correlate;
+  \item tutti i metodi sembrano appartenere allo stesso insieme, con uno scopo complessivo simile;
+  \item la classe è facile da capire.
+\end{itemize}}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\gbox{Campanelli d'allarme}{swred}{\raggedright
+\begin{itemize}[leftmargin=1.1em]
+  \item il nome contiene «e» o termini generici (\code{GestoreUtentiEStampe}, \code{Manager}, \code{Utils});
+  \item gruppi di metodi usano gruppi di attributi \textbf{disgiunti}: sono due classi in una;
+  \item per descrivere la classe serve una frase con molte virgole;
+  \item una modifica a un requisito qualunque finisce sempre per toccare quella classe.
+\end{itemize}}
+\end{minipage}
+
+% ============================================================
+\section{Accoppiamento}
+
+\dfn{Accoppiamento}{
+  L'\term{accoppiamento} (\textit{coupling}) misura quanto una classe è \textbf{connessa} ad altre classi, quanto ne
+  \textbf{conosce} i dettagli e quanto ne \textbf{dipende}.
+
+  Due o più classi sono accoppiate quando è impossibile riusarne una senza riusare anche le altre. Se due classi dipendono
+  strettamente e in molti dettagli l'una dall'altra, si dicono \textbf{fortemente accoppiate}; altrimenti
+  \textbf{debolmente accoppiate}. Per avere codice di qualità bisogna puntare a un \textbf{basso accoppiamento}.
+}
+
+Il basso accoppiamento permette di:
+\begin{itemize}
+  \item capire il codice di una classe senza leggere i dettagli delle altre;
+  \item modificare una classe senza che le modifiche si ripercuotano sulle altre;
+  \item riusare facilmente una classe senza dover importare anche altre classi;
+  \item testare facilmente una classe, indipendentemente dalle altre.
+\end{itemize}
+In una parola, migliora la \textbf{manutenibilità} del software.
+
+Un certo grado di accoppiamento è però \textbf{inevitabile}: nel paradigma a oggetti il sistema funziona proprio perché gli
+oggetti si scambiano messaggi, e per mandare un messaggio a un oggetto bisogna conoscerlo. L'accoppiamento va quindi
+\textbf{limitato} dove possibile, non eliminato. La linea guida è assegnare le responsabilità delle classi in modo da
+ottenere un accoppiamento basso; la Legge di Demetra, più avanti, ne è un'applicazione concreta.
+
+\subsection{Le forme di accoppiamento}
+
+Date due classi $X$ e $Y$, $X$ è accoppiata a $Y$ se si verifica almeno uno di questi casi. Accanto riportiamo come la
+dipendenza si vede in un diagramma delle classi (Capitolo 7).
+
+\Needspace{16\baselineskip}
+\begin{center}
+\renewcommand{\arraystretch}{1.6}
+\begin{tabular}{@{}c p{6.4cm} c@{}}
+  \toprule
+  & \textbf{Caso} & \textbf{In UML} \\
+  \midrule
+  1 & $X$ ha un \textbf{attributo} di tipo $Y$ &
+    \raisebox{-0.25\height}{\tikz{\node[classe1=0.8cm](x){X}; \node[classe1=0.8cm](y) at (2.4,0){Y}; \draw[navig](x)--(y);}} \\
+  2 & $X$ ha un \textbf{metodo} che usa un elemento di tipo $Y$ (parametro, variabile locale, valore restituito\ldots) &
+    \raisebox{-0.25\height}{\tikz{\node[classe1=0.8cm](x){X}; \node[classe1=0.8cm](y) at (2.4,0){Y}; \draw[dipend](x)--(y);}} \\
+  3 & $X$ è una \textbf{sottoclasse} (anche indiretta) di $Y$ &
+    \raisebox{-0.25\height}{\tikz{\node[classe1=0.8cm](x){X}; \node[classe1=0.8cm](y) at (2.4,0){Y}; \draw[gen](x)--(y);}} \\
+  4 & $X$ \textbf{implementa} un'interfaccia di tipo $Y$ &
+    \raisebox{-0.25\height}{\tikz{\node[classe1=0.8cm](x){X}; \node[classe1=0.8cm, font=\tiny\bfseries, align=center](y) at (2.4,0){«interface»\\Y}; \draw[realizza](x)--(y);}} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Il caso 3, l'\textbf{ereditarietà}, è quello che produce l'accoppiamento più forte. Una sottoclasse eredita attributi e
+metodi della superclasse e spesso ne dipende anche nei dettagli di implementazione: una modifica alla superclasse può
+rompere tutte le sottoclassi, anche quelle che non si sono mai occupate della parte modificata. L'interfaccia (caso 4),
+invece, impegna solo a rispettare un \textbf{contratto}, senza portarsi dietro alcuna implementazione.
+
+\subsection{Pensare per interfacce}
+
+Le interfacce sono uno strumento centrale per ridurre l'accoppiamento, e la libreria standard di Java ne contiene centinaia
+di esempi d'uso corretto (\code{List}, \code{Comparable}, \code{Runnable}\ldots). I loro vantaggi principali sono due.
+\begin{itemize}
+  \item \textbf{Fissano uno standard.} Un'interfaccia definisce un \textbf{contratto} che favorisce il riuso. Un oggetto che
+        implementa un'interfaccia promette di rispettare quello standard; l'oggetto che lo usa si chiama
+        \term{consumatore} (\textit{consumer}). L'interfaccia è un contratto fra un oggetto e i suoi consumatori.
+  \item \textbf{Introducono un livello di astrazione} che rende i programmi più facili da capire: permettono di ragionare
+        sul comportamento generale del codice senza entrare nei dettagli specifici.
+\end{itemize}
+
+Vediamo l'effetto di un'interfaccia su un esempio concreto.
+
+\begin{esempio}{Il viaggiatore e l'automobile}
+\Needspace{14\baselineskip}
+\noindent\begin{minipage}[c]{0.5\textwidth}
+\begin{lstlisting}[language=Java]
+class Traveler {
+  Car c = new Car();
+
+  void startJourney() {
+    c.move();
+  }
+}
+
+class Car {
+  void move() {
+    // logica...
+  }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.46\textwidth}
+\centering
+\begin{tikzpicture}
+  \umlclass[2.3cm]{t}{(0,0)}{Traveler}{c : Car}{startJourney()}
+  \umlclass[1.8cm]{c}{(3.6,0)}{Car}{}{move()}
+  \draw[navig] (t.east) -- (c.west);
+\end{tikzpicture}
+\end{minipage}
+
+\code{Traveler} ha un attributo di tipo \code{Car}: è il caso 1, un accoppiamento forte.
+\begin{itemize}
+  \item Che cosa succede se vogliamo riusare \code{Traveler} con un mezzo di trasporto diverso da \code{Car}? Dobbiamo
+        modificarlo.
+  \item Che cosa succede se cambiano i metodi di \code{Car}? Dobbiamo modificare anche \code{Traveler}.
+\end{itemize}
+
+Introduciamo un'interfaccia \code{Vehicle}, che \code{Car} e \code{Bike} implementano.
+
+\Needspace{18\baselineskip}
+\noindent\begin{minipage}[c]{0.5\textwidth}
+\begin{lstlisting}[language=Java]
+interface Vehicle {
+  void move();
+}
+
+class Car implements Vehicle {
+  public void move() { /* logica */ }
+}
+
+class Bike implements Vehicle {
+  public void move() { /* logica */ }
+}
+
+class Traveler {
+  Vehicle v;
+
+  public void setV(Vehicle v) {
+    this.v = v;
+  }
+  void startJourney() {
+    v.move();
+  }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.46\textwidth}
+\centering
+\begin{tikzpicture}
+  \umlclass[2.3cm]{t}{(0,0)}{Traveler}{v : Vehicle}{setV(v : Vehicle)\\startJourney()}
+  \node[classe1=2.0cm, font=\scriptsize, align=center] (v) at (3.8,0.35) {«interface»\\\textbf{Vehicle}};
+  \node[font=\tiny, anchor=north] at (v.south) {move()};
+  \umlclass[1.5cm]{c}{(2.8,-2.2)}{Car}{}{move()}
+  \umlclass[1.5cm]{b}{(4.8,-2.2)}{Bike}{}{move()}
+  \draw[navig] (t.east |- v.west) -- (v.west);
+  \draw[realizza] (c.north) -- ($(v.south)+(-0.4,-0.3)$);
+  \draw[realizza] (b.north) -- ($(v.south)+(0.4,-0.3)$);
+\end{tikzpicture}
+
+\vspace{4pt}
+{\scriptsize \code{Traveler} non conosce più né \code{Car} né \code{Bike}.}
+\end{minipage}
+
+L'interfaccia \code{Vehicle} ha \textbf{spezzato} l'accoppiamento fra \code{Traveler} e \code{Car}. Le conseguenze:
+\begin{itemize}
+  \item \code{Traveler} ora è accoppiato a un'\textbf{interfaccia}, non a una classe concreta;
+  \item tutte le implementazioni di \code{Vehicle} funzionano con \code{Traveler} senza modificarne il codice;
+  \item si potranno usare in futuro implementazioni di \code{Vehicle} che oggi non esistono ancora (\textbf{anticipare il
+        cambiamento});
+  \item serve però un'\textbf{entità esterna} che fornisca (\textit{inietti}) l'implementazione concreta: qui il metodo
+        \code{setV}, chiamato ad esempio così:
+\begin{lstlisting}[language=Java]
+Traveler t = new Traveler();
+t.setV(new Bike());      // chi crea Traveler sceglie il mezzo
+t.startJourney();
+\end{lstlisting}
+  \item la complessità del codice è aumentata: c'è un tipo in più da conoscere.
+\end{itemize}
+\end{esempio}
+
+\warning{{Iniezione con il costruttore}}{
+  Nella versione delle slide, se qualcuno chiama \code{startJourney()} senza aver prima chiamato \code{setV(...)},
+  l'attributo \code{v} vale \code{null} e il programma termina con una \code{NullPointerException}. Quando la dipendenza
+  è \textbf{obbligatoria}, conviene passarla nel \textbf{costruttore}: \code{public Traveler(Vehicle v) \{ this.v = v; \}}.
+  Così non può esistere un \code{Traveler} senza mezzo di trasporto. Questa tecnica, con cui chi usa una classe le fornisce
+  dall'esterno gli oggetti di cui ha bisogno, si chiama \term{dependency injection}. Applicata a \code{ReportPrinter}
+  dell'esempio sul report, risolverebbe il problema di accoppiamento segnalato lì.
+}
+
+% ============================================================
+\section{Un esempio completo: il ragazzo dei giornali}
+
+L'esempio classico del \textit{Paperboy} (il ragazzo che consegna i giornali e passa a riscuotere) mostra un caso di
+accoppiamento eccessivo molto comune, e come correggerlo.
+
+\Needspace{24\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[language=Java]
+public class Customer {
+  private String firstName;
+  private String lastName;
+  private Wallet myWallet;
+
+  public String getFirstName() {
+    return firstName;
+  }
+  public String getLastName() {
+    return lastName;
+  }
+  public Wallet getWallet() {
+    return myWallet;
+  }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[language=Java]
+public class Wallet {
+  private float value;
+
+  public float getTotalMoney() {
+    return value;
+  }
+  public void setTotalMoney(float newValue) {
+    value = newValue;
+  }
+  public void addMoney(float deposit) {
+    value += deposit;
+  }
+  public void subtractMoney(float debit) {
+    value -= debit;
+  }
+}
+\end{lstlisting}
+\end{minipage}
+
+Ecco il codice di un metodo della classe \code{Paperboy}, che riscuote due dollari.
+
+\Needspace{10\baselineskip}
+\begin{lstlisting}[language=Java]
+float payment = 2.00f;                     // "voglio i miei due dollari!"
+Wallet theWallet = myCustomer.getWallet();
+if (theWallet.getTotalMoney() > payment) {
+  theWallet.subtractMoney(payment);
+} else {
+  // ripassare piu' tardi a riscuotere
+}
+\end{lstlisting}
+
+\subsection{Perché è sbagliato}
+
+\begin{enumerate}
+  \item \textbf{Non rispecchia il mondo reale.} Tradotto in linguaggio naturale, il codice dice che quando il ragazzo
+        passa a riscuotere, il cliente gli lascia \textbf{prendere il portafoglio} dalla tasca e sfilarne due dollari,
+        fidandosi che prenda solo quanto dovuto. Se in futuro \code{Wallet} contenesse anche le carte di credito, il
+        ragazzo avrebbe accesso pure a quelle. Il problema di fondo è che il \code{Paperboy} è \textbf{esposto a più
+        informazioni di quante gliene servano}.
+  \item \textbf{Accoppia tre classi.} \code{Paperboy} ora sa che il cliente ha un portafoglio e può manipolarlo: per
+        compilarlo servono sia \code{Customer} sia \code{Wallet}. Le tre classi sono \textbf{fortemente accoppiate}, e una
+        modifica a \code{Wallet} può costringere a modificare le altre due.
+  \Needspace{16\baselineskip}
+  \item \textbf{È fragile.} Supponiamo che a un cliente rubino il portafoglio, e che un collega decida di modellare il
+        furto impostando il portafoglio a \code{null}:
+\begin{lstlisting}[language=Java]
+victim.setWallet(null);
+\end{lstlisting}
+        È una scelta ragionevole: né la documentazione né il codice impongono che il
+        portafoglio esista. Ma il codice del \code{Paperboy} \textbf{dà per scontato} che ci sia, e chiamando un metodo su
+        \code{null} ottiene una \code{NullPointerException}. Si potrebbe controllare \code{null} prima di ogni chiamata, ma il
+        codice del ragazzo diventerebbe ancora più confuso: \textit{«se il cliente ha un portafoglio, guarda quanto c'è
+        dentro; se può pagarmi, prendi i soldi»}.
+\end{enumerate}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[classe1=2.0cm] (p) at (0,0) {Paperboy};
+  \node[classe1=2.0cm] (c) at (3.4,0) {Customer};
+  \node[classe1=2.0cm] (w) at (6.8,0) {Wallet};
+  \draw[dipend] (p) -- (c);
+  \draw[dipend] (c) -- (w);
+  \draw[dipend, draw=swred, line width=0.9pt] (p.north) to[bend left=25]
+    node[note, above, text=swred]{il ragazzo conosce e usa il portafoglio} (w.north);
+  \node[note, font=\scriptsize\bfseries] at (3.4,-0.75) {prima};
+  \begin{scope}[shift={(9.4,0)}]
+    \node[classe1=2.0cm] (p2) at (0,0) {Paperboy};
+    \node[classe1=2.0cm] (c2) at (3.4,0) {Customer};
+    \node[classe1=2.0cm] (w2) at (3.4,1.2) {Wallet};
+    \draw[dipend] (p2) -- (c2);
+    \draw[dipend] (c2) -- (w2);
+    \node[note, font=\scriptsize\bfseries] at (1.7,-0.75) {dopo};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+
+\subsection{La versione migliorata}
+
+\code{Customer} non offre più \code{getWallet()}, ma un metodo \code{getPayment()}: il ragazzo \textbf{chiede} un pagamento,
+e il cliente decide come farlo.
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[t]{0.52\textwidth}
+\begin{lstlisting}[language=Java]
+public class Customer {
+  private String firstName;
+  private String lastName;
+  private Wallet myWallet;
+
+  // getFirstName(), getLastName() come prima
+
+  public float getPayment(float bill) {
+    if (myWallet != null
+        && myWallet.getTotalMoney() >= bill) {
+      myWallet.subtractMoney(bill);
+      return bill;
+    }
+    return 0;
+  }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.45\textwidth}
+\begin{lstlisting}[language=Java]
+// in un metodo di Paperboy
+float payment = 2.00f;
+float paidAmount =
+    myCustomer.getPayment(payment);
+if (paidAmount == payment) {
+  // ringrazia e lascia la ricevuta
+} else {
+  // ripassa piu' tardi
+}
+\end{lstlisting}
+\end{minipage}
+
+\warning{Il codice delle slide va corretto}{
+  Il metodo \code{getPayment} delle slide non compila:
+  \begin{itemize}
+    \item usa le variabili \code{theWallet} e \code{payment}, che appartengono al codice del \code{Paperboy}: dentro
+          \code{Customer} vanno usati l'attributo \code{myWallet} e il parametro \code{bill};
+    \item se il portafoglio manca o non contiene abbastanza soldi, il metodo termina \textbf{senza restituire nulla}, e
+          Java segnala \textit{missing return statement}: serve un \code{return 0} finale.
+  \end{itemize}
+  Inoltre, sia nelle slide sia nel codice originale, la condizione \code{getTotalMoney() > payment} impedisce di pagare a
+  un cliente che ha \textbf{esattamente} due dollari: la condizione corretta è \code{>=}. Infine, in un'applicazione reale
+  le somme di denaro non si rappresentano con \code{float}, che introduce errori di arrotondamento, ma con
+  \code{BigDecimal} o con un intero di centesimi.
+}
+
+\subsection{Perché è meglio}
+
+\begin{enumerate}
+  \item \textbf{Modella meglio la realtà.} Il codice del \code{Paperboy} ora \textit{chiede} al cliente un pagamento, e non
+        ha accesso diretto al portafoglio.
+  \item \textbf{Isola i cambiamenti.} La classe \code{Wallet} può cambiare e il ragazzo ne è completamente isolato. Se
+        cambiasse l'interfaccia di \code{Wallet}, andrebbe aggiornato solo \code{Customer}; finché l'interfaccia di
+        \code{Customer} resta la stessa, nessun suo cliente si accorgerà che ha un portafoglio nuovo. Il codice è più
+        manutenibile perché le modifiche non si \textbf{propagano a catena} in un grande progetto.
+  \item \textbf{Libera l'implementazione.} È forse la ragione più «a oggetti»: ora siamo liberi di cambiare
+        l'implementazione di \code{getPayment()}. Nella realtà, quando passa il ragazzo, il cliente potrebbe prendere i due
+        dollari da un barattolo di monete, cercarli fra i cuscini del divano o farseli prestare dal coinquilino. Tutto questo
+        è \textbf{logica di business} che non riguarda il ragazzo: può stare dentro \code{getPayment()} e cambiare in futuro
+        senza toccare il codice del \code{Paperboy}.
+\end{enumerate}
+
+\info{{Ma Customer non è diventato più complesso?}}{
+  Un'obiezione legittima: abbiamo reso \code{Customer} più complesso. Ma nella prima versione era il \code{Paperboy} a dover
+  conoscere e manipolare il \code{Wallet}. Se \code{Customer} è più complesso, perché i suoi clienti ora sono \textbf{meno}
+  complessi? Perché la complessità è sempre la stessa: è solo \textbf{contenuta} meglio nell'oggetto giusto ed esposta in
+  modo sano. Prima esisteva nel codice dei clienti, magari ripetuta in più punti; ora compare \textbf{una volta sola}, e si
+  mantiene nello stesso posto in cui avvengono i cambiamenti che potrebbero romperla.
+}
+
+% ============================================================
+\section{La Legge di Demetra}
+
+La \term{Legge di Demetra} (\textit{Law of Demeter}) è un'altra linea guida fondamentale per ottenere un basso
+accoppiamento. Prende il nome dal progetto Demeter, uno dei primi grandi sistemi a oggetti, sviluppato a Boston alla fine degli
+anni Ottanta (le slide indicano la Boston University, ma il gruppo di Karl Lieberherr che formulò la legge lavorava alla
+Northeastern University).
+
+L'idea di fondo è spingere l'\textbf{information hiding} al massimo: niente catene del tipo
+\code{foo.getA().getB().getC()}. Più lungo è il percorso di chiamate che il programma attraversa, più il programma è fragile
+ai cambiamenti: ogni classe lungo la catena è una classe da cui dipendiamo.
+
+\dfn{Legge di Demetra}{
+  Un metodo $M$ di un oggetto $O$ dovrebbe inviare messaggi \textbf{solo} a:
+  \begin{enumerate}
+    \item l'oggetto stesso (\code{this});
+    \item i \textbf{parametri} di $M$;
+    \item gli oggetti \textbf{creati} all'interno di $M$;
+    \item i \textbf{componenti diretti} di $O$, cioè i suoi attributi.
+  \end{enumerate}
+  In breve: \textit{parla solo con i tuoi amici più stretti, non con gli amici degli amici}.
+}
+
+\begin{esempio}{Chiamate permesse e vietate}
+\Needspace{16\baselineskip}
+\begin{lstlisting}[language=Java]
+class Driver {
+  private Car car;                          // componente diretto
+
+  void drive(Road road) {                   // parametro
+    this.checkMirrors();                    // OK (1): this
+    road.getSpeedLimit();                   // OK (2): parametro
+    Route r = new Route(); r.compute();     // OK (3): creato qui
+    car.increaseSpeed();                    // OK (4): componente diretto
+    car.getEngine().getCarburator()
+       .openFuelValve();                    // NO: oggetti estranei
+  }
+}
+\end{lstlisting}
+L'ultima chiamata attraversa \code{Car}, \code{Engine} e \code{Carburator}: \code{Driver} dipende così da tre classi invece
+che da una, e da come sono collegate fra loro.
+\end{esempio}
+
+\Needspace{14\baselineskip}
+\subsection{Com'è fatta una violazione}
+
+In figura un \textit{client} raggiunge un fornitore indiretto passando attraverso un intermediario. Le due scritture
+nella nota sono equivalenti: usare un \textit{getter} invece dell'accesso diretto all'attributo \textbf{non} rimedia alla
+violazione, perché il client continua a conoscere la struttura interna dell'intermediario.
+
+\begin{center}
+\begin{tikzpicture}
+  \umlclass[2.6cm]{ip}{(0,0)}{Indirect Provider}{}{doSomething()}
+  \umlclass[2.6cm]{im}{(5.0,0)}{Intermediate Provider}{+provider}{getProvider()}
+  \node[classe1=2.2cm] (cl) at (10.0,0.25) {Indirect Client};
+  \draw[assoc] (ip.east) -- node[above, font=\scriptsize\itshape]{provider} (im.west);
+  \draw[assoc] (im.east |- cl.west) -- node[above, font=\scriptsize\itshape]{intermediate} (cl.west);
+  \node[notauml, font=\scriptsize\ttfamily, anchor=north] (n) at (5.0,-1.5)
+    {intermediate.provider.doSomething()\\ \textrm{\textit{oppure}}\\ intermediate.getProvider().doSomething()};
+  \draw[dashed, draw=black!60] (n.north east) -- (cl.south);
+  \draw[swred, line width=2.2pt, opacity=0.8] (n.center) circle (0.62);
+  \draw[swred, line width=2.2pt, opacity=0.8] ($(n.center)+(-0.44,0.44)$) -- ($(n.center)+(0.44,-0.44)$);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Eliminare il codice di navigazione}
+
+La correzione consiste nel \textbf{spostare il comportamento} verso l'oggetto che possiede i dati, un passo alla volta.
+L'esempio (da Oscar Nierstrasz) è un'auto che accelera aprendo la valvola del carburatore.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    cod/.style={notauml, font=\scriptsize\ttfamily},
+    passo/.style={chip=swgray, font=\scriptsize\bfseries},
+    rif/.style={dashed, draw=black!55, line width=0.5pt}]
+  % --- prima ---
+  \node[passo, anchor=east] at (-1.55,0) {Prima};
+  \umlclass[2.6cm]{c0}{(0,0)}{Carburator}{+fuelValveOpen}{}
+  \umlclass[2.6cm]{e0}{(4.2,0)}{Engine}{+carburator}{}
+  \umlclass[2.6cm]{a0}{(8.4,0)}{Car}{-engine}{+increaseSpeed()}
+  \draw[assoc] (c0.east) -- (e0.west);
+  \draw[assoc] (e0.east) -- (a0.west);
+  \node[cod, anchor=north east, text=swred] (n0) at ($(a0.south east)+(0,-0.3)$)
+    {engine.carburator.fuelValveOpen = true};
+  \draw[rif] (n0.north -| a0.south) -- (a0.south);
+  % --- passo 1 ---
+  \node[passo, anchor=east] at (-1.55,-2.9) {Passo 1};
+  \umlclass[2.6cm]{c1}{(0,-2.9)}{Carburator}{+fuelValveOpen}{}
+  \umlclass[2.6cm]{e1}{(4.2,-2.9)}{Engine}{-carburator}{\textcolor{swred}{+speedUp()}}
+  \umlclass[2.6cm]{a1}{(8.4,-2.9)}{Car}{-engine}{+increaseSpeed()}
+  \draw[assoc] (c1.east) -- (e1.west);
+  \draw[assoc] (e1.east) -- (a1.west);
+  \node[cod, anchor=north] (n1a) at ($(e1.south)+(0,-0.3)$) {carburator.fuelValveOpen = true};
+  \node[cod, anchor=north] (n1b) at ($(a1.south)+(0.3,-0.3)$) {engine.speedUp()};
+  \draw[rif] (n1a.north) -- (e1.south);
+  \draw[rif] (n1b.north -| a1.south) -- (a1.south);
+  % --- passo 2 ---
+  \node[passo, anchor=east] at (-1.55,-5.8) {Passo 2};
+  \umlclass[2.6cm]{c2}{(0,-5.8)}{Carburator}{-fuelValveOpen}{\textcolor{swred}{+openFuelValve()}}
+  \umlclass[2.6cm]{e2}{(4.2,-5.8)}{Engine}{-carburator}{+speedUp()}
+  \umlclass[2.6cm]{a2}{(8.4,-5.8)}{Car}{-engine}{+increaseSpeed()}
+  \draw[assoc] (c2.east) -- (e2.west);
+  \draw[assoc] (e2.east) -- (a2.west);
+  \node[cod, anchor=north] (n2a) at ($(c2.south)+(0,-0.3)$) {fuelValveOpen = true};
+  \node[cod, anchor=north] (n2b) at ($(e2.south)+(0,-0.3)$) {carburator.openFuelValve()};
+  \node[cod, anchor=north] (n2c) at ($(a2.south)+(0.3,-0.3)$) {engine.speedUp()};
+  \draw[rif] (n2a.north) -- (c2.south);
+  \draw[rif] (n2b.north) -- (e2.south);
+  \draw[rif] (n2c.north -| a2.south) -- (a2.south);
+\end{tikzpicture}
+\caption{Eliminare il codice di navigazione. A ogni passo un oggetto smette di frugare nella struttura di un altro e gli
+         chiede invece un servizio (in rosso i metodi aggiunti; nelle note il codice dei metodi).}
+\end{figure}
+
+\begin{itemize}
+  \item \textbf{Prima}: \code{Car} attraversa \code{Engine} e scrive direttamente l'attributo del \code{Carburator}. Conosce
+        la struttura interna di due classi.
+  \item \textbf{Passo 1}: \code{Engine} offre il servizio \code{speedUp()}. \code{Car} parla solo con il suo componente
+        diretto, l'\code{engine}; l'attributo \code{carburator} può diventare privato.
+  \item \textbf{Passo 2}: anche \code{Carburator} offre un servizio, \code{openFuelValve()}, e il suo attributo diventa
+        privato. Ora ogni classe conosce solo i propri vicini immediati.
+\end{itemize}
+
+\info{{Il Paperboy e Demetra}}{
+  La prima versione del \code{Paperboy} violava proprio la Legge di Demetra: \code{myCustomer.getWallet().subtractMoney(...)}
+  manda un messaggio al \code{Wallet}, che non è né un parametro né un componente del ragazzo. La correzione è la stessa
+  dell'auto: spostare il comportamento (\code{getPayment()}) nell'oggetto che possiede i dati.
+
+  Attenzione a non ridurre la regola al conteggio dei punti: \code{builder.append("a").append("b")} o una catena di
+  operazioni su uno \textit{stream} non violano la Legge di Demetra, perché ogni chiamata restituisce lo stesso oggetto o un
+  oggetto dello stesso tipo, e non si naviga nella struttura interna di oggetti estranei.
+}
+
+% ============================================================
+\section{Progettazione guidata dalle responsabilità}
+
+La \term{progettazione guidata dalle responsabilità} (\textit{responsibility-driven design}) ragiona sul sistema in termini
+di tre concetti: \textbf{classe}, \textbf{responsabilità} e \textbf{collaborazione}. Mette insieme le regole viste finora.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[card=swgreen, text width=4.6cm, minimum height=1.5cm] (a) at (0,0)
+    {ogni classe ha responsabilità e ruoli \textbf{chiaramente definiti}};
+  \node[card=swblue, text width=4.6cm, minimum height=1.5cm] (b) at (5.3,0)
+    {la classe che \textbf{possiede i dati} è responsabile di elaborarli};
+  \node[card=q7, text width=4.6cm, minimum height=1.5cm] (c) at (10.6,0)
+    {ogni classe è responsabile della \textbf{gestione dei propri dati}};
+  \node[chip=swgreen, anchor=north] at ($(a.south)+(0,-0.15)$) {alta coesione};
+  \node[chip=swblue, anchor=north] at ($(b.south)+(0,-0.15)$) {basso accoppiamento};
+  \node[chip=q7, anchor=north] at ($(c.south)+(0,-0.15)$) {incapsulamento};
+\end{tikzpicture}
+\end{center}
+
+Lo strumento che facilita questo modo di ragionare sono le \textbf{schede CRC}, già incontrate nel Capitolo 7 per
+identificare le classi del modello di dominio.
+
+\subsection{Le schede CRC}
+
+Le schede CRC (\textit{Class--Responsibility--Collaboration}) sono state introdotte da Kent Beck e Ward Cunningham per
+insegnare la progettazione a oggetti. A ogni classe del diagramma delle classi di progetto si associa una scheda che
+riporta:
+\begin{itemize}
+  \item il \textbf{nome} della classe;
+  \item le sue \textbf{responsabilità}: le conoscenze che la classe mantiene o i servizi che offre;
+  \item i suoi \textbf{collaboratori}: le altre classi di cui la classe deve sfruttare conoscenze o servizi per assolvere
+        le proprie responsabilità.
+\end{itemize}
+
+\Needspace{20\baselineskip}
+\noindent\begin{minipage}[c]{0.4\textwidth}
+\centering
+\begin{tikzpicture}[font=\scriptsize]
+  \draw[line width=0.8pt, fill=swlight] (0,0) rectangle (5.4,4.6);
+  \draw (0,4.1) -- (5.4,4.1);
+  \draw[line width=1.2pt] (0,3.6) -- (5.4,3.6);
+  \draw (0,3.1) -- (5.4,3.1);
+  \draw[line width=1.2pt] (0,2.6) -- (5.4,2.6);
+  \draw (3.2,0) -- (3.2,2.6);
+  \foreach \y in {0.4,0.8,...,2.2} \draw[swgray!50] (0,\y) -- (5.4,\y);
+  \node[anchor=west] at (0.08,4.35) {\textbf{Nome della classe}};
+  \node[anchor=west] at (0.08,3.85) {Superclassi};
+  \node[anchor=west] at (0.08,3.35) {Sottoclassi};
+  \node[anchor=west] at (0.08,2.82) {Responsabilità};
+  \node[anchor=west] at (3.28,2.82) {Collaboratori};
+\end{tikzpicture}
+
+{\scriptsize La scheda CRC completa delle slide.}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.56\textwidth}
+Rispetto alla versione del Capitolo 7 questa scheda riporta anche \textbf{superclassi} e \textbf{sottoclassi}: in
+progettazione la gerarchia è decisa, e va tenuta sotto controllo perché l'ereditarietà è la forma di accoppiamento più forte.
+
+Le schede CRC hanno due conseguenze pratiche, che ne fanno uno strumento di \textbf{diagnosi}:
+\begin{itemize}
+  \item se non si riescono a specificare con chiarezza le responsabilità di una classe, c'è un \textbf{errore di progetto}
+        (bassa coesione);
+  \item se una classe ha bisogno di \textbf{troppi collaboratori}, c'è un potenziale errore di progetto (alto
+        accoppiamento).
+\end{itemize}
+\end{minipage}
+
+\begin{esempio}{Le schede CRC del Paperboy}
+Ecco le schede della versione migliorata. Si noti che \code{Wallet} non compare fra i collaboratori del \code{Paperboy}:
+la scheda rende visibile a colpo d'occhio la riduzione dell'accoppiamento.
+
+\begin{center}
+\begin{tikzpicture}
+  \crccard{(0,0)}{Paperboy}{consegna i giornali\newline riscuote il pagamento}{Customer}
+  \crccard{(6.1,0)}{Customer}{conosce nome e cognome\newline paga un conto (\code{getPayment})}{Wallet}
+  \crccard{(3.05,-1.9)}{Wallet}{conosce la somma contenuta\newline aggiunge e toglie denaro}{---}
+\end{tikzpicture}
+\end{center}
+\end{esempio}
+
+% ============================================================
+\section{Esercizi}
+
+\begin{esercizio}{Troppe responsabilità}
+La classe seguente fa parte di un sistema di segreteria universitaria. Individua le sue responsabilità, spiega quali motivi
+di cambiamento la rendono fragile e proponi una scomposizione che rispetti il Single Responsibility Principle.
+
+\begin{lstlisting}[language=Java]
+public class Studente {
+  private String matricola, nome, email;
+  private List<Esame> esami;
+
+  public double calcolaMedia() { ... }
+  public void salvaSuDatabase(Connection db) { ... }
+  public void stampaLibretto() { ... }
+  public void inviaEmailConvocazione(String testo) { ... }
+}
+\end{lstlisting}
+
+\textbf{Soluzione.} Le responsabilità sono quattro, e ognuna è un motivo di cambiamento diverso:
+\begin{itemize}
+  \item i \textbf{dati} dello studente e il calcolo della media (cambia se cambiano le regole di calcolo, ad esempio la
+        media pesata sui crediti);
+  \item la \textbf{persistenza} (cambia se cambia il DBMS o lo schema delle tabelle);
+  \item la \textbf{presentazione} del libretto (cambia se si vuole un PDF invece della stampa a video);
+  \item la \textbf{comunicazione} (cambia se si passa dalle e-mail alle notifiche dell'app).
+\end{itemize}
+Una scomposizione possibile: \code{Studente} tiene i dati e \code{calcolaMedia()}, perché la media si calcola dagli esami,
+che sono dati suoi; \code{StudenteRepository} si occupa di salvare e caricare; \code{LibrettoPrinter} della stampa;
+\code{ServizioNotifiche} dell'invio dei messaggi.
+
+\begin{center}
+\begin{tikzpicture}
+  \umlclass[2.9cm]{s}{(0,0)}{Studente}{matricola, nome, email\\esami}{calcolaMedia()}
+  \umlclass[3.4cm]{r}{(5.6,1.5)}{StudenteRepository}{}{salva(s : Studente)\\carica(matr) : Studente}
+  \umlclass[3.4cm]{p}{(5.6,0)}{LibrettoPrinter}{}{stampa(s : Studente)}
+  \umlclass[3.4cm]{n}{(5.6,-1.4)}{ServizioNotifiche}{}{invia(s : Studente, testo)}
+  \draw[dipend] (r.west) -- (s.east);
+  \draw[dipend] (p.west) -- (s.east);
+  \draw[dipend] (n.west) -- (s.east);
+\end{tikzpicture}
+\end{center}
+Le tre classi nuove dipendono da \code{Studente}, mentre \code{Studente} non dipende da nessuna di loro: si può cambiare il
+database o il canale di notifica senza toccarla.
+\end{esercizio}
+
+\begin{esercizio}{Riconoscere l'accoppiamento}
+Elenca tutte le classi a cui è accoppiata \code{Ordine}, indicando per ciascuna il tipo di accoppiamento. Quale conviene
+ridurre per primo?
+
+\begin{lstlisting}[language=Java]
+public class Ordine extends Documento implements Stampabile {
+  private Cliente cliente;
+
+  public void aggiungi(Prodotto p) {
+    Sconto s = new Sconto();
+    // ...
+  }
+}
+\end{lstlisting}
+
+\textbf{Soluzione.}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}lll@{}}
+  \toprule
+  \textbf{Classe} & \textbf{Caso} & \textbf{Perché} \\
+  \midrule
+  \code{Documento}  & 3, sottoclasse    & \code{Ordine extends Documento} \\
+  \code{Stampabile} & 4, interfaccia    & \code{Ordine implements Stampabile} \\
+  \code{Cliente}    & 1, attributo      & \code{private Cliente cliente} \\
+  \code{Prodotto}   & 2, metodo         & parametro di \code{aggiungi} \\
+  \code{Sconto}     & 2, metodo         & variabile locale creata in \code{aggiungi} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+L'accoppiamento più forte è quello con \code{Documento}: conviene chiedersi se un ordine \textit{è davvero} un documento o
+se piuttosto \textit{ha} un documento associato, e in quel caso sostituire l'ereditarietà con un attributo (composizione).
+Anche \code{new Sconto()} lega \code{Ordine} a una classe concreta: se le politiche di sconto possono cambiare, è meglio
+ricevere uno \code{Sconto} (o un'interfaccia \code{PoliticaSconto}) dall'esterno, come per \code{Vehicle}.
+\end{esercizio}
+
+\begin{esercizio}{Applicare la Legge di Demetra}
+In un sistema di e-commerce, la classe \code{Spedizione} contiene il metodo seguente. Spiega perché viola la Legge di
+Demetra e correggilo.
+
+\begin{lstlisting}[language=Java]
+public double costo(Ordine ordine) {
+  String citta = ordine.getCliente().getIndirizzo().getCitta();
+  return tariffario.tariffaPer(citta);
+}
+\end{lstlisting}
+
+\textbf{Soluzione.} \code{ordine} è un parametro, quindi chiamare \code{ordine.getCliente()} è lecito; ma il risultato è un
+\code{Cliente}, che non è né un parametro né un componente di \code{Spedizione}, e ancora meno lo è l'\code{Indirizzo}.
+\code{Spedizione} dipende così da \code{Ordine}, \code{Cliente} e \code{Indirizzo}, e dal modo in cui sono collegati: se un
+giorno l'indirizzo di consegna diventasse diverso da quello del cliente, il metodo darebbe un risultato sbagliato.
+
+La correzione sposta la responsabilità verso chi ha i dati: è l'\code{Ordine} a sapere dove va consegnato.
+\begin{lstlisting}[language=Java]
+// in Ordine
+public String getCittaConsegna() {
+  return cliente.getCittaConsegna();   // Cliente delega al suo Indirizzo
+}
+
+// in Spedizione
+public double costo(Ordine ordine) {
+  return tariffario.tariffaPer(ordine.getCittaConsegna());
+}
+\end{lstlisting}
+Un'alternativa altrettanto valida è far ricevere a \code{costo} direttamente la città, o l'\code{Indirizzo}, come
+parametro.
+\end{esercizio}
+
+\begin{esercizio}{Obiettivi di progetto e compromessi}
+Una regione commissiona un'app per prenotare le vaccinazioni. Deve essere online fra \textbf{due mesi}, all'inizio della
+campagna; nei primi giorni si attendono centinaia di migliaia di accessi, in gran parte da persone anziane. L'app tratta
+dati sanitari. Indica i tre obiettivi di progetto prioritari e almeno un compromesso da dichiarare.
+
+\textbf{Soluzione.} Una risposta ragionevole:
+\begin{enumerate}
+  \item \textbf{disponibilità e prestazioni sotto carico}: il picco iniziale è certo, e un sistema che non risponde il primo
+        giorno fallisce la sua missione;
+  \item \textbf{sicurezza}: i dati sanitari sono dati particolari secondo il GDPR;
+  \item \textbf{usabilità}: gli utenti principali hanno poca dimestichezza con la tecnologia.
+\end{enumerate}
+Il compromesso principale è \textbf{tempi di rilascio \textit{vs} funzionalità}: la data non si può spostare, quindi si
+rilascia una prima versione con le sole funzioni essenziali (prenotare, spostare, annullare) e si rimandano le altre
+(ad esempio lo storico delle vaccinazioni). Va dichiarato anche il compromesso \textbf{costo \textit{vs} affidabilità}:
+servono server ridondanti dimensionati per il picco. È invece sconsigliato puntare sul compromesso tempi/personale a
+progetto avviato, per la legge di Brooks.
+\end{esercizio}
+
+\begin{esercizio}{Schede CRC per una biblioteca}
+Un utente prende in prestito una copia di un libro per 30 giorni. Il sistema calcola la data di restituzione e, in caso di
+ritardo, una multa di 0,50 euro al giorno. Un utente non può avere più di 5 prestiti attivi. Scrivi le schede CRC di
+\code{Utente}, \code{Copia} e \code{Prestito}.
+
+\textbf{Soluzione.}
+\begin{center}
+\begin{tikzpicture}
+  \crccard{(0,0)}{Prestito}{conosce copia, utente, data di inizio\newline calcola la data di scadenza\newline calcola la
+    multa}{Copia\newline Utente}
+  \crccard{(6.1,0)}{Copia}{conosce il libro e la collocazione\newline sa se è disponibile\newline si segna in prestito o
+    restituita}{Libro}
+  \crccard{(3.05,-2.3)}{Utente}{conosce i propri dati\newline conosce i prestiti attivi\newline sa se può fare un nuovo
+    prestito (max 5)}{Prestito}
+\end{tikzpicture}
+\end{center}
+La multa la calcola \code{Prestito}, perché è lui a possedere le date: è la regola «la classe che possiede i dati li
+elabora». Allo stesso modo il controllo sul limite di 5 prestiti sta in \code{Utente}, che conosce i propri prestiti
+attivi. Nessuna scheda ha più di due collaboratori: è un buon segnale di accoppiamento contenuto.
+\end{esercizio}
+
+% ============================================================
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item Il \textbf{System Design} trasforma il modello di analisi nel modello di progetto, scritto per i
+        \textbf{programmatori}: obiettivi di progetto, architettura in sottosistemi, strategie di costruzione. L'\textbf{Object
+        Design} ne specifica poi i dettagli.
+  \item Gli \textbf{obiettivi di progetto} derivano soprattutto dai requisiti non funzionali, vanno \textbf{formalizzati} e
+        ordinati per priorità, perché si possono ottimizzare solo pochi criteri: memoria/velocità, tempi/funzionalità,
+        tempi/qualità, tempi/personale sono i compromessi tipici.
+  \item Si \textbf{scompone} perché $C(P_1+P_2) > C(P_1)+C(P_2)$; ogni sottosistema offre i suoi servizi tramite
+        un'\textbf{interfaccia}. Il numero di componenti ottimale bilancia costo di sviluppo e costo di integrazione.
+  \item L'obiettivo è l'\textbf{indipendenza funzionale}: \textbf{alta coesione} (una sola responsabilità, un solo motivo
+        per cambiare) e \textbf{basso accoppiamento}.
+  \item L'accoppiamento nasce da attributi, parametri e variabili, \textbf{ereditarietà} (il più forte) e interfacce; le
+        \textbf{interfacce} con l'iniezione delle dipendenze lo riducono.
+  \item La \textbf{Legge di Demetra}: un metodo parla solo con \code{this}, i parametri, gli oggetti che crea e i componenti
+        diretti. Le catene \code{a.getB().getC()} si eliminano spostando il comportamento verso chi possiede i dati.
+  \item Nella \textbf{progettazione guidata dalle responsabilità} le \textbf{schede CRC} servono da diagnosi: responsabilità
+        poco chiare indicano bassa coesione, troppi collaboratori un accoppiamento alto.
+\end{itemize}
+}
