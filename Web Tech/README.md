@@ -32,21 +32,22 @@ escluse: restano sulle slide e sul sito del docente, dove vengono aggiornate.
 | `chapters/6. JavaScript avanzato.tex` | Prototipi ed ereditarietà, array, destrutturazione, iterabili, Map e Set, classi, gestione degli errori, moduli |
 | `chapters/7. JavaScript nel browser.tex` | `window`, DOM e BOM, ricerca e navigazione dei nodi, modifica del DOM, eventi, bubbling e delegazione, ordine di esecuzione degli script |
 | `chapters/8. Asincronismo e rete.tex` | Cookie e Web Storage, callback, Promise e concatenazione, API statiche, `async`/`await`, `fetch` |
-| `chapters/9. Web statico e dinamico.tex` | Limiti del web statico, CGI, scripting lato server, PHP, NGINX e PHP-FPM |
-| `chapters/10. Node.tex` | Event loop, modello non bloccante, npm e `package.json`, primo server HTTP, debug, nodemon |
-| `chapters/11. Web app con Node.tex` | Routing, motori di template e Pug, analisi del corpo delle richieste |
-| `chapters/12. Sessioni.tex` | Cookie, i loro limiti, sessioni memorizzate sul server |
-| `chapters/13. Express.tex` | Framework e inversione del controllo, routing, middleware, gestione errori, messaggi flash |
-| `chapters/14. Web app con Express.tex` | ORM e Sequelize, organizzazione del progetto, file di configurazione |
-| `chapters/15. REST.tex` | Stile REST, verbi e risorse, JWT, hash crittografici, OpenAPI |
-| `chapters/16. TypeScript.tex` | Transpiler, tipi, unioni, interfacce, generici, livelli di severità |
-| `chapters/17. Frontend Tooling.tex` | Sass, framework CSS, bundling, tree shaking, minificazione, Vite |
-| `chapters/18. Single Page App.tex` | Routing lato client, componenti, Web Components API |
-| `chapters/19. Angular.tex` | Componenti, template, eventi, `@Input`/`@Output`, Router |
-| `chapters/20. Angular avanzato.tex` | Form, servizi e DI, guardie, HttpClient, Observable, signal, la SPA completa |
-| `chapters/21. Sicurezza.tex` | XSS, CSRF, SQL injection, session hijacking, same-origin policy e CORS |
-| `chapters/22. Testing.tex` | Piramide del testing, Jasmine, test double, E2E, fragilità e flakiness, Playwright |
-| `chapters/23. CMS e GraphQL.tex` | *(fuori programma)* CMS tradizionali e headless, Strapi, GraphQL, siti statici |
+| `chapters/9. Il Web sotto il cofano.tex` | Applicazioni di rete, client-server e P2P, processi e socket, IP e porte, protocolli applicativi, DNS, versioni di HTTP, TCP/UDP e QUIC, connessioni persistenti, metodi sicuri e idempotenti (GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS, QUERY), risposte e codici di stato, HTTPS e TLS, dal clic alla pagina e tempistiche nei DevTools |
+| `chapters/10. Web statico e dinamico.tex` | Limiti del web statico, CGI, scripting lato server, PHP, NGINX e PHP-FPM |
+| `chapters/11. Node.tex` | Event loop, modello non bloccante, npm e `package.json`, primo server HTTP, debug, nodemon |
+| `chapters/12. Web app con Node.tex` | Routing, motori di template e Pug, analisi del corpo delle richieste |
+| `chapters/13. Sessioni.tex` | Cookie, i loro limiti, sessioni memorizzate sul server |
+| `chapters/14. Express.tex` | Framework e inversione del controllo, routing, middleware, gestione errori, messaggi flash |
+| `chapters/15. Web app con Express.tex` | ORM e Sequelize, organizzazione del progetto, file di configurazione |
+| `chapters/16. REST.tex` | Stile REST, verbi e risorse, JWT, hash crittografici, OpenAPI |
+| `chapters/17. TypeScript.tex` | Transpiler, tipi, unioni, interfacce, generici, livelli di severità |
+| `chapters/18. Frontend Tooling.tex` | Sass, framework CSS, bundling, tree shaking, minificazione, Vite |
+| `chapters/19. Single Page App.tex` | Routing lato client, componenti, Web Components API |
+| `chapters/20. Angular.tex` | Componenti, template, eventi, `@Input`/`@Output`, Router |
+| `chapters/21. Angular avanzato.tex` | Form, servizi e DI, guardie, HttpClient, Observable, signal, la SPA completa |
+| `chapters/22. Sicurezza.tex` | XSS, CSRF, SQL injection, session hijacking, same-origin policy e CORS |
+| `chapters/23. Testing.tex` | Piramide del testing, Jasmine, test double, E2E, fragilità e flakiness, Playwright |
+| `chapters/24. CMS e GraphQL.tex` | *(fuori programma)* CMS tradizionali e headless, Strapi, GraphQL, siti statici |
 | `unina_doc_class.cls` | Classe di documento (ripresa dalle *Dispense APA*, non modificata) |
 | `fonts/` | Font usati dalla classe (Lato, Gobold, FiraCode, Lora, IcoMoon, …) |
 | `sources/` | Logo dell'ateneo, risorse della copertina, immagine di Fu-Tzu (`fu-tzu.jpg`, dalle slide) |

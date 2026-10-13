@@ -1,0 +1,1192 @@
+\chapter{Il Web sotto il cofano}
+
+Finora abbiamo guardato il Web dal lato del browser: HTML, CSS, JavaScript, e
+infine \code{fetch} per parlare con un server. Prima di passare dall'altra parte
+e scrivere noi il server, apriamo il cofano e guardiamo che cosa succede
+\textbf{fra} il browser e il server: come comunicano due programmi su macchine
+diverse, come si trova un server partendo da un nome, che cosa dice esattamente
+HTTP e come lo protegge HTTPS.
+
+Le basi (il ciclo richiesta--risposta, le URL, la struttura dei messaggi, i
+codici di stato) le abbiamo viste nel capitolo 1: qui le riprendiamo e le
+approfondiamo. L'obiettivo dichiarato della lezione è che, alla fine, la scheda
+\textit{Rete} dei DevTools faccia un po' meno paura.
+
+% ============================================================
+\section{Le applicazioni di rete}
+
+\dfn{Applicazione di rete}{
+  Un'\term{applicazione di rete} è composta da \textbf{più programmi} che girano
+  su sistemi diversi (gli \term{host}, o \textit{end system}) e comunicano fra
+  loro attraverso la rete.}
+
+Un'applicazione web, ad esempio, comprende due programmi distinti:
+
+\begin{itemize}
+  \item il \textbf{browser}, che gira sull'host dell'utente (desktop, portatile,
+        tablet, smartphone\ldots);
+  \item il \textbf{server web}, che gira sull'host del server.
+\end{itemize}
+
+\subsection{Reti di scala diversa}
+
+Le reti si classificano per estensione geografica. Cambiano la scala e chi le
+gestisce, ma grazie ai \textbf{protocolli} comuni reti di ogni scala riescono a
+comunicare fra loro: Internet è, letteralmente, una \textbf{rete di reti}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    chip/.style={rounded corners=3pt, fill=#1, text=white, font=\Lato\scriptsize\bfseries,
+      minimum width=1.25cm, minimum height=0.55cm},
+    riga/.style={rounded corners=3pt, draw=neutral!35!white, fill=neutral!4!white,
+      line width=0.6pt, minimum width=15.6cm, minimum height=0.8cm},
+    est/.style={font=\Lato\small\bfseries, anchor=west},
+    des/.style={font=\Lato\small, anchor=west, text=neutral!25!black}]
+  \foreach \i/\sigla/\col/\estensione/\descr in {
+      0/PAN/orange-gradient-6/{pochi metri}/{i dispositivi personali (Bluetooth: telefono, cuffie, orologio)},
+      1/LAN/accent!75!black/{un edificio, un campus}/{alta velocità, gestita localmente (la rete di casa o del dipartimento)},
+      2/MAN/green-gradient-6/{una città, un'area metropolitana}/{collega più LAN},
+      3/WAN/primary!75!black/{nazioni, continenti}/{gli operatori interconnettono le proprie reti}} {
+    \node[riga, anchor=west] (r\i) at (0,-\i*1.0) {};
+    \node[chip=\col] at (0.85,-\i*1.0) {\sigla};
+    \node[est, text=\col] at (1.75,-\i*1.0) {\estensione};
+    \node[des] at (6.9,-\i*1.0) {\descr};
+  }
+\end{tikzpicture}
+\caption{Le reti per scala. Internet le collega tutte.}
+\end{figure}
+
+\subsection{Client-server e peer-to-peer}
+
+L'\term{architettura} di un'applicazione di rete la decide lo sviluppatore, e
+stabilisce come l'applicazione è distribuita sui vari host. I modelli
+fondamentali sono due.
+
+\begin{itemize}
+  \item \textbf{Client-server}: i nodi sono \textbf{eterogenei}. C'è un host
+        \textbf{sempre acceso}, il \term{server}, che fornisce servizi su
+        richiesta di molti altri host, i \term{client}.
+  \item \textbf{Peer-to-peer} (P2P): i nodi sono (idealmente)
+        \textbf{omogenei}. L'applicazione sfrutta la comunicazione diretta fra
+        coppie di host connessi in modo intermittente, i \term{peer}.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    srv/.style={wtnode, fill=primary!18!white, minimum width=1.5cm, minimum height=0.8cm,
+      font=\Lato\scriptsize\bfseries},
+    cli/.style={wtnodeplain, minimum width=1.2cm, font=\Lato\scriptsize},
+    peer/.style={wtnodeacc, minimum width=1.0cm, font=\Lato\scriptsize},
+    lnk/.style={{Stealth[length=4pt,width=4pt]}-{Stealth[length=4pt,width=4pt]},
+      line width=0.7pt, draw=primary!65!black},
+    plnk/.style={line width=0.7pt, draw=accent!60!black, dashed}]
+  % --- client-server ---
+  \node[srv] (s) at (0,0) {\icpu\ server};
+  \foreach \a/\n in {90/1, 162/2, 234/3, 306/4, 18/5} {
+    \node[cli] (c\n) at (\a:2.1) {client};
+    \draw[lnk] (c\n) -- (s);
+  }
+  \node[font=\Lato\small\bfseries] at (0,-2.85) {Client-server};
+  % --- peer-to-peer ---
+  \begin{scope}[shift={(7.6,0)}]
+    \foreach \a/\n in {90/1, 150/2, 210/3, 270/4, 330/5, 30/6} \node[peer] (p\n) at (\a:1.9) {peer};
+    \foreach \x/\y in {1/3, 1/4, 2/5, 3/6, 4/6, 2/4, 5/1} \draw[plnk] (p\x) -- (p\y);
+    \node[font=\Lato\small\bfseries] at (0,-2.85) {Peer-to-peer};
+  \end{scope}
+\end{tikzpicture}
+\caption{A sinistra i client parlano solo con il server; a destra ogni peer può
+         parlare direttamente con gli altri.}
+\end{figure}
+
+Nell'architettura client-server:
+
+\begin{itemize}
+  \item i client \textbf{non} comunicano direttamente fra loro;
+  \item il server ha un indirizzo \textbf{fisso e noto} (un nome di host o un
+        indirizzo IP), così un client può sempre contattarlo inviandogli una
+        richiesta;
+  \item per reggere tutte le richieste, spesso i server sono \textbf{molti}, ma
+        il client di solito non se ne accorge e li percepisce come un unico
+        server.
+\end{itemize}
+
+I server multipli possono essere raccolti in \term{data center} (enormi
+quantità di server in un unico luogo, che vanno alimentati, mantenuti e ben
+collegati), sparsi come \textbf{server distribuiti} in tutto il mondo (che vanno
+interconnessi e coordinati), oppure organizzati in \textbf{data center
+distribuiti}. È il caso di Google, che secondo i dati riportati a lezione conta
+fra 30 e 50 data center nel mondo, che insieme gestiscono la ricerca ma anche
+YouTube, Gmail e gli altri servizi.
+
+Un'applicazione web è l'esempio tipico di client-server: c'è un server web
+\textbf{sempre acceso e raggiungibile}, che riceve le richieste dei browser e
+risponde inviando l'oggetto richiesto.
+
+% ============================================================
+\section{Processi che comunicano}
+
+In un'applicazione di rete, a comunicare non sono propriamente gli host, ma i
+\term{processi} che girano su di essi, magari su sistemi operativi diversi.
+
+\begin{itemize}
+  \item In un'applicazione web, il processo del browser del client scambia
+        messaggi con il processo del server web.
+  \item In un'applicazione P2P di \textit{file sharing}, un file viene trasferito
+        dal processo di un peer al processo di un altro peer.
+\end{itemize}
+
+In ogni coppia di processi che comunicano c'è tipicamente un \textbf{processo
+client}, quello che avvia la comunicazione, e un \textbf{processo server},
+quello che attende di essere contattato. Nel Web il browser è il client e il
+server web è il server; nel P2P il peer che scarica fa da client e quello che
+invia fa da server. In un'applicazione P2P, quindi, un processo può
+\textbf{cambiare ruolo} da uno scambio all'altro.
+
+\subsection{Il socket}
+
+\dfn{Socket}{
+  Un \term{socket} è l'\textbf{interfaccia software} fra il livello applicativo e
+  il livello di trasporto, attraverso cui un processo invia e riceve messaggi
+  sulla rete. Nello stack TCP/IP è l'interfaccia fra l'applicazione (HTTP, DNS,
+  SMTP\ldots) e il protocollo di trasporto (TCP, UDP o QUIC).}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    liv/.style={rounded corners=3pt, fill=#1, text=white, align=center,
+      minimum width=3.0cm, minimum height=1.25cm, font=\Lato\scriptsize},
+    fr/.style={-{Stealth[length=6pt,width=5pt]}, line width=1.1pt, draw=neutral!55!black}]
+  \node[liv=accent!75!black] (a) at (0,0)    {\textbf{\small Applicazione}\\ HTTP, DNS, SMTP\ldots};
+  \node[liv=orange-gradient-6] (s) at (3.7,0) {\textbf{\small Socket}\\ interfaccia software};
+  \node[liv=green-gradient-6] (t) at (7.4,0)  {\textbf{\small Trasporto}\\ TCP / UDP / QUIC};
+  \node[liv=primary!75!black] (n) at (11.1,0) {\textbf{\small Rete}\\ IP e instradamento};
+  \draw[fr] (a) -- (s); \draw[fr] (s) -- (t); \draw[fr] (t) -- (n);
+  \draw[wtbrace] ([yshift=4pt]a.north east) -- ([yshift=4pt]a.north west)
+    node[midway, above=4pt, font=\Lato\scriptsize, align=center]{controllato dallo\\ sviluppatore};
+  \draw[wtbrace] ([yshift=4pt]n.north east) -- ([yshift=4pt]t.north west)
+    node[midway, above=4pt, font=\Lato\scriptsize, align=center]{controllato dal sistema operativo:\\
+      lo sviluppatore sceglie solo il protocollo e pochi parametri};
+\end{tikzpicture}
+\caption{Il socket è la porta fra ciò che scriviamo noi e ciò che fa la rete.}
+\end{figure}
+
+Un'analogia classica è quella della \textbf{cassetta postale}. Quando un
+processo vuole inviare un messaggio a un processo su un altro host, lo
+imbuca nella propria cassetta (il socket). Il processo mittente dà per scontato
+che, dall'altra parte della porta, ci sia un'infrastruttura di trasporto che
+porterà il messaggio fino alla cassetta del destinatario. Arrivato all'host di
+destinazione, il messaggio passa per la cassetta (il socket) del processo
+ricevente.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    proc/.style={wtnode, minimum width=2.2cm, font=\Lato\scriptsize},
+    cass/.style={rounded corners=2pt, draw=red-gradient-6, fill=red-gradient-1!60!white,
+      line width=0.8pt, minimum width=1.0cm, minimum height=0.6cm, font=\Lato\tiny\bfseries},
+    viaggio/.style={-{Stealth[length=6pt,width=5pt]}, line width=1pt, dashed,
+      draw=red-gradient-6}]
+  \node[proc] (p1) at (0,0) {processo\\ sull'host 1};
+  \node[cass] (c1) at (2.4,0) {socket};
+  \node[proc] (p2) at (11.2,0) {processo\\ sull'host 2};
+  \node[cass] (c2) at (8.8,0) {socket};
+  \draw[wtarrow] (p1) -- node[wtlab, above=1pt]{imbuca} (c1);
+  \draw[wtarrow] (c2) -- node[wtlab, above=1pt]{ritira} (p2);
+  \draw[viaggio] (c1.east) to[out=-25, in=205]
+    node[wtlab, below=2pt]{infrastruttura di trasporto (la rete)} (c2.west);
+  \draw[wtdash] (3.1,-1.25) -- (3.1,1.0) node[above, font=\Lato\tiny, text=neutral!40!black]{la «porta di casa»};
+  \draw[wtdash] (8.1,-1.25) -- (8.1,1.0);
+\end{tikzpicture}
+\caption{Il socket come cassetta postale: il processo imbuca, la rete consegna.}
+\end{figure}
+
+Il socket è l'\textbf{API} fra l'applicazione e la rete. Lo sviluppatore
+controlla tutto ciò che sta dal lato applicativo, ma ha poco controllo sul lato
+del trasporto: può soltanto
+\begin{enumerate}
+  \item \textbf{scegliere il protocollo} di trasporto (TCP o UDP);
+  \item forse \textbf{impostare qualche parametro} (dimensione massima dei
+        buffer, dimensione massima dei segmenti\ldots).
+\end{enumerate}
+Una volta scelto il protocollo, l'applicazione si costruisce dando per scontati
+i servizi che quel protocollo offre.
+
+\subsection{Indirizzi IP e porte}
+
+Per spedire una lettera serve un indirizzo. Su un host girano molte
+applicazioni di rete contemporaneamente, quindi per raggiungere il processo
+giusto servono \textbf{due} informazioni:
+
+\begin{enumerate}
+  \item l'\textbf{indirizzo dell'host}, per trovare la macchina giusta nella rete:
+        è l'\term{indirizzo IP}, che lavora a livello di \textbf{rete}
+        (instradamento);
+  \item un \textbf{identificatore del processo}, per trovare il processo giusto
+        dentro la macchina: è il \term{numero di porta}, che lavora a livello di
+        \textbf{trasporto}.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    host/.style={rounded corners=5pt, draw=primary!55!black, fill=primary!5!white,
+      line width=0.8pt},
+    proc/.style={wtnodeplain, minimum width=2.4cm, font=\Lato\scriptsize},
+    porta/.style={rectangle, draw=red-gradient-6, fill=red-gradient-1!60!white, line width=0.7pt,
+      font=\FiraCodeNL\scriptsize\bfseries, inner sep=2pt, minimum width=0.9cm},
+    ip/.style={font=\FiraCodeNL\small\bfseries, text=primary!75!black}]
+  % host client
+  \draw[host] (0,-1.6) rectangle (3.6,1.4);
+  \node[ip, anchor=south] at (1.8,1.45) {192.168.1.7};
+  \node[proc, fill=accent!10!white] (b) at (1.5,0.4) {browser};
+  \node[proc] at (1.5,-0.7) {client di posta};
+  \node[porta] (pb) at (3.6,0.4) {52314};
+  \draw[line width=0.6pt] (b) -- (pb);
+  % host server
+  \draw[host] (8.2,-1.6) rectangle (11.8,1.4);
+  \node[ip, anchor=south] at (10.0,1.45) {93.184.216.34};
+  \node[proc, fill=accent!10!white] (w) at (10.3,0.4) {server web};
+  \node[proc] (m) at (10.3,-0.7) {server di posta};
+  \node[porta] (p80) at (8.2,0.4) {80};
+  \node[porta] (p25) at (8.2,-0.7) {25};
+  \draw[line width=0.6pt] (w) -- (p80);
+  \draw[line width=0.6pt] (m) -- (p25);
+  % messaggio
+  \draw[wtarrowacc] (pb) -- node[wtlab, above=2pt, align=center]
+    {all'host \code{93.184.216.34},\\ al processo sulla porta \code{80}} (p80);
+  \node[font=\Lato\scriptsize, text=neutral!35!black, align=center] at (5.9,-1.1)
+    {l'IP trova la macchina,\\ la porta trova il processo};
+\end{tikzpicture}
+\caption{Indirizzo IP e porta. Anche il browser usa una porta, assegnata al
+         momento dal sistema operativo (qui \code{52314}): serve a ricevere la
+         risposta.}
+\end{figure}
+
+\begin{itemize}
+  \item Un host è identificato da un indirizzo IP. Un indirizzo IPv4, come
+        \code{192.168.1.10}, è un numero a \textbf{32 bit}; gli indirizzi IPv6,
+        che stanno progressivamente sostituendo IPv4, sono a 128 bit.
+  \item Un processo è identificato da un numero di porta (da 0 a 65535). Alle
+        applicazioni più diffuse sono state assegnate per convenzione porte
+        \textbf{note} (\textit{well-known}): la IANA ne pubblica l'elenco
+        ufficiale.
+\end{itemize}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}l@{\hspace{0.9cm}}l@{\hspace{1.6cm}}l@{\hspace{0.9cm}}l@{}}
+  \textbf{Porta} & \textbf{Servizio} & \textbf{Porta} & \textbf{Servizio} \\
+  \code{80}  & HTTP (Web)          & \code{25}  & SMTP (invio di posta) \\
+  \code{443} & HTTPS (Web sicuro)  & \code{53}  & DNS \\
+  \code{22}  & SSH                 & \code{21}  & FTP \\
+\end{tabular}
+\end{center}
+
+È il motivo per cui nelle URL la porta si può omettere: se non la scriviamo, il
+browser usa quella nota del protocollo (80 per \code{http}, 443 per
+\code{https}).
+
+% ============================================================
+\section{I protocolli applicativi}
+
+\dfn{Protocollo applicativo}{
+  Un \term{protocollo di livello applicativo} definisce come i processi di
+  un'applicazione di rete, in esecuzione su host diversi, si scambiano messaggi.
+  In particolare stabilisce:
+  \begin{enumerate}
+    \item i \textbf{tipi} di messaggio scambiati (ad esempio richieste e risposte);
+    \item la \textbf{sintassi} di ciascun tipo: quali campi contiene e come sono
+          delimitati;
+    \item la \textbf{semantica} dei campi, cioè il significato delle informazioni
+          che contengono;
+    \item le \textbf{regole} che stabiliscono quando e come un processo invia
+          messaggi e risponde.
+  \end{enumerate}}
+
+In rete, e su Internet, si usano comunemente molti protocolli applicativi.
+Alcune applicazioni si scambiano informazioni \textbf{sensibili} (credenziali,
+dati personali\ldots): su una rete pubblica i messaggi vanno protetti, e per
+questo molti protocolli hanno una \textbf{versione sicura}, evidenziata in verde.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{0.8cm}}>{\raggedright\arraybackslash}p{11.5cm}@{}}
+  \textbf{Protocollo} & \textbf{A che cosa serve} \\
+  DHCP & \textit{Dynamic Host Configuration Protocol}: assegna gli indirizzi IP agli host \\
+  DNS  & \textit{Domain Name System}: traduce i nomi dei siti in indirizzi IP \\
+  HTTP / \textcolor{green-gradient-6}{\textbf{HTTPS}} & \textit{HyperText Transfer Protocol (Secure)}: trasferisce le pagine web \\
+  SMTP / \textcolor{green-gradient-6}{\textbf{SMTPS}} & \textit{Simple Mail Transfer Protocol (Secure)}: invia i messaggi di posta \\
+  SNMP & \textit{Simple Network Management Protocol}: gestisce i dispositivi di rete \\
+  Telnet / \textcolor{green-gradient-6}{\textbf{SSH}} & \textit{Teletype Network} / \textit{Secure SHell}: riga di comando su un host remoto \\
+  FTP / \textcolor{green-gradient-6}{\textbf{FTPS}} & \textit{File Transfer Protocol (Secure)}: trasferisce file \\
+\end{tabular}
+\end{center}
+
+% ============================================================
+\section{Dalla URL all'indirizzo: il DNS}
+
+Rileggiamo una URL alla luce di quanto visto: ogni sua parte serve a uno dei
+passi della comunicazione.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      part/.style={font=\FiraCodeNL\large, inner sep=2pt, outer sep=0pt, rounded corners=2pt},
+      lab/.style={font=\Lato\scriptsize, align=center, inner sep=2pt}]
+    \node[part, fill=yellow-gradient-1!70!white]       (sch)  {https};
+    \node[part, right=0pt of sch]                       (sep)  {://};
+    \node[part, fill=green-gradient-1!60!white, right=0pt of sep] (dom) {www.informatica.it};
+    \node[part, right=0pt of dom]                       (col)  {:};
+    \node[part, fill=accent!18!white, right=0pt of col] (port) {4242};
+    \node[part, fill=neutral!14!white, right=0pt of port] (path) {/corsi/tecweb.html};
+    \node[lab, above=16pt of sch]  (lsch)  {\textbf{protocollo}\\ quale protocollo applicativo};
+    \node[lab, above=16pt of port] (lport) {\textbf{porta}\\ quale \textbf{processo} sul server};
+    \draw[wtdash] (lsch.south)  -- (sch.north);
+    \draw[wtdash] (lport.south) -- (port.north);
+    \node[lab, below=16pt of dom]  (ldom)  {\textbf{nome dell'host}\\ quale macchina (tramite il DNS)};
+    \node[lab, below=16pt of path] (lpath) {\textbf{percorso}\\ quale risorsa sul server};
+    \draw[wtdash] (ldom.north)  -- (dom.south);
+    \draw[wtdash] (lpath.north) -- (path.south);
+  \end{tikzpicture}
+  \caption{Le parti di una URL e il passo della comunicazione a cui servono.}
+\end{figure}
+
+Resta un problema: le persone ricordano \textbf{nomi}, ma la rete instrada i
+pacchetti verso \textbf{indirizzi IP}. A tradurre gli uni negli altri è il
+\term{DNS} (\textit{Domain Name System}), la rubrica di Internet.
+
+\begin{itemize}
+  \item Il DNS \textbf{non} risiede su un unico server centrale: è un database
+        \textbf{distribuito} su migliaia di server in tutto il mondo (server
+        \textit{root}, server dei TLD, server \textit{autoritativi}), per
+        garantire scalabilità e tolleranza ai guasti.
+  \item I nomi sono organizzati come un \textbf{albero rovesciato}: dalla radice
+        (\code{.}) si scende ai domini di primo livello o TLD (\code{.com},
+        \code{.it}), poi ai domini di secondo livello (\code{google.com},
+        \code{unina.it}) e ai sottodomini.
+  \item Per non sovraccaricare la rete con interrogazioni ripetute, i server DNS
+        e i dispositivi locali tengono in \textbf{cache} i risultati recenti per
+        un tempo stabilito, il \term{TTL} (\textit{Time To Live}).
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    level distance=1.05cm,
+    n/.style={wtnodeplain, font=\FiraCodeNL\scriptsize},
+    edge from parent/.style={draw=neutral!50!black, line width=0.6pt},
+    level 1/.style={sibling distance=3.2cm},
+    level 2/.style={sibling distance=2.3cm},
+    level 3/.style={sibling distance=2.9cm}]
+  \node[n, fill=primary!18!white] {.}
+    child { node[n] {com}
+      child { node[n] {google.com} }
+      child { node[n] {example.com} } }
+    child { node[n] {org}
+      child { node[n] {mozilla.org} } }
+    child { node[n, fill=green-gradient-1!50!white] {it}
+      child { node[n, fill=green-gradient-1!50!white] {unina.it}
+        child { node[n, fill=green-gradient-1!50!white] {www.unina.it} }
+        child { node[n] {docenti.unina.it} } } };
+  \node[wtlab, anchor=west, align=left] at (6.6,-0.1) {radice};
+  \node[wtlab, anchor=west, align=left] at (6.6,-1.05) {TLD};
+  \node[wtlab, anchor=west, align=left] at (6.6,-2.1) {domini di secondo livello};
+  \node[wtlab, anchor=west, align=left] at (6.6,-3.15) {sottodomini};
+\end{tikzpicture}
+\caption{Lo spazio dei nomi DNS: un albero rovesciato. Un nome si legge da
+         destra a sinistra risalendo verso la radice (in verde il percorso di
+         \code{www.unina.it}).}
+\end{figure}
+
+\begin{esempio}{Chi risponde a «www.unina.it?»}
+Il browser non interroga direttamente l'intero albero: chiede al proprio
+\term{resolver} (di solito quello del provider o della rete locale), che fa il
+lavoro per lui scendendo nell'albero un livello alla volta, a meno che la
+risposta non sia già in cache.
+
+\begin{center}
+\begin{tikzpicture}[
+    att/.style={wtnode, minimum width=2.6cm, minimum height=0.85cm, font=\Lato\scriptsize},
+    life/.style={wtdash},
+    q/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=primary!70!black},
+    r/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=accent!70!black},
+    ml/.style={font=\Lato\scriptsize, midway, above, inner sep=2pt, fill=white},
+    num/.style={circle, fill=accent!75!black, text=white, font=\Lato\tiny\bfseries,
+      inner sep=1pt, minimum size=11pt}]
+  \foreach \x/\n/\t/\f in {0/b/{\textbf{browser}}/accent!8!white,
+                           3.6/res/{\textbf{resolver}\\ (con cache)}/primary!8!white,
+                           7.2/root/{server \textbf{root}}/primary!18!white,
+                           10.8/tld/{server del TLD \code{.it}}/green-gradient-1!50!white,
+                           14.4/aut/{server autoritativo\\ di \code{unina.it}}/orange-gradient-1!50!white} {
+    \node[att, fill=\f] (\n) at (\x,0) {\t};
+    \draw[life] (\n.south) -- (\x,-5.3);
+  }
+  \draw[q] (0,-1.0) -- node[ml]{\code{www.unina.it}?} (3.6,-1.0);
+  \draw[q] (3.6,-1.7) -- node[ml]{\code{www.unina.it}?} (7.2,-1.7);
+  \draw[r] (7.2,-2.2) -- node[ml]{chiedi a \code{.it}} (3.6,-2.2);
+  \draw[q] (3.6,-2.9) -- node[ml, pos=0.75]{\code{www.unina.it}?} (10.8,-2.9);
+  \draw[r] (10.8,-3.4) -- node[ml, pos=0.75]{chiedi a \code{unina.it}} (3.6,-3.4);
+  \draw[q] (3.6,-4.1) -- node[ml, pos=0.8]{\code{www.unina.it}?} (14.4,-4.1);
+  \draw[r] (14.4,-4.6) -- node[ml, pos=0.8]{ecco l'indirizzo IP} (3.6,-4.6);
+  \draw[r] (3.6,-5.1) -- node[ml]{indirizzo IP} (0,-5.1);
+  \foreach \y/\n in {-1.0/1, -1.7/2, -2.9/3, -4.1/4, -5.1/5} \node[num] at (-0.45,\y) {\n};
+\end{tikzpicture}
+\end{center}
+Il resolver chiede prima a un server \textbf{root}, che non conosce l'indirizzo
+ma sa chi gestisce \code{.it}; il server del TLD \code{.it} sa chi gestisce
+\code{unina.it}; il server \textbf{autoritativo} di \code{unina.it} conosce
+finalmente l'indirizzo. Il resolver lo restituisce al browser e lo mette in
+cache per la durata del TTL: la volta successiva risponderà da solo, in pochi
+millisecondi.
+\end{esempio}
+
+% ============================================================
+\section{HTTP più da vicino}
+
+HTTP stabilisce come i client web chiedono oggetti (ad esempio pagine web) ai
+server e come i server li trasferiscono. Quando l'utente chiede un oggetto, ad
+esempio facendo clic su un link, il browser invia al server \textbf{richieste}
+HTTP per gli oggetti della pagina; il server risponde con \textbf{risposte} HTTP
+che li contengono. Il modello è rimasto lo stesso dagli anni Novanta, ma HTTP
+continua a \textbf{evolvere} per bilanciare affidabilità e prestazioni.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    ver/.style={rounded corners=3pt, fill=#1, text=white, font=\Lato\scriptsize\bfseries,
+      minimum width=1.6cm, minimum height=0.6cm},
+    des/.style={font=\Lato\small, anchor=west},
+    anno/.style={font=\Lato\scriptsize, text=neutral!40!black, anchor=east}]
+  \foreach \i/\v/\col/\a/\d in {
+      0/{HTTP/1.0}/neutral!55!black/1996/{connessioni spesso \textbf{non persistenti}},
+      1/{HTTP/1.1}/accent!75!black/1997/{connessioni \textbf{persistenti} per impostazione predefinita},
+      2/{HTTP/2}/orange-gradient-6/2015/{più \textbf{flussi multiplexati} su un'unica connessione TCP},
+      3/{HTTP/3}/green-gradient-6/2022/{HTTP su \textbf{QUIC}, che a sua volta usa \textbf{UDP}}} {
+    \node[anno] at (-0.2,-\i*0.85) {\a};
+    \node[ver=\col, anchor=west] at (0,-\i*0.85) {\v};
+    \node[des] at (1.85,-\i*0.85) {\d};
+    \draw[neutral!25!white, line width=0.6pt] (1.85,-\i*0.85-0.35) -- (11.5,-\i*0.85-0.35);
+  }
+\end{tikzpicture}
+\caption{Le versioni di HTTP. Richieste e risposte restano il cuore del
+         protocollo; cambiano il trasporto e il modo di condividere le
+         connessioni.}
+\end{figure}
+
+\subsection{TCP o UDP}
+
+HTTP si appoggia principalmente su \textbf{TCP}, ma dal 2022, con HTTP/3, può
+usare anche \textbf{UDP}. I due protocolli di trasporto offrono servizi molto
+diversi.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{3.4cm}>{\raggedright\arraybackslash}p{5.6cm}>{\raggedright\arraybackslash}p{5.6cm}@{}}
+  & \textbf{TCP} (\textit{Transmission Control Protocol}) & \textbf{UDP} (\textit{User Datagram Protocol}) \\
+  \textbf{Connessione} & \textbf{orientato alla connessione}: prima di scambiare dati, i
+    processi fanno un \textit{handshake} & \textbf{senza connessione}: nessun handshake, si invia e basta \\
+  \textbf{Affidabilità} & trasferimento \textbf{affidabile}: i dati arrivano integri e in
+    ordine (se possibile) & \textbf{nessuna garanzia} che i messaggi arrivino, né in che ordine \\
+  \textbf{Costo} & più lento: handshake, conferme, ritrasmissioni & leggero, servizi minimi \\
+\end{tabular}
+\end{center}
+
+Su TCP, il client apre prima una connessione con il server; una volta stabilita,
+i processi del browser e del server comunicano attraverso i loro socket. Il
+client scrive le richieste HTTP nel proprio socket e ne legge le risposte; il
+server legge le richieste dal suo socket e vi scrive le risposte.
+
+HTTP ha usato storicamente TCP proprio per l'\textbf{affidabilità}: TCP
+garantisce che richieste e risposte arrivino, prima o poi, integre a
+destinazione. Ma i servizi di TCP rallentano la comunicazione, e per questo le
+implementazioni recenti di HTTP usano anche UDP, insieme al protocollo
+\term{QUIC} (\textit{Quick UDP Internet Connection}), che implementa
+l'affidabilità \textbf{sopra} UDP. Le stime riportate a lezione parlano di
+comunicazioni circa il 30\% più veloci rispetto a TCP, ma il guadagno reale
+dipende molto dalle condizioni della rete: è maggiore sulle reti lente o che
+perdono pacchetti.
+
+\info{Il vantaggio di un'architettura a livelli}{
+  Qui si vede uno dei grandi vantaggi della stratificazione: le applicazioni
+  basate su HTTP non devono preoccuparsi di raggiungibilità, perdita di dati,
+  ritrasmissioni. Delegano quasi tutto il lavoro ai livelli inferiori, e restano
+  più semplici sia logicamente sia computazionalmente. Passare da TCP a QUIC
+  cambia il trasporto, ma non il modo in cui scriviamo una richiesta HTTP.}
+
+\subsection{QUIC}
+
+QUIC porta tre miglioramenti principali.
+
+\textbf{1. Meno attese all'apertura.} Con TCP e TLS, l'apertura della
+connessione e la negoziazione della sicurezza avvengono in \textbf{due fasi
+separate}, ciascuna con il suo scambio di messaggi. QUIC le combina: di solito
+il client può inviare la richiesta dopo un solo \textit{round trip} (andata e
+ritorno), e riprendendo una connessione precedente può addirittura inviarla
+subito.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    att/.style={wtnodeplain, minimum width=1.5cm, font=\Lato\scriptsize\bfseries},
+    vita/.style={wtdash},
+    tcp/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=primary!70!black},
+    tls/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=orange-gradient-6},
+    req/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=1.1pt, draw=green-gradient-6},
+    ml/.style={font=\FiraCodeNL\tiny, sloped, above, inner sep=1pt, fill=white}]
+  % --- TCP + TLS ---
+  \node[font=\Lato\small\bfseries] at (2.0,0.75) {TCP + TLS 1.3};
+  \node[att] (c) at (0,0) {client}; \node[att] (s) at (4,0) {server};
+  \draw[vita] (c.south) -- (0,-5.2); \draw[vita] (s.south) -- (4,-5.2);
+  \draw[tcp] (0,-0.6) -- node[ml]{SYN} (4,-1.1);
+  \draw[tcp] (4,-1.1) -- node[ml]{SYN-ACK} (0,-1.6);
+  \draw[tls] (0,-1.7) -- node[ml]{ACK + ClientHello} (4,-2.2);
+  \draw[tls] (4,-2.2) -- node[ml]{ServerHello\ldots} (0,-2.7);
+  \draw[req] (0,-2.8) -- node[ml]{richiesta HTTP} (4,-3.3);
+  \draw[wtbrace] (-0.3,-0.6) -- (-0.3,-2.7) node[midway, left=3pt, font=\Lato\scriptsize, align=right]{2 round trip\\ prima della\\ richiesta};
+  % --- QUIC ---
+  \begin{scope}[shift={(6.6,0)}]
+    \node[font=\Lato\small\bfseries] at (2.0,0.75) {QUIC};
+    \node[att] (c2) at (0,0) {client}; \node[att] (s2) at (4,0) {server};
+    \draw[vita] (c2.south) -- (0,-5.2); \draw[vita] (s2.south) -- (4,-5.2);
+    \draw[tls] (0,-0.6) -- node[ml]{Initial (trasporto + TLS)} (4,-1.1);
+    \draw[tls] (4,-1.1) -- node[ml]{risposta (trasporto + TLS)} (0,-1.6);
+    \draw[req] (0,-1.7) -- node[ml]{richiesta HTTP} (4,-2.2);
+    \draw[wtbrace] (-0.3,-0.6) -- (-0.3,-1.6) node[midway, left=3pt, font=\Lato\scriptsize, align=right]{1 round\\ trip};
+    \draw[req, dashed] (0,-3.4) -- node[ml]{0-RTT: richiesta subito} (4,-3.9);
+    \node[font=\Lato\tiny, text=neutral!40!black, anchor=north] at (2,-4.2) {riprendendo una connessione precedente};
+  \end{scope}
+\end{tikzpicture}
+\caption{Quanto si aspetta prima di poter inviare la richiesta. In blu
+         l'apertura della connessione TCP, in arancione la negoziazione
+         crittografica, in verde la richiesta.}
+\end{figure}
+
+\textbf{2. Nessun blocco fra richieste indipendenti.} HTTP/2 invia molte
+richieste in parallelo sulla \textbf{stessa} connessione TCP. Ma TCP vede un
+unico flusso di byte da consegnare in ordine: se si perde un pacchetto, tutto
+ciò che arriva dopo resta fermo finché quel pacchetto non viene ritrasmesso,
+anche se appartiene a richieste che non c'entrano nulla. È il cosiddetto
+\term{head-of-line blocking}. HTTP/3 usa \textbf{flussi QUIC separati}: i dati
+mancanti di un flusso non bloccano la consegna degli altri.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    pk/.style={rectangle, draw=#1!70!black, fill=#1!35!white, line width=0.5pt,
+      minimum width=0.55cm, minimum height=0.42cm, font=\FiraCodeNL\tiny},
+    persa/.style={rectangle, draw=red-gradient-6, dashed, line width=0.8pt,
+      minimum width=0.55cm, minimum height=0.42cm, font=\FiraCodeNL\tiny, text=red-gradient-6},
+    ferma/.style={rectangle, draw=neutral!50!white, fill=neutral!12!white, line width=0.5pt,
+      minimum width=0.55cm, minimum height=0.42cm, font=\FiraCodeNL\tiny, text=neutral!50!black}]
+  % HTTP/2 su TCP
+  \node[font=\Lato\small\bfseries, anchor=west] at (0,0.75) {HTTP/2 su TCP: un solo tubo};
+  \draw[rounded corners=4pt, draw=neutral!45!black, line width=0.7pt] (0,-0.35) rectangle (5.0,0.35);
+  \node[pk=primary] at (0.5,0) {A1};
+  \node[persa] at (1.15,0) {A2};
+  \foreach \x/\l/\c in {1.8/B1/accent, 2.45/C1/green-gradient-6, 3.1/A3/primary, 3.75/B2/accent, 4.4/C2/green-gradient-6}
+    \node[ferma] at (\x,0) {\l};
+  \node[font=\Lato\scriptsize, text=red-gradient-6, anchor=north] at (3.45,-0.45) {tutti fermi finché A2 non arriva};
+  % HTTP/3 su QUIC
+  \begin{scope}[shift={(7.8,0)}]
+    \node[font=\Lato\small\bfseries, anchor=west] at (0,0.75) {HTTP/3 su QUIC: flussi separati};
+    \foreach \y/\c/\a/\b/\s in {0.25/primary/A1/A2/fermo, -0.25/accent/B1/B2/ok, -0.75/green-gradient-6/C1/C2/ok} {
+      \draw[rounded corners=3pt, draw=neutral!45!black, line width=0.6pt] (0,\y-0.22) rectangle (3.4,\y+0.22);
+    }
+    \node[pk=primary, minimum height=0.36cm] at (0.45,0.25) {A1};
+    \node[persa, minimum height=0.36cm] at (1.1,0.25) {A2};
+    \node[ferma, minimum height=0.36cm] at (1.75,0.25) {A3};
+    \node[pk=accent, minimum height=0.36cm] at (0.45,-0.25) {B1};
+    \node[pk=accent, minimum height=0.36cm] at (1.1,-0.25) {B2};
+    \node[pk=green-gradient-6, minimum height=0.36cm] at (0.45,-0.75) {C1};
+    \node[pk=green-gradient-6, minimum height=0.36cm] at (1.1,-0.75) {C2};
+    \node[font=\Lato\scriptsize, anchor=west, text=red-gradient-6] at (3.5,0.25) {aspetta solo A};
+    \node[font=\Lato\scriptsize, anchor=west, text=green-gradient-6] at (3.5,-0.25) {consegnato};
+    \node[font=\Lato\scriptsize, anchor=west, text=green-gradient-6] at (3.5,-0.75) {consegnato};
+  \end{scope}
+\end{tikzpicture}
+\caption{Tre richieste (A, B, C) in parallelo e un pacchetto perso (A2). Su TCP
+         la perdita blocca tutto; su QUIC blocca solo il flusso a cui
+         appartiene.}
+\end{figure}
+
+\textbf{3. Più facile da aggiornare.} Come TCP, QUIC usa \textbf{conferme}
+(\textit{acknowledgment}) e \textbf{timer} per accorgersi delle perdite e
+ritrasmettere i dati mancanti. Ma TCP è implementato nel kernel del sistema
+operativo, mentre QUIC di solito è implementato nel \textbf{software
+applicativo} (il browser, il server): i suoi meccanismi di recupero si possono
+aggiornare molto più facilmente.
+
+\subsection{Connessioni persistenti e non persistenti}
+
+In molte applicazioni, HTTP compreso, client e server comunicano a lungo,
+scambiandosi molte coppie richiesta--risposta: una dopo l'altra, a intervalli
+regolari o in modo intermittente. Con un protocollo orientato alla connessione
+(TCP o QUIC) ci sono due possibilità.
+
+\begin{itemize}
+  \item \textbf{Connessioni persistenti}: tutte le richieste e le relative
+        risposte viaggiano sulla \textbf{stessa} connessione.
+  \item \textbf{Connessioni non persistenti}: per ogni coppia
+        richiesta--risposta si apre una \textbf{nuova} connessione.
+\end{itemize}
+
+Oggi le applicazioni HTTP usano per impostazione predefinita connessioni
+persistenti (si possono configurare client e server per non farlo, se serve);
+le prime versioni di HTTP (HTTP/1.0) usavano invece connessioni non
+persistenti. È ciò che chiede l'header \code{Connection: keep-alive} visto nel
+capitolo 1.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.95cm,
+    con/.style={draw=primary!60!black, fill=primary!25!white, line width=0.5pt, minimum height=0.42cm},
+    req/.style={draw=accent!60!black, fill=accent!25!white, line width=0.5pt, minimum height=0.42cm},
+    lab/.style={font=\Lato\scriptsize, anchor=east}]
+  \node[lab] at (-0.2,0.6) {non persistente};
+  \foreach \i/\o in {0/pagina.html, 1/foto.jpg, 2/stile.css} {
+    \draw[con] (\i*3.3,0.39) rectangle (\i*3.3+1.2,0.81);
+    \draw[req] (\i*3.3+1.2,0.39) rectangle (\i*3.3+2.9,0.81);
+    \node[font=\FiraCodeNL\tiny] at (\i*3.3+2.05,0.6) {\o};
+  }
+  \node[lab] at (-0.2,-0.4) {persistente};
+  \draw[con] (0,-0.61) rectangle (1.2,-0.19);
+  \foreach \i/\o in {0/pagina.html, 1/foto.jpg, 2/stile.css} {
+    \draw[req] (1.2+\i*1.7,-0.61) rectangle (2.9+\i*1.7,-0.19);
+    \node[font=\FiraCodeNL\tiny] at (2.05+\i*1.7,-0.4) {\o};
+  }
+  \draw[-{Stealth[length=5pt,width=4pt]}, line width=0.7pt, draw=neutral!45!black] (0,-1.0) -- (10.2,-1.0)
+    node[font=\Lato\scriptsize, right]{t};
+  \node[font=\Lato\scriptsize, anchor=west] at (0,-1.4) {\textcolor{primary!70!black}{\rule{7pt}{7pt}} apertura della connessione
+    \qquad \textcolor{accent!70!black}{\rule{7pt}{7pt}} richiesta e risposta};
+  \draw[wtbrace] (6.3,-0.65) -- (6.3,-0.15);
+  \node[font=\Lato\scriptsize, text=green-gradient-6, anchor=west] at (6.6,-0.4) {si risparmiano due aperture};
+\end{tikzpicture}
+\caption{Tre oggetti della stessa pagina con connessioni non persistenti e
+         persistenti.}
+\end{figure}
+
+% ============================================================
+\section{I messaggi HTTP in dettaglio}
+
+HTTP ha due formati di messaggio: la \textbf{richiesta}, che specifica il
+comando (il metodo) che il server deve eseguire, e la \textbf{risposta}, che
+riporta l'esito del comando (successo, fallimento\ldots) ed eventualmente i dati
+(ad esempio il file richiesto). In HTTP/1.x entrambi i messaggi sono scritti in
+semplice \textbf{testo ASCII}, facilmente leggibile anche da una persona.
+
+\info{E in HTTP/2 e HTTP/3?}{
+  Da HTTP/2 in poi i messaggi viaggiano in un formato \textbf{binario}, diviso in
+  \textit{frame}, che è più compatto e permette il multiplexing. Il
+  \textbf{significato} però non cambia: metodo, destinazione, header, corpo,
+  codice di stato sono gli stessi. Per questo i DevTools e strumenti come
+  \code{curl} li mostrano sempre nella forma testuale che vediamo qui.}
+
+\subsection{La richiesta}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    cod/.style={font=\FiraCodeNL\footnotesize, anchor=west, text=white, inner sep=1pt},
+    ann/.style={rounded corners=3pt, draw=#1, line width=0.8pt, fill=white, text width=4.6cm,
+      align=left, font=\Lato\scriptsize, inner sep=4pt, anchor=west},
+    tit/.style={font=\Lato\scriptsize\bfseries, text=#1},
+    col/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.6pt, draw=#1}]
+  \fill[rounded corners=4pt, fill=black!82] (0,0.45) rectangle (8.9,-3.6);
+  \node[cod, text=accent!25!white] (l1) at (0.25,0) {GET /courses/techweb?year=2026 HTTP/1.1};
+  \node[cod] (l2) at (0.25,-0.5) {Host: www.example.org};
+  \node[cod] at (0.25,-0.9) {Accept: text/html};
+  \node[cod] at (0.25,-1.3) {Accept-Language: en};
+  \node[cod] (l5) at (0.25,-1.7) {User-Agent: Mozilla/5.0};
+  \draw[dashed, draw=neutral!55!white, line width=0.6pt] (0.25,-2.15) -- (3.0,-2.15);
+  \node[cod, text=neutral!65!white] (l7) at (0.25,-2.75) {[corpo facoltativo, a seconda del metodo]};
+  \node[ann=accent!70!black] (a1) at (9.6,0.1) {{\Lato\scriptsize\bfseries\color{accent!70!black}RIGA INIZIALE}\\ metodo + destinazione + versione};
+  \node[ann=orange-gradient-6] (a2) at (9.6,-1.1) {{\Lato\scriptsize\bfseries\color{orange-gradient-6}HEADER}\\ metadati e preferenze del client};
+  \node[ann=green-gradient-6] (a3) at (9.6,-2.15) {{\Lato\scriptsize\bfseries\color{green-gradient-6}RIGA VUOTA}\\ separa gli header dal corpo};
+  \node[ann=primary!70!black] (a4) at (9.6,-3.1) {{\Lato\scriptsize\bfseries\color{primary!70!black}CORPO}\\ i dati della richiesta};
+  \draw[col=accent!70!black] (a1.west) -- (8.7,0);
+  \draw[col=orange-gradient-6] (a2.west) -- (8.7,-1.1);
+  \draw[col=green-gradient-6] (a3.west) -- (8.7,-2.15);
+  \draw[col=primary!70!black] (a4.west) -- (8.7,-2.75);
+\end{tikzpicture}
+\caption{La struttura di una richiesta HTTP (la riga vuota è resa con una
+         linea tratteggiata).}
+\end{figure}
+
+Il punto interrogativo separa il percorso dalla \textbf{query string}
+(\code{year=2026}), che porta parametri aggiuntivi. Il metodo dice al server
+\textbf{che cosa fare} con la risorsa indicata.
+
+\subsection{Metodi sicuri e idempotenti}
+
+Prima di passare in rassegna i metodi servono due proprietà, già accennate nel
+capitolo 1.
+
+\dfn{Metodo sicuro e metodo idempotente}{
+  Un metodo è \term{sicuro} (\textit{safe}) se è di \textbf{sola lettura}: il
+  client non chiede alcuna modifica sul server.
+
+  Un metodo è \term{idempotente} se l'\textbf{effetto} di più richieste identiche
+  è lo stesso di una sola. Conta lo stato del server, non la risposta: la seconda
+  \code{DELETE} della stessa risorsa riceverà probabilmente \code{404}, ma la
+  risorsa resta cancellata esattamente come dopo la prima.}
+
+Le due proprietà non sono formalità: sono la ragione per cui un browser, un
+\textit{proxy} o una libreria possono \textbf{ripetere} da soli una richiesta
+idempotente interrotta da un problema di rete, o \textbf{mettere in cache} la
+risposta a una richiesta sicura. Una \code{POST} ripetuta per errore, invece,
+può creare due ordini.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{6.4cm}ccl@{}}
+  \textbf{Metodo} & \textbf{A che cosa serve} & \textbf{Sicuro} & \textbf{Idempotente} & \textbf{Risultato tipico} \\
+  \code{GET}     & ottenere una rappresentazione della risorsa         & \mok  & \mok  & \code{200} \\
+  \code{HEAD}    & come \code{GET}, ma senza corpo nella risposta      & \mok  & \mok  & \code{200}, \code{304} \\
+  \code{POST}    & inviare dati o avviare un'operazione                & \merr & \merr & \code{201} \\
+  \code{PUT}     & creare o sostituire la risorsa                       & \merr & \mok  & \code{200}, \code{201}, \code{204} \\
+  \code{PATCH}   & applicare una modifica parziale                      & \merr & dipende & \code{200}, \code{204} \\
+  \code{DELETE}  & chiedere la rimozione della risorsa                  & \merr & \mok  & \code{204} \\
+  \code{OPTIONS} & scoprire le opzioni disponibili per la risorsa       & \mok  & \mok  & \code{204} \\
+  \code{QUERY}   & interrogazione sicura con contenuto nel corpo        & \mok  & \mok  & \code{200} \\
+\end{tabular}
+\end{center}
+
+\subsection{I metodi, uno per uno}
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=http, name=GET]
+GET /api/courses/techweb/lectures?week=4 HTTP/1.1
+Host: www.example.org
+Accept: application/json
+Authorization: Bearer <token>
+\end{lstlisting}
+\risultato
+\wtmetodo{GET}{accent!75!black}{Ottiene una rappresentazione della risorsa
+  indicata.}{Sicuro e idempotente. Di norma la richiesta non ha corpo.}{200 OK}
+\end{affianco}
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=http, name=HEAD]
+HEAD /assets/lecture-04.pdf HTTP/1.1
+Host: www.example.org
+Accept: application/pdf
+If-None-Match: "abc123"
+\end{lstlisting}
+\risultato
+\wtmetodo{HEAD}{accent!75!black}{Chiede gli stessi header di una \code{GET},
+  ma senza il corpo della risposta.}{Sicuro e idempotente. Utile per leggere i
+  metadati (dimensione, data) e per i controlli di cache.}{200 OK
+  oppure 304 Not Modified}
+\end{affianco}
+
+\info{{If-None-Match, ETag e 304}}{
+  Il server può associare a ogni versione di una risorsa un'etichetta, l'header
+  \code{ETag} (qui \code{"abc123"}). Il client la ricorda e la rimanda con
+  \code{If-None-Match}: se la risorsa non è cambiata, il server risponde
+  \code{304 Not Modified} senza ritrasmetterla, e il client usa la copia che ha
+  già in cache.}
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=http, name=POST]
+POST /api/assignments HTTP/1.1
+Host: www.example.org
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{"title":"HTTP lab","dueDate":"2026-11-05"}
+\end{lstlisting}
+\risultato
+\wtmetodo{POST}{orange-gradient-6}{Invia dati da elaborare; spesso crea una
+  nuova risorsa subordinata (qui un nuovo compito).}{Potenzialmente non
+  sicuro e, per impostazione predefinita, non idempotente.}{201 Created}
+\end{affianco}
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=http, name=PUT]
+PUT /api/assignments/42 HTTP/1.1
+Host: www.example.org
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{"id":42,"title":"HTTP lab","dueDate":"2026-11-05"}
+\end{lstlisting}
+\risultato
+\wtmetodo{PUT}{orange-gradient-6}{Crea o sostituisce lo stato della risorsa
+  all'URI indicato.}{Non sicuro ma idempotente. Il corpo contiene il
+  \textbf{nuovo stato completo}.}{200 OK, 201 Created o 204 No Content}
+\end{affianco}
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=http, name=PATCH]
+PATCH /api/assignments/42 HTTP/1.1
+Host: www.example.org
+Content-Type: application/merge-patch+json
+Authorization: Bearer <token>
+
+{"dueDate":"2026-11-12"}
+\end{lstlisting}
+\risultato
+\wtmetodo{PATCH}{orange-gradient-6}{Applica una modifica \textbf{parziale}
+  allo stato attuale della risorsa.}{Non sicuro. L'idempotenza dipende dal
+  documento di patch e da come lo interpreta il server.}{200 OK o 204 No
+  Content}
+\end{affianco}
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=http, name=DELETE]
+DELETE /api/assignments/42 HTTP/1.1
+Host: www.example.org
+Authorization: Bearer <token>
+If-Match: "assignment-v3"
+\end{lstlisting}
+\risultato
+\wtmetodo{DELETE}{red-gradient-6}{Chiede di rimuovere l'associazione fra
+  l'URI e la sua risorsa.}{Non sicuro ma idempotente: ripeterla ha lo stesso
+  effetto voluto.}{204 No Content}
+\end{affianco}
+
+\begin{esempio}{POST, PUT e PATCH ripetute}
+Che cosa succede se la stessa richiesta parte \textbf{due volte}, per esempio
+perché l'utente ha fatto doppio clic o la rete ha ritrasmesso?
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.4cm}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{5.4cm}@{}}
+  \textbf{Richiesta} & \textbf{Dopo la prima} & \textbf{Dopo la seconda} \\
+  \leavevmode\code{POST /api/assignments} & esiste il compito 43 & esistono i compiti 43
+    \textbf{e 44}: un duplicato \\
+  \leavevmode\code{PUT /api/assignments/42} con lo stato completo & il compito 42 ha quello
+    stato & identico: \textbf{nessun cambiamento} \\
+  \leavevmode\code{PATCH} con \code{\{"dueDate":"2026-11-12"\}} \newline (imposta un valore) & la scadenza è il 12 &
+    identica: questa patch è idempotente \\
+  \leavevmode\code{PATCH} che \textbf{aggiunge} un elemento a una lista & un elemento in
+    più & \textbf{due} elementi in più: non idempotente \\
+  \leavevmode\code{DELETE /api/assignments/42} & il compito non esiste più (\code{204}) &
+    ancora inesistente, anche se la risposta è \code{404} \\
+\end{tabular}
+\end{center}
+È per questo che \code{PATCH} è indicato come «dipende»: una patch che
+\textit{imposta} dei valori (come il \textit{JSON Merge Patch} dell'esempio) è
+idempotente, una che \textit{aggiunge} o \textit{incrementa} no.
+\end{esempio}
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=http, name=OPTIONS]
+OPTIONS /api/assignments HTTP/1.1
+Host: www.example.org
+Origin: https://app.example.org
+Access-Control-Request-Method: POST
+Access-Control-Request-Headers: content-type
+\end{lstlisting}
+\risultato
+\wtmetodo{OPTIONS}{neutral!55!black}{Chiede quali opzioni di comunicazione
+  sono disponibili per la risorsa.}{Sicuro e idempotente. I browser lo usano
+  anche per il \textit{preflight} CORS.}{204 No Content, con gli header
+  \code{Allow} o CORS}
+\end{affianco}
+
+L'esempio è proprio un \textit{preflight}: prima di inviare una \code{POST}
+con corpo JSON da \code{app.example.org} a \code{www.example.org}, il browser
+chiede al server se l'operazione è permessa da quell'origine. Lo vedremo nel
+capitolo 22, parlando di \textit{same-origin policy} e CORS.
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=http, name=QUERY]
+QUERY /api/assignments/search HTTP/1.1
+Host: www.example.org
+Content-Type: application/json
+Accept: application/json
+
+{"course":"TechWeb","status":"open"}
+\end{lstlisting}
+\risultato
+\wtmetodo{QUERY}{green-gradient-6}{Esegue sul server un'interrogazione
+  descritta dal contenuto della richiesta.}{Sicuro, idempotente e
+  memorizzabile in cache. L'header \code{Content-Type} è obbligatorio.}{200 OK}
+\end{affianco}
+
+\info{Perché serviva un metodo nuovo}{
+  \code{QUERY} è il metodo più recente (le slide citano la RFC 10008) e
+  colma un vuoto. Una ricerca complessa con \code{GET} deve stare tutta nella
+  query string, che ha limiti di lunghezza e finisce nei log; la si può mettere
+  nel corpo di una \code{POST}, ma allora la richiesta non è più né sicura né
+  idempotente, e non si può mettere in cache. \code{QUERY} unisce i due mondi: un
+  corpo come la \code{POST}, la semantica di sola lettura della \code{GET}.
+  Essendo così recente, il supporto da parte di server e librerie può essere
+  ancora limitato.}
+
+\subsection{La risposta}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    cod/.style={font=\FiraCodeNL\footnotesize, anchor=west, text=white, inner sep=1pt},
+    ann/.style={rounded corners=3pt, draw=#1, line width=0.8pt, fill=white, text width=4.6cm,
+      align=left, font=\Lato\scriptsize, inner sep=4pt, anchor=west},
+    tit/.style={font=\Lato\scriptsize\bfseries, text=#1},
+    col/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.6pt, draw=#1}]
+  \fill[rounded corners=4pt, fill=black!82] (0,0.45) rectangle (8.9,-3.6);
+  \node[cod, text=green-gradient-1] at (0.25,0) {HTTP/1.1 200 OK};
+  \node[cod] at (0.25,-0.5) {Date: Mon, 12 Oct 2026 10:15:00 GMT};
+  \node[cod] at (0.25,-0.9) {Content-Type: application/json};
+  \node[cod] at (0.25,-1.3) {Content-Length: 38};
+  \node[cod] at (0.25,-1.7) {Cache-Control: max-age=60};
+  \draw[dashed, draw=neutral!55!white, line width=0.6pt] (0.25,-2.15) -- (3.0,-2.15);
+  \node[cod, text=orange-gradient-1] at (0.25,-2.75) {\{"course":"TechWeb","status":"online"\}};
+  \node[ann=green-gradient-6] (a1) at (9.6,0.1) {{\Lato\scriptsize\bfseries\color{green-gradient-6}RIGA DI STATO}\\ versione + codice + messaggio};
+  \node[ann=orange-gradient-6] (a2) at (9.6,-1.1) {{\Lato\scriptsize\bfseries\color{orange-gradient-6}HEADER}\\ metadati della risposta};
+  \node[ann=accent!70!black] (a3) at (9.6,-2.15) {{\Lato\scriptsize\bfseries\color{accent!70!black}RIGA VUOTA}\\ chiude la sezione degli header};
+  \node[ann=primary!70!black] (a4) at (9.6,-3.1) {{\Lato\scriptsize\bfseries\color{primary!70!black}CORPO}\\ la rappresentazione o il risultato};
+  \draw[col=green-gradient-6] (a1.west) -- (8.7,0);
+  \draw[col=orange-gradient-6] (a2.west) -- (8.7,-1.1);
+  \draw[col=accent!70!black] (a3.west) -- (8.7,-2.15);
+  \draw[col=primary!70!black] (a4.west) -- (8.7,-2.75);
+\end{tikzpicture}
+\caption{La struttura di una risposta HTTP.}
+\end{figure}
+
+\code{Content-Length} vale \code{38} perché il corpo è lungo 38 byte, e
+\code{Cache-Control: max-age=60} autorizza il client a riusare la risposta per
+60 secondi senza richiederla.
+
+\begin{center}
+\begin{tikzpicture}[
+    cls/.style={rounded corners=3pt, fill=#1, text=white, font=\Lato\scriptsize\bfseries,
+      minimum width=1.2cm, minimum height=0.55cm},
+    nome/.style={font=\Lato\small\bfseries, anchor=west},
+    ex/.style={font=\FiraCodeNL\small, anchor=west}]
+  \foreach \i/\c/\col/\n/\e in {
+      0/1xx/neutral!55!black/Informativi/{l'elaborazione continua},
+      1/2xx/green-gradient-6/Successo/{200 OK, 201 Created, 204 No Content},
+      2/3xx/primary!75!black/Redirezione/{301, 302, 304},
+      3/4xx/orange-gradient-6/Errore del client/{400, 401, 403, 404},
+      4/5xx/red-gradient-6/Errore del server/{500, 502, 503}} {
+    \node[cls=\col] at (0,-\i*0.75) {\c};
+    \node[nome] at (1.0,-\i*0.75) {\n};
+    \node[ex, text=\col] at (5.0,-\i*0.75) {\e};
+  }
+\end{tikzpicture}
+\end{center}
+
+Le classi le conosciamo dal capitolo 1. Alcune coppie di codici vicini vengono
+confuse spesso, ed è utile saperle distinguere:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{12.6cm}@{}}
+  \code{301} / \code{302} & la risorsa si è spostata \textbf{per sempre}
+    (aggiornare i link e i segnalibri) / \textbf{temporaneamente} (continuare a
+    usare il vecchio indirizzo) \\
+  \code{304} & non è un errore: «la tua copia in cache è ancora buona» \\
+  \code{401} / \code{403} & \textbf{non so chi sei} (manca l'autenticazione, o non
+    è valida) / \textbf{so chi sei, ma non puoi} (mancano i permessi) \\
+  \code{502} / \code{503} & un server intermedio (\textit{proxy}, \textit{gateway})
+    ha ricevuto una risposta non valida da quello dietro / il server è
+    \textbf{momentaneamente} non disponibile, ad esempio per sovraccarico o
+    manutenzione \\
+\end{tabular}
+\end{center}
+
+% ============================================================
+\section{HTTPS: HTTP dentro un canale TLS}
+
+\term{HTTPS} non è un protocollo diverso da HTTP: è lo \textbf{stesso} HTTP,
+trasportato dentro un canale protetto da \term{TLS} (\textit{Transport Layer
+Security}), che si inserisce fra HTTP e il trasporto.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    liv/.style={rounded corners=3pt, fill=#1, text=white, minimum width=10.8cm, minimum height=0.75cm},
+    nome/.style={font=\Lato\small\bfseries, text=white, anchor=west},
+    des/.style={font=\Lato\small, text=white, anchor=west}]
+  \foreach \i/\col/\n/\d in {
+      0/accent!75!black/HTTP/{richiesta e risposta},
+      1/orange-gradient-6/TLS/{cifra, autentica il server, controlla l'integrità},
+      2/green-gradient-6/{TCP o QUIC}/{trasporta i dati},
+      3/primary!75!black/IP/{instrada i pacchetti verso la destinazione}} {
+    \node[liv=\col, anchor=west] at (0,-\i*0.9) {};
+    \node[nome] at (0.3,-\i*0.9) {\n};
+    \node[des] at (3.4,-\i*0.9) {\d};
+  }
+\end{tikzpicture}
+\caption{La pila di HTTPS. Con QUIC, TLS è integrato nel protocollo di
+         trasporto, ma i servizi offerti sono gli stessi.}
+\end{figure}
+
+TLS offre tre garanzie:
+\begin{itemize}
+  \item \textbf{riservatezza}: i dati sono cifrati, e chi li intercetta lungo il
+        percorso vede solo byte incomprensibili;
+  \item \textbf{autenticazione}: il server dimostra la propria identità con un
+        \term{certificato} firmato da un'autorità di cui il browser si fida;
+  \item \textbf{integrità}: se qualcuno modifica i dati in transito, il
+        destinatario se ne accorge.
+\end{itemize}
+
+\warning{Il lucchetto non vuol dire «sito affidabile»}{
+  Il lucchetto nella barra degli indirizzi significa soltanto che il canale è
+  \textbf{cifrato} e che il certificato è stato \textbf{verificato} per quel nome
+  di dominio. \textbf{Non} dice nulla sull'onestà di chi gestisce il sito:
+  ottenere un certificato valido per \code{poste-italiane-verifica.com} è facile
+  e gratuito, e moltissimi siti di \textit{phishing} mostrano il lucchetto come
+  tutti gli altri.}
+
+% ============================================================
+\section{Dal clic alla pagina: il viaggio completo}
+
+Mettiamo insieme tutti i pezzi. Quando facciamo clic su un link
+\code{https://}, prima che compaia la pagina il browser compie sei passi.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    passo/.style={rounded corners=3pt, draw=#1, line width=0.9pt, fill=white,
+      minimum width=4.7cm, minimum height=1.25cm, text width=4.3cm, align=left, inner sep=6pt},
+    num/.style={font=\Lato\Large\bfseries, text=#1},
+    tit/.style={font=\Lato\small\bfseries},
+    des/.style={font=\Lato\scriptsize, text=neutral!35!black},
+    fr/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=neutral!50!black}]
+  \foreach \i/\x/\y/\col/\t/\d in {
+      1/0/0/accent!75!black/{ANALISI DELLA URL}/{schema, host, porta, percorso},
+      2/5.2/0/green-gradient-6/{DNS}/{dal nome all'indirizzo IP},
+      3/10.4/0/orange-gradient-6/{CONNESSIONE}/{TCP o QUIC verso IP e porta},
+      4/0/-1.75/primary!75!black/{TLS}/{certificato e chiavi di sessione},
+      5/5.2/-1.75/accent!75!black/{RICHIESTA}/{metodo, destinazione, header, corpo},
+      6/10.4/-1.75/green-gradient-6/{RISPOSTA}/{stato, header, corpo}} {
+    \node[passo=\col] (p\i) at (\x,\y)
+      {{\Lato\Large\bfseries\color{\col}\i}\quad{\Lato\small\bfseries\t}\\[2pt]
+       {\Lato\scriptsize\color{neutral!35!black}\d}};
+  }
+  \draw[fr] (p1) -- (p2); \draw[fr] (p2) -- (p3);
+  \draw[fr] (p3.south) -- ++(0,-0.25) -| (p4.north);
+  \draw[fr] (p4) -- (p5); \draw[fr] (p5) -- (p6);
+\end{tikzpicture}
+\caption{Il viaggio completo, dal clic alla pagina. Il browser fa tutto questo
+         mentre noi diciamo «Internet è lento».}
+\end{figure}
+
+I primi passi li abbiamo già visti nel capitolo 1; la novità è il passo 4, e il
+fatto che ognuno di questi passi si vede, e si misura, nei DevTools. Nella
+scheda \textit{Rete}, selezionando una richiesta e aprendo la sezione
+\textit{Tempistiche}, il browser mostra quanto è durata ciascuna fase.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{15.4cm}
+\begin{devtools}{Rete}
+  {\Lato\scriptsize
+  \noindent\hspace*{6pt}{\color{neutral!30!black}Header\quad Cookie\quad Richiesta\quad Risposta\quad
+    \colorbox{dtline}{Tempistiche}\quad Sicurezza}\par\vspace{2pt}
+  {\color{dtline}\hrule}\vspace{6pt}
+  \noindent\hspace*{8pt}\begin{tikzpicture}[x=0.06cm,
+      fase/.style={font=\Lato\scriptsize, anchor=east, text=neutral!20!black},
+      ms/.style={font=\FiraCodeNL\scriptsize, anchor=west, text=neutral!30!black}]
+    \foreach \i/\n/\a/\d/\col in {
+        0/Bloccata/0/2/neutral!40!white,
+        1/Risoluzione DNS/2/14/green-gradient-6,
+        2/Connessione/16/22/orange-gradient-6,
+        3/Configurazione TLS/38/26/primary!70!black,
+        4/Invio/64/1/accent!70!black,
+        5/In attesa/65/78/accent!45!white,
+        6/Ricezione/143/7/primary!45!white} {
+      \node[fase] at (-2,-\i*0.42) {\n};
+      \fill[\col] (\a,-\i*0.42-0.13) rectangle (\a+\d,-\i*0.42+0.13);
+      \node[ms] at (\a+\d+1,-\i*0.42) {\d\ ms};
+    }
+    \draw[neutral!40!white] (0,0.3) -- (0,-2.8);
+  \end{tikzpicture}\par\vspace{6pt}
+  {\color{dtline}\hrule}\vspace{2pt}
+  \noindent\hspace*{6pt}{\color{neutral!25!black}Totale: 150 ms\quad$\vert$\quad
+    valori di esempio}\par\vspace{3pt}}
+\end{devtools}
+\end{minipage}
+\caption{La sezione \textit{Tempistiche} di una richiesta HTTPS (valori di
+         esempio). Ogni barra è uno dei passi della figura precedente.}
+\end{figure}
+
+Leggerla non è difficile, ora che sappiamo che cosa c'è sotto:
+\begin{itemize}
+  \item \textbf{Risoluzione DNS}: il passo 2. Alla seconda visita è spesso zero,
+        perché l'indirizzo è in cache;
+  \item \textbf{Connessione} e \textbf{Configurazione TLS}: i passi 3 e 4, cioè
+        i \textit{round trip} visti a proposito di QUIC. Con una connessione
+        \textbf{persistente} già aperta spariscono del tutto;
+  \item \textbf{Invio}: il tempo per spedire la richiesta, di solito
+        trascurabile;
+  \item \textbf{In attesa}: il tempo fra l'invio della richiesta e l'arrivo del
+        primo byte della risposta (\textit{Time To First Byte}). È il tempo che
+        il \textbf{server} ha impiegato a elaborare la richiesta: quando una
+        pagina è lenta, il colpevole si trova spesso qui;
+  \item \textbf{Ricezione}: il tempo per scaricare il corpo della risposta, che
+        dipende dalla sua dimensione e dalla banda.
+\end{itemize}
+
+% ============================================================
+\section{Riepilogo}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    idea/.style={rounded corners=4pt, draw=#1, line width=1pt, fill=white, minimum width=3.9cm,
+      minimum height=2.0cm, text width=3.6cm, align=center, inner sep=5pt},
+    tit/.style={font=\Lato\normalsize\bfseries, text=#1},
+    des/.style={font=\Lato\scriptsize, text=neutral!30!black}]
+  \foreach \i/\col/\t/\d in {
+      0/accent!75!black/{RETE}/{definisce il contesto e la scala: processi, socket, indirizzi IP e porte},
+      1/green-gradient-6/{URL + DNS}/{identificano e trovano la destinazione},
+      2/orange-gradient-6/{HTTP}/{definisce la conversazione: metodi, header, codici di stato},
+      3/primary!75!black/{HTTPS}/{protegge i dati in transito: riservatezza, autenticazione, integrità}} {
+    \node[idea=\col] at (\i*4.25,0)
+      {{\Lato\normalsize\bfseries\color{\col}\t}\\[4pt]{\Lato\scriptsize\color{neutral!30!black}\d}};
+  }
+\end{tikzpicture}
+\caption{Quattro idee da portare a casa.}
+\end{figure}
+
+\begin{itemize}
+  \item Un'applicazione di rete è fatta di \textbf{processi} su host diversi, che
+        comunicano attraverso i \textbf{socket}; l'indirizzo \textbf{IP} trova
+        l'host, la \textbf{porta} trova il processo.
+  \item Il \textbf{DNS} traduce i nomi in indirizzi IP con un database
+        distribuito e gerarchico, e una cache regolata dal TTL.
+  \item HTTP mantiene lo stesso modello richiesta--risposta, ma il trasporto
+        evolve: connessioni persistenti (1.1), flussi multiplexati (2), QUIC su
+        UDP (3).
+  \item I metodi HTTP hanno una semantica precisa: \textbf{sicuri} (\code{GET},
+        \code{HEAD}, \code{OPTIONS}, \code{QUERY}) e \textbf{idempotenti}
+        (\code{PUT}, \code{DELETE} e tutti i sicuri); \code{POST} non è né l'uno né
+        l'altro.
+  \item \textbf{HTTPS} è HTTP dentro TLS: dati cifrati, server autenticato,
+        integrità controllata. Il lucchetto non garantisce che il sito sia onesto.
+\end{itemize}
+
+% ============================================================
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{RFC 1034} --- \textit{Domain Names: Concepts and Facilities},
+        sezioni 2.3--2.4. \\
+        \urlx{https://www.rfc-editor.org/rfc/rfc1034.html}
+  \item \textbf{RFC 9110} --- \textit{HTTP Semantics}, sezioni 3, 5--6, 9 e 15. \\
+        \urlx{https://www.rfc-editor.org/rfc/rfc9110.html}
+  \item \textbf{RFC 9114} --- \textit{HTTP/3}, sezioni 1 e 6.1. \\
+        \urlx{https://www.rfc-editor.org/rfc/rfc9114.html}
+  \item \textbf{RFC 5789} --- \textit{PATCH Method for HTTP}, sezioni 1--2.2. \\
+        \urlx{https://www.rfc-editor.org/rfc/rfc5789.html}
+  \item \textbf{RFC 7396} --- \textit{JSON Merge Patch}, sezioni 1--3. \\
+        \urlx{https://www.rfc-editor.org/rfc/rfc7396.html}
+  \item \textbf{RFC 8446} --- \textit{The Transport Layer Security Protocol Version
+        1.3}, sezioni 1--2, 4 e 5. \\
+        \urlx{https://www.rfc-editor.org/rfc/rfc8446.html}
+  \item \textbf{RFC 10008} --- \textit{The HTTP QUERY Method}, sezioni 1--2 e
+        tabella 1. \\
+        \urlx{https://www.rfc-editor.org/rfc/rfc10008.html}
+  \item \textbf{Fetch Standard} --- WHATWG, sezione \textit{CORS-preflight fetch}. \\
+        \urlx{https://fetch.spec.whatwg.org/\#cors-preflight-fetch}
+  \item \textbf{RFC 3986} --- \textit{Uniform Resource Identifier: Generic
+        Syntax}, sezioni 3--3.5. \\
+        \urlx{https://www.rfc-editor.org/rfc/rfc3986.html}
+\end{itemize}
