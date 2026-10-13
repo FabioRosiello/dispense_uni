@@ -155,6 +155,268 @@ function setupPage() {
 \end{immagine}
 \end{affianco}
 
+\subsection{Che cosa vuol dire «asincrono»}
+
+Partiamo da un'analogia. In un fast food si può essere serviti in due modi.
+
+\begin{itemize}
+  \item \textbf{Sincrono}: si ordina e si resta al bancone finché il panino non
+        è pronto. Il cassiere aspetta con noi, e la fila alle nostre spalle è
+        ferma.
+  \item \textbf{Asincrono}: si ordina, si riceve un \textbf{cercapersone} e si
+        va a sedersi. Nel frattempo il cassiere serve gli altri clienti; quando
+        il panino è pronto il cercapersone vibra, e si va a ritirarlo.
+\end{itemize}
+
+Il cercapersone è esattamente una \term{callback}: non aspettiamo il risultato,
+lasciamo detto \guillemotleft quando è pronto, avvisami\guillemotright.
+
+Il motivo per cui in JavaScript la differenza conta tanto è che il codice di una
+pagina gira su \textbf{un solo thread}: lo stesso filo di esecuzione esegue i
+nostri script, i gestori degli eventi e l'aggiornamento della pagina. Se quel
+thread resta occupato ad aspettare, \textbf{tutto il resto si ferma}: è il
+cassiere che non serve più nessuno.
+
+\begin{esempio}{Un'attesa sincrona blocca la pagina}
+Il primo pulsante simula un'operazione lenta con un'attesa
+\textbf{sincrona}: un ciclo che gira a vuoto per tre secondi. Il secondo
+pulsante stampa semplicemente un messaggio. Premiamo \textit{Blocca 3 s} e
+subito dopo, due volte, \textit{Cliccami}.
+
+\begin{affianco}[0.53][c]
+\codicepiccolo
+\begin{lstlisting}[style=html, name=attesa-sincrona.html]
+<button id="blocca">Blocca 3 s</button>
+<button onclick="console.log('clic!')">Cliccami</button>
+<script>
+  function aspetta(ms) {          // attesa SINCRONA: da non fare
+    let fine = Date.now() + ms;
+    while (fine > Date.now()) { } // il thread gira a vuoto
+  }
+
+  document.getElementById("blocca").onclick = () => {
+    console.log("Inizio");
+    aspetta(3000);
+    console.log("Fine");
+  };
+</script>
+\end{lstlisting}
+\begin{console}[Console]
+Inizio
+Fine       <- dopo 3 secondi
+clic!      <- solo ora!
+clic!
+\end{console}
+\risultato
+\begin{immagine}[I due clic arrivano mentre il thread è occupato:\\
+                 restano in coda e vengono gestiti solo alla fine.]
+\begin{tikzpicture}[x=1.75cm,
+    corsia/.style={mnota, anchor=east, text=neutral!35!black},
+    occ/.style={draw=red-gradient-6, fill=red-gradient-1!45!white, line width=0.6pt},
+    gest/.style={draw=primary!60!black, fill=primary!18!white, line width=0.6pt},
+    clic/.style={circle, fill=accent!70!black, inner sep=1.6pt},
+    att/.style={-{Stealth[length=4pt,width=3.5pt]}, dashed, line width=0.6pt,
+      draw=accent!70!black}]
+  \node[corsia] at (-0.1,0.9) {utente};
+  \node[corsia] at (-0.1,0)   {thread JS};
+  \draw[occ] (0,-0.22) rectangle (3,0.22);
+  \node[mcod] at (1.5,0) {aspetta(3000)};
+  \draw[gest] (3.02,-0.22) rectangle (3.22,0.22);
+  \draw[gest] (3.24,-0.22) rectangle (3.44,0.22);
+  \node[clic] (c0) at (0,0.9) {};
+  \node[mnota, anchor=south] at (c0.north) {Blocca};
+  \foreach \t/\x in {1/0.8, 2/1.8} {
+    \node[clic] (c\t) at (\x,0.9) {};
+    \node[mnota, anchor=south] at (c\t.north) {Cliccami};
+  }
+  \draw[att] (c1) to[out=-20, in=110] (3.12,0.24);
+  \draw[att] (c2) to[out=-20, in=100] (3.34,0.24);
+  \draw[-{Stealth[length=5pt,width=4pt]}, line width=0.7pt, draw=neutral!45!black]
+    (0,-0.6) -- (3.75,-0.6) node[mnota, right]{t};
+  \foreach \x in {0,1,2,3} {
+    \draw[neutral!45!black] (\x,-0.55) -- (\x,-0.65);
+    \node[mnota, anchor=north] at (\x,-0.65) {\x\,s};
+  }
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
+
+Per tre secondi la pagina è \textbf{congelata}: i clic non producono nulla, i
+pulsanti non reagiscono al passaggio del mouse, non si riesce nemmeno a
+scorrere. I due clic non vanno persi, ma vengono gestiti solo quando il thread
+si libera, cioè dopo \textit{Fine}.
+\end{esempio}
+
+\begin{esempio}{La stessa attesa, asincrona}
+Sostituiamo il ciclo con \code{setTimeout(callback, ms)}, che chiede al browser
+di eseguire \code{callback} dopo \code{ms} millisecondi e \textbf{ritorna
+subito}.
+
+\begin{affianco}[0.53][c]
+\codicepiccolo
+\begin{lstlisting}[style=html, name=attesa-asincrona.html]
+<button id="blocca">Aspetta 3 s</button>
+<button onclick="console.log('clic!')">Cliccami</button>
+<script>
+  document.getElementById("blocca").onclick = () => {
+    console.log("Inizio");
+    setTimeout(() => {
+      console.log("Fine");        // fra 3 secondi
+    }, 3000);
+    // l'handler finisce qui: il thread e' libero
+  };
+</script>
+\end{lstlisting}
+\begin{console}[Console]
+Inizio
+clic!      <- subito
+clic!      <- subito
+Fine       <- dopo 3 secondi
+\end{console}
+\risultato
+\begin{immagine}[Il thread resta libero: i clic vengono gestiti subito,\\
+                 mentre è il browser a contare i tre secondi.]
+\begin{tikzpicture}[x=1.75cm,
+    corsia/.style={mnota, anchor=east, text=neutral!35!black},
+    gest/.style={draw=primary!60!black, fill=primary!18!white, line width=0.6pt},
+    tim/.style={draw=neutral!50!white, fill=neutral!10!white, line width=0.6pt, dashed},
+    clic/.style={circle, fill=accent!70!black, inner sep=1.6pt}]
+  \node[corsia] at (-0.1,0.9)  {utente};
+  \node[corsia] at (-0.1,0)    {thread JS};
+  \node[corsia] at (-0.1,-0.75) {browser};
+  \node[clic] (c0) at (0,0.9) {};
+  \node[mnota, anchor=south] at (c0.north) {Aspetta};
+  \foreach \t/\x in {1/0.8, 2/1.8} {
+    \node[clic] (c\t) at (\x,0.9) {};
+    \node[mnota, anchor=south] at (c\t.north) {Cliccami};
+    \draw[gest] (\x,-0.22) rectangle (\x+0.2,0.22);
+    \draw[-{Stealth[length=4pt,width=3.5pt]}, line width=0.6pt, draw=accent!70!black]
+      (c\t) -- (\x+0.1,0.24);
+  }
+  \draw[gest] (0,-0.22) rectangle (0.2,0.22);
+  \draw[tim] (0.2,-0.95) rectangle (3,-0.55);
+  \node[mnota] at (1.6,-0.75) {timer di 3 s};
+  \draw[gest] (3,-0.22) rectangle (3.2,0.22);
+  \node[mcod, anchor=south west] at (3.0,0.24) {Fine};
+  \draw[-{Stealth[length=4pt,width=3.5pt]}, line width=0.6pt, draw=neutral!50!black]
+    (3,-0.55) -- (3.1,-0.24);
+  \draw[-{Stealth[length=5pt,width=4pt]}, line width=0.7pt, draw=neutral!45!black]
+    (0,-1.35) -- (3.75,-1.35) node[mnota, right]{t};
+  \foreach \x in {0,1,2,3} {
+    \draw[neutral!45!black] (\x,-1.3) -- (\x,-1.4);
+    \node[mnota, anchor=north] at (\x,-1.4) {\x\,s};
+  }
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
+
+L'ordine delle stampe è cambiato: \textit{Fine} arriva \textbf{per ultimo}, anche
+se nel codice è scritto prima della fine dell'handler. Il codice dopo
+\code{setTimeout} non aspetta la callback: prosegue subito, e la callback verrà
+eseguita più tardi.
+\end{esempio}
+
+\subsubsection*{Chi conta i tre secondi?}
+
+Se il thread di JavaScript è uno solo ed è libero, chi tiene il tempo? Il
+\textbf{browser}. Le operazioni lente (timer, richieste di rete, attesa di
+eventi) sono offerte dal browser tramite le sue API, e procedono
+\textbf{fuori} dal thread di JavaScript. Il meccanismo, semplificato, ha tre
+attori.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    zona/.style={rounded corners=5pt, line width=0.8pt, inner sep=6pt},
+    cella/.style={draw=primary!60!black, fill=white, line width=0.6pt,
+      font=\FiraCodeNL\scriptsize, minimum width=3.1cm, minimum height=0.5cm},
+    tit/.style={font=\Lato\scriptsize\bfseries, text=neutral!25!black},
+    num/.style={circle, fill=accent!70!black, text=white,
+      font=\Lato\tiny\bfseries, inner sep=1pt, minimum size=11pt},
+    a/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
+      draw=accent!70!black}]
+  % call stack
+  \node[cella] (s2) at (0,0) {setTimeout(cb, 3000)};
+  \node[cella, anchor=north] (s1) at (s2.south) {onclick()};
+  \node[tit, anchor=south] (ts) at (s2.north) {Call stack (thread JS)};
+  \begin{scope}[on background layer]
+    \node[zona, draw=primary!55!black, fill=primary!6!white, fit=(ts)(s1)(s2)] (stack) {};
+  \end{scope}
+  % web api
+  \node[cella, fill=neutral!8!white, draw=neutral!55!black] (w1) at (7.4,0) {timer: 3 s};
+  \node[cella, fill=neutral!8!white, draw=neutral!55!black, anchor=north] (w2) at (w1.south) {richieste di rete};
+  \node[cella, fill=neutral!8!white, draw=neutral!55!black, anchor=north] (w3) at (w2.south) {eventi (clic, tasti\ldots)};
+  \node[tit, anchor=south] (tw) at (w1.north) {Browser (Web API)};
+  \begin{scope}[on background layer]
+    \node[zona, draw=neutral!55!black, fill=neutral!4!white, fit=(tw)(w1)(w3)] (web) {};
+  \end{scope}
+  % coda
+  \node[cella, minimum width=1.2cm, fill=green-gradient-1!45!white,
+        draw=green-gradient-6] (q1) at (5.9,-3.1) {cb};
+  \node[cella, minimum width=1.2cm, anchor=west] (q2) at (q1.east) {\ldots};
+  \node[cella, minimum width=1.2cm, anchor=west] (q3) at (q2.east) {\ldots};
+  \node[tit, anchor=south] (tq) at (q2.north) {Coda dei callback};
+  \begin{scope}[on background layer]
+    \node[zona, draw=green-gradient-6, fill=green-gradient-1!12!white, fit=(tq)(q1)(q3)] (coda) {};
+  \end{scope}
+  % frecce
+  \draw[a] (stack.east |- s2) -- node[num, pos=0.5]{1} (web.west |- w1);
+  \draw[a] (web.south) -- node[num, right=2pt]{2} (coda.north -| web.south);
+  \draw[a] (coda.west) -| node[num, pos=0.75]{3} (stack.south);
+  \node[mnota, anchor=south, align=center] at ($(stack.east |- s2)!0.5!(web.west |- w1)+(0,0.25)$)
+    {avvia il timer\\ e ritorna subito};
+  \node[mnota, anchor=west] at ($(web.south)+(0.35,-0.45)$) {dopo 3 s: \code{cb} in coda};
+  \node[mnota, anchor=north, align=center] at ($(coda.west)+(-2.0,-0.12)$)
+    {\textbf{event loop}: quando lo stack è vuoto,\\ prende il primo callback e lo esegue};
+\end{tikzpicture}
+\caption{Il modello di esecuzione di JavaScript nel browser, semplificato.}
+\end{figure}
+
+\begin{enumerate}
+  \item Il nostro codice chiama \code{setTimeout(cb, 3000)}: il browser avvia un
+        timer e la chiamata \textbf{ritorna subito}. Il thread prosegue, finisce
+        l'handler e resta libero.
+  \item Allo scadere del timer, il browser non interrompe JavaScript: mette
+        \code{cb} nella \term{coda dei callback} (\textit{task queue}). Lo
+        stesso succede quando arriva la risposta di una richiesta di rete o
+        quando l'utente fa clic.
+  \item L'\term{event loop} controlla continuamente: \textbf{quando lo stack è
+        vuoto}, cioè quando JavaScript non sta eseguendo nulla, prende il primo
+        callback in coda e lo esegue.
+\end{enumerate}
+
+Il punto 3 spiega anche l'esempio sincrono: i clic finivano in coda, ma lo stack
+era occupato da \code{aspetta(3000)}, e l'event loop non poteva prenderli.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=js, name=timeout-zero.js]
+console.log("A");
+setTimeout(() => console.log("B"), 0);   // 0 ms!
+console.log("C");
+\end{lstlisting}
+\risultato
+\begin{console}
+A
+C
+B
+\end{console}
+\wtnota{Anche con 0 ms, \code{B} passa dalla coda:\\ aspetta che il codice
+        sincrono finisca.}
+\end{affianco}
+
+\info{Asincrono non vuol dire parallelo}{
+  Il codice JavaScript della pagina non viene mai eseguito \textbf{in
+  contemporanea}: c'è un solo thread, e una callback parte solo quando il codice
+  precedente è terminato. Ciò che avviene in parallelo è l'\textbf{attesa}
+  (il timer che scorre, la risposta che viaggia in rete), gestita dal browser.
+  Ne segue una regola pratica: una callback non interrompe mai il codice in
+  esecuzione, e un calcolo lungo e sincrono blocca la pagina comunque, anche se
+  è scritto dentro una callback.}
+
+Tutte le operazioni lente del browser funzionano così: le si avvia passando una
+callback, e il risultato arriva più tardi. Vediamo come si organizza il codice
+attorno a questa idea.
+
 \subsection{Callback}
 
 Le \term{callback} le abbiamo già incontrate nel capitolo precedente, parlando
@@ -208,10 +470,51 @@ Done
 \end{affianco}
 
 Qui le tre operazioni invocano la callback \textbf{subito}, quindi
-\textit{Result is 6} compare prima di \textit{Done}. Con operazioni davvero
-asincrone, per esempio basate su \code{setTimeout} o su una richiesta di rete,
-l'ordine si invertirebbe: \code{setupPage} terminerebbe stampando \textit{Done}
-e il risultato arriverebbe dopo.
+\textit{Result is 6} compare prima di \textit{Done}: lo stile è asincrono, ma le
+operazioni non lo sono ancora. Rendiamole davvero asincrone, facendo arrivare
+ogni risultato dopo un secondo, come farebbe una richiesta di rete.
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=js, name=callback-async.js]
+function firstOperation(value, cb) {
+  setTimeout(() => cb(1 + value), 1000);
+}
+function secondOperation(value, cb) {
+  setTimeout(() => cb(2 + value), 1000);
+}
+function thirdOperation(value, cb) {
+  setTimeout(() => cb(3 + value), 1000);
+}
+// setupPage() resta identica
+\end{lstlisting}
+\risultato
+\begin{console}[Console, chiamando setupPage()]
+Done           <- subito
+Result is 6    <- dopo 3 secondi
+\end{console}
+\begin{immagine}[Ogni passo parte solo quando arriva il risultato\\
+                 del precedente, un secondo dopo.]
+\begin{tikzpicture}[x=1.4cm,
+    gest/.style={draw=primary!60!black, fill=primary!18!white, line width=0.6pt,
+      minimum height=0.42cm, inner sep=1pt, font=\FiraCodeNL\tiny},
+    tim/.style={draw=neutral!50!white, fill=neutral!10!white, dashed, line width=0.6pt}]
+  \node[gest, anchor=west, minimum width=0.5cm] at (0,0) {Done};
+  \foreach \i/\r in {0/r1, 1/r2, 2/r3} {
+    \draw[tim] (\i,-0.75) rectangle (\i+1,-0.45);
+    \node[gest, anchor=west, minimum width=0.4cm] at (\i+1,0) {\r};
+  }
+  \node[mnota, anchor=east] at (-0.05,0) {thread JS};
+  \node[mnota, anchor=east] at (-0.05,-0.6) {timer};
+  \draw[-{Stealth[length=5pt,width=4pt]}, line width=0.7pt, draw=neutral!45!black]
+    (0,-1.1) -- (3.6,-1.1) node[mnota, right]{t};
+  \foreach \x in {0,1,2,3} \node[mnota, anchor=north] at (\x,-1.1) {\x\,s};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
+
+Ora l'ordine si è invertito: \code{setupPage} avvia la prima operazione e termina
+subito stampando \textit{Done}; il risultato arriva tre secondi dopo, passando di
+callback in callback.
 
 \error{Callback Hell}{
   L'indentazione che si allarga a destra ha un nome: \term{Callback Hell},
@@ -327,6 +630,164 @@ console.log(promise);    // Promise { <state>: "pending" }
 \end{tikzpicture}
 \end{immagine}
 \end{affianco}
+
+\subsection{Anatomia di una Promise: chi fa cosa}
+
+Con le Promise entrano in gioco molte funzioni dai nomi simili: l'executor,
+\code{resolve}, \code{reject}, \code{then}, \code{catch}\ldots{} La confusione
+più comune è non sapere \textbf{dove si trova} ciascuna e \textbf{chi la
+chiama}. Il diagramma seguente mostra la classe \code{Promise} come una classe
+UML, con accanto le funzioni che \textbf{non} le appartengono.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    comp/.style={draw=primary!60!black, line width=0.7pt, text width=6.9cm,
+      align=left, inner sep=4pt, font=\FiraCodeNL\scriptsize},
+    sez/.style={font=\Lato\scriptsize\itshape, text=neutral!40!black},
+    nota/.style={mnota, text width=4.6cm},
+    fn/.style={mfun, align=center},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt},
+    rif/.style={dashed, line width=0.6pt, draw=neutral!50!black}]
+  % ---- la classe ----
+  \node[comp, fill=primary!22!white, align=center, font=\Lato\small\bfseries] (h) at (0,0)
+    {Promise};
+  \node[comp, fill=neutral!6!white, anchor=north] (c1) at (h.south)
+    {\textcolor{neutral!45!black}{\Lato\scriptsize\itshape stato interno (non accessibile)}\\{}
+     [[state]]: "pending" | "fulfilled" | "rejected"\\{}
+     [[result]]: valore o errore\\{}
+     [[reazioni]]: gestori registrati con then};
+  \node[comp, fill=white, anchor=north] (c2) at (c1.south)
+    {\textcolor{neutral!45!black}{\Lato\scriptsize\itshape costruttore}\\
+     constructor(executor)};
+  \node[comp, fill=green-gradient-1!25!white, anchor=north] (c3) at (c2.south)
+    {\textcolor{neutral!45!black}{\Lato\scriptsize\itshape metodi dell'oggetto: si chiamano su una promise}\\
+     then(onFulfilled, onRejected): Promise\\
+     catch(onRejected): Promise\\
+     finally(onFinally): Promise};
+  \node[comp, fill=accent!8!white, anchor=north] (c4) at (c3.south)
+    {\textcolor{neutral!45!black}{\Lato\scriptsize\itshape metodi statici: si chiamano sulla classe Promise}\\
+     \underline{all(promises)}, \underline{allSettled(promises)}\\
+     \underline{race(promises)}, \underline{any(promises)}\\
+     \underline{resolve(value)}, \underline{reject(error)}};
+  % ---- l'executor, a destra ----
+  \node[fn, text width=5.0cm, anchor=north west, fill=primary!6!white, draw=primary!60!black]
+    (ex) at ($(h.north east)+(2.6,0)$)
+    {\textbf{executor} (lo scriviamo noi)\\[2pt]
+     function (resolve, reject) \{ \ldots{} \}};
+  \node[fn, anchor=north west] (rs) at ($(ex.south west)+(0.2,-0.55)$) {resolve(value)};
+  \node[fn, anchor=north east, draw=red-gradient-6, fill=red-gradient-1!25!white] (rj)
+    at ($(ex.south east)+(-0.2,-0.55)$) {reject(error)};
+  \draw[rif] (rs.north |- ex.south) -- (rs.north);
+  \draw[rif] (rj.north |- ex.south) -- (rj.north);
+  \node[mnota, anchor=south west, text=neutral!40!black] at ($(rs.north)+(0.05,0.08)$) {argomenti};
+  \node[nota, text width=5.0cm, anchor=north west] (nr) at ($(ex.south west)+(0,-1.25)$)
+    {\code{resolve} e \code{reject} le crea \textbf{la Promise} e le passa
+     all'executor: \textbf{non} sono metodi dell'oggetto. Chiamarle cambia
+     [[state]] e [[result]].};
+  \draw[a, draw=primary!60!black] (c2.east) -- ++(0.9,0) |- (ex.west);
+  \node[mnota, anchor=south west] at ($(c2.east)+(0,0.02)$) {lo chiama};
+  \node[mnota, anchor=north west] at ($(c2.east)+(0,-0.02)$) {subito};
+  % ---- il consumatore, a destra in basso ----
+  \node[fn, text width=5.0cm, anchor=north west, fill=accent!8!white, draw=accent!60!black]
+    (co) at ($(nr.south west)+(0,-0.55)$)
+    {\textbf{onFulfilled}, \textbf{onRejected}\\ (le scriviamo noi)\\[2pt]
+     (result) => \{ \ldots{} \}};
+  \draw[a, draw=accent!60!black] (c3.east) -- ++(1.6,0) |- (co.west);
+  \node[mnota, anchor=south west] at ($(c3.east)+(0,0.02)$) {le registra};
+  \node[nota, text width=5.0cm, anchor=north west] at ($(co.south west)+(0,-0.08)$)
+    {callback passate a \code{then}: le chiama la Promise quando si sistema.};
+\end{tikzpicture}
+\caption{La classe \code{Promise} (a sinistra) e le funzioni che le girano
+         attorno (a destra). I metodi statici sono sottolineati, come in UML.}
+\end{figure}
+
+Lo stesso, in forma di tabella:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{6.8cm}@{}}
+  \textbf{Funzione} & \textbf{Dove si trova / chi la scrive} & \textbf{Chi la chiama, e quando} \\[2pt]
+  \code{executor} & la scriviamo noi, è l'argomento di \code{new Promise}
+    & il costruttore, \textbf{subito}, una volta sola \\
+  \code{resolve}, \code{reject} & le crea JavaScript per ogni nuova Promise
+    & noi, \textbf{dentro l'executor}, quando l'operazione finisce \\
+  \code{then}, \code{catch}, \code{finally} & metodi di ogni oggetto Promise
+    & noi, nel codice consumatore: \code{promise.then(\ldots)} \\
+  \code{onFulfilled}, \code{onRejected} & le scriviamo noi, sono gli argomenti di \code{then}
+    & la Promise, \textbf{quando si sistema}, passando risultato o errore \\
+  \code{Promise.all}, \code{Promise.resolve}\ldots & metodi statici della classe
+    & noi, sulla classe: \code{Promise.all([\ldots])} \\
+\end{tabular}
+\end{center}
+
+\begin{esempio}{Chi chiama chi, passo per passo}
+Seguiamo le chiamate in un esempio minimo: la Promise si risolve con 42 dopo un
+secondo.
+
+\begin{lstlisting}[style=js, name=anatomia.js]
+let promise = new Promise((resolve, reject) => {    // (1) e (2)
+  setTimeout(() => resolve(42), 1000);              // (4) dopo 1 s
+});
+
+promise.then(                                       // (3)
+  (result) => console.log("ok:", result),           // (5) onFulfilled
+  (error)  => console.log("ko:", error.message)     // onRejected
+);
+\end{lstlisting}
+
+\begin{center}
+\begin{tikzpicture}[
+    att/.style={draw=neutral!55!black, fill=white, line width=0.7pt, rounded corners=3pt,
+      font=\Lato\scriptsize\bfseries, align=center, minimum width=3.4cm, minimum height=0.75cm},
+    vita/.style={dashed, draw=neutral!50!white, line width=0.7pt},
+    msg/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt},
+    num/.style={circle, fill=accent!70!black, text=white,
+      font=\Lato\tiny\bfseries, inner sep=1pt, minimum size=11pt},
+    lab/.style={mcod, above}]
+  \node[att, fill=primary!8!white] (p) at (0,0) {codice produttore\\ \normalfont executor};
+  \node[att, fill=green-gradient-1!35!white] (o) at (6,0) {oggetto Promise\\ \normalfont [[state]], [[result]]};
+  \node[att, fill=accent!8!white] (c) at (12,0) {codice consumatore\\ \normalfont then e callback};
+  \foreach \n in {p,o,c} \draw[vita] (\n.south) -- ++(0,-5.6);
+  % (1) new Promise
+  \draw[msg, draw=primary!60!black] (0,-0.9) -- node[lab]{new Promise(executor)} (6,-0.9);
+  \node[num] at (0,-0.9) {1};
+  % (2) executor(resolve, reject)
+  \draw[msg, draw=primary!60!black] (6,-1.6) -- node[lab]{executor(resolve, reject)} (0,-1.6);
+  \node[num] at (6,-1.6) {2};
+  \node[mnota, anchor=west] at (6.1,-1.95) {subito; [[state]] = "pending"};
+  % (3) then
+  \draw[msg, draw=accent!60!black] (12,-2.7) -- node[lab]{then(onFulfilled, onRejected)} (6,-2.7);
+  \node[num] at (12,-2.7) {3};
+  \node[mnota, anchor=east, align=right] at (5.9,-3.05) {i gestori finiscono in [[reazioni]];\\ \code{then} restituisce subito una nuova Promise};
+  % (4) resolve(42)
+  \draw[msg, draw=green-gradient-6] (0,-4.1) -- node[lab]{resolve(42)} (6,-4.1);
+  \node[num] at (0,-4.1) {4};
+  \node[mnota, anchor=west] at (0.1,-4.45) {dopo 1 s, dalla callback di \code{setTimeout}};
+  \node[mnota, anchor=west] at (6.1,-4.45) {[[state]] = "fulfilled", [[result]] = 42};
+  % (5) onFulfilled(42)
+  \draw[msg, draw=green-gradient-6] (6,-5.2) -- node[lab]{onFulfilled(42)} (12,-5.2);
+  \node[num] at (6,-5.2) {5};
+  \node[mnota, anchor=north] at (9,-5.3) {passando dalla coda: stampa \code{ok: 42}};
+\end{tikzpicture}
+\end{center}
+
+Noi scriviamo l'executor e le callback, e chiamiamo \code{new Promise},
+\code{then} e \code{resolve}. La Promise chiama l'executor (subito) e
+\code{onFulfilled} (quando si sistema). Se l'executor avesse chiamato
+\code{reject(new Error(...))}, al passo 5 sarebbe stata chiamata
+\code{onRejected}.
+\end{esempio}
+
+\warning{{resolve e Promise.resolve non sono la stessa cosa}}{\raggedright
+  Il \code{resolve} che riceve l'executor è una funzione legata a \textbf{quella}
+  Promise, e serve a sistemarla. \code{Promise.resolve(value)} è invece un metodo
+  \textbf{statico} che crea una \textbf{nuova} Promise già risolta. Un oggetto
+  Promise, poi, \textbf{non ha} un metodo \code{resolve}: scrivere
+  \code{promise.resolve(42)} produce \code{TypeError: promise.resolve is not a
+  function}. Da fuori, una Promise si può solo osservare con \code{then}; a
+  deciderne l'esito è soltanto chi ha in mano \code{resolve} e \code{reject},
+  cioè l'executor.}
 
 \subsection{then, catch e finally}
 

@@ -595,6 +595,113 @@ Ora ogni motivo di cambiamento tocca una sola classe:
 \end{itemize}}
 \end{minipage}
 
+\subsection{Tipi e livelli di coesione}
+
+Non tutta la coesione è uguale. A seconda del \textbf{motivo} per cui gli elementi di un modulo stanno insieme, si
+distinguono sette tipi di coesione, ordinati dal più debole al più forte. Più il legame è debole, più il raggruppamento è
+casuale e più il modulo tende a cambiare per ragioni diverse.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    liv/.style={rectangle, rounded corners=2pt, draw=#1!70!black, fill=#1!12, line width=0.7pt,
+                minimum width=2.15cm, minimum height=0.85cm, align=center, font=\scriptsize\bfseries},
+    a/.style={-{Stealth[length=2.6mm]}, line width=1.1pt}]
+  \foreach \i/\nome/\col in {0/{Casuale}/q6, 1/{Logica}/q6, 2/{Temporale}/q6, 3/{Procedurale}/q6,
+                             4/{Comunicativa}/q5, 5/{Funzionale}/q8, 6/{A oggetti}/q8} {
+    \node[liv=\col] (l\i) at (\i*2.35,0) {\nome};
+  }
+  \shade[left color=q6!70, right color=q8!80] ($(l0.south west)+(0,-0.42)$) rectangle ($(l6.south east)+(0,-0.3)$);
+  \node[font=\scriptsize, text=q6!80!black, anchor=north west] at ($(l0.south west)+(0,-0.5)$) {debole: da evitare};
+  \node[font=\scriptsize, text=q5!90!black, anchor=north] at ($(l4.south)+(0,-0.5)$) {media};
+  \node[font=\scriptsize, text=q8!80!black, anchor=north east] at ($(l6.south east)+(0,-0.5)$) {forte: l'obiettivo};
+\end{tikzpicture}
+\caption{I sette livelli di coesione, dal più debole al più forte.}
+\end{figure}
+
+\Needspace{30\baselineskip}
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}>{\bfseries\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}p{6.0cm}
+                >{\raggedright\arraybackslash}p{6.2cm}@{}}
+  \toprule
+  \normalfont\textbf{Tipo} & \textbf{Gli elementi stanno insieme perché\ldots} & \textbf{Esempio} \\
+  \midrule
+  \color{q6}Casuale (\textit{accidental}) & \ldots{} capita: sono semplicemente raggruppati, senza un legame reale &
+    una classe \code{Utils} con \code{formattaData}, \code{calcolaIva} e \code{inviaEmail} \\
+  \color{q6}Logica & svolgono attività \textbf{logicamente simili} (gestione degli errori, delle stampe\ldots), anche se
+    su dati e per scopi diversi & un modulo \code{Stampe} che stampa fatture, etichette e report, scegliendo con un
+    parametro quale \\
+  \color{q6}Temporale & vanno eseguiti \textbf{nello stesso intervallo di tempo} & un metodo \code{init()} che apre il
+    database, carica la configurazione e azzera i contatori \\
+  \color{q6}Procedurale & vanno eseguiti \textbf{in un certo ordine} & \code{leggiInput()}, poi \code{valida()}, poi
+    \code{salva()}, messi insieme solo perché vengono uno dopo l'altro \\
+  \color{q5}Comunicativa & lavorano su un \textbf{insieme di dati comune} & visualizzazione, logica e salvataggio dello
+    stesso \code{Ordine} nello stesso modulo \\
+  \color{q8}Funzionale & contribuiscono tutti a \textbf{una sola attività}, e non fanno altro & un modulo che calcola il
+    codice fiscale \\
+  \color{q8}A oggetti & ogni operazione \textbf{modifica o ispeziona gli attributi} dell'oggetto & una classe
+    \code{ContoCorrente} con \code{deposita}, \code{preleva}, \code{getSaldo} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+La coesione \textbf{comunicativa} è a metà strada: i dati sono condivisi, ma le responsabilità sono diverse (mostrare,
+elaborare, salvare), e quindi i motivi di cambiamento sono più d'uno. La coesione a cui puntiamo con il Single
+Responsibility Principle è quella \textbf{funzionale}, e nelle classi quella \textbf{a oggetti}.
+
+\info{{Temporale e procedurale sono i casi più insidiosi}}{
+  Un metodo \code{init()} o una sequenza «leggi, valida, salva» sembrano ben organizzati, perché il codice si legge
+  dall'alto in basso senza salti. Il problema è che il motivo per cui le istruzioni stanno insieme è il \textbf{momento} in
+  cui vengono eseguite, non il \textbf{compito} che svolgono: se cambia il modo di validare, si tocca lo stesso modulo che
+  si occupa di salvare. Spesso la soluzione è lasciare lì solo il coordinamento, e delegare ogni passo a un modulo
+  funzionalmente coeso.
+}
+
+\subsection{Un controesempio: la God Class}
+
+\dfn{Antipattern}{
+  Un \term{antipattern} è una cattiva pratica che si osserva \textbf{comunemente} nel software reale: una soluzione che
+  sembra ragionevole sul momento, ma le cui conseguenze negative superano i vantaggi.
+}
+
+La \term{God Class} (o \textit{God Object}) è l'antipattern opposto all'alta coesione. Una God Class:
+\begin{itemize}
+  \item ha una conoscenza \textbf{eccessiva} del sistema;
+  \item gestisce \textbf{molte responsabilità non correlate};
+  \item fa da \textbf{snodo centrale} per tutte le operazioni: le altre classi sono poco più che contenitori di dati, e
+        tutta la logica passa da lei.
+\end{itemize}
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[c]{0.5\textwidth}
+Le conseguenze:
+\begin{itemize}
+  \item \textbf{difficile da mantenere}: una singola modifica si propaga in modo imprevedibile a tutto il sistema;
+  \item \textbf{soggetta a errori}: un bug nella God Class colpisce molte aree diverse;
+  \item \textbf{difficile da scalare}: una struttura monolitica ostacola l'elaborazione distribuita o parallela, e
+        anche il lavoro in parallelo dei team, che finiscono per modificare tutti lo stesso file.
+\end{itemize}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.46\textwidth}
+\centering
+\begin{tikzpicture}
+  \umlclass[3.6cm]{g}{(0,0)}{GestoreSegreteria}{studenti, esami, aule\\docenti, tasse, db}
+    {iscriviStudente()\\ registraEsame()\\ calcolaMedia()\\ prenotaAula()\\ calcolaTasse()\\ stampaCertificato()\\
+     inviaEmail()\\ salvaSuDb()\\ \ldots}
+  \foreach \n/\a/\x/\y in {s/Studente/-2.9/1.5, e/Esame/2.9/1.5, a/Aula/-2.9/-1.6, d/Docente/2.9/-1.6} {
+    \node[classe1=1.5cm] (\n) at (\x,\y) {\a};
+    \draw[navig] (g) -- (\n);
+  }
+\end{tikzpicture}
+
+{\scriptsize Le altre classi sono solo dati: tutta la logica\\ sta in un'unica classe.\par}
+\end{minipage}
+
+La cura è quella vista con il Single Responsibility Principle: individuare i motivi di cambiamento e distribuire le
+responsabilità, ognuna nella classe che possiede i dati su cui lavora (\code{calcolaMedia} in \code{Studente},
+\code{prenotaAula} in un servizio di prenotazione, \code{salvaSuDb} in un \textit{repository}\ldots).
+
 % ============================================================
 \section{Accoppiamento}
 
@@ -1215,6 +1322,31 @@ Le tre classi nuove dipendono da \code{Studente}, mentre \code{Studente} non dip
 database o il canale di notifica senza toccarla.
 \end{esercizio}
 
+\begin{esercizio}{Riconoscere il tipo di coesione}
+Per ciascun modulo indica il tipo di coesione e se va bene così.
+\begin{enumerate}
+  \item \code{Avvio}, con un unico metodo che legge il file di configurazione, apre la connessione al database e mostra la
+        schermata di benvenuto.
+  \item \code{CalcolatoreRata}, che calcola la rata di un mutuo dati importo, tasso e durata.
+  \item \code{Varie}, con i metodi \code{arrotonda}, \code{normalizzaNome} e \code{generaPassword}.
+  \item \code{SchedaPaziente}, che mostra a video i dati di un paziente, li valida e li salva nel database.
+  \item \code{Termostato}, con \code{getTemperatura}, \code{impostaSoglia} e \code{accendi}, che leggono e modificano solo
+        i suoi attributi.
+\end{enumerate}
+
+\textbf{Soluzione.}
+\begin{enumerate}
+  \item \textbf{Temporale}: le tre azioni stanno insieme solo perché avvengono all'avvio. Meglio che \code{Avvio} si
+        limiti a coordinare, delegando a \code{Configurazione}, \code{Database} e \code{SchermataBenvenuto}.
+  \item \textbf{Funzionale}: un'unica attività ben definita. Va bene.
+  \item \textbf{Casuale}: nessun legame fra i metodi. Ognuno va spostato dove serve (o in moduli di utilità
+        tematici, come \code{Arrotondamenti} o \code{Sicurezza}).
+  \item \textbf{Comunicativa}: lavorano tutti sui dati del paziente, ma presentazione, validazione e persistenza sono tre
+        motivi di cambiamento diversi. Va divisa, come nell'Esercizio 11.1.
+  \item \textbf{A oggetti}: ogni operazione lavora sullo stato dell'oggetto. È il livello a cui puntiamo.
+\end{enumerate}
+\end{esercizio}
+
 \begin{esercizio}{Riconoscere l'accoppiamento}
 Elenca tutte le classi a cui è accoppiata \code{Ordine}, indicando per ciascuna il tipo di accoppiamento. Quale conviene
 ridurre per primo?
@@ -1337,6 +1469,8 @@ attivi. Nessuna scheda ha più di due collaboratori: è un buon segnale di accop
         un'\textbf{interfaccia}. Il numero di componenti ottimale bilancia costo di sviluppo e costo di integrazione.
   \item L'obiettivo è l'\textbf{indipendenza funzionale}: \textbf{alta coesione} (una sola responsabilità, un solo motivo
         per cambiare) e \textbf{basso accoppiamento}.
+  \item La coesione va dalla \textbf{casuale} (la più debole) alla \textbf{funzionale} e \textbf{a oggetti} (le più forti);
+        la \textbf{God Class}, che concentra in sé tutte le responsabilità, è l'antipattern da evitare.
   \item L'accoppiamento nasce da attributi, parametri e variabili, \textbf{ereditarietà} (il più forte) e interfacce; le
         \textbf{interfacce} con l'iniezione delle dipendenze lo riducono.
   \item La \textbf{Legge di Demetra}: un metodo parla solo con \code{this}, i parametri, gli oggetti che crea e i componenti
