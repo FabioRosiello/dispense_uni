@@ -1,0 +1,820 @@
+\chapter{Architetture software}
+% Il codice in linea (\code) non va a capo: un po' di elasticita' in piu' evita righe che sbordano
+\emergencystretch=2.5em
+
+Nel capitolo precedente abbiamo visto perché e come scomporre un sistema in sottosistemi, guidati da coesione e
+accoppiamento. Qui facciamo un passo in più: vediamo come i sottosistemi si \textbf{organizzano} in una struttura
+complessiva, l'\textbf{architettura}, e quali sono le architetture standard da cui si parte nella pratica. Nello schema degli
+otto aspetti del System Design (Capitolo 11) ci troviamo al passo 2, \textit{scomposizione del sistema}: livelli e partizioni.
+
+% ============================================================
+\section{Che cos'è un'architettura software}
+
+\dfn{Architettura software}{
+  L'\term{architettura software} di un sistema è la sua struttura (o l'insieme delle sue strutture), formata da
+  \textbf{elementi software}, dalle loro \textbf{proprietà visibili dall'esterno} e dalle \textbf{relazioni} fra di essi.
+
+  Quali strutture considerare, e come rappresentarle, dipende dagli obiettivi di ingegneria che si perseguono.
+}
+
+La definizione, dovuta a Bass, Clements e Kazman (\textit{Software Architecture in Practice}), ha tre conseguenze
+importanti.
+
+\subsection{1. L'architettura è un'astrazione}
+
+L'architettura definisce gli elementi e il modo in cui \textbf{interagiscono}, e tace di proposito sui dettagli puramente
+locali: ciò che è privato di un elemento \textbf{non} è architetturale. Contano invece le proprietà \textbf{visibili
+dall'esterno}, cioè le ipotesi che un elemento può fare su un altro:
+\begin{itemize}
+  \item i servizi \textbf{forniti} e i servizi \textbf{richiesti};
+  \item le caratteristiche di \textbf{prestazione};
+  \item la \textbf{gestione dei guasti};
+  \item l'\textbf{uso delle risorse}.
+\end{itemize}
+Sono le stesse informazioni che, nel diagramma dei componenti del Capitolo 9, stanno nelle interfacce fornite e richieste.
+
+\subsection{2. Ogni sistema ha un'architettura}
+
+Ogni sistema è composto di elementi in relazione fra loro, quindi ha un'architettura; nel caso limite, un solo elemento in
+relazione solo con sé stesso. Ma \textbf{avere} un'architettura è diverso dall'avere un'architettura \textbf{nota a tutti}:
+l'architettura è una cosa, la sua \textbf{specifica} un'altra.
+
+\warning{{Se non la progetti, ne avrai una comunque}}{
+  Se non si sviluppa esplicitamente un'architettura, il sistema ne avrà comunque una: quella che emerge dalle scelte prese
+  giorno per giorno da chi scrive il codice. E potrebbe non piacerci affatto.
+}
+
+\subsection{3. Un disegno a scatole e frecce non basta}
+
+Ne segue che un disegno fatto di \textbf{scatole e linee} non è, da solo, un'architettura: è soltanto un punto di partenza.
+Vedendo una scatola con scritto «database» si può immaginare che cosa faccia, ma niente di più.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[compo, minimum width=2.4cm] (a) at (0,0) {Executive};
+  \node[compo, minimum width=2.4cm] (b) at (4.6,0) {Database};
+  \draw[line width=0.8pt] (a) -- (b);
+  \node[font=\Large\bfseries, text=swred] at (2.3,0.45) {?};
+  \node[note, anchor=west, text width=6.4cm] at (7.0,0) {Che servizi offre \textit{Database}? Chi chiama chi? Quante
+    richieste al secondo regge? Che succede se non risponde? Senza queste \textbf{specifiche e proprietà} il disegno non
+    dice nulla di verificabile.};
+\end{tikzpicture}
+\end{center}
+
+Inoltre un sistema ha \textbf{molte strutture} (o \textit{viste}): la scomposizione in moduli, i componenti in esecuzione,
+l'allocazione sui nodi hardware\ldots{} Nessuna struttura da sola \textit{è} l'architettura, e l'insieme delle strutture da
+considerare non è fissato: si sceglie ciò che serve per l'analisi, la comunicazione o la comprensione. I diagrammi UML visti
+finora ne sono un esempio: package (Capitolo 8), componenti e deployment (Capitolo 9) sono viste diverse della stessa
+architettura.
+
+% ============================================================
+\section{L'architettura nel System Design}
+
+L'architettura di un sistema si definisce nella prima fase del System Design, la \term{progettazione architetturale}.
+Lo scopo principale è scomporre il sistema in sottosistemi, perché:
+\begin{itemize}
+  \item realizzare più componenti distinti è meno complesso che realizzare un sistema monolitico;
+  \item permette lo \textbf{sviluppo in parallelo};
+  \item favorisce modificabilità, riusabilità, portabilità.
+\end{itemize}
+
+Definire un'architettura significa \textbf{assegnare le funzionalità ai moduli}: il modulo dell'interfaccia utente, quello
+di accesso al database, quello della sicurezza, e così via. Anche qui valgono \textbf{alta coesione} e \textbf{basso
+accoppiamento}: ogni parte dell'architettura deve offrire servizi fortemente correlati, limitando il numero di altri
+moduli a cui è legata.
+
+La definizione si svolge da due punti di vista, che insieme portano alla soluzione finale:
+\begin{enumerate}
+  \item l'\textbf{identificazione dei sottosistemi} e delle loro relazioni;
+  \item la definizione delle \textbf{politiche di controllo} (chi avvia le operazioni, come scorre il flusso di controllo).
+\end{enumerate}
+Entrambe le scelte sono cruciali, perché sono \textbf{difficili da cambiare} a sviluppo avviato: bisognerebbe modificare
+le interfacce di molti sottosistemi.
+
+% ============================================================
+\section{Identificare i sottosistemi}
+
+\subsection{Divide et impera}
+
+Affrontare qualcosa di grande tutto in una volta è più difficile che affrontare un insieme di cose più piccole. Dividere il
+sistema porta quattro vantaggi:
+\begin{itemize}
+  \item ogni componente è più piccolo, e quindi più facile da \textbf{capire};
+  \item le parti si possono \textbf{sostituire o modificare} senza dover sostituire o modificare profondamente le altre;
+  \item persone diverse possono lavorare su \textbf{parti diverse};
+  \item un singolo ingegnere del software può \textbf{specializzarsi}.
+\end{itemize}
+
+La divisione procede per livelli successivi:
+
+\Needspace{12\baselineskip}
+\begin{center}
+\begin{tikzpicture}[
+    liv/.style={rounded corners=4pt, line width=0.8pt, draw=#1!70!black, fill=#1!8},
+    tit/.style={font=\scriptsize\bfseries, anchor=north west, inner sep=2pt}]
+  \draw[liv=ph2] (0,0) rectangle (13.6,3.3);
+  \node[tit, text=ph2!80!black] at (0,3.3) {Sistema};
+  \foreach \k/\x in {0/0.25, 1/4.75, 2/9.25} {
+    \draw[liv=ph3] (\x,0.25) rectangle (\x+4.1,2.85);
+    \node[tit, text=ph3!80!black] at (\x,2.85) {Livello o sottosistema};
+    \foreach \j/\y in {0/0.45, 1/1.55} {
+      \draw[liv=ph4] (\x+0.2,\y) rectangle (\x+3.9,\y+0.95);
+      \node[tit, text=ph4!80!black, font=\tiny\bfseries] at (\x+0.2,\y+0.95) {Package};
+      \foreach \c in {0,1,2} {
+        \draw[liv=q9, fill=yellow!12] (\x+0.35+\c*1.17,\y+0.12) rectangle (\x+1.37+\c*1.17,\y+0.62);
+        \node[font=\tiny, text=q9!80!black] at (\x+0.86+\c*1.17,\y+0.48) {Classe};
+        \draw[q9!60, line width=0.4pt] (\x+0.45+\c*1.17,\y+0.3) -- (\x+1.27+\c*1.17,\y+0.3);
+        \node[font=\tiny, text=q9!70!black] at (\x+0.86+\c*1.17,\y+0.2) {metodi};
+      }
+    }
+  }
+\end{tikzpicture}
+\end{center}
+\begin{itemize}
+  \item un \textbf{sistema} si divide in \textbf{livelli} (\textit{layer}) e \textbf{sottosistemi};
+  \item un sottosistema si divide in uno o più \textbf{package};
+  \item un package si divide in \textbf{classi};
+  \item una classe si divide in \textbf{metodi}.
+\end{itemize}
+
+\subsection{Due dimensioni: sottosistemi e livelli}
+
+Sottosistemi e livelli sono due modi \textbf{ortogonali} di tagliare un sistema.
+\begin{itemize}
+  \item La \textbf{dimensione funzionale} divide il sistema per \textit{funzioni}: in un'auto, il sistema di alimentazione,
+        quello di propulsione, quello elettrico, quello frenante.
+  \item La \textbf{dimensione di astrazione} (o di implementazione) lo divide per \textit{livelli}: dai servizi più
+        astratti, vicini all'utente, a quelli più concreti, vicini all'hardware.
+\end{itemize}
+Ogni pezzo del sistema sta all'incrocio di una funzione e di un livello. Un sistema ben progettato è \textbf{coerente in
+entrambe le dimensioni}: un esempio reale è la mappa del kernel Linux, che dispone le funzioni del kernel in colonne e i
+livelli in righe.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    cella/.style={rectangle, draw=swblue!70!black, fill=swblue!#1, line width=0.6pt, minimum width=1.55cm,
+                  minimum height=0.62cm},
+    intest/.style={font=\scriptsize\bfseries, align=center, text width=1.55cm},
+    riga/.style={font=\scriptsize, anchor=east},
+    ax/.style={-{Stealth[length=2.4mm]}, line width=0.9pt, draw=swgray}]
+  % --- l'auto ---
+  \foreach \c/\n in {0/{Alimen-\\tazione}, 1/{Propul-\\sione}, 2/{Elettrico}, 3/{Frenante}} {
+    \node[intest, anchor=south] at (\c*1.65,0.4) {\n};
+  }
+  \foreach \r/\sh in {0/12, 1/26, 2/42} {
+    \node[riga] at (-0.95,-\r*0.72) {Livello \the\numexpr\r+1\relax};
+    \foreach \c in {0,...,3} \node[cella=\sh] at (\c*1.65,-\r*0.72) {};
+  }
+  \draw[ax] (-0.8,1.35) -- (5.7,1.35) node[note, above left]{dimensione funzionale};
+  \draw[ax] (-1.9,0.3) -- (-1.9,-2.0) node[note, below, align=center]{dimensione di\\ astrazione};
+  % --- la mappa del kernel Linux, semplificata ---
+  \begin{scope}[shift={(9.2,0)}]
+    \foreach \c/\n in {0/{system}, 1/{proces-\\sing}, 2/{memory}, 3/{storage}, 4/{networ-\\king}} {
+      \node[intest, text width=1.05cm, anchor=south, font=\tiny\bfseries] at (\c*1.1,0.3) {\n};
+    }
+    \foreach \r/\n in {0/{interfacce utente}, 1/{virtuale}, 2/{funzionale}, 3/{controllo dispositivi},
+                       4/{interfacce hardware}} {
+      \node[riga, font=\tiny] at (-0.62,-\r*0.5) {\n};
+      \pgfmathtruncatemacro{\sh}{12+\r*7}
+      \foreach \c/\col in {0/q7, 1/q4, 2/q8, 3/q1, 4/q2} {
+        \node[rectangle, draw=\col!60!black, fill=\col!\sh, line width=0.5pt,
+              minimum width=1.05cm, minimum height=0.44cm] at (\c*1.1,-\r*0.5) {};
+      }
+    }
+    \node[note, font=\scriptsize\bfseries] at (2.2,-2.65) {Mappa del kernel Linux (semplificata)};
+  \end{scope}
+\end{tikzpicture}
+\caption{A sinistra, i sottosistemi di un'auto (colonne) incrociati con i livelli di astrazione (righe). A destra lo
+         stesso schema nel kernel Linux: funzioni in colonna, livelli in riga.}
+\end{figure}
+
+% ============================================================
+\section{L'architettura a livelli}
+
+\dfn{Scomposizione gerarchica in livelli}{
+  Una scomposizione gerarchica di un sistema è un insieme \textbf{ordinato} di \term{livelli} (\textit{layer}). Un livello è
+  un raggruppamento di sottosistemi che offrono servizi correlati, eventualmente realizzati usando i servizi di altri
+  livelli.
+  \begin{itemize}
+    \item Un livello può dipendere \textbf{solo dai livelli inferiori}.
+    \item Un livello \textbf{non sa nulla} dei livelli superiori.
+  \end{itemize}
+}
+
+La prima formalizzazione dell'architettura a livelli si deve a \textbf{Edsger Dijkstra}, con il sistema operativo
+\textit{THE} (sviluppato a partire dal 1965 e descritto nel 1968): il sistema va costruito come un insieme di
+\term{macchine virtuali}, ognuna costruita \textbf{sopra} quella sottostante. Ogni livello offre al livello superiore una
+«macchina» più comoda di quella che lui stesso riceve dal livello inferiore.
+
+A seconda di quali livelli si possono usare, l'architettura è \textbf{chiusa} o \textbf{aperta}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    vm/.style={draw=swgray, line width=0.7pt, fill=#1},
+    cl/.style={rectangle, draw=q9!75!black, fill=yellow!12, line width=0.5pt, minimum width=0.55cm,
+               minimum height=0.36cm, font=\tiny},
+    ch/.style={-{Stealth[length=1.8mm]}, line width=0.7pt, draw=#1},
+    ch/.default=black!70]
+  \foreach \lato/\ox/\tit in {chiusa/0/{Architettura chiusa}, aperta/8.0/{Architettura aperta}} {
+    \begin{scope}[shift={(\ox,0)}]
+      \node[font=\small\bfseries] at (3.0,0.55) {\tit};
+      \foreach \i/\f in {1/ph5!6, 2/ph5!12, 3/ph5!18, 4/ph5!24} {
+        \draw[vm=\f] (0,-\i*1.0+1.0) rectangle (6.0,-\i*1.0);
+        \node[font=\scriptsize\bfseries, anchor=east] at (5.95,-\i*1.0+0.5) {VM\i};
+      }
+      \node[cl] (\lato-a) at (1.0,-0.5) {C};  \node[cl] (\lato-b) at (2.4,-0.5) {C};  \node[cl] (\lato-c) at (3.8,-0.5) {C};
+      \node[cl] (\lato-d) at (2.0,-1.5) {C};  \node[cl] (\lato-e) at (3.6,-1.5) {C};
+      \node[cl] (\lato-f) at (1.4,-2.5) {C};  \node[cl] (\lato-g) at (3.2,-2.5) {C};
+      \node[cl] (\lato-h) at (1.0,-3.5) {C};  \node[cl] (\lato-i) at (3.6,-3.5) {C};
+    \end{scope}
+  }
+  % chiusa: solo verso il livello immediatamente sotto
+  \draw[ch] (chiusa-a) -- (chiusa-d); \draw[ch] (chiusa-b) -- (chiusa-d); \draw[ch] (chiusa-c) -- (chiusa-e);
+  \draw[ch] (chiusa-d) -- (chiusa-f); \draw[ch] (chiusa-d) -- (chiusa-g); \draw[ch] (chiusa-e) -- (chiusa-g);
+  \draw[ch] (chiusa-f) -- (chiusa-h); \draw[ch] (chiusa-g) -- (chiusa-i);
+  % aperta: anche verso livelli piu' in basso
+  \draw[ch] (aperta-b) -- (aperta-d); \draw[ch] (aperta-c) -- (aperta-e);
+  \draw[ch=swred] (aperta-a) -- (aperta-f); \draw[ch=swred] (aperta-a.south west) to[bend right=12] (aperta-h);
+  \draw[ch] (aperta-d) -- (aperta-g); \draw[ch=swred] (aperta-e) -- (aperta-i);
+  \draw[ch] (aperta-f) -- (aperta-h);
+  \node[note, align=center] at (3.0,-4.4) {ogni macchina usa solo\\ quella \textbf{immediatamente} sotto};
+  \node[note, align=center] at (11.0,-4.4) {si può usare \textbf{qualunque} macchina sottostante\\
+    \textcolor{swred}{(in rosso le chiamate che saltano livelli)}};
+\end{tikzpicture}
+\caption{Il sistema come pila di macchine virtuali (VM1 in cima, VM4 in fondo).}
+\end{figure}
+
+\Needspace{14\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\gbox{Architettura chiusa}{ph5}{\raggedright
+Ogni livello può chiamare \textbf{solo} le operazioni del livello \textbf{immediatamente} sottostante.
+
+\textbf{Obiettivo di progetto}: alta \textbf{manutenibilità} e \textbf{portabilità}. Si può sostituire un livello toccando
+solo quello sopra; per portare il sistema su un'altra piattaforma basta riscrivere i livelli più bassi.}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\gbox{Architettura aperta}{sworange}{\raggedright
+Ogni livello può usare i servizi di \textbf{tutti} i livelli sottostanti.
+
+\textbf{Obiettivo di progetto}: \textbf{efficienza} a tempo di esecuzione. Si evitano i passaggi intermedi, ma ogni livello
+dipende da più livelli: cambiare quelli in basso costa di più.}
+\end{minipage}
+
+È un'applicazione diretta del Capitolo 11: l'architettura chiusa \textbf{riduce l'accoppiamento} (ogni livello conosce un
+solo vicino, come nella Legge di Demetra), quella aperta lo aumenta in cambio di prestazioni.
+
+\begin{esempio}{Android, un'architettura (quasi) chiusa}
+Lo stack del sistema operativo Android è un esempio classico di architettura a livelli: le applicazioni usano il
+\textit{framework} applicativo, che usa le librerie e il runtime, che si appoggiano al kernel Linux.
+
+\begin{center}
+\begin{tikzpicture}[
+    strato/.style={rectangle, rounded corners=3pt, draw=#1!70!black, fill=#1!14, line width=0.8pt,
+                   minimum width=13.6cm, minimum height=1.05cm},
+    comp/.style={rectangle, rounded corners=2pt, fill=#1!55!black, text=white, font=\tiny\bfseries,
+                 minimum width=1.9cm, minimum height=0.36cm, inner sep=1pt},
+    tit/.style={font=\scriptsize\bfseries, anchor=north, text=#1!70!black}]
+  \node[strato=swblue] (s1) at (0,0) {};
+  \node[tit=swblue] at (s1.north) {Applicazioni};
+  \foreach \i/\n in {0/Home, 1/Contatti, 2/Telefono, 3/Browser, 4/\ldots}
+    \node[comp=swblue] at (-4.4+\i*2.2,-0.15) {\n};
+  \node[strato=swblue, fill=swblue!8] (s2) at (0,-1.2) {};
+  \node[tit=swblue] at (s2.north) {Application Framework};
+  \foreach \i/\n in {0/Activity Mgr, 1/Window Mgr, 2/Content Providers, 3/View System, 4/Notification Mgr}
+    \node[comp=swblue] at (-4.4+\i*2.2,-1.35) {\n};
+  \node[rectangle, rounded corners=3pt, draw=q8!70!black, fill=q8!14, line width=0.8pt, minimum width=8.9cm,
+        minimum height=1.05cm] (s3) at (-2.35,-2.4) {};
+  \node[tit=q8] at (s3.north) {Librerie};
+  \foreach \i/\n in {0/Surface Mgr, 1/Media, 2/SQLite, 3/OpenGL ES}
+    \node[comp=q8] at (-5.65+\i*2.2,-2.55) {\n};
+  \node[rectangle, rounded corners=3pt, draw=sworange!80!black, fill=sworange!18, line width=0.8pt,
+        minimum width=4.5cm, minimum height=1.05cm] (s4) at (4.55,-2.4) {};
+  \node[tit=sworange] at (s4.north) {Android Runtime};
+  \foreach \i/\n in {0/ART, 1/Core Libraries}
+    \node[comp=sworange] at (3.45+\i*2.2,-2.55) {\n};
+  \node[strato=swred] (s5) at (0,-3.6) {};
+  \node[tit=swred] at (s5.north) {Kernel Linux};
+  \foreach \i/\n in {0/Display, 1/Camera, 2/Bluetooth, 3/Binder (IPC), 4/Power Mgmt}
+    \node[comp=swred] at (-4.4+\i*2.2,-3.75) {\n};
+\end{tikzpicture}
+\end{center}
+Un'app normale non parla con il kernel né con i driver: chiede i servizi al framework (ad esempio la fotocamera), che li
+ottiene dai livelli sottostanti. A rigore l'architettura non è chiusa al cento per cento: con l'\textit{Android NDK} un'app
+può usare direttamente librerie native. È la regola, non la legge.
+\end{esempio}
+
+\subsection{Livelli e partizioni}
+
+Dentro un'architettura a livelli, ogni livello può a sua volta essere diviso in \term{partizioni}: sottosistemi
+\textbf{allo stesso livello} di astrazione, che si occupano di funzioni diverse. Nell'esempio di Larman (un sistema di
+cassa, POS), il livello del dominio è partizionato in \textit{POS}, \textit{Inventory} e \textit{Tax}; quello dei servizi
+tecnici in \textit{Persistence}, \textit{Security} e \textit{Logging}.
+
+\begin{center}
+\begin{tikzpicture}
+  \umlpkg{dom}{(0,2.1)}{8.2}{1.5}{Domain}
+  \umlpkg{pos}{(0.35,2.22)}{2.2}{0.55}{POS}
+  \umlpkg{inv}{(3.0,2.22)}{2.2}{0.55}{Inventory}
+  \umlpkg{tax}{(5.65,2.22)}{2.2}{0.55}{Tax}
+  \umlpkg{tec}{(0,0)}{8.2}{1.5}{Technical Services}
+  \umlpkg{per}{(0.35,0.12)}{2.2}{0.55}{Persistence}
+  \umlpkg{sec}{(3.0,0.12)}{2.2}{0.55}{Security}
+  \umlpkg{log}{(5.65,0.12)}{2.2}{0.55}{Logging}
+  \draw[dipend] (dom.south) -- (tec.north |- 0,1.72);
+  \draw[{Stealth[length=2.4mm]}-{Stealth[length=2.4mm]}, line width=0.9pt, draw=swgray] (-0.6,3.8) -- (-0.6,-0.1)
+    node[midway, note, left, align=right]{livelli\\ (verticale)};
+  \draw[{Stealth[length=2.4mm]}-{Stealth[length=2.4mm]}, line width=0.9pt, draw=swgray] (0,-0.45) -- (8.2,-0.45)
+    node[midway, note, below]{partizioni (orizzontale)};
+\end{tikzpicture}
+\end{center}
+
+% ============================================================
+\section{Le principali architetture}
+
+L'ingegneria del software ha codificato diversi \textbf{stili architetturali}, da usare come base per progettare un sistema
+specifico:
+\begin{itemize}
+  \item architettura \textbf{client/server};
+  \item architettura a \textbf{repository};
+  \item architettura \textbf{a livelli};
+  \item architettura \textbf{three-tier} e \textbf{multi-tier};
+  \item architettura \textbf{orientata ai servizi} (SOA);
+  \item \ldots
+\end{itemize}
+
+% ------------------------------------------------------------
+\subsection{Client/server}
+
+\dfn{Architettura client/server}{
+  Un'architettura \textbf{distribuita} in cui dati ed elaborazione sono ripartiti in una rete fra due tipi di nodi.
+  \begin{itemize}
+    \item I \term{server} sono elaboratori potenti e dedicati, che offrono servizi specifici: stampa, gestione del file
+          system, compilazione, gestione del traffico di rete, calcolo.
+    \item I \term{client} sono macchine meno potenti, su cui girano le applicazioni dell'utente, che usano i servizi dei
+          server.
+  \end{itemize}
+}
+
+Dal punto di vista della progettazione, un sottosistema detto \textbf{server} fornisce servizi a istanze di altri
+sottosistemi, i \textbf{client}, che si occupano dell'interazione con l'utente.
+\begin{itemize}
+  \item I client chiamano il server, che esegue dei servizi e restituisce il risultato; la risposta di solito è
+        \textbf{immediata}.
+  \item I client conoscono l'\textbf{interfaccia} del server (i suoi servizi), il nome e la natura dei server.
+  \item I server \textbf{non} conoscono le interfacce dei client, e non hanno bisogno di conoscerne né l'identità né il
+        numero: servono chiunque faccia una richiesta.
+  \item Gli utenti interagiscono \textbf{solo con il client}.
+\end{itemize}
+
+\Needspace{10\baselineskip}
+\begin{center}
+\begin{tikzpicture}
+  \node[classe1=2.2cm] (c) at (0,0) {Client};
+  \umlclass[2.6cm]{s}{(6.6,-0.35)}{Server}{}{service1()\\service2()\\\ldots\\serviceN()}
+  \draw[assoc] (c.east) -- (s.west |- c.east);
+  \node[molt, anchor=south west] at (c.east) {*};
+  \node[molt, anchor=north west, font=\scriptsize\itshape] at (c.east) {requester};
+  \node[molt, anchor=south east] at (s.west |- c.east) {*};
+  \node[molt, anchor=north east, font=\scriptsize\itshape] at (s.west |- c.east) {provider};
+  \foreach \i in {0,1,2} \node[classe1=1.1cm, font=\tiny\bfseries] (k\i) at (10.5,0.8-\i*0.8) {:Client};
+  \node[classe1=1.3cm, font=\tiny\bfseries] (sv) at (13.0,0) {:Server};
+  \foreach \i in {0,1,2} \draw[navig] (k\i.east) -- (sv.west);
+  \node[note, align=center] at (11.8,-1.5) {molti client,\\ un server che non li conosce};
+\end{tikzpicture}
+\end{center}
+
+L'esempio più familiare è il \textbf{Web}: il browser è il client, il server web risponde a chiunque gli invii una
+richiesta HTTP, senza sapere in anticipo chi o quanti saranno.
+
+% ------------------------------------------------------------
+\subsection{Repository}
+
+\dfn{Architettura a repository}{
+  I sottosistemi accedono e modificano un'\textbf{unica struttura dati} condivisa, il \term{repository}. I sottosistemi
+  sono «relativamente indipendenti»: interagiscono \textbf{solo attraverso il repository}.
+}
+
+Il flusso di controllo può essere dettato:
+\begin{itemize}
+  \item dal \textbf{repository}: è una modifica ai dati memorizzati a far partire un sottosistema (in questo caso si parla
+        anche di architettura a \textit{blackboard}, a lavagna);
+  \item dai \textbf{sottosistemi}: ognuno ha il proprio flusso di controllo indipendente, e usa il repository quando gli serve.
+\end{itemize}
+
+\Needspace{12\baselineskip}
+\begin{center}
+\begin{tikzpicture}
+  \node[classe1=2.2cm] (sub) at (0,0) {Subsystem};
+  \umlclass[2.6cm]{rep}{(4.4,-0.3)}{Repository}{}{createData()\\setData()\\getData()\\searchData()}
+  \draw[dipend] (sub.east) -- (rep.west |- sub.east);
+  \begin{scope}[shift={(10.8,-0.2)}]
+    \node[cylinder, shape border rotate=90, aspect=0.25, draw=swblue!70!black, fill=swblue!15, line width=0.8pt,
+          minimum width=1.5cm, minimum height=1.3cm, font=\scriptsize\bfseries] (db) at (0,0) {Repository};
+    \foreach \a/\n in {150/Modulo 1, 90/Modulo 2, 30/Modulo 3, -30/Modulo 4, -90/Modulo $n$} {
+      \node[rectangle, fill=sworange, text=white, font=\tiny\bfseries, minimum width=1.4cm, minimum height=0.5cm]
+        (m\a) at (\a:2.25) {\n};
+      \draw[{Stealth[length=1.8mm]}-{Stealth[length=1.8mm]}, line width=0.7pt, draw=swteal] (m\a) -- (db);
+    }
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+
+\begin{esempio}{Il compilatore e i DBMS}
+Due esempi tipici di architettura a repository sono i \textbf{DBMS} e i \textbf{compilatori moderni}. In un compilatore,
+analizzatore lessicale, sintattico e semantico, ottimizzatore e generatore di codice non si chiamano fra loro: leggono e
+scrivono l'\textbf{albero sintattico} e la \textbf{tabella dei simboli}. Allo stesso repository attingono anche strumenti
+esterni come il debugger e l'editor sintattico.
+
+\begin{center}
+\begin{tikzpicture}
+  \umlpkg{comp}{(0,1.9)}{11.4}{1.5}{Compiler}
+  \foreach \i/\n in {0/LexicalAnalyzer, 1/SyntacticAnalyzer, 2/SemanticAnalyzer, 3/Optimizer, 4/CodeGenerator}
+    \node[classe1=2.0cm, font=\tiny\bfseries] (c\i) at (1.25+\i*2.23,2.4) {\n};
+  \umlpkg{repo}{(3.2,0)}{5.0}{1.1}{Repository}
+  \node[classe1=1.9cm, font=\tiny\bfseries] (pt) at (4.4,0.38) {ParseTree};
+  \node[classe1=1.9cm, font=\tiny\bfseries] (st) at (7.0,0.38) {SymbolTable};
+  \foreach \i in {0,...,4} \draw[dipend] (c\i.south) -- ($(repo.north)+(-1.5+\i*0.75,0.0)$);
+  \umlpkg{dbg}{(1.2,-1.6)}{2.8}{0.6}{SourceLevelDebugger}
+  \umlpkg{ed}{(7.3,-1.6)}{2.6}{0.6}{SyntacticEditor}
+  \draw[dipend] (dbg.north) -- ($(repo.south)+(-1.2,0)$);
+  \draw[dipend] (ed.north) -- ($(repo.south)+(1.2,0)$);
+\end{tikzpicture}
+\end{center}
+Aggiungere un nuovo strumento (un formattatore del codice, un analizzatore di stile) non richiede di modificare il
+compilatore: basta che legga lo stesso repository.
+\end{esempio}
+
+\Needspace{24\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\gbox{Vantaggi}{swgreen}{\raggedright
+\begin{itemize}[leftmargin=1.1em]
+  \item Modo efficiente di condividere \textbf{grandi quantità di dati}: si scrivono una volta, tutti li leggono.
+  \item Un sottosistema non deve preoccuparsi di come i dati sono prodotti o usati dagli altri.
+  \item Gestione \textbf{centralizzata} di backup, sicurezza, controllo degli accessi, ripristino dagli errori.
+  \item Il modello dei dati condivisi è pubblicato come \textbf{schema} del repository: è facile aggiungere nuovi
+        sottosistemi.
+\end{itemize}}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\gbox{Svantaggi}{swred}{\raggedright
+\begin{itemize}[leftmargin=1.1em]
+  \item I sottosistemi devono accordarsi su un modello dei dati di \textbf{compromesso}: prestazioni più basse.
+  \item \textbf{Evoluzione dei dati}: adottare un nuovo modello è difficile e costoso, perché va applicato all'intero
+        repository e vanno aggiornati tutti i sottosistemi.
+  \item Sottosistemi diversi possono avere esigenze diverse di backup e sicurezza, che il repository non supporta.
+  \item È difficile \textbf{distribuire} il repository su più macchine continuando a vederlo come logicamente
+        centralizzato: problemi di ridondanza e di consistenza dei dati.
+\end{itemize}}
+\end{minipage}
+
+% ------------------------------------------------------------
+\subsection{A livelli}
+
+\dfn{Architettura a livelli}{
+  I sottosistemi sono organizzati in \textbf{livelli}. Ogni livello:
+  \begin{itemize}
+    \item usa i servizi del livello sottostante;
+    \item fornisce servizi al livello superiore attraverso \textbf{interfacce ben definite}.
+  \end{itemize}
+}
+
+\begin{center}
+\begin{tikzpicture}[
+    s/.style={rectangle, draw=#1!70!black, fill=#1!16, line width=0.6pt, minimum width=3.3cm, minimum height=0.5cm,
+              font=\tiny\bfseries, align=center}]
+  % annidato
+  \draw[line width=0.7pt, fill=swlight] (0,0) rectangle (4.2,3.0);
+  \node[font=\scriptsize\bfseries, anchor=north west] at (0.05,3.0) {Applicazione dati};
+  \draw[line width=0.7pt, fill=white] (0.3,0.25) rectangle (3.9,2.55);
+  \node[font=\scriptsize\bfseries, anchor=north west] at (0.35,2.55) {Sistema di database};
+  \draw[line width=0.7pt, fill=swlight] (0.6,0.5) rectangle (3.6,2.1);
+  \node[font=\scriptsize\bfseries, anchor=north west] at (0.65,2.1) {Sistema operativo};
+  \draw[line width=0.7pt, fill=white] (0.9,0.75) rectangle (3.3,1.55);
+  \node[font=\scriptsize\bfseries] at (2.1,1.15) {Kernel};
+  % GNU/Linux
+  \begin{scope}[shift={(6.6,0)}]
+    \node[s=swblue] at (0,2.75) {Applicazioni utente};
+    \node[s=swblue] at (0,2.15) {Libreria C di GNU (glibc)};
+    \node[s=q5] at (0,1.55) {Interfaccia delle system call};
+    \node[s=q5] at (0,0.95) {Kernel};
+    \node[s=q5] at (0,0.35) {Codice dipendente dall'architettura};
+    \node[note, font=\scriptsize\bfseries] at (0,-0.2) {GNU/Linux};
+  \end{scope}
+  % .NET
+  \begin{scope}[shift={(11.0,0)}]
+    \node[s=sworange] at (0,2.75) {Applicazione utente};
+    \node[s=sworange] at (0,2.15) {ASP.NET, Windows Forms\ldots};
+    \node[s=sworange] at (0,1.55) {Base Class Libraries};
+    \node[s=sworange] at (0,0.95) {Common Language Runtime};
+    \node[s=swgray] at (0,0.35) {Sistema operativo};
+    \node[note, font=\scriptsize\bfseries] at (0,-0.2) {.NET Framework};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+
+\Needspace{10\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\gbox{Vantaggi}{swgreen}{\raggedright
+\begin{itemize}[leftmargin=1.1em]
+  \item \textbf{astrazione} delle responsabilità (\textit{separation of concerns});
+  \item livelli inferiori e superiori \textbf{isolati} gli uni dagli altri (disaccoppiati);
+  \item \textbf{riusabilità} dei livelli.
+\end{itemize}}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\gbox{Svantaggi}{swred}{\raggedright
+\begin{itemize}[leftmargin=1.1em]
+  \item \textbf{sovraccarico} (\textit{overhead}) dovuto all'attraversamento di più livelli;
+  \item maggiore \textbf{complessità}.
+\end{itemize}}
+\end{minipage}
+
+\info{{Layer e tier}}{
+  Le slide osservano che per la maggior parte delle persone i termini \textit{layer} e \textit{tier} sono intercambiabili.
+  Molti autori, però, li distinguono: un \textbf{layer} è una suddivisione \textbf{logica} del codice (presentazione, logica,
+  dati), un \textbf{tier} una separazione \textbf{fisica}, cioè su processi o macchine diversi. Un'applicazione può avere
+  tre layer e girare tutta su un solo tier, oppure distribuire ogni layer su un tier diverso, come nell'architettura che
+  vediamo ora.
+}
+
+% ------------------------------------------------------------
+\subsection{Three-tier}
+
+L'architettura \term{three-tier}, introdotta negli anni Novanta, gestisce \textbf{esplicitamente} la logica applicativa
+(\textit{business logic}) in un livello dedicato. I tre livelli sono:
+\begin{enumerate}
+  \item \textbf{gestione dei dati}: comunicazione con il DBMS, file XML, \ldots;
+  \item \textbf{logica applicativa}: elaborazione dei dati, regole del dominio;
+  \item \textbf{interfaccia utente}: presentazione dei dati e dei servizi.
+\end{enumerate}
+Ogni livello ha i propri obiettivi e vincoli di progetto, e \textbf{nessun livello fa ipotesi} sulla struttura o
+sull'implementazione degli altri: il livello 2 non sa come sono rappresentati i dati né com'è fatta l'interfaccia; il
+livello 3 non sa come funziona la logica applicativa.
+
+\begin{itemize}
+  \item Non c'è comunicazione diretta fra il livello 1 e il livello 3: l'interfaccia utente non riceve né inserisce dati
+        direttamente nel livello dei dati, e ogni informazione, in entrambe le direzioni, è \textbf{filtrata dalla logica
+        applicativa}. È un'architettura a livelli \textbf{chiusa}.
+  \item I livelli funzionano senza presupporre di far parte di un'applicazione specifica: le applicazioni sono viste come
+        \textbf{collezioni di componenti che cooperano}, e ogni componente può far parte contemporaneamente di applicazioni
+        diverse (ad esempio lo stesso database, o lo stesso componente di logica).
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    srv/.style={rectangle split, rectangle split parts=2, draw=black!80, fill=white, line width=0.7pt, font=\scriptsize,
+                align=center, text width=2.4cm},
+    bolla/.style={circle, fill=q8!18, minimum size=2.7cm},
+    cli/.style={ellipse, draw=black!80, fill=swblue!12, line width=0.7pt, font=\scriptsize, minimum width=1.4cm,
+                minimum height=0.75cm},
+    lnk/.style={{Stealth[length=2mm]}-{Stealth[length=2mm]}, line width=0.8pt}]
+  % --- schema generale ---
+  \node[cli] (c) at (0,0) {Client};
+  \node[bolla] at (3.4,0) {};  \node[srv] (a) at (3.4,0) {\textbf{Server}\nodepart{two}Logica applicativa};
+  \node[bolla] at (7.0,0) {};  \node[srv] (d) at (7.0,0) {\textbf{Server}\nodepart{two}Gestione dei dati};
+  \draw[lnk] (c) -- (a);  \draw[lnk] (a) -- (d);
+  \node[note, font=\scriptsize\bfseries] at (0,0.75) {Presentazione};
+  \node[note, font=\scriptsize\bfseries, align=center] at (3.5,-2.25) {Un'architettura three-tier client/server};
+  % --- internet banking ---
+  \begin{scope}[shift={(10.0,0)}]
+    \foreach \i in {0,...,3} \node[cli, minimum width=1.1cm, minimum height=0.55cm, font=\tiny] (k\i) at (0,1.35-\i*0.9) {Client};
+    \node[bolla, minimum size=2.4cm] at (2.9,0) {};
+    \node[srv, text width=2.0cm, font=\tiny] (w) at (2.9,0) {\textbf{Web server}\nodepart{two}servizio\\ conti correnti};
+    \node[bolla, minimum size=2.4cm] at (6.6,0) {};
+    \node[srv, text width=2.0cm, font=\tiny] (db) at (6.6,0) {\textbf{Database server}\nodepart{two}database dei\\ conti};
+    \foreach \i in {0,...,3} \draw[line width=0.6pt] (k\i.east) -- (w.west);
+    \draw[line width=0.7pt] (w.east) -- node[note, font=\tiny, above]{query SQL} (db.west);
+    \node[note, font=\tiny, anchor=south] at (1.3,1.7) {interazione HTTP};
+    \node[note, font=\scriptsize\bfseries, align=center] at (3.3,-2.25) {Un sistema di internet banking};
+  \end{scope}
+\end{tikzpicture}
+\caption{L'architettura three-tier: in generale (a sinistra) e in un sistema di internet banking (a destra).}
+\end{figure}
+
+\Needspace{30\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\gbox{Vantaggi}{swgreen}{\raggedright
+\textbf{Flessibilità e modificabilità}, grazie ai componenti separati:
+\begin{itemize}[leftmargin=1.1em]
+  \item i componenti si possono usare in sistemi diversi;
+  \item modificare un componente non tocca il resto del sistema (a meno che cambi la sua API);
+  \item la ricerca dei bug è più mirata, perché le funzionalità sono separate e isolate;
+  \item aggiungere funzionalità significa estendere solo i componenti coinvolti, o aggiungerne di nuovi.
+\end{itemize}
+\textbf{Interconnettività}:
+\begin{itemize}[leftmargin=1.1em]
+  \item le API dei componenti evitano gli adattatori del modello client/server: $N$ interfacce diverse possono collegarsi
+        allo stesso servizio;
+  \item applicazioni diverse accedono facilmente ai dati comuni (logiche diverse sullo stesso gestore dei dati).
+\end{itemize}
+\textbf{Gestione dei sistemi distribuiti}: la logica applicativa si può aggiornare senza aggiornare i client.}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\gbox{Svantaggi}{swred}{\raggedright
+\textbf{Dimensione ed efficienza} delle applicazioni:
+\begin{itemize}[leftmargin=1.1em]
+  \item uso intenso della comunicazione di rete, quindi \textbf{latenza} dei servizi;
+  \item la comunicazione fra componenti richiede librerie per lo scambio di informazioni, quindi codice voluminoso.
+\end{itemize}
+\textbf{Integrazione del software \textit{legacy}}:
+\begin{itemize}[leftmargin=1.1em]
+  \item molte aziende gestiscono i propri dati con vecchio software monolitico;
+  \item è difficile applicare il modello three-tier alle nuove applicazioni che devono usarlo;
+  \item servono \textbf{adattatori} per interfacciarsi con il software legacy.
+\end{itemize}}
+\end{minipage}
+
+% ------------------------------------------------------------
+\subsection{Multi-tier}
+
+L'architettura \term{multi-tier} è l'evoluzione della three-tier su $N$ livelli, e ammette configurazioni diverse. I suoi
+elementi fondamentali sono cinque.
+
+\begin{center}
+\begin{tikzpicture}[
+    tier/.style={rectangle, rounded corners=3pt, fill=#1, draw=#1!70!black, text=white, font=\scriptsize\bfseries,
+                 minimum width=3.8cm, minimum height=0.75cm, align=center},
+    descr/.style={note, anchor=west, text width=9.0cm}]
+  \foreach \i/\n/\c/\d in {
+      0/{Interfaccia utente (UI)}/ph1/{gestisce l'interazione con l'utente: un browser, un'app mobile, un'interfaccia grafica\ldots},
+      1/{Logica di presentazione}/ph2/{stabilisce che cosa la UI mostra e come gestire le richieste dell'utente},
+      2/{Logica applicativa}/ph3/{gestisce le regole di business dell'applicazione},
+      3/{Servizi infrastrutturali}/ph4/{offrono funzionalità aggiuntive ai componenti: messaggistica, transazioni\ldots},
+      4/{Livello dei dati}/ph6/{i dati dell'applicazione}} {
+    \node[tier=\c] (t\i) at (0,-\i*0.95) {\n};
+    \node[descr] at (2.15,-\i*0.95) {\d};
+  }
+  \foreach \i [evaluate=\i as \j using int(\i+1)] in {0,...,3}
+    \draw[-{Stealth[length=2mm]}, line width=0.9pt, draw=swgray] (t\i.south) -- (t\j.north);
+\end{tikzpicture}
+\end{center}
+
+% ------------------------------------------------------------
+\subsection{Orientata ai servizi (SOA)}
+
+Nell'architettura \term{orientata ai servizi} (\textit{Service-Oriented Architecture}, SOA) il sistema è un insieme di
+\textbf{servizi} indipendenti, ciascuno con una propria interfaccia, a cui i client accedono attraverso un punto di
+ingresso comune.
+\begin{itemize}
+  \item I servizi sono componenti \textbf{senza stato} (\textit{stateless}): non conservano informazioni fra una richiesta e
+        l'altra, quindi si possono \textbf{replicare} e \textbf{spostare} da un computer all'altro.
+  \item Alla fornitura dei servizi possono partecipare \textbf{molti server}.
+  \item Un'architettura orientata ai servizi è di solito più facile da \textbf{scalare} quando la domanda cresce (basta
+        aggiungere repliche dei servizi più richiesti) ed è \textbf{resiliente} ai guasti (se una replica cade, ne
+        risponde un'altra).
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}[
+    cli/.style={rectangle, rounded corners=6pt, draw=swred, fill=swred!8, line width=0.8pt, font=\scriptsize\bfseries,
+                text=swred!80!black, minimum width=1.6cm, minimum height=0.55cm},
+    nod/.style={rectangle, draw=swteal, fill=swteal!14, line width=0.8pt, font=\small\bfseries, align=center,
+                minimum width=2.1cm, minimum height=1.0cm},
+    srv/.style={rectangle, rounded corners=2pt, draw=swteal, fill=swred!6, line width=0.8pt, font=\scriptsize\bfseries,
+                text=swteal!80!black, minimum width=0.75cm, minimum height=0.5cm},
+    ar/.style={{Stealth[length=1.8mm]}-{Stealth[length=1.8mm]}, line width=0.7pt, draw=swteal!80!black}]
+  \foreach \i/\n in {0/Client 1, 1/Client 2, 2/Client 3, 3/Client \ldots} \node[cli] (c\i) at (0,1.5-\i*1.0) {\n};
+  \node[nod] (ws) at (3.4,0) {Web\\ server};
+  \node[nod] (sg) at (6.6,0) {Service\\ gateway};
+  \foreach \i in {0,...,5} \node[srv] (s\i) at (9.6,1.75-\i*0.7) {S\the\numexpr\i+1\relax};
+  \node[note, font=\scriptsize\bfseries, text=swteal] at (9.6,-2.65) {Servizi};
+  \foreach \i in {0,...,3} \draw[ar] (c\i.east) -- (ws.west);
+  \draw[ar, draw=swgray, line width=1.2pt] (ws) -- (sg);
+  \foreach \i in {0,...,5} \draw[ar] (sg.east) -- (s\i.west);
+\end{tikzpicture}
+\end{center}
+
+Il \textit{service gateway} smista ogni richiesta al servizio competente: i client vedono un unico punto di accesso e non
+sanno quante repliche ci siano dietro, né su quali macchine girino.
+
+% ============================================================
+\section{Confronto}
+
+\Needspace{24\baselineskip}
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\small
+\begin{tabular}{@{}>{\bfseries}p{2.1cm} >{\raggedright\arraybackslash}p{4.0cm} >{\raggedright\arraybackslash}p{3.6cm}
+                >{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{2.6cm}@{}}
+  \toprule
+  \normalfont\textbf{Stile} & \textbf{Idea} & \textbf{Punti di forza} & \textbf{Punti deboli} & \textbf{Esempi} \\
+  \midrule
+  Client/server & i server offrono servizi, i client li chiamano & servizi centralizzati, client semplici & il server è
+    un collo di bottiglia & Web, server di stampa \\
+  Repository & i sottosistemi comunicano solo tramite dati condivisi & condivisione di grandi moli di dati, nuovi
+    sottosistemi facili da aggiungere & modello dei dati difficile da cambiare e da distribuire & compilatori, DBMS \\
+  A livelli & ogni livello usa solo quelli sottostanti & astrazione, isolamento, riuso & overhead, complessità & sistemi
+    operativi, Android \\
+  Three-tier & presentazione, logica e dati su livelli separati & flessibilità, interconnettività & latenza di rete,
+    integrazione del legacy & internet banking, e-commerce \\
+  SOA & servizi senza stato dietro un gateway & scalabilità, resilienza ai guasti & complessità di gestione e
+    comunicazione & grandi applicazioni web \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+% ============================================================
+\section{Esercizi}
+
+\begin{esercizio}{Architettura chiusa o aperta?}
+Un'applicazione è organizzata in quattro livelli: \textit{Interfaccia}, \textit{Logica}, \textit{Accesso ai dati},
+\textit{Driver del database}. Per velocizzare una schermata di ricerca, uno sviluppatore fa chiamare direttamente il
+\textit{Driver del database} dall'\textit{Interfaccia}. Che tipo di architettura diventa? Quali obiettivi di progetto
+migliora e quali peggiora?
+
+\textbf{Soluzione.} Saltando due livelli, l'architettura diventa \textbf{aperta}. Migliora l'\textbf{efficienza} a tempo
+di esecuzione di quella schermata, ma peggiorano \textbf{manutenibilità} e \textbf{portabilità}: l'\textit{Interfaccia} ora
+dipende dal driver, quindi un cambio di DBMS costringe a modificare anche l'interfaccia, e le regole della
+\textit{Logica} (validazioni, permessi) vengono aggirate. Se le prestazioni sono davvero un problema, conviene prima
+ottimizzare i livelli intermedi, ad esempio con una cache nel livello di accesso ai dati, lasciando l'architettura chiusa.
+\end{esercizio}
+
+\begin{esercizio}{Scegliere lo stile architetturale}
+Per ciascun sistema indica lo stile architetturale più adatto e motiva la scelta.
+\begin{enumerate}
+  \item Un ambiente di sviluppo (IDE) in cui editor, compilatore, debugger e strumento di refactoring lavorano tutti
+        sullo stesso albero sintattico del programma.
+  \item Il sistema di home banking di una banca, con sito web e app che accedono agli stessi conti.
+  \item Il sito di vendita dei biglietti di un grande festival, con picchi enormi di richieste all'apertura delle vendite.
+  \item Una stampante condivisa in un ufficio, usata da tutti i PC della rete.
+\end{enumerate}
+
+\textbf{Soluzione.}
+\begin{enumerate}
+  \item \textbf{Repository}: gli strumenti condividono una grande struttura dati (l'albero sintattico e la tabella dei
+        simboli) e non devono conoscersi fra loro; aggiungere uno strumento nuovo non tocca gli altri.
+  \item \textbf{Three-tier}: sito e app sono due interfacce diverse sulla stessa logica applicativa e sugli stessi dati;
+        la logica (bonifici, controlli) si aggiorna senza aggiornare i client, e l'interfaccia non tocca mai direttamente
+        il database.
+  \item \textbf{SOA}: i servizi senza stato si replicano per reggere il picco (ad esempio molte istanze del servizio di
+        disponibilità dei posti) e il sistema resta in piedi anche se una replica cade.
+  \item \textbf{Client/server}: il server di stampa offre un servizio a client che non conosce in anticipo; i client
+        conoscono l'interfaccia del server.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Assegnare le responsabilità ai tier}
+In un'architettura three-tier per un e-commerce, a quale livello (dati, logica applicativa, interfaccia) va ciascuna di
+queste responsabilità?
+\begin{enumerate}
+  \item Mostrare il contenuto del carrello.
+  \item Calcolare lo sconto del 10\% sugli ordini sopra i 100 euro.
+  \item Salvare l'ordine confermato.
+  \item Controllare che il campo e-mail del modulo di registrazione contenga una «@».
+  \item Verificare che un prodotto sia disponibile in magazzino prima di confermare l'ordine.
+\end{enumerate}
+
+\textbf{Soluzione.} 1 \textbf{interfaccia}; 2 \textbf{logica applicativa} (è una regola di business); 3 \textbf{dati}; 5
+\textbf{logica applicativa}, che interroga il livello dei dati. La 4 è il caso più interessante: il controllo può stare
+nell'\textbf{interfaccia}, per dare all'utente una risposta immediata, ma va \textbf{ripetuto} nella logica applicativa,
+perché nessun livello deve fare ipotesi sugli altri: la logica non può fidarsi del fatto che ogni interfaccia (il sito,
+l'app, un client scritto da altri) abbia già controllato.
+\end{esercizio}
+
+\begin{esercizio}{Livelli e partizioni}
+Proponi un'architettura a livelli e partizioni per il sistema di segreteria universitaria del Capitolo 11 (studenti, esami,
+tasse, aule), indicando le dipendenze fra i livelli.
+
+\textbf{Soluzione.} Una proposta, sul modello di Larman:
+\begin{center}
+\begin{tikzpicture}
+  \umlpkg{ui}{(0,4.2)}{9.2}{1.5}{Interfaccia}
+  \umlpkg{w}{(0.3,4.32)}{2.6}{0.55}{Portale web}
+  \umlpkg{a}{(3.3,4.32)}{2.6}{0.55}{App studenti}
+  \umlpkg{b}{(6.3,4.32)}{2.6}{0.55}{Back office}
+  \umlpkg{dom}{(0,2.1)}{9.2}{1.5}{Dominio}
+  \umlpkg{d1}{(0.3,2.22)}{1.9}{0.55}{Carriera}
+  \umlpkg{d2}{(2.5,2.22)}{1.9}{0.55}{Esami}
+  \umlpkg{d3}{(4.7,2.22)}{1.9}{0.55}{Tasse}
+  \umlpkg{d4}{(6.9,2.22)}{1.9}{0.55}{Aule}
+  \umlpkg{tec}{(0,0)}{9.2}{1.5}{Servizi tecnici}
+  \umlpkg{t1}{(0.3,0.12)}{2.6}{0.55}{Persistenza}
+  \umlpkg{t2}{(3.3,0.12)}{2.6}{0.55}{Autenticazione}
+  \umlpkg{t3}{(6.3,0.12)}{2.6}{0.55}{Logging}
+  \draw[dipend] (ui.south) -- (dom.north |- 0,3.82);
+  \draw[dipend] (dom.south) -- (tec.north |- 0,1.72);
+\end{tikzpicture}
+\end{center}
+L'architettura è \textbf{chiusa}: l'interfaccia usa solo il dominio, il dominio solo i servizi tecnici. Le partizioni dello
+stesso livello dovrebbero dipendere il meno possibile l'una dall'altra; dove serve (ad esempio \textit{Esami} che aggiorna
+la \textit{Carriera}) la dipendenza va resa esplicita e tenuta in una sola direzione.
+\end{esercizio}
+
+% ============================================================
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item L'\textbf{architettura software} è l'insieme delle strutture di un sistema: elementi, proprietà visibili dall'esterno
+        e relazioni. È un'astrazione, ogni sistema ne ha una (meglio progettarla), e un disegno a scatole e frecce non basta.
+  \item Si definisce nella \textbf{progettazione architetturale}, identificando i sottosistemi e le politiche di controllo:
+        scelte difficili da cambiare in seguito.
+  \item Il sistema si divide in \textbf{livelli} e \textbf{sottosistemi}, poi in package, classi e metodi; funzioni e livelli
+        sono due dimensioni ortogonali.
+  \item In un'architettura a livelli ogni livello dipende solo da quelli inferiori. \textbf{Chiusa} (solo il livello
+        immediatamente sotto): manutenibilità e portabilità. \textbf{Aperta} (tutti i livelli sotto): efficienza.
+  \item Gli stili principali sono \textbf{client/server}, \textbf{repository}, \textbf{a livelli}, \textbf{three-tier} e
+        \textbf{multi-tier}, \textbf{SOA}: ognuno con vantaggi e svantaggi da pesare rispetto agli obiettivi di progetto.
+\end{itemize}
+}
