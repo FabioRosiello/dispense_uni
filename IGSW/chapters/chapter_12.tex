@@ -1,820 +1,1100 @@
-\chapter{Architetture software}
+\chapter{Architetture software moderne}
 % Il codice in linea (\code) non va a capo: un po' di elasticita' in piu' evita righe che sbordano
 \emergencystretch=2.5em
 
-Nel capitolo precedente abbiamo visto perché e come scomporre un sistema in sottosistemi, guidati da coesione e
-accoppiamento. Qui facciamo un passo in più: vediamo come i sottosistemi si \textbf{organizzano} in una struttura
-complessiva, l'\textbf{architettura}, e quali sono le architetture standard da cui si parte nella pratica. Nello schema degli
-otto aspetti del System Design (Capitolo 11) ci troviamo al passo 2, \textit{scomposizione del sistema}: livelli e partizioni.
+Il capitolo precedente ha presentato gli stili architetturali classici: client/server, repository, livelli, three-tier,
+SOA. Qui guardiamo le architetture dei sistemi \textbf{moderni}, che devono servire milioni di utenti, non fermarsi mai ed
+evolvere ogni giorno. Il filo conduttore sono le \textbf{proprietà} che l'architettura determina (scalabilità,
+disponibilità, consistenza dei dati) e le tecniche per ottenerle: bilanciamento del carico, replica, code di messaggi,
+microservizi. Chiudiamo con un tema meno tecnico ma altrettanto decisivo: il legame fra l'architettura e
+l'\textbf{organizzazione} dei team.
+
+% Stili delle figure di questo capitolo
+\tikzset{
+  pc/.style={rectangle, rounded corners=2pt, draw=swteal!80!black, fill=swteal!10, line width=0.7pt,
+             minimum width=#1, minimum height=#1, font=\scriptsize, inner sep=0pt},
+  pc/.default=0.7cm,
+  servizio/.style={rectangle, rounded corners=2pt, draw=sworange!80!black, fill=sworange!12, line width=0.8pt,
+             minimum width=1.5cm, minimum height=0.8cm, font=\scriptsize\bfseries, align=center},
+  db/.style={cylinder, shape border rotate=90, aspect=0.22, draw=swblue!70!black, fill=swblue!14, line width=0.8pt,
+             minimum width=1.2cm, minimum height=0.9cm, font=\scriptsize\bfseries, align=center},
+  fr/.style={-{Stealth[length=2.2mm]}, line width=0.8pt, draw=swgray},
+  frd/.style={{Stealth[length=2.2mm]}-{Stealth[length=2.2mm]}, line width=0.8pt, draw=swgray},
+}
 
 % ============================================================
-\section{Che cos'è un'architettura software}
+\section{Che cos'è, di nuovo, un'architettura}
 
-\dfn{Architettura software}{
-  L'\term{architettura software} di un sistema è la sua struttura (o l'insieme delle sue strutture), formata da
-  \textbf{elementi software}, dalle loro \textbf{proprietà visibili dall'esterno} e dalle \textbf{relazioni} fra di essi.
+Nel Capitolo 11 abbiamo definito l'architettura come l'insieme delle strutture di un sistema. Martin Fowler ne dà una
+definizione complementare, centrata sulle \textbf{decisioni}.
 
-  Quali strutture considerare, e come rappresentarle, dipende dagli obiettivi di ingegneria che si perseguono.
+\dfn{Architettura software (Fowler)}{
+  L'architettura di un sistema software è l'insieme delle \textbf{decisioni di progetto principali} sul sistema: il
+  progetto di massima (\textit{blueprint}) della sua costruzione e della sua evoluzione. Sono decisioni che hanno un
+  impatto significativo sulla struttura del sistema, sul suo comportamento e sulle sue interazioni, e sulle sue proprietà
+  non funzionali.
 }
 
-La definizione, dovuta a Bass, Clements e Kazman (\textit{Software Architecture in Practice}), ha tre conseguenze
-importanti.
-
-\subsection{1. L'architettura è un'astrazione}
-
-L'architettura definisce gli elementi e il modo in cui \textbf{interagiscono}, e tace di proposito sui dettagli puramente
-locali: ciò che è privato di un elemento \textbf{non} è architetturale. Contano invece le proprietà \textbf{visibili
-dall'esterno}, cioè le ipotesi che un elemento può fare su un altro:
+«Principale» indica un grado di importanza tale da dare a una decisione lo \textbf{status di decisione architetturale}.
+Ma quale lo è?
 \begin{itemize}
-  \item i servizi \textbf{forniti} e i servizi \textbf{richiesti};
-  \item le caratteristiche di \textbf{prestazione};
-  \item la \textbf{gestione dei guasti};
-  \item l'\textbf{uso delle risorse}.
+  \item Scegliere fra MariaDB e MySQL è una decisione architetturale? Probabilmente no: sono due database relazionali quasi
+        intercambiabili, e passare dall'uno all'altro costa poco.
+  \item Scegliere fra un database \textbf{relazionale} e uno \textbf{NoSQL}? Sì: cambia il modo in cui si modellano i dati,
+        le garanzie di consistenza, il codice che li usa. Tornare indietro costa moltissimo.
 \end{itemize}
-Sono le stesse informazioni che, nel diagramma dei componenti del Capitolo 9, stanno nelle interfacce fornite e richieste.
 
-\subsection{2. Ogni sistema ha un'architettura}
+L'architettura riguarda ciò che è \textbf{difficile da cambiare in seguito}. Non esiste un criterio oggettivo per stabilire
+quali decisioni siano «principali»; come scrive Fowler, \textit{«l'architettura riguarda le cose importanti, qualunque esse
+siano»}. Il cuore del pensare un software in modo architetturale è decidere che cosa è importante, e poi spendere energie
+per mantenere quegli elementi in buone condizioni. Per diventare architetto, uno sviluppatore deve saper riconoscere gli
+elementi importanti: quelli che, se non tenuti sotto controllo, porteranno con ogni probabilità a problemi seri.
 
-Ogni sistema è composto di elementi in relazione fra loro, quindi ha un'architettura; nel caso limite, un solo elemento in
-relazione solo con sé stesso. Ma \textbf{avere} un'architettura è diverso dall'avere un'architettura \textbf{nota a tutti}:
-l'architettura è una cosa, la sua \textbf{specifica} un'altra.
+\subsection{Perché l'architettura conta}
 
-\warning{{Se non la progetti, ne avrai una comunque}}{
-  Se non si sviluppa esplicitamente un'architettura, il sistema ne avrà comunque una: quella che emerge dalle scelte prese
-  giorno per giorno da chi scrive il codice. E potrebbe non piacerci affatto.
-}
+Per clienti e utenti l'architettura è un argomento ostico: è qualcosa che \textbf{non percepiscono} direttamente. Eppure ha
+un impatto significativo sulla struttura del sistema, sul suo comportamento e sulle sue proprietà non funzionali. Inoltre
+un'architettura scadente rende il sistema molto più difficile da sviluppare e da far evolvere, con conseguenze sui costi e
+sui tempi di consegna delle nuove funzionalità.
 
-\subsection{3. Un disegno a scatole e frecce non basta}
+\Needspace{18\baselineskip}
+\noindent\begin{minipage}[c]{0.44\textwidth}
+Il grafico, da un articolo di Fowler (\textit{Is High Quality Software Worth the Cost?}), mostra la funzionalità
+accumulata nel tempo da due progetti. Quello con \textbf{bassa qualità interna} parte più veloce, ma rallenta presto:
+ogni nuova funzionalità costa di più, perché il codice è sempre più difficile da capire e modificare. Quello con
+\textbf{alta qualità interna} (una buona architettura) parte un po' più lento, ma poi consegna più in fretta e a costi
+minori.
 
-Ne segue che un disegno fatto di \textbf{scatole e linee} non è, da solo, un'architettura: è soltanto un punto di partenza.
-Vedendo una scatola con scritto «database» si può immaginare che cosa faccia, ma niente di più.
+Il punto chiave è \textbf{quando} le due curve si incrociano: secondo Fowler, dopo \textbf{settimane}, non mesi. La qualità
+interna costa di più all'inizio, ma ripaga molto presto.
+\end{minipage}\hfill
+\begin{minipage}[c]{0.53\textwidth}
+\centering
+\begin{tikzpicture}[x=0.75cm, y=0.75cm]
+  \draw[-{Stealth[length=2mm]}, line width=0.8pt] (0,0) -- (10.2,0) node[below left, note]{tempo};
+  \draw[-{Stealth[length=2mm]}, line width=0.8pt] (0,0) -- (0,6.4) node[above right, note, align=left]{funzionalità\\ accumulata};
+  \draw[line width=1.3pt, draw=swblue, domain=0:9.8, samples=60] plot (\x, {5.6*(1-exp(-\x/5.5))*(1+0.04*\x)});
+  \draw[line width=1.3pt, draw=q9!70, domain=0:9.8, samples=60] plot (\x, {3.2*(1-exp(-\x/1.8))});
+  \draw[dashed, draw=swgray] (2.95,0) -- (2.95,2.6);
+  \node[note, anchor=north, align=center, text=q4!80!black] at (2.95,-0.05) {dopo settimane,\\ non mesi};
+  \node[note, anchor=west, text=swblue, font=\scriptsize\bfseries] at (3.9,5.9) {alta qualità interna};
+  \node[note, anchor=west, text=q9!80!black, font=\scriptsize\bfseries] at (6.9,3.55) {bassa qualità interna};
+  \node[note, anchor=west, align=left, text=swgray, font=\tiny] at (0.4,3.6) {all'inizio l'alta qualità\\ rallenta un poco};
+\end{tikzpicture}
+\end{minipage}
+
+\subsection{Le proprietà che dipendono dall'architettura}
+
+Le proprietà su cui l'architettura incide di più sono sei. Le prime tre sono i temi delle prossime sezioni; le altre tre
+sono misure di prestazione che conviene distinguere bene.
 
 \begin{center}
+\begin{tikzpicture}[prop/.style={chip=#1, minimum width=3.0cm, minimum height=0.7cm, font=\small\bfseries}]
+  \node[prop=swteal] at (0,0) {Scalabilità};
+  \node[prop=swteal] at (3.4,0) {Disponibilità};
+  \node[prop=swteal] at (6.8,0) {Consistenza};
+  \node[prop=swblue] at (0,-0.95) {Prestazioni};
+  \node[prop=swblue] at (3.4,-0.95) {Latenza};
+  \node[prop=swblue] at (6.8,-0.95) {Throughput};
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item La \term{latenza} è il \textbf{tempo} necessario a servire una singola richiesta (ad esempio 200 ms).
+  \item Il \term{throughput} è la \textbf{quantità} di lavoro servita nell'unità di tempo (ad esempio 5000 richieste al
+        secondo).
+\end{itemize}
+Le due misure sono legate ma non coincidono: un sistema può servire moltissime richieste al secondo, ciascuna lentamente.
+
+% ============================================================
+\section{Scalabilità}
+
+\dfn{Scalabilità}{
+  Un servizio è \term{scalabile} se, aggiungendo risorse, le sue prestazioni aumentano in modo \textbf{proporzionale} alle
+  risorse aggiunte.
+}
+
+Di solito aumentare le prestazioni significa servire \textbf{più unità di lavoro} (più richieste, più utenti), ma può anche
+significare gestire unità di lavoro \textbf{più grandi}, ad esempio quando i dati crescono. Un modo semplice di distinguere
+prestazioni e scalabilità:
+\begin{itemize}
+  \item se c'è un problema di \textbf{prestazioni}, il sistema è lento anche per un \textbf{singolo} utente;
+  \item se c'è un problema di \textbf{scalabilità}, il sistema è veloce per un singolo utente, ma lento \textbf{sotto carico}.
+\end{itemize}
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[c]{0.5\textwidth}
+\textbf{La scalabilità è una questione di soldi.} Il grafico mostra come crescono i costi al crescere del volume di lavoro
+(richieste servite, transazioni, utenti contemporanei\ldots) per tre ipotetici sistemi.
+\begin{itemize}
+  \item \textcolor{swred}{\textbf{Male}}: costi che crescono più che proporzionalmente. Il sistema è economico finché è
+        piccolo, ma diventa insostenibile proprio quando ha successo.
+  \item \textcolor{swteal}{\textbf{Accettabile}}: costi che crescono in proporzione al volume.
+  \item \textcolor{swgreen}{\textbf{Bene}}: costi che crescono meno che proporzionalmente. Ogni utente in più costa meno
+        del precedente.
+\end{itemize}
+Le tre curve si incrociano in un punto: a quel volume i tre sistemi costano uguale. Prima di quel punto il sistema
+«cattivo» è addirittura il più economico, ed è proprio questa la trappola: le differenze si vedono solo quando il volume
+cresce.
+\end{minipage}\hfill
+\begin{minipage}[c]{0.46\textwidth}
+\centering
+\begin{tikzpicture}[x=0.7cm, y=0.7cm]
+  \draw[-{Stealth[length=2mm]}, line width=0.8pt] (0,0) -- (8.6,0) node[below left, note]{volume};
+  \draw[-{Stealth[length=2mm]}, line width=0.8pt] (0,0) -- (0,6.6) node[above right, note]{costi};
+  \draw[line width=1.3pt, draw=swred, domain=0:4.6, samples=40] plot (\x, {0.8+0.2444*\x*\x});
+  \draw[line width=1.3pt, draw=swteal, domain=0:8.2, samples=10] plot (\x, {1.2+0.6*\x});
+  \draw[line width=1.3pt, draw=swgreen, domain=0:8.2, samples=40] plot (\x, {1.6+1.01*ln(1+\x)});
+  \node[note, text=swred, font=\scriptsize\bfseries, anchor=south] at (4.6,6.3) {male};
+  \node[note, text=swteal, font=\scriptsize\bfseries, anchor=west] at (8.2,6.3) {accettabile};
+  \node[note, text=swgreen, font=\scriptsize\bfseries, anchor=west] at (8.2,3.85) {bene};
+  \draw[dashed, draw=swgray] (3,0) -- (3,3);
+  \fill[black] (3,3) circle (2pt);
+  \node[note, anchor=north, font=\tiny] at (3,-0.05) {stesso costo};
+\end{tikzpicture}
+\end{minipage}
+
+\subsection{Scalare orizzontalmente, verticalmente, diagonalmente}
+
+Come si serve più lavoro? Le strade sono tre.
+
+\begin{figure}[H]
+\centering
 \begin{tikzpicture}
-  \node[compo, minimum width=2.4cm] (a) at (0,0) {Executive};
-  \node[compo, minimum width=2.4cm] (b) at (4.6,0) {Database};
-  \draw[line width=0.8pt] (a) -- (b);
-  \node[font=\Large\bfseries, text=swred] at (2.3,0.45) {?};
-  \node[note, anchor=west, text width=6.4cm] at (7.0,0) {Che servizi offre \textit{Database}? Chi chiama chi? Quante
-    richieste al secondo regge? Che succede se non risponde? Senza queste \textbf{specifiche e proprietà} il disegno non
-    dice nulla di verificabile.};
+  \tikzset{riq/.style={rectangle, rounded corners=4pt, draw=#1!70!black, fill=#1!8, line width=0.8pt,
+                       minimum width=4.6cm, minimum height=4.2cm}}
+  % orizzontale
+  \node[riq=q5] at (0,0) {};
+  \foreach \r in {0,1,2} \foreach \c in {0,1,2} \node[pc] at (-1.0+\c*1.0,1.3-\r*0.95) {\icpu};
+  \draw[fr, draw=q5!80!black, line width=1.2pt] (-1.6,-1.45) -- (1.6,-1.45);
+  \node[font=\scriptsize\bfseries, align=center] at (0,-2.55) {Scalabilità orizzontale};
+  \node[note, align=center] at (0,-3.0) {più nodi di calcolo};
+  % verticale
+  \node[riq=q6] at (5.0,0) {};
+  \node[pc=0.55cm] at (5.0,-1.35) {\icpu};
+  \node[pc=0.9cm] at (5.0,-0.4) {\icpu};
+  \node[pc=1.3cm, font=\large] at (5.0,1.05) {\icpu};
+  \draw[fr, draw=q6!80!black, line width=1.2pt] (3.25,-1.6) -- (3.25,1.7);
+  \node[font=\scriptsize\bfseries, align=center] at (5.0,-2.55) {Scalabilità verticale};
+  \node[note, align=center] at (5.0,-3.0) {un nodo più potente};
+  % diagonale
+  \node[riq=q7] at (10.0,0) {};
+  \node[pc=0.5cm] at (8.6,-1.4) {\icpu};
+  \node[pc=0.65cm] at (8.6,-0.5) {\icpu}; \node[pc=0.65cm] at (9.4,-0.5) {\icpu};
+  \node[pc=0.85cm] at (8.7,0.6) {\icpu}; \node[pc=0.85cm] at (9.7,0.6) {\icpu}; \node[pc=0.85cm] at (10.7,0.6) {\icpu};
+  \draw[fr, draw=q7!80!black, line width=1.2pt] (9.5,-1.5) -- (11.7,-0.2);
+  \node[font=\scriptsize\bfseries, align=center] at (10.0,-2.55) {Scalabilità diagonale};
+  \node[note, align=center] at (10.0,-3.0) {più nodi, e più potenti};
 \end{tikzpicture}
-\end{center}
-
-Inoltre un sistema ha \textbf{molte strutture} (o \textit{viste}): la scomposizione in moduli, i componenti in esecuzione,
-l'allocazione sui nodi hardware\ldots{} Nessuna struttura da sola \textit{è} l'architettura, e l'insieme delle strutture da
-considerare non è fissato: si sceglie ciò che serve per l'analisi, la comunicazione o la comprensione. I diagrammi UML visti
-finora ne sono un esempio: package (Capitolo 8), componenti e deployment (Capitolo 9) sono viste diverse della stessa
-architettura.
-
-% ============================================================
-\section{L'architettura nel System Design}
-
-L'architettura di un sistema si definisce nella prima fase del System Design, la \term{progettazione architetturale}.
-Lo scopo principale è scomporre il sistema in sottosistemi, perché:
-\begin{itemize}
-  \item realizzare più componenti distinti è meno complesso che realizzare un sistema monolitico;
-  \item permette lo \textbf{sviluppo in parallelo};
-  \item favorisce modificabilità, riusabilità, portabilità.
-\end{itemize}
-
-Definire un'architettura significa \textbf{assegnare le funzionalità ai moduli}: il modulo dell'interfaccia utente, quello
-di accesso al database, quello della sicurezza, e così via. Anche qui valgono \textbf{alta coesione} e \textbf{basso
-accoppiamento}: ogni parte dell'architettura deve offrire servizi fortemente correlati, limitando il numero di altri
-moduli a cui è legata.
-
-La definizione si svolge da due punti di vista, che insieme portano alla soluzione finale:
-\begin{enumerate}
-  \item l'\textbf{identificazione dei sottosistemi} e delle loro relazioni;
-  \item la definizione delle \textbf{politiche di controllo} (chi avvia le operazioni, come scorre il flusso di controllo).
-\end{enumerate}
-Entrambe le scelte sono cruciali, perché sono \textbf{difficili da cambiare} a sviluppo avviato: bisognerebbe modificare
-le interfacce di molti sottosistemi.
-
-% ============================================================
-\section{Identificare i sottosistemi}
-
-\subsection{Divide et impera}
-
-Affrontare qualcosa di grande tutto in una volta è più difficile che affrontare un insieme di cose più piccole. Dividere il
-sistema porta quattro vantaggi:
-\begin{itemize}
-  \item ogni componente è più piccolo, e quindi più facile da \textbf{capire};
-  \item le parti si possono \textbf{sostituire o modificare} senza dover sostituire o modificare profondamente le altre;
-  \item persone diverse possono lavorare su \textbf{parti diverse};
-  \item un singolo ingegnere del software può \textbf{specializzarsi}.
-\end{itemize}
-
-La divisione procede per livelli successivi:
-
-\Needspace{12\baselineskip}
-\begin{center}
-\begin{tikzpicture}[
-    liv/.style={rounded corners=4pt, line width=0.8pt, draw=#1!70!black, fill=#1!8},
-    tit/.style={font=\scriptsize\bfseries, anchor=north west, inner sep=2pt}]
-  \draw[liv=ph2] (0,0) rectangle (13.6,3.3);
-  \node[tit, text=ph2!80!black] at (0,3.3) {Sistema};
-  \foreach \k/\x in {0/0.25, 1/4.75, 2/9.25} {
-    \draw[liv=ph3] (\x,0.25) rectangle (\x+4.1,2.85);
-    \node[tit, text=ph3!80!black] at (\x,2.85) {Livello o sottosistema};
-    \foreach \j/\y in {0/0.45, 1/1.55} {
-      \draw[liv=ph4] (\x+0.2,\y) rectangle (\x+3.9,\y+0.95);
-      \node[tit, text=ph4!80!black, font=\tiny\bfseries] at (\x+0.2,\y+0.95) {Package};
-      \foreach \c in {0,1,2} {
-        \draw[liv=q9, fill=yellow!12] (\x+0.35+\c*1.17,\y+0.12) rectangle (\x+1.37+\c*1.17,\y+0.62);
-        \node[font=\tiny, text=q9!80!black] at (\x+0.86+\c*1.17,\y+0.48) {Classe};
-        \draw[q9!60, line width=0.4pt] (\x+0.45+\c*1.17,\y+0.3) -- (\x+1.27+\c*1.17,\y+0.3);
-        \node[font=\tiny, text=q9!70!black] at (\x+0.86+\c*1.17,\y+0.2) {metodi};
-      }
-    }
-  }
-\end{tikzpicture}
-\end{center}
-\begin{itemize}
-  \item un \textbf{sistema} si divide in \textbf{livelli} (\textit{layer}) e \textbf{sottosistemi};
-  \item un sottosistema si divide in uno o più \textbf{package};
-  \item un package si divide in \textbf{classi};
-  \item una classe si divide in \textbf{metodi}.
-\end{itemize}
-
-\subsection{Due dimensioni: sottosistemi e livelli}
-
-Sottosistemi e livelli sono due modi \textbf{ortogonali} di tagliare un sistema.
-\begin{itemize}
-  \item La \textbf{dimensione funzionale} divide il sistema per \textit{funzioni}: in un'auto, il sistema di alimentazione,
-        quello di propulsione, quello elettrico, quello frenante.
-  \item La \textbf{dimensione di astrazione} (o di implementazione) lo divide per \textit{livelli}: dai servizi più
-        astratti, vicini all'utente, a quelli più concreti, vicini all'hardware.
-\end{itemize}
-Ogni pezzo del sistema sta all'incrocio di una funzione e di un livello. Un sistema ben progettato è \textbf{coerente in
-entrambe le dimensioni}: un esempio reale è la mappa del kernel Linux, che dispone le funzioni del kernel in colonne e i
-livelli in righe.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-    cella/.style={rectangle, draw=swblue!70!black, fill=swblue!#1, line width=0.6pt, minimum width=1.55cm,
-                  minimum height=0.62cm},
-    intest/.style={font=\scriptsize\bfseries, align=center, text width=1.55cm},
-    riga/.style={font=\scriptsize, anchor=east},
-    ax/.style={-{Stealth[length=2.4mm]}, line width=0.9pt, draw=swgray}]
-  % --- l'auto ---
-  \foreach \c/\n in {0/{Alimen-\\tazione}, 1/{Propul-\\sione}, 2/{Elettrico}, 3/{Frenante}} {
-    \node[intest, anchor=south] at (\c*1.65,0.4) {\n};
-  }
-  \foreach \r/\sh in {0/12, 1/26, 2/42} {
-    \node[riga] at (-0.95,-\r*0.72) {Livello \the\numexpr\r+1\relax};
-    \foreach \c in {0,...,3} \node[cella=\sh] at (\c*1.65,-\r*0.72) {};
-  }
-  \draw[ax] (-0.8,1.35) -- (5.7,1.35) node[note, above left]{dimensione funzionale};
-  \draw[ax] (-1.9,0.3) -- (-1.9,-2.0) node[note, below, align=center]{dimensione di\\ astrazione};
-  % --- la mappa del kernel Linux, semplificata ---
-  \begin{scope}[shift={(9.2,0)}]
-    \foreach \c/\n in {0/{system}, 1/{proces-\\sing}, 2/{memory}, 3/{storage}, 4/{networ-\\king}} {
-      \node[intest, text width=1.05cm, anchor=south, font=\tiny\bfseries] at (\c*1.1,0.3) {\n};
-    }
-    \foreach \r/\n in {0/{interfacce utente}, 1/{virtuale}, 2/{funzionale}, 3/{controllo dispositivi},
-                       4/{interfacce hardware}} {
-      \node[riga, font=\tiny] at (-0.62,-\r*0.5) {\n};
-      \pgfmathtruncatemacro{\sh}{12+\r*7}
-      \foreach \c/\col in {0/q7, 1/q4, 2/q8, 3/q1, 4/q2} {
-        \node[rectangle, draw=\col!60!black, fill=\col!\sh, line width=0.5pt,
-              minimum width=1.05cm, minimum height=0.44cm] at (\c*1.1,-\r*0.5) {};
-      }
-    }
-    \node[note, font=\scriptsize\bfseries] at (2.2,-2.65) {Mappa del kernel Linux (semplificata)};
-  \end{scope}
-\end{tikzpicture}
-\caption{A sinistra, i sottosistemi di un'auto (colonne) incrociati con i livelli di astrazione (righe). A destra lo
-         stesso schema nel kernel Linux: funzioni in colonna, livelli in riga.}
+\caption{Le tre strade per servire più lavoro.}
 \end{figure}
 
-% ============================================================
-\section{L'architettura a livelli}
+La scalabilità \textbf{verticale} è la più semplice (non cambia nulla nel software), ma ha un limite fisico ed economico:
+oltre una certa soglia una macchina più potente costa moltissimo, o non esiste. Quella \textbf{orizzontale} non ha limiti
+teorici, ma richiede che il software sappia distribuire il lavoro su più nodi.
 
-\dfn{Scomposizione gerarchica in livelli}{
-  Una scomposizione gerarchica di un sistema è un insieme \textbf{ordinato} di \term{livelli} (\textit{layer}). Un livello è
-  un raggruppamento di sottosistemi che offrono servizi correlati, eventualmente realizzati usando i servizi di altri
-  livelli.
-  \begin{itemize}
-    \item Un livello può dipendere \textbf{solo dai livelli inferiori}.
-    \item Un livello \textbf{non sa nulla} dei livelli superiori.
-  \end{itemize}
+\subsection{Il bilanciamento del carico}
+
+Quando si scala orizzontalmente (o diagonalmente), serve un componente dedicato che distribuisca le richieste in arrivo fra
+i nodi di calcolo: il \term{load balancer} (bilanciatore del carico). Le strategie più comuni per scegliere il nodo sono:
+\begin{itemize}
+  \item \textbf{casuale}: ogni richiesta va a un nodo scelto a caso;
+  \item \textbf{meno carico} (\textit{least loaded}): la richiesta va al nodo meno occupato in quel momento;
+  \item \textbf{round robin}: i nodi si alternano a turno, uno dopo l'altro.
+\end{itemize}
+
+\Needspace{10\baselineskip}
+\noindent\begin{minipage}[c]{0.46\textwidth}
+\centering
+\begin{tikzpicture}
+  \node[note, font=\scriptsize] (w) at (0,0) {richieste};
+  \node[rectangle, rounded corners=3pt, draw=swblue!70!black, fill=swblue!15, line width=0.8pt, font=\scriptsize\bfseries,
+        align=center, minimum height=0.9cm] (lb) at (2.4,0) {load\\ balancer};
+  \foreach \i/\y in {1/1.1, 2/0, 3/-1.1} {
+    \node[pc] (n\i) at (5.0,\y) {\icpu};
+    \draw[fr] (lb.east) -- (n\i.west);
+  }
+  \draw[fr] (w) -- (lb);
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.5\textwidth}
+\warning{{Il load balancer è un punto delicato}}{
+  Tutto il traffico passa da lì, quindi può diventare un \textbf{collo di bottiglia}. E un singolo load balancer è un
+  \textbf{single point of failure}: se si guasta, si ferma tutto, anche se i nodi dietro funzionano. Nei sistemi reali i
+  load balancer stessi vengono replicati.
+}
+\end{minipage}
+
+% ============================================================
+\section{Disponibilità}
+
+\dfn{Disponibilità}{
+  La \term{disponibilità} (\textit{availability}) è la \textbf{frazione di tempo} in cui un sistema o un servizio è
+  operativo e accessibile.
 }
 
-La prima formalizzazione dell'architettura a livelli si deve a \textbf{Edsger Dijkstra}, con il sistema operativo
-\textit{THE} (sviluppato a partire dal 1965 e descritto nel 1968): il sistema va costruito come un insieme di
-\term{macchine virtuali}, ognuna costruita \textbf{sopra} quella sottostante. Ogni livello offre al livello superiore una
-«macchina» più comoda di quella che lui stesso riceve dal livello inferiore.
+La disponibilità è cruciale per i sistemi che devono funzionare in modo continuo: i sistemi \textbf{business-critical},
+dove un fermo causa perdite economiche e danni d'immagine, e i sistemi \textbf{safety-critical}, dove sono in gioco persone.
+Nel modello ISO/IEC 25010 del Capitolo 4 è una delle sotto-caratteristiche dell'affidabilità. Un sistema può diventare
+indisponibile per:
+\begin{itemize}
+  \item problemi \textbf{software} (l'applicazione smette di rispondere);
+  \item \textbf{carichi eccessivi} (non ci sono abbastanza risorse di calcolo);
+  \item perdita della \textbf{connessione di rete};
+  \item \textbf{guasti hardware}.
+\end{itemize}
 
-A seconda di quali livelli si possono usare, l'architettura è \textbf{chiusa} o \textbf{aperta}.
+\subsection{Quantificare la disponibilità: i «nove»}
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-    vm/.style={draw=swgray, line width=0.7pt, fill=#1},
-    cl/.style={rectangle, draw=q9!75!black, fill=yellow!12, line width=0.5pt, minimum width=0.55cm,
-               minimum height=0.36cm, font=\tiny},
-    ch/.style={-{Stealth[length=1.8mm]}, line width=0.7pt, draw=#1},
-    ch/.default=black!70]
-  \foreach \lato/\ox/\tit in {chiusa/0/{Architettura chiusa}, aperta/8.0/{Architettura aperta}} {
-    \begin{scope}[shift={(\ox,0)}]
-      \node[font=\small\bfseries] at (3.0,0.55) {\tit};
-      \foreach \i/\f in {1/ph5!6, 2/ph5!12, 3/ph5!18, 4/ph5!24} {
-        \draw[vm=\f] (0,-\i*1.0+1.0) rectangle (6.0,-\i*1.0);
-        \node[font=\scriptsize\bfseries, anchor=east] at (5.95,-\i*1.0+0.5) {VM\i};
-      }
-      \node[cl] (\lato-a) at (1.0,-0.5) {C};  \node[cl] (\lato-b) at (2.4,-0.5) {C};  \node[cl] (\lato-c) at (3.8,-0.5) {C};
-      \node[cl] (\lato-d) at (2.0,-1.5) {C};  \node[cl] (\lato-e) at (3.6,-1.5) {C};
-      \node[cl] (\lato-f) at (1.4,-2.5) {C};  \node[cl] (\lato-g) at (3.2,-2.5) {C};
-      \node[cl] (\lato-h) at (1.0,-3.5) {C};  \node[cl] (\lato-i) at (3.6,-3.5) {C};
-    \end{scope}
-  }
-  % chiusa: solo verso il livello immediatamente sotto
-  \draw[ch] (chiusa-a) -- (chiusa-d); \draw[ch] (chiusa-b) -- (chiusa-d); \draw[ch] (chiusa-c) -- (chiusa-e);
-  \draw[ch] (chiusa-d) -- (chiusa-f); \draw[ch] (chiusa-d) -- (chiusa-g); \draw[ch] (chiusa-e) -- (chiusa-g);
-  \draw[ch] (chiusa-f) -- (chiusa-h); \draw[ch] (chiusa-g) -- (chiusa-i);
-  % aperta: anche verso livelli piu' in basso
-  \draw[ch] (aperta-b) -- (aperta-d); \draw[ch] (aperta-c) -- (aperta-e);
-  \draw[ch=swred] (aperta-a) -- (aperta-f); \draw[ch=swred] (aperta-a.south west) to[bend right=12] (aperta-h);
-  \draw[ch] (aperta-d) -- (aperta-g); \draw[ch=swred] (aperta-e) -- (aperta-i);
-  \draw[ch] (aperta-f) -- (aperta-h);
-  \node[note, align=center] at (3.0,-4.4) {ogni macchina usa solo\\ quella \textbf{immediatamente} sotto};
-  \node[note, align=center] at (11.0,-4.4) {si può usare \textbf{qualunque} macchina sottostante\\
-    \textcolor{swred}{(in rosso le chiamate che saltano livelli)}};
-\end{tikzpicture}
-\caption{Il sistema come pila di macchine virtuali (VM1 in cima, VM4 in fondo).}
-\end{figure}
+La disponibilità si esprime come percentuale di tempo in cui il servizio è attivo (\textit{uptime}), e si misura in
+\textbf{numero di nove}: un servizio disponibile al 99{,}99\% ha «quattro nove». Ogni nove in più divide per dieci il fermo
+annuo tollerato.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}llr@{}}
+  \toprule
+  \textbf{Nove} & \textbf{Disponibilità} & \textbf{Fermo tollerato in un anno} \\
+  \midrule
+  uno     & 90\%        & circa 36 giorni e mezzo \\
+  due     & 99\%        & circa 3 giorni e 15 ore \\
+  tre     & 99{,}9\%    & circa 8 ore e 45 minuti \\
+  quattro & 99{,}99\%   & circa 52 minuti \\
+  cinque  & 99{,}999\%  & circa 5 minuti \\
+  sei     & 99{,}9999\% & circa 31 secondi \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Il calcolo è semplice: un anno ha circa $365 \times 24 = 8760$ ore, e il fermo tollerato è la frazione restante. Con tre
+nove, $8760 \times 0{,}001 = 8{,}76$ ore, cioè circa 8 ore e 45 minuti (le slide riportano 8 ore e 41 minuti: la piccola
+differenza dipende da come si conta la durata dell'anno).
+
+\subsection{Come si ottiene un'alta disponibilità: il fail-over}
+
+L'idea è non dipendere da un'unica istanza di un componente. Le tecniche di \term{fail-over} sono due.
 
 \Needspace{14\baselineskip}
 \noindent\begin{minipage}[t]{0.49\textwidth}
-\gbox{Architettura chiusa}{ph5}{\raggedright
-Ogni livello può chiamare \textbf{solo} le operazioni del livello \textbf{immediatamente} sottostante.
+\gbox{Fail-over attivo-passivo}{swblue}{\raggedright
+Se il componente \textbf{primario} si guasta, un'istanza \textbf{secondaria} ne prende il posto. La secondaria di solito è
+\textbf{passiva}: non fa nulla finché il primario funziona.
 
-\textbf{Obiettivo di progetto}: alta \textbf{manutenibilità} e \textbf{portabilità}. Si può sostituire un livello toccando
-solo quello sopra; per portare il sistema su un'altra piattaforma basta riscrivere i livelli più bassi.}
+\centering
+\begin{tikzpicture}
+  \node[note] (r) at (0,0) {richieste};
+  \node[pc] (p) at (2.6,0.55) {\icpu};
+  \node[pc, draw=swgray!60, fill=swlight, text=swgray!60] (s) at (2.6,-0.55) {\icpu};
+  \draw[fr] (r.east) -- (p.west);
+  \draw[fr, dashed, draw=swgray!60] (r.east) -- (s.west);
+  \node[note, anchor=west] at (3.0,0.55) {primario (lavora)};
+  \node[note, anchor=west, text=swgray] at (3.0,-0.55) {secondario (in attesa)};
+\end{tikzpicture}}
 \end{minipage}\hfill
 \begin{minipage}[t]{0.49\textwidth}
-\gbox{Architettura aperta}{sworange}{\raggedright
-Ogni livello può usare i servizi di \textbf{tutti} i livelli sottostanti.
+\gbox{Fail-over attivo-attivo}{swgreen}{\raggedright
+Esistono fin dall'inizio due o più istanze, che si dividono il lavoro (come nella scalabilità orizzontale). Se una si
+guasta, le altre si fanno carico anche della sua parte.
 
-\textbf{Obiettivo di progetto}: \textbf{efficienza} a tempo di esecuzione. Si evitano i passaggi intermedi, ma ogni livello
-dipende da più livelli: cambiare quelli in basso costa di più.}
+\centering
+\begin{tikzpicture}
+  \node[note] (r) at (0,0) {richieste};
+  \node[pc] (p) at (2.6,0.55) {\icpu};
+  \node[pc] (s) at (2.6,-0.55) {\icpu};
+  \draw[fr] (r.east) -- (p.west);
+  \draw[fr] (r.east) -- (s.west);
+  \node[note, anchor=west] at (3.0,0.55) {lavora};
+  \node[note, anchor=west] at (3.0,-0.55) {lavora anche lei};
+\end{tikzpicture}}
 \end{minipage}
 
-È un'applicazione diretta del Capitolo 11: l'architettura chiusa \textbf{riduce l'accoppiamento} (ogni livello conosce un
-solo vicino, come nella Legge di Demetra), quella aperta lo aumenta in cambio di prestazioni.
+\subsection{Osservabilità e monitoraggio}
 
-\begin{esempio}{Android, un'architettura (quasi) chiusa}
-Lo stack del sistema operativo Android è un esempio classico di architettura a livelli: le applicazioni usano il
-\textit{framework} applicativo, che usa le librerie e il runtime, che si appoggiano al kernel Linux.
+Con il fail-over, la durata del fermo dipende da quanto in fretta si reagisce al guasto.
+\begin{itemize}
+  \item \textbf{Quanto in fretta ci accorgiamo che un componente si è guastato?} E, prima ancora, \textbf{come} ce ne
+        accorgiamo? Di solito con gli \term{heartbeat}: segnali o controlli periodici che verificano che il sistema funzioni
+        normalmente. Se un componente smette di «battere», lo si considera guasto.
+  \item \textbf{Quanto ci mette la secondaria a partire?} Può essere in \textit{hot standby} (già avviata e pronta a
+        subentrare) o in \textit{cold standby} (spenta, da avviare al momento). Nel fail-over attivo-attivo il problema non
+        si pone: le altre istanze sono già in funzione.
+\end{itemize}
 
-\begin{center}
-\begin{tikzpicture}[
-    strato/.style={rectangle, rounded corners=3pt, draw=#1!70!black, fill=#1!14, line width=0.8pt,
-                   minimum width=13.6cm, minimum height=1.05cm},
-    comp/.style={rectangle, rounded corners=2pt, fill=#1!55!black, text=white, font=\tiny\bfseries,
-                 minimum width=1.9cm, minimum height=0.36cm, inner sep=1pt},
-    tit/.style={font=\scriptsize\bfseries, anchor=north, text=#1!70!black}]
-  \node[strato=swblue] (s1) at (0,0) {};
-  \node[tit=swblue] at (s1.north) {Applicazioni};
-  \foreach \i/\n in {0/Home, 1/Contatti, 2/Telefono, 3/Browser, 4/\ldots}
-    \node[comp=swblue] at (-4.4+\i*2.2,-0.15) {\n};
-  \node[strato=swblue, fill=swblue!8] (s2) at (0,-1.2) {};
-  \node[tit=swblue] at (s2.north) {Application Framework};
-  \foreach \i/\n in {0/Activity Mgr, 1/Window Mgr, 2/Content Providers, 3/View System, 4/Notification Mgr}
-    \node[comp=swblue] at (-4.4+\i*2.2,-1.35) {\n};
-  \node[rectangle, rounded corners=3pt, draw=q8!70!black, fill=q8!14, line width=0.8pt, minimum width=8.9cm,
-        minimum height=1.05cm] (s3) at (-2.35,-2.4) {};
-  \node[tit=q8] at (s3.north) {Librerie};
-  \foreach \i/\n in {0/Surface Mgr, 1/Media, 2/SQLite, 3/OpenGL ES}
-    \node[comp=q8] at (-5.65+\i*2.2,-2.55) {\n};
-  \node[rectangle, rounded corners=3pt, draw=sworange!80!black, fill=sworange!18, line width=0.8pt,
-        minimum width=4.5cm, minimum height=1.05cm] (s4) at (4.55,-2.4) {};
-  \node[tit=sworange] at (s4.north) {Android Runtime};
-  \foreach \i/\n in {0/ART, 1/Core Libraries}
-    \node[comp=sworange] at (3.45+\i*2.2,-2.55) {\n};
-  \node[strato=swred] (s5) at (0,-3.6) {};
-  \node[tit=swred] at (s5.north) {Kernel Linux};
-  \foreach \i/\n in {0/Display, 1/Camera, 2/Bluetooth, 3/Binder (IPC), 4/Power Mgmt}
-    \node[comp=swred] at (-4.4+\i*2.2,-3.75) {\n};
-\end{tikzpicture}
-\end{center}
-Un'app normale non parla con il kernel né con i driver: chiede i servizi al framework (ad esempio la fotocamera), che li
-ottiene dai livelli sottostanti. A rigore l'architettura non è chiusa al cento per cento: con l'\textit{Android NDK} un'app
-può usare direttamente librerie native. È la regola, non la legge.
-\end{esempio}
-
-\subsection{Livelli e partizioni}
-
-Dentro un'architettura a livelli, ogni livello può a sua volta essere diviso in \term{partizioni}: sottosistemi
-\textbf{allo stesso livello} di astrazione, che si occupano di funzioni diverse. Nell'esempio di Larman (un sistema di
-cassa, POS), il livello del dominio è partizionato in \textit{POS}, \textit{Inventory} e \textit{Tax}; quello dei servizi
-tecnici in \textit{Persistence}, \textit{Security} e \textit{Logging}.
-
-\begin{center}
-\begin{tikzpicture}
-  \umlpkg{dom}{(0,2.1)}{8.2}{1.5}{Domain}
-  \umlpkg{pos}{(0.35,2.22)}{2.2}{0.55}{POS}
-  \umlpkg{inv}{(3.0,2.22)}{2.2}{0.55}{Inventory}
-  \umlpkg{tax}{(5.65,2.22)}{2.2}{0.55}{Tax}
-  \umlpkg{tec}{(0,0)}{8.2}{1.5}{Technical Services}
-  \umlpkg{per}{(0.35,0.12)}{2.2}{0.55}{Persistence}
-  \umlpkg{sec}{(3.0,0.12)}{2.2}{0.55}{Security}
-  \umlpkg{log}{(5.65,0.12)}{2.2}{0.55}{Logging}
-  \draw[dipend] (dom.south) -- (tec.north |- 0,1.72);
-  \draw[{Stealth[length=2.4mm]}-{Stealth[length=2.4mm]}, line width=0.9pt, draw=swgray] (-0.6,3.8) -- (-0.6,-0.1)
-    node[midway, note, left, align=right]{livelli\\ (verticale)};
-  \draw[{Stealth[length=2.4mm]}-{Stealth[length=2.4mm]}, line width=0.9pt, draw=swgray] (0,-0.45) -- (8.2,-0.45)
-    node[midway, note, below]{partizioni (orizzontale)};
-\end{tikzpicture}
-\end{center}
+\dfn{Osservabilità}{
+  L'\term{osservabilità} è il grado in cui riusciamo a capire che cosa sta succedendo all'interno di un sistema software
+  mentre è in esecuzione, a partire dai dati che produce (log, metriche, tracce delle richieste). È una caratteristica
+  importante di un'architettura; strumenti come \textit{OpenTelemetry} servono proprio a raccogliere questi dati in modo
+  uniforme.
+}
 
 % ============================================================
-\section{Le principali architetture}
+\section{Dati e consistenza}
 
-L'ingegneria del software ha codificato diversi \textbf{stili architetturali}, da usare come base per progettare un sistema
-specifico:
-\begin{itemize}
-  \item architettura \textbf{client/server};
-  \item architettura a \textbf{repository};
-  \item architettura \textbf{a livelli};
-  \item architettura \textbf{three-tier} e \textbf{multi-tier};
-  \item architettura \textbf{orientata ai servizi} (SOA);
-  \item \ldots
-\end{itemize}
+Scalare orizzontalmente le istanze dell'applicazione è stato relativamente facile: basta un nuovo server con
+l'applicazione e un load balancer davanti. Ma quasi tutte le applicazioni hanno anche dati \textbf{persistenti}, di solito in
+un database relazionale. Tutte le istanze, dietro il load balancer, usano lo stesso database: e se è il database a non
+reggere più il carico? Scalare i dati è molto meno semplice.
 
-% ------------------------------------------------------------
-\subsection{Client/server}
+\begin{center}
+\begin{tikzpicture}
+  \node[note] (w) at (0,0) {richieste};
+  \node[rectangle, rounded corners=3pt, draw=swblue!70!black, fill=swblue!15, line width=0.8pt, font=\scriptsize\bfseries,
+        align=center, minimum height=0.9cm] (lb) at (2.4,0) {load\\ balancer};
+  \foreach \i/\y in {1/1.1, 2/0, 3/-1.1} {
+    \node[pc] (n\i) at (5.0,\y) {\icpu};
+    \draw[fr] (lb.east) -- (n\i.west);
+    \draw[fr] (n\i.east) -- (7.3,0);
+  }
+  \draw[fr] (w) -- (lb);
+  \node[db] (d) at (8.0,0) {DB};
+  \node[note, anchor=west, text=swred, align=left] at (8.8,0) {un solo database\\ per tutte le istanze?};
+\end{tikzpicture}
+\end{center}
 
-\dfn{Architettura client/server}{
-  Un'architettura \textbf{distribuita} in cui dati ed elaborazione sono ripartiti in una rete fra due tipi di nodi.
+\subsection{Le proprietà ACID}
+
+\dfn{Proprietà ACID}{
+  Le transazioni dei database relazionali (RDBMS) godono di quattro proprietà.
   \begin{itemize}
-    \item I \term{server} sono elaboratori potenti e dedicati, che offrono servizi specifici: stampa, gestione del file
-          system, compilazione, gestione del traffico di rete, calcolo.
-    \item I \term{client} sono macchine meno potenti, su cui girano le applicazioni dell'utente, che usano i servizi dei
-          server.
+    \item \textbf{Atomicità} (\textit{Atomicity}): ogni transazione è «tutto o niente».
+    \item \textbf{Consistenza} (\textit{Consistency}): ogni transazione porta il database da uno stato valido a un altro
+          stato valido.
+    \item \textbf{Isolamento} (\textit{Isolation}): eseguire transazioni in modo concorrente dà lo stesso risultato che
+          eseguirle in sequenza.
+    \item \textbf{Durabilità} (\textit{Durability}): una volta confermata (\textit{commit}), una transazione resta tale,
+          anche in caso di guasto.
   \end{itemize}
 }
 
-Dal punto di vista della progettazione, un sottosistema detto \textbf{server} fornisce servizi a istanze di altri
-sottosistemi, i \textbf{client}, che si occupano dell'interazione con l'utente.
+Sono proprio queste garanzie a rendere impossibile scalare un RDBMS orizzontalmente in modo semplice: se i dati stanno su
+più macchine, garantire isolamento e consistenza richiede che le macchine si coordinino a ogni scrittura. Le strade sono:
 \begin{itemize}
-  \item I client chiamano il server, che esegue dei servizi e restituisce il risultato; la risposta di solito è
-        \textbf{immediata}.
-  \item I client conoscono l'\textbf{interfaccia} del server (i suoi servizi), il nome e la natura dei server.
-  \item I server \textbf{non} conoscono le interfacce dei client, e non hanno bisogno di conoscerne né l'identità né il
-        numero: servono chiunque faccia una richiesta.
-  \item Gli utenti interagiscono \textbf{solo con il client}.
+  \item scalarlo \textbf{verticalmente}, dandogli più risorse di calcolo;
+  \item usare tecniche specifiche: \textbf{replica} (master-slave e master-master), \textbf{federazione} e
+        \textbf{sharding}, \textbf{denormalizzazione}.
 \end{itemize}
 
-\Needspace{10\baselineskip}
-\begin{center}
-\begin{tikzpicture}
-  \node[classe1=2.2cm] (c) at (0,0) {Client};
-  \umlclass[2.6cm]{s}{(6.6,-0.35)}{Server}{}{service1()\\service2()\\\ldots\\serviceN()}
-  \draw[assoc] (c.east) -- (s.west |- c.east);
-  \node[molt, anchor=south west] at (c.east) {*};
-  \node[molt, anchor=north west, font=\scriptsize\itshape] at (c.east) {requester};
-  \node[molt, anchor=south east] at (s.west |- c.east) {*};
-  \node[molt, anchor=north east, font=\scriptsize\itshape] at (s.west |- c.east) {provider};
-  \foreach \i in {0,1,2} \node[classe1=1.1cm, font=\tiny\bfseries] (k\i) at (10.5,0.8-\i*0.8) {:Client};
-  \node[classe1=1.3cm, font=\tiny\bfseries] (sv) at (13.0,0) {:Server};
-  \foreach \i in {0,1,2} \draw[navig] (k\i.east) -- (sv.west);
-  \node[note, align=center] at (11.8,-1.5) {molti client,\\ un server che non li conosce};
-\end{tikzpicture}
-\end{center}
-
-L'esempio più familiare è il \textbf{Web}: il browser è il client, il server web risponde a chiunque gli invii una
-richiesta HTTP, senza sapere in anticipo chi o quanti saranno.
-
-% ------------------------------------------------------------
-\subsection{Repository}
-
-\dfn{Architettura a repository}{
-  I sottosistemi accedono e modificano un'\textbf{unica struttura dati} condivisa, il \term{repository}. I sottosistemi
-  sono «relativamente indipendenti»: interagiscono \textbf{solo attraverso il repository}.
-}
-
-Il flusso di controllo può essere dettato:
-\begin{itemize}
-  \item dal \textbf{repository}: è una modifica ai dati memorizzati a far partire un sottosistema (in questo caso si parla
-        anche di architettura a \textit{blackboard}, a lavagna);
-  \item dai \textbf{sottosistemi}: ognuno ha il proprio flusso di controllo indipendente, e usa il repository quando gli serve.
-\end{itemize}
-
-\Needspace{12\baselineskip}
-\begin{center}
-\begin{tikzpicture}
-  \node[classe1=2.2cm] (sub) at (0,0) {Subsystem};
-  \umlclass[2.6cm]{rep}{(4.4,-0.3)}{Repository}{}{createData()\\setData()\\getData()\\searchData()}
-  \draw[dipend] (sub.east) -- (rep.west |- sub.east);
-  \begin{scope}[shift={(10.8,-0.2)}]
-    \node[cylinder, shape border rotate=90, aspect=0.25, draw=swblue!70!black, fill=swblue!15, line width=0.8pt,
-          minimum width=1.5cm, minimum height=1.3cm, font=\scriptsize\bfseries] (db) at (0,0) {Repository};
-    \foreach \a/\n in {150/Modulo 1, 90/Modulo 2, 30/Modulo 3, -30/Modulo 4, -90/Modulo $n$} {
-      \node[rectangle, fill=sworange, text=white, font=\tiny\bfseries, minimum width=1.4cm, minimum height=0.5cm]
-        (m\a) at (\a:2.25) {\n};
-      \draw[{Stealth[length=1.8mm]}-{Stealth[length=1.8mm]}, line width=0.7pt, draw=swteal] (m\a) -- (db);
-    }
-  \end{scope}
-\end{tikzpicture}
-\end{center}
-
-\begin{esempio}{Il compilatore e i DBMS}
-Due esempi tipici di architettura a repository sono i \textbf{DBMS} e i \textbf{compilatori moderni}. In un compilatore,
-analizzatore lessicale, sintattico e semantico, ottimizzatore e generatore di codice non si chiamano fra loro: leggono e
-scrivono l'\textbf{albero sintattico} e la \textbf{tabella dei simboli}. Allo stesso repository attingono anche strumenti
-esterni come il debugger e l'editor sintattico.
-
-\begin{center}
-\begin{tikzpicture}
-  \umlpkg{comp}{(0,1.9)}{11.4}{1.5}{Compiler}
-  \foreach \i/\n in {0/LexicalAnalyzer, 1/SyntacticAnalyzer, 2/SemanticAnalyzer, 3/Optimizer, 4/CodeGenerator}
-    \node[classe1=2.0cm, font=\tiny\bfseries] (c\i) at (1.25+\i*2.23,2.4) {\n};
-  \umlpkg{repo}{(3.2,0)}{5.0}{1.1}{Repository}
-  \node[classe1=1.9cm, font=\tiny\bfseries] (pt) at (4.4,0.38) {ParseTree};
-  \node[classe1=1.9cm, font=\tiny\bfseries] (st) at (7.0,0.38) {SymbolTable};
-  \foreach \i in {0,...,4} \draw[dipend] (c\i.south) -- ($(repo.north)+(-1.5+\i*0.75,0.0)$);
-  \umlpkg{dbg}{(1.2,-1.6)}{2.8}{0.6}{SourceLevelDebugger}
-  \umlpkg{ed}{(7.3,-1.6)}{2.6}{0.6}{SyntacticEditor}
-  \draw[dipend] (dbg.north) -- ($(repo.south)+(-1.2,0)$);
-  \draw[dipend] (ed.north) -- ($(repo.south)+(1.2,0)$);
-\end{tikzpicture}
-\end{center}
-Aggiungere un nuovo strumento (un formattatore del codice, un analizzatore di stile) non richiede di modificare il
-compilatore: basta che legga lo stesso repository.
-\end{esempio}
-
-\Needspace{24\baselineskip}
-\noindent\begin{minipage}[t]{0.49\textwidth}
-\gbox{Vantaggi}{swgreen}{\raggedright
-\begin{itemize}[leftmargin=1.1em]
-  \item Modo efficiente di condividere \textbf{grandi quantità di dati}: si scrivono una volta, tutti li leggono.
-  \item Un sottosistema non deve preoccuparsi di come i dati sono prodotti o usati dagli altri.
-  \item Gestione \textbf{centralizzata} di backup, sicurezza, controllo degli accessi, ripristino dagli errori.
-  \item Il modello dei dati condivisi è pubblicato come \textbf{schema} del repository: è facile aggiungere nuovi
-        sottosistemi.
-\end{itemize}}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.49\textwidth}
-\gbox{Svantaggi}{swred}{\raggedright
-\begin{itemize}[leftmargin=1.1em]
-  \item I sottosistemi devono accordarsi su un modello dei dati di \textbf{compromesso}: prestazioni più basse.
-  \item \textbf{Evoluzione dei dati}: adottare un nuovo modello è difficile e costoso, perché va applicato all'intero
-        repository e vanno aggiornati tutti i sottosistemi.
-  \item Sottosistemi diversi possono avere esigenze diverse di backup e sicurezza, che il repository non supporta.
-  \item È difficile \textbf{distribuire} il repository su più macchine continuando a vederlo come logicamente
-        centralizzato: problemi di ridondanza e di consistenza dei dati.
-\end{itemize}}
-\end{minipage}
-
-% ------------------------------------------------------------
-\subsection{A livelli}
-
-\dfn{Architettura a livelli}{
-  I sottosistemi sono organizzati in \textbf{livelli}. Ogni livello:
-  \begin{itemize}
-    \item usa i servizi del livello sottostante;
-    \item fornisce servizi al livello superiore attraverso \textbf{interfacce ben definite}.
-  \end{itemize}
-}
-
-\begin{center}
-\begin{tikzpicture}[
-    s/.style={rectangle, draw=#1!70!black, fill=#1!16, line width=0.6pt, minimum width=3.3cm, minimum height=0.5cm,
-              font=\tiny\bfseries, align=center}]
-  % annidato
-  \draw[line width=0.7pt, fill=swlight] (0,0) rectangle (4.2,3.0);
-  \node[font=\scriptsize\bfseries, anchor=north west] at (0.05,3.0) {Applicazione dati};
-  \draw[line width=0.7pt, fill=white] (0.3,0.25) rectangle (3.9,2.55);
-  \node[font=\scriptsize\bfseries, anchor=north west] at (0.35,2.55) {Sistema di database};
-  \draw[line width=0.7pt, fill=swlight] (0.6,0.5) rectangle (3.6,2.1);
-  \node[font=\scriptsize\bfseries, anchor=north west] at (0.65,2.1) {Sistema operativo};
-  \draw[line width=0.7pt, fill=white] (0.9,0.75) rectangle (3.3,1.55);
-  \node[font=\scriptsize\bfseries] at (2.1,1.15) {Kernel};
-  % GNU/Linux
-  \begin{scope}[shift={(6.6,0)}]
-    \node[s=swblue] at (0,2.75) {Applicazioni utente};
-    \node[s=swblue] at (0,2.15) {Libreria C di GNU (glibc)};
-    \node[s=q5] at (0,1.55) {Interfaccia delle system call};
-    \node[s=q5] at (0,0.95) {Kernel};
-    \node[s=q5] at (0,0.35) {Codice dipendente dall'architettura};
-    \node[note, font=\scriptsize\bfseries] at (0,-0.2) {GNU/Linux};
-  \end{scope}
-  % .NET
-  \begin{scope}[shift={(11.0,0)}]
-    \node[s=sworange] at (0,2.75) {Applicazione utente};
-    \node[s=sworange] at (0,2.15) {ASP.NET, Windows Forms\ldots};
-    \node[s=sworange] at (0,1.55) {Base Class Libraries};
-    \node[s=sworange] at (0,0.95) {Common Language Runtime};
-    \node[s=swgray] at (0,0.35) {Sistema operativo};
-    \node[note, font=\scriptsize\bfseries] at (0,-0.2) {.NET Framework};
-  \end{scope}
-\end{tikzpicture}
-\end{center}
-
-\Needspace{10\baselineskip}
-\noindent\begin{minipage}[t]{0.49\textwidth}
-\gbox{Vantaggi}{swgreen}{\raggedright
-\begin{itemize}[leftmargin=1.1em]
-  \item \textbf{astrazione} delle responsabilità (\textit{separation of concerns});
-  \item livelli inferiori e superiori \textbf{isolati} gli uni dagli altri (disaccoppiati);
-  \item \textbf{riusabilità} dei livelli.
-\end{itemize}}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.49\textwidth}
-\gbox{Svantaggi}{swred}{\raggedright
-\begin{itemize}[leftmargin=1.1em]
-  \item \textbf{sovraccarico} (\textit{overhead}) dovuto all'attraversamento di più livelli;
-  \item maggiore \textbf{complessità}.
-\end{itemize}}
-\end{minipage}
-
-\info{{Layer e tier}}{
-  Le slide osservano che per la maggior parte delle persone i termini \textit{layer} e \textit{tier} sono intercambiabili.
-  Molti autori, però, li distinguono: un \textbf{layer} è una suddivisione \textbf{logica} del codice (presentazione, logica,
-  dati), un \textbf{tier} una separazione \textbf{fisica}, cioè su processi o macchine diversi. Un'applicazione può avere
-  tre layer e girare tutta su un solo tier, oppure distribuire ogni layer su un tier diverso, come nell'architettura che
-  vediamo ora.
-}
-
-% ------------------------------------------------------------
-\subsection{Three-tier}
-
-L'architettura \term{three-tier}, introdotta negli anni Novanta, gestisce \textbf{esplicitamente} la logica applicativa
-(\textit{business logic}) in un livello dedicato. I tre livelli sono:
-\begin{enumerate}
-  \item \textbf{gestione dei dati}: comunicazione con il DBMS, file XML, \ldots;
-  \item \textbf{logica applicativa}: elaborazione dei dati, regole del dominio;
-  \item \textbf{interfaccia utente}: presentazione dei dati e dei servizi.
-\end{enumerate}
-Ogni livello ha i propri obiettivi e vincoli di progetto, e \textbf{nessun livello fa ipotesi} sulla struttura o
-sull'implementazione degli altri: il livello 2 non sa come sono rappresentati i dati né com'è fatta l'interfaccia; il
-livello 3 non sa come funziona la logica applicativa.
-
-\begin{itemize}
-  \item Non c'è comunicazione diretta fra il livello 1 e il livello 3: l'interfaccia utente non riceve né inserisce dati
-        direttamente nel livello dei dati, e ogni informazione, in entrambe le direzioni, è \textbf{filtrata dalla logica
-        applicativa}. È un'architettura a livelli \textbf{chiusa}.
-  \item I livelli funzionano senza presupporre di far parte di un'applicazione specifica: le applicazioni sono viste come
-        \textbf{collezioni di componenti che cooperano}, e ogni componente può far parte contemporaneamente di applicazioni
-        diverse (ad esempio lo stesso database, o lo stesso componente di logica).
-\end{itemize}
+\subsection{Replica master-slave e master-master}
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[
-    srv/.style={rectangle split, rectangle split parts=2, draw=black!80, fill=white, line width=0.7pt, font=\scriptsize,
-                align=center, text width=2.4cm},
-    bolla/.style={circle, fill=q8!18, minimum size=2.7cm},
-    cli/.style={ellipse, draw=black!80, fill=swblue!12, line width=0.7pt, font=\scriptsize, minimum width=1.4cm,
-                minimum height=0.75cm},
-    lnk/.style={{Stealth[length=2mm]}-{Stealth[length=2mm]}, line width=0.8pt}]
-  % --- schema generale ---
-  \node[cli] (c) at (0,0) {Client};
-  \node[bolla] at (3.4,0) {};  \node[srv] (a) at (3.4,0) {\textbf{Server}\nodepart{two}Logica applicativa};
-  \node[bolla] at (7.0,0) {};  \node[srv] (d) at (7.0,0) {\textbf{Server}\nodepart{two}Gestione dei dati};
-  \draw[lnk] (c) -- (a);  \draw[lnk] (a) -- (d);
-  \node[note, font=\scriptsize\bfseries] at (0,0.75) {Presentazione};
-  \node[note, font=\scriptsize\bfseries, align=center] at (3.5,-2.25) {Un'architettura three-tier client/server};
-  % --- internet banking ---
-  \begin{scope}[shift={(10.0,0)}]
-    \foreach \i in {0,...,3} \node[cli, minimum width=1.1cm, minimum height=0.55cm, font=\tiny] (k\i) at (0,1.35-\i*0.9) {Client};
-    \node[bolla, minimum size=2.4cm] at (2.9,0) {};
-    \node[srv, text width=2.0cm, font=\tiny] (w) at (2.9,0) {\textbf{Web server}\nodepart{two}servizio\\ conti correnti};
-    \node[bolla, minimum size=2.4cm] at (6.6,0) {};
-    \node[srv, text width=2.0cm, font=\tiny] (db) at (6.6,0) {\textbf{Database server}\nodepart{two}database dei\\ conti};
-    \foreach \i in {0,...,3} \draw[line width=0.6pt] (k\i.east) -- (w.west);
-    \draw[line width=0.7pt] (w.east) -- node[note, font=\tiny, above]{query SQL} (db.west);
-    \node[note, font=\tiny, anchor=south] at (1.3,1.7) {interazione HTTP};
-    \node[note, font=\scriptsize\bfseries, align=center] at (3.3,-2.25) {Un sistema di internet banking};
+    cl/.style={rectangle, rounded corners=2pt, draw=black!70, fill=white, line width=0.6pt, font=\scriptsize,
+               minimum width=1.2cm, minimum height=0.55cm},
+    ms/.style={rectangle, draw=black!70, fill=#1, line width=0.7pt, font=\scriptsize\bfseries, minimum width=1.3cm,
+               minimum height=0.6cm},
+    ms/.default=black!12,
+    lab/.style={font=\tiny, above, inner sep=1pt}]
+  % master-slave
+  \node[font=\small\bfseries] at (2.6,1.35) {Master-slave};
+  \node[cl] (c1) at (0,0.6) {client};
+  \node[cl] (c2) at (0,-0.6) {client};
+  \node[cl] (c3) at (0,-1.6) {client};
+  \node[ms] (m) at (3.6,0.6) {master};
+  \node[ms=white] (s1) at (2.6,-0.6) {slave};
+  \node[ms=white] (s2) at (4.6,-1.6) {slave};
+  \draw[dashed, draw=swgray] (1.6,1.05) rectangle (5.6,-2.1);
+  \draw[fr] (c1) -- node[lab]{letture/scritture} (m);
+  \draw[fr] (c2) -- node[lab]{letture} (s1);
+  \draw[fr] (c3) -- node[lab]{letture} (s2);
+  \draw[fr, draw=swred] (m) -- node[font=\tiny, left]{replica} (s1);
+  \draw[fr, draw=swred] (m) -- (s2);
+  % master-master
+  \begin{scope}[shift={(8.2,0)}]
+    \node[font=\small\bfseries] at (2.2,1.35) {Master-master};
+    \node[cl] (d1) at (0,0.4) {client};
+    \node[cl] (d2) at (0,-1.3) {client};
+    \node[ms] (m1) at (3.4,0.4) {master};
+    \node[ms] (m2) at (3.4,-1.3) {master};
+    \draw[dashed, draw=swgray] (1.6,1.05) rectangle (5.2,-2.1);
+    \draw[fr] (d1) -- node[lab]{letture/scritture} (m1);
+    \draw[fr] (d2) -- node[lab]{letture/scritture} (m2);
+    \draw[frd, draw=swred] (m1) -- node[font=\tiny, right]{sincronizzazione} (m2);
   \end{scope}
 \end{tikzpicture}
-\caption{L'architettura three-tier: in generale (a sinistra) e in un sistema di internet banking (a destra).}
+\caption{Le due forme di replica (rielaborate dalle slide \textit{Scalability, availability, stability, patterns}). In
+         rosso il lavoro di coordinamento che introduce un \textbf{sovraccarico}.}
 \end{figure}
 
-\Needspace{30\baselineskip}
-\noindent\begin{minipage}[t]{0.49\textwidth}
-\gbox{Vantaggi}{swgreen}{\raggedright
-\textbf{Flessibilità e modificabilità}, grazie ai componenti separati:
-\begin{itemize}[leftmargin=1.1em]
-  \item i componenti si possono usare in sistemi diversi;
-  \item modificare un componente non tocca il resto del sistema (a meno che cambi la sua API);
-  \item la ricerca dei bug è più mirata, perché le funzionalità sono separate e isolate;
-  \item aggiungere funzionalità significa estendere solo i componenti coinvolti, o aggiungerne di nuovi.
+\begin{itemize}
+  \item \textbf{Master-slave.} Ci sono più istanze del RDBMS: un \textbf{master} e uno o più \textbf{slave}. Il master serve
+        letture e scritture e replica ogni scrittura su ogni slave; gli slave sono \textbf{repliche in sola lettura}.
+        \textit{Disponibilità}: se il master si guasta, il sistema può continuare in sola lettura, e uno slave può
+        eventualmente essere promosso a master. Funziona bene quando ci sono \textbf{molte letture e poche scritture}.
+  \item \textbf{Master-master.} Tutte le istanze sono master e servono sia letture sia scritture. A ogni scrittura i master
+        si coordinano e si sincronizzano, mentre le letture sono gestite in modo indipendente. \textit{Disponibilità}: se un
+        master si guasta, il sistema continua con l'altro. La sincronizzazione però introduce un \textbf{sovraccarico}.
 \end{itemize}
-\textbf{Interconnettività}:
-\begin{itemize}[leftmargin=1.1em]
-  \item le API dei componenti evitano gli adattatori del modello client/server: $N$ interfacce diverse possono collegarsi
-        allo stesso servizio;
-  \item applicazioni diverse accedono facilmente ai dati comuni (logiche diverse sullo stesso gestore dei dati).
+
+\subsection{Federazione e sharding}
+
+Le slide le elencano fra le tecniche di replica, ma a rigore sono tecniche di \textbf{partizionamento}: invece di copiare
+gli stessi dati su più database, si \textbf{dividono} i dati fra più database.
+
+\Needspace{12\baselineskip}
+\noindent\begin{minipage}[c]{0.56\textwidth}
+\textbf{Federazione.} Un unico grande database viene diviso in più database \textbf{per funzione}: invece di un database
+monolitico, uno per i prodotti, uno per gli utenti, uno per gli ordini. Gli svantaggi:
+\begin{itemize}
+  \item non serve a nulla se lo schema ha un'unica tabella molto grande;
+  \item è più difficile fare \textit{join} fra dati che stanno in database diversi;
+  \item è più difficile far rispettare vincoli fra tabelle (ad esempio le chiavi esterne);
+  \item può richiedere di denormalizzare.
 \end{itemize}
-\textbf{Gestione dei sistemi distribuiti}: la logica applicativa si può aggiornare senza aggiornare i client.}
 \end{minipage}\hfill
-\begin{minipage}[t]{0.49\textwidth}
-\gbox{Svantaggi}{swred}{\raggedright
-\textbf{Dimensione ed efficienza} delle applicazioni:
-\begin{itemize}[leftmargin=1.1em]
-  \item uso intenso della comunicazione di rete, quindi \textbf{latenza} dei servizi;
-  \item la comunicazione fra componenti richiede librerie per lo scambio di informazioni, quindi codice voluminoso.
-\end{itemize}
-\textbf{Integrazione del software \textit{legacy}}:
-\begin{itemize}[leftmargin=1.1em]
-  \item molte aziende gestiscono i propri dati con vecchio software monolitico;
-  \item è difficile applicare il modello three-tier alle nuove applicazioni che devono usarlo;
-  \item servono \textbf{adattatori} per interfacciarsi con il software legacy.
-\end{itemize}}
+\begin{minipage}[c]{0.4\textwidth}
+\centering
+\begin{tikzpicture}
+  \node[servizio, fill=swlight, draw=swgray] (a) at (1.6,1.3) {applicazione};
+  \node[db] (p) at (0,-0.4) {Prodotti};
+  \node[db] (u) at (1.6,-0.4) {Utenti};
+  \node[db] (o) at (3.2,-0.4) {Ordini};
+  \foreach \d in {p,u,o} \draw[fr] (a) -- (\d);
+\end{tikzpicture}
 \end{minipage}
 
-% ------------------------------------------------------------
-\subsection{Multi-tier}
-
-L'architettura \term{multi-tier} è l'evoluzione della three-tier su $N$ livelli, e ammette configurazioni diverse. I suoi
-elementi fondamentali sono cinque.
-
-\begin{center}
-\begin{tikzpicture}[
-    tier/.style={rectangle, rounded corners=3pt, fill=#1, draw=#1!70!black, text=white, font=\scriptsize\bfseries,
-                 minimum width=3.8cm, minimum height=0.75cm, align=center},
-    descr/.style={note, anchor=west, text width=9.0cm}]
-  \foreach \i/\n/\c/\d in {
-      0/{Interfaccia utente (UI)}/ph1/{gestisce l'interazione con l'utente: un browser, un'app mobile, un'interfaccia grafica\ldots},
-      1/{Logica di presentazione}/ph2/{stabilisce che cosa la UI mostra e come gestire le richieste dell'utente},
-      2/{Logica applicativa}/ph3/{gestisce le regole di business dell'applicazione},
-      3/{Servizi infrastrutturali}/ph4/{offrono funzionalità aggiuntive ai componenti: messaggistica, transazioni\ldots},
-      4/{Livello dei dati}/ph6/{i dati dell'applicazione}} {
-    \node[tier=\c] (t\i) at (0,-\i*0.95) {\n};
-    \node[descr] at (2.15,-\i*0.95) {\d};
-  }
-  \foreach \i [evaluate=\i as \j using int(\i+1)] in {0,...,3}
-    \draw[-{Stealth[length=2mm]}, line width=0.9pt, draw=swgray] (t\i.south) -- (t\j.north);
-\end{tikzpicture}
-\end{center}
-
-% ------------------------------------------------------------
-\subsection{Orientata ai servizi (SOA)}
-
-Nell'architettura \term{orientata ai servizi} (\textit{Service-Oriented Architecture}, SOA) il sistema è un insieme di
-\textbf{servizi} indipendenti, ciascuno con una propria interfaccia, a cui i client accedono attraverso un punto di
-ingresso comune.
+\Needspace{12\baselineskip}
+\noindent\begin{minipage}[c]{0.56\textwidth}
+\textbf{Sharding.} I dati vengono distribuiti su più database in modo che ciascuno gestisca solo un \textbf{sottoinsieme}
+dei record della stessa tabella: ad esempio gli utenti con il nome dalla A alla M in un database, quelli dalla N alla Z in
+un altro. Gli svantaggi:
 \begin{itemize}
-  \item I servizi sono componenti \textbf{senza stato} (\textit{stateless}): non conservano informazioni fra una richiesta e
-        l'altra, quindi si possono \textbf{replicare} e \textbf{spostare} da un computer all'altro.
-  \item Alla fornitura dei servizi possono partecipare \textbf{molti server}.
-  \item Un'architettura orientata ai servizi è di solito più facile da \textbf{scalare} quando la domanda cresce (basta
-        aggiungere repliche dei servizi più richiesti) ed è \textbf{resiliente} ai guasti (se una replica cade, ne
-        risponde un'altra).
+  \item la logica applicativa diventa più complessa, perché deve sapere dove sta ogni dato;
+  \item gli \textit{shard} possono \textbf{sbilanciarsi} (in Italia i cognomi che iniziano per R sono molti di più di
+        quelli che iniziano per Q);
+  \item unire i dati è difficile, e far rispettare i vincoli lo è ancora di più.
+\end{itemize}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.4\textwidth}
+\centering
+\begin{tikzpicture}
+  \node[servizio, fill=swlight, draw=swgray] (a) at (1.2,2.2) {applicazione};
+  \node[rectangle, fill=swred!80!black, text=white, font=\scriptsize\bfseries, minimum height=0.6cm] (lb) at (1.2,1.0)
+    {instradamento};
+  \draw[fr] (a) -- node[font=\tiny, right]{utente «Luigi»} (lb);
+  \node[db] (s1) at (0,-0.5) {Utenti\\ A--M};
+  \node[db] (s2) at (2.4,-0.5) {Utenti\\ N--Z};
+  \draw[fr] (lb) -- (s1); \draw[fr, line width=1.2pt, draw=swred] (lb) -- (s2);
+\end{tikzpicture}
+\end{minipage}
+
+\subsection{Denormalizzazione}
+
+La \term{denormalizzazione} migliora le prestazioni in lettura a scapito di quelle in scrittura (e, naturalmente, della
+normalizzazione). Si scrivono \textbf{copie ridondanti} degli stessi dati in più tabelle, per evitare \textit{join} costosi.
+Il prezzo è che mantenere le copie consistenti fra loro diventa un problema. Alcuni RDBMS, come PostgreSQL, offrono le
+\textbf{viste materializzate}, che memorizzano il risultato di un'interrogazione e si occupano di gestire le copie
+ridondanti (in PostgreSQL la vista va aggiornata esplicitamente con \code{REFRESH MATERIALIZED VIEW}; altri DBMS la
+aggiornano automaticamente).
+
+\subsection{I database NoSQL e la consistenza finale}
+
+I database \term{NoSQL} sono più scalabili, a costo di rinunciare a vere transazioni ACID (e a parte delle capacità di
+interrogazione). Le loro proprietà si riassumono spesso con l'acronimo \textbf{BASE}:
+\begin{itemize}
+  \item \textbf{Basically Available}: il sistema garantisce la disponibilità;
+  \item \textbf{Soft state}: lo stato del sistema può cambiare nel tempo, anche senza input;
+  \item \textbf{Eventual consistency}: il sistema diventa consistente \textbf{dopo un certo tempo}, a patto di non ricevere
+        nuovi input in quel periodo.
 \end{itemize}
 
-\begin{center}
+\dfn{Consistenza finale (eventual consistency)}{
+  Garanzia informale che, se un dato non riceve nuovi aggiornamenti, \textbf{prima o poi} tutti gli accessi a quel dato
+  restituiranno l'ultimo valore scritto.
+}
+
+\begin{figure}[H]
+\centering
 \begin{tikzpicture}[
-    cli/.style={rectangle, rounded corners=6pt, draw=swred, fill=swred!8, line width=0.8pt, font=\scriptsize\bfseries,
-                text=swred!80!black, minimum width=1.6cm, minimum height=0.55cm},
-    nod/.style={rectangle, draw=swteal, fill=swteal!14, line width=0.8pt, font=\small\bfseries, align=center,
-                minimum width=2.1cm, minimum height=1.0cm},
-    srv/.style={rectangle, rounded corners=2pt, draw=swteal, fill=swred!6, line width=0.8pt, font=\scriptsize\bfseries,
-                text=swteal!80!black, minimum width=0.75cm, minimum height=0.5cm},
-    ar/.style={{Stealth[length=1.8mm]}-{Stealth[length=1.8mm]}, line width=0.7pt, draw=swteal!80!black}]
-  \foreach \i/\n in {0/Client 1, 1/Client 2, 2/Client 3, 3/Client \ldots} \node[cli] (c\i) at (0,1.5-\i*1.0) {\n};
-  \node[nod] (ws) at (3.4,0) {Web\\ server};
-  \node[nod] (sg) at (6.6,0) {Service\\ gateway};
-  \foreach \i in {0,...,5} \node[srv] (s\i) at (9.6,1.75-\i*0.7) {S\the\numexpr\i+1\relax};
-  \node[note, font=\scriptsize\bfseries, text=swteal] at (9.6,-2.65) {Servizi};
-  \foreach \i in {0,...,3} \draw[ar] (c\i.east) -- (ws.west);
-  \draw[ar, draw=swgray, line width=1.2pt] (ws) -- (sg);
-  \foreach \i in {0,...,5} \draw[ar] (sg.east) -- (s\i.west);
+    nodo/.style={rectangle, rounded corners=2pt, draw=swblue!70!black, line width=0.7pt, minimum width=1.2cm,
+                 minimum height=0.75cm, font=\scriptsize, align=center},
+    vecchio/.style={nodo, fill=white},
+    nuovo/.style={nodo, fill=swgreen!22},
+    ev/.style={font=\scriptsize\bfseries, text=#1},
+    passo/.style={chip=swgray, font=\scriptsize\bfseries}]
+  \foreach \r/\stati/\tit in {
+      0/{0,0,0,0,0}/{1. Tutti i nodi hanno X = 1},
+      1/{0,1,0,0,0}/{2. Una scrittura X = 2 arriva al nodo 2},
+      2/{1,1,1,0,1}/{3. La modifica si propaga, ma non ovunque},
+      3/{1,1,1,1,1}/{4. Prima o poi tutti i nodi sono allineati}} {
+    \node[passo, anchor=west] at (-0.6,-\r*1.55+0.55) {\tit};
+    \foreach \v [count=\c from 1] in \stati {
+      \ifnum\v=1
+        \node[nuovo] (n\r\c) at (\c*1.55,-\r*1.55-0.15) {Nodo \c\\ \textbf{X = 2}};
+      \else
+        \node[vecchio] (n\r\c) at (\c*1.55,-\r*1.55-0.15) {Nodo \c\\ X = 1};
+      \fi
+    }
+  }
+  \draw[fr, draw=swred, line width=1pt] (2*1.55,-1*1.55+0.55) -- (n12.north);
+  \node[ev=swred, anchor=west] at (9.0,-1*1.55-0.15) {\code{write X=2}};
+  \node[ev=swgreen, anchor=west] at (9.0,-2*1.55+0.05) {\code{read X} sul nodo 1 $\rightarrow$ 2};
+  \node[ev=swred, anchor=west] at (9.0,-2*1.55-0.35) {\code{read X} sul nodo 4 $\rightarrow$ \textbf{1}!};
+  \node[ev=swgreen, anchor=west] at (9.0,-3*1.55-0.15) {ogni \code{read X} $\rightarrow$ 2};
 \end{tikzpicture}
-\end{center}
+\caption{La consistenza finale in un cluster NoSQL di cinque nodi. Al passo 3 due letture contemporanee danno risultati
+         diversi: è il prezzo della scalabilità.}
+\end{figure}
 
-Il \textit{service gateway} smista ogni richiesta al servizio competente: i client vedono un unico punto di accesso e non
-sanno quante repliche ci siano dietro, né su quali macchine girino.
-
-% ============================================================
-\section{Confronto}
-
-\Needspace{24\baselineskip}
+Esistono diversi modelli di database NoSQL:
 \begin{center}
 \renewcommand{\arraystretch}{1.35}
-\small
-\begin{tabular}{@{}>{\bfseries}p{2.1cm} >{\raggedright\arraybackslash}p{4.0cm} >{\raggedright\arraybackslash}p{3.6cm}
-                >{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{2.6cm}@{}}
+\begin{tabular}{@{}>{\bfseries}l >{\raggedright\arraybackslash}p{8.6cm} l@{}}
   \toprule
-  \normalfont\textbf{Stile} & \textbf{Idea} & \textbf{Punti di forza} & \textbf{Punti deboli} & \textbf{Esempi} \\
+  \normalfont\textbf{Modello} & \textbf{Come organizza i dati} & \textbf{Esempi} \\
   \midrule
-  Client/server & i server offrono servizi, i client li chiamano & servizi centralizzati, client semplici & il server è
-    un collo di bottiglia & Web, server di stampa \\
-  Repository & i sottosistemi comunicano solo tramite dati condivisi & condivisione di grandi moli di dati, nuovi
-    sottosistemi facili da aggiungere & modello dei dati difficile da cambiare e da distribuire & compilatori, DBMS \\
-  A livelli & ogni livello usa solo quelli sottostanti & astrazione, isolamento, riuso & overhead, complessità & sistemi
-    operativi, Android \\
-  Three-tier & presentazione, logica e dati su livelli separati & flessibilità, interconnettività & latenza di rete,
-    integrazione del legacy & internet banking, e-commerce \\
-  SOA & servizi senza stato dietro un gateway & scalabilità, resilienza ai guasti & complessità di gestione e
-    comunicazione & grandi applicazioni web \\
+  Chiave-valore & coppie chiave/valore, tipicamente in memoria & Redis, Memcached \\
+  Documentali   & documenti (XML, JSON\ldots) che contengono tutte le informazioni di un oggetto & MongoDB \\
+  A grafo       & ogni record è un nodo, le relazioni fra record sono archi & Neo4J \\
+  Vettoriali    & memorizzazione e ricerca di grandi vettori, spesso prodotti da applicazioni di intelligenza
+                  artificiale & Milvus \\
   \bottomrule
 \end{tabular}
 \end{center}
 
 % ============================================================
-\section{Esercizi}
+\section{Elaborazione asincrona}
 
-\begin{esercizio}{Architettura chiusa o aperta?}
-Un'applicazione è organizzata in quattro livelli: \textit{Interfaccia}, \textit{Logica}, \textit{Accesso ai dati},
-\textit{Driver del database}. Per velocizzare una schermata di ricerca, uno sviluppatore fa chiamare direttamente il
-\textit{Driver del database} dall'\textit{Interfaccia}. Che tipo di architettura diventa? Quali obiettivi di progetto
-migliora e quali peggiora?
+Man mano che un sistema cresce, può capitare di dover svolgere elaborazioni che non si possono fare \textbf{in linea}
+mentre si serve una richiesta, perché introdurrebbero una latenza inaccettabile. Nell'esempio, a ogni richiesta che produce
+un errore, l'applicazione chiede a un \code{ErrorHandler} di registrarlo, avvisare gli amministratori e analizzarlo, e solo
+dopo risponde al client.
 
-\textbf{Soluzione.} Saltando due livelli, l'architettura diventa \textbf{aperta}. Migliora l'\textbf{efficienza} a tempo
-di esecuzione di quella schermata, ma peggiorano \textbf{manutenibilità} e \textbf{portabilità}: l'\textit{Interfaccia} ora
-dipende dal driver, quindi un cambio di DBMS costringe a modificare anche l'interfaccia, e le regole della
-\textit{Logica} (validazioni, permessi) vengono aggirate. Se le prestazioni sono davvero un problema, conviene prima
-ottimizzare i livelli intermedi, ad esempio con una cache nel livello di accesso ai dati, lasciando l'architettura chiusa.
-\end{esercizio}
-
-\begin{esercizio}{Scegliere lo stile architetturale}
-Per ciascun sistema indica lo stile architetturale più adatto e motiva la scelta.
-\begin{enumerate}
-  \item Un ambiente di sviluppo (IDE) in cui editor, compilatore, debugger e strumento di refactoring lavorano tutti
-        sullo stesso albero sintattico del programma.
-  \item Il sistema di home banking di una banca, con sito web e app che accedono agli stessi conti.
-  \item Il sito di vendita dei biglietti di un grande festival, con picchi enormi di richieste all'apertura delle vendite.
-  \item Una stampante condivisa in un ufficio, usata da tutti i PC della rete.
-\end{enumerate}
-
-\textbf{Soluzione.}
-\begin{enumerate}
-  \item \textbf{Repository}: gli strumenti condividono una grande struttura dati (l'albero sintattico e la tabella dei
-        simboli) e non devono conoscersi fra loro; aggiungere uno strumento nuovo non tocca gli altri.
-  \item \textbf{Three-tier}: sito e app sono due interfacce diverse sulla stessa logica applicativa e sugli stessi dati;
-        la logica (bonifici, controlli) si aggiorna senza aggiornare i client, e l'interfaccia non tocca mai direttamente
-        il database.
-  \item \textbf{SOA}: i servizi senza stato si replicano per reggere il picco (ad esempio molte istanze del servizio di
-        disponibilità dei posti) e il sistema resta in piedi anche se una replica cade.
-  \item \textbf{Client/server}: il server di stampa offre un servizio a client che non conosce in anticipo; i client
-        conoscono l'interfaccia del server.
-\end{enumerate}
-\end{esercizio}
-
-\begin{esercizio}{Assegnare le responsabilità ai tier}
-In un'architettura three-tier per un e-commerce, a quale livello (dati, logica applicativa, interfaccia) va ciascuna di
-queste responsabilità?
-\begin{enumerate}
-  \item Mostrare il contenuto del carrello.
-  \item Calcolare lo sconto del 10\% sugli ordini sopra i 100 euro.
-  \item Salvare l'ordine confermato.
-  \item Controllare che il campo e-mail del modulo di registrazione contenga una «@».
-  \item Verificare che un prodotto sia disponibile in magazzino prima di confermare l'ordine.
-\end{enumerate}
-
-\textbf{Soluzione.} 1 \textbf{interfaccia}; 2 \textbf{logica applicativa} (è una regola di business); 3 \textbf{dati}; 5
-\textbf{logica applicativa}, che interroga il livello dei dati. La 4 è il caso più interessante: il controllo può stare
-nell'\textbf{interfaccia}, per dare all'utente una risposta immediata, ma va \textbf{ripetuto} nella logica applicativa,
-perché nessun livello deve fare ipotesi sugli altri: la logica non può fidarsi del fatto che ogni interfaccia (il sito,
-l'app, un client scritto da altri) abbia già controllato.
-\end{esercizio}
-
-\begin{esercizio}{Livelli e partizioni}
-Proponi un'architettura a livelli e partizioni per il sistema di segreteria universitaria del Capitolo 11 (studenti, esami,
-tasse, aule), indicando le dipendenze fra i livelli.
-
-\textbf{Soluzione.} Una proposta, sul modello di Larman:
-\begin{center}
+\begin{figure}[H]
+\centering
 \begin{tikzpicture}
-  \umlpkg{ui}{(0,4.2)}{9.2}{1.5}{Interfaccia}
-  \umlpkg{w}{(0.3,4.32)}{2.6}{0.55}{Portale web}
-  \umlpkg{a}{(3.3,4.32)}{2.6}{0.55}{App studenti}
-  \umlpkg{b}{(6.3,4.32)}{2.6}{0.55}{Back office}
-  \umlpkg{dom}{(0,2.1)}{9.2}{1.5}{Dominio}
-  \umlpkg{d1}{(0.3,2.22)}{1.9}{0.55}{Carriera}
-  \umlpkg{d2}{(2.5,2.22)}{1.9}{0.55}{Esami}
-  \umlpkg{d3}{(4.7,2.22)}{1.9}{0.55}{Tasse}
-  \umlpkg{d4}{(6.9,2.22)}{1.9}{0.55}{Aule}
-  \umlpkg{tec}{(0,0)}{9.2}{1.5}{Servizi tecnici}
-  \umlpkg{t1}{(0.3,0.12)}{2.6}{0.55}{Persistenza}
-  \umlpkg{t2}{(3.3,0.12)}{2.6}{0.55}{Autenticazione}
-  \umlpkg{t3}{(6.3,0.12)}{2.6}{0.55}{Logging}
-  \draw[dipend] (ui.south) -- (dom.north |- 0,3.82);
-  \draw[dipend] (dom.south) -- (tec.north |- 0,1.72);
+  \foreach \x/\n in {0/Client, 2.0/Application, 4.2/ErrorHandler, 6.4/Logger, 8.4/Mailer, 10.6/SecurityAnalyzer}
+    {\node[partec] at (\x,0) {\n}; \draw[vita] (\x,-0.3) -- (\x,-4.7);}
+  \draw[sinc] (0,-0.8) -- node[msgl]{request(r)} (1.92,-0.8);
+  \attiv{2}{-0.8}{-4.2}
+  \draw[sinc] (2.08,-1.2) -- node[msgl]{handle(e)} (4.12,-1.2);
+  \attiv{4.2}{-1.2}{-3.85}
+  \draw[sinc] (4.28,-1.6) -- node[msgl]{logError(e)} (6.32,-1.6); \attiv{6.4}{-1.6}{-1.95}
+  \draw[ritorno] (6.32,-1.95) -- (4.28,-1.95);
+  \draw[sinc] (4.28,-2.3) -- node[msgl]{notifyAdmins(e)} (8.32,-2.3); \attiv{8.4}{-2.3}{-2.75}
+  \draw[ritorno] (8.32,-2.75) -- (4.28,-2.75);
+  \draw[sinc] (4.28,-3.1) -- node[msgl, pos=0.65]{analyze(e)} (10.52,-3.1); \attiv{10.6}{-3.1}{-3.65}
+  \draw[ritorno] (10.52,-3.65) -- (4.28,-3.65);
+  \draw[ritorno] (4.12,-3.85) -- (2.08,-3.85);
+  \draw[ritorno] (1.92,-4.2) -- node[msgl]{response} (0,-4.2);
+  \draw[swred, dashed, line width=0.9pt] (-0.6,-1.15) -- (11.5,-1.15);
+  \draw[swred, dashed, line width=0.9pt] (-0.6,-3.9) -- (11.5,-3.9);
+  \draw[{Stealth[length=2mm]}-{Stealth[length=2mm]}, swred, line width=0.9pt] (-0.5,-1.15) -- (-0.5,-3.9);
+  \node[font=\scriptsize, text=swred, align=right, anchor=east] at (-0.6,-2.5) {latenza\\ inutile};
+\end{tikzpicture}
+\caption{Elaborazione sincrona: il client aspetta che l'errore sia registrato, notificato e analizzato, anche se a lui
+         non serve.}
+\end{figure}
+
+\subsection{Code di messaggi e message broker}
+
+L'asincronismo aiuta a ridurre i tempi di risposta. Un modo di realizzarlo sono le \term{code di messaggi}
+(\textit{Message Queue}, MQ): componenti progettati per ricevere, conservare e consegnare messaggi. Quando un compito è
+troppo lento per essere svolto in linea:
+\begin{enumerate}
+  \item l'applicazione \textbf{pubblica} un messaggio in una coda, con i dettagli del compito da svolgere;
+  \item un \textbf{worker}, in modo asincrono e magari più tardi, fa da \textbf{consumatore}: preleva il messaggio dalla coda e
+        svolge davvero il compito;
+  \item l'utente \textbf{non resta bloccato} ad aspettare la fine del compito lungo, che viene completato in background
+        appena uno dei worker (che possono essere molti) è disponibile.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    prod/.style={rectangle, rounded corners=3pt, fill=swteal!80!black, text=white, font=\scriptsize\bfseries,
+                 minimum width=1.9cm, minimum height=0.6cm},
+    cons/.style={rectangle, rounded corners=3pt, fill=swgreen!75!black, text=white, font=\scriptsize\bfseries,
+                 minimum width=1.9cm, minimum height=0.55cm},
+    coda/.style={cylinder, shape border rotate=0, aspect=0.3, draw=#1!70!black, fill=#1!18, line width=0.8pt,
+                 minimum width=1.0cm, minimum height=2.7cm, font=\scriptsize\bfseries}]
+  \draw[rounded corners=4pt, fill=yellow!35, draw=q5!60!black, line width=0.8pt] (2.5,1.5) rectangle (6.7,-2.6);
+  \node[font=\small\bfseries] at (4.6,1.15) {Message broker};
+  \node[coda=q4] (q1) at (4.6,0.2) {MQ 1 \quad\imail\,\imail};
+  \node[coda=q7] (q2) at (4.6,-1.6) {MQ 2 \quad\imail\,\imail};
+  \node[prod] (p1) at (0,0.6) {Producer 1};
+  \node[prod] (p2) at (0,-0.4) {Producer 2};
+  \node[prod] (p3) at (0,-1.4) {Producer 3};
+  \node[cons] (c1) at (9.2,1.0) {Consumer 1};
+  \node[cons] (c2) at (9.2,0.2) {Consumer 2};
+  \node[cons] (c3) at (9.2,-0.9) {Consumer 3};
+  \node[cons] (c4) at (9.2,-2.0) {Consumer $n$};
+  \draw[fr] (p1.east) -- (q1.west); \draw[fr] (p2.east) -- (q1.west); \draw[fr] (p2.east) -- (q2.west);
+  \draw[fr] (p3.east) -- (q2.west);
+  \draw[fr] (q1.east) -- (c1.west); \draw[fr] (q1.east) -- (c2.west);
+  \draw[fr] (q2.east) -- (c3.west); \draw[fr] (q2.east) -- (c4.west);
+\end{tikzpicture}
+\caption{Produttori e consumatori non si conoscono: comunicano solo attraverso le code del broker.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \foreach \x/\n in {0/Client, 1.9/Application, 3.9/MessageQueue, 5.9/ErrorHandler, 7.7/Logger, 9.2/Mailer,
+                     11.0/SecurityAnalyzer}
+    {\node[partec] at (\x,0) {\n}; \draw[vita] (\x,-0.3) -- (\x,-5.0);}
+  \draw[sinc] (0,-0.8) -- node[msgl]{request(r)} (1.82,-0.8);
+  \attiv{1.9}{-0.8}{-1.7}
+  \draw[asinc] (1.98,-1.15) -- node[msgl]{store(e)} (3.82,-1.15);
+  \attiv{3.9}{-1.15}{-1.5}
+  \draw[ritorno] (1.82,-1.7) -- node[msgl]{response} (0,-1.7);
+  \attiv{5.9}{-0.6}{-4.6}
+  \draw[sinc] (5.82,-2.2) -- node[msgl]{dequeue()} (3.98,-2.2);
+  \attiv{3.9}{-2.2}{-2.55}
+  \draw[ritorno] (3.98,-2.55) -- node[msgl]{e} (5.82,-2.55);
+  \draw[sinc] (5.98,-3.0) -- node[msgl]{logError(e)} (7.62,-3.0); \attiv{7.7}{-3.0}{-3.3}
+  \draw[sinc] (5.98,-3.6) -- node[msgl]{notifyAdmins(e)} (9.12,-3.6); \attiv{9.2}{-3.6}{-3.9}
+  \draw[sinc] (5.98,-4.2) -- node[msgl, pos=0.7]{analyze(e)} (10.92,-4.2); \attiv{11.0}{-4.2}{-4.5}
+  \draw[{Stealth[length=2mm]}-{Stealth[length=2mm]}, swgreen, line width=0.9pt] (-0.5,-0.8) -- (-0.5,-1.7);
+  \node[font=\scriptsize, text=swgreen!70!black, align=right, anchor=east] at (-0.6,-1.25) {latenza\\ ridotta};
+  \draw[swred, dashed, line width=0.8pt, rounded corners=3pt] (5.4,-1.95) rectangle (11.9,-4.75);
+  \node[font=\scriptsize, text=swred, align=left, anchor=west] at (12.0,-3.35) {gestione\\ dell'errore\\ asincrona};
+\end{tikzpicture}
+\caption{Con una coda di messaggi l'applicazione deposita l'errore e risponde subito; l'\code{ErrorHandler} lo preleva e lo
+         gestisce per conto suo.}
+\end{figure}
+
+Fra i \term{message broker} open source più diffusi ci sono RabbitMQ, Apache ActiveMQ e BlazingMQ.
+
+\warning{{I message broker non sono oggetti banali}}{
+  Internamente sono organizzati in architetture distribuite complesse; l'instradamento dei messaggi può essere più
+  sofisticato di una semplice interrogazione da parte dei consumatori; e broker e configurazioni diversi garantiscono
+  \textbf{proprietà diverse}: la consegna di un messaggio può essere garantita o no, e lo stesso messaggio può essere
+  consegnato a \textbf{più di un} consumatore. Bisogna valutare con attenzione questi aspetti rispetto al problema da
+  risolvere: un messaggio consegnato due volte, ad esempio, non deve far addebitare due volte un pagamento.
+}
+
+% ============================================================
+\section{Microservizi}
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\gbox{Architettura monolitica}{q6}{\raggedright
+\begin{itemize}[leftmargin=1.1em]
+  \item componenti e moduli \textbf{strettamente impacchettati} in un'unica unità;
+  \item un'unica \textbf{codebase};
+  \item un'unica unità di \textbf{deployment}, autosufficiente;
+  \item le responsabilità di business sono \textbf{accoppiate}.
+\end{itemize}
+\centering
+\begin{tikzpicture}
+  \draw[rounded corners=3pt, fill=q6!10, draw=q6!70!black, line width=0.9pt] (0,0) rectangle (4.2,1.4);
+  \foreach \x/\n in {0.55/Utenti, 1.6/Ordini, 2.65/Catalogo, 3.65/Pagam.}
+    \node[font=\tiny\bfseries, rounded corners=1pt, draw=q6!50, fill=white, minimum width=0.9cm, minimum height=0.45cm]
+      at (\x,0.7) {\n};
+  \node[font=\tiny, text=q6!80!black] at (2.1,0.18) {un solo processo, un solo deployment};
+\end{tikzpicture}}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\gbox{Architettura a microservizi}{swgreen}{\raggedright
+\begin{itemize}[leftmargin=1.1em]
+  \item il software è strutturato come un insieme di \textbf{servizi};
+  \item ogni servizio ha la \textbf{propria codebase}, anche in linguaggi diversi (\textit{poliglotta});
+  \item ogni servizio si può \textbf{rilasciare in modo indipendente};
+  \item i servizi sono organizzati attorno alle \textbf{capacità di business};
+  \item i servizi sono \textbf{debolmente accoppiati}.
+\end{itemize}
+\centering
+\begin{tikzpicture}
+  \foreach \x/\y/\n/\k in {0.5/1.0/Utenti/a, 2.1/1.0/Ordini/b, 3.7/1.0/Catalogo/c, 2.1/0/Pagam./d}
+    \node[servizio, minimum width=1.2cm, minimum height=0.5cm, font=\tiny\bfseries] (\k) at (\x,\y) {\n};
+  \draw[frd] (a) -- (b); \draw[frd] (b) -- (c); \draw[frd] (b) -- (d);
+\end{tikzpicture}}
+\end{minipage}
+
+\subsection{Perché mai dovrei farlo?}
+
+All'inizio, o per software poco complesso, il monolite ha vantaggi concreti:
+\begin{itemize}
+  \item \textbf{deployment facile}: c'è un solo artefatto da costruire (ad esempio un unico file WAR da caricare su un
+        application server come Apache Tomcat, che parla con un unico database);
+  \item \textbf{sviluppo facile}: un'unica codebase, e una gestione dei dati semplice.
+\end{itemize}
+
+I problemi arrivano quando il monolite \textbf{cresce in complessità}. Le slide lo paragonano a Sisifo, condannato a
+spingere in eterno un masso su per un monte:
+\begin{itemize}
+  \item l'architettura interna diventa sempre più difficile da mantenere e da far evolvere;
+  \item i nuovi rilasci richiedono sempre più tempo (mesi), e aggiungere funzionalità diventa lento;
+  \item il ciclo di \textit{build}, test e rilascio diventa lungo e complicato: \textit{chi ha rotto la build?};
+  \item il deployment diventa sempre più difficile: \textit{di chi è il modulo che non funziona?};
+  \item l'innovazione si ferma.
+\end{itemize}
+
+\subsection{Le motivazioni: consegnare spesso e bene}
+
+Il mondo di oggi cambia rapidamente, le aziende devono essere agili e innovare in fretta, e il software deve essere
+consegnato \textbf{rapidamente, frequentemente e in modo affidabile}. Le quattro metriche \textbf{DORA}
+(\textit{DevOps Research and Assessment}) misurano proprio questo:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}>{\bfseries}l >{\raggedright\arraybackslash}p{9.6cm}@{}}
+  \toprule
+  \normalfont\textbf{Metrica} & \textbf{Che cosa misura} \\
+  \midrule
+  Deployment Frequency     & quanto spesso si rilascia in produzione \\
+  Lead Time for Changes    & quanto tempo impiega un \textit{commit} ad arrivare in produzione \\
+  Change Failure Rate      & la percentuale di rilasci che causano un guasto in produzione \\
+  Time to Restore Service  & quanto tempo serve per riprendersi da un guasto in produzione \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Dividere il monolite in microservizi aiuta a rendere gestibili i sistemi grandi:
+\begin{itemize}
+  \item ogni microservizio è molto più piccolo del sistema intero, quindi più facile da capire, mantenere, far evolvere e
+        testare;
+  \item ogni microservizio si può costruire e rilasciare in modo indipendente;
+  \item una nuova funzionalità probabilmente tocca un solo microservizio;
+  \item i rilasci sono più frequenti: per aggiungere una funzionalità basta rilasciare di nuovo un solo microservizio.
+\end{itemize}
+
+\subsection{Scalare un monolite e scalare dei microservizi}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    srv/.style={rectangle, rounded corners=3pt, draw=swteal!80!black, fill=swteal!8, line width=0.8pt,
+                minimum width=2.0cm, minimum height=1.7cm},
+    f/.style={rectangle, rounded corners=1pt, draw=#1!70!black, fill=#1!25, line width=0.5pt,
+              minimum width=0.42cm, minimum height=0.32cm, inner sep=0pt}]
+  % monolite replicato
+  \node[font=\small\bfseries] at (3.3,1.4) {Monolite};
+  \foreach \s in {0,1,2} {
+    \node[srv] at (\s*2.2+1.1,0) {};
+    \draw[rounded corners=2pt, fill=q6!10, draw=q6!60] (\s*2.2+0.4,-0.65) rectangle (\s*2.2+1.8,0.65);
+    \foreach \c/\x/\y in {q4/0.65/0.35, q5/1.1/0.35, q7/1.55/0.35, q8/0.65/-0.05, swblue/1.1/-0.05, q9/1.55/-0.05}
+      \node[f=\c] at (\s*2.2+\x,\y) {};
+  }
+  \node[note, align=center] at (3.3,-1.2) {si replica \textbf{tutto}, anche le funzioni\\ che non ne hanno bisogno};
+  % microservizi distribuiti
+  \begin{scope}[shift={(8.0,0)}]
+    \node[font=\small\bfseries] at (3.3,1.4) {Microservizi};
+    \foreach \s in {0,1,2} \node[srv] at (\s*2.2+1.1,0) {};
+    % server 1: q4, q5, q7 ; server 2: q4, q4, q8 ; server 3: q4, swblue, q9
+    \foreach \c/\x/\y in {q4/0.7/0.35, q5/1.5/0.35, q7/0.7/-0.3, q4/1.5/-0.3} \node[f=\c, minimum width=0.6cm, minimum height=0.45cm] at (\x,\y) {};
+    \foreach \c/\x/\y in {q4/0.7/0.35, q8/1.5/0.35, q4/0.7/-0.3, swblue/1.5/-0.3} \node[f=\c, minimum width=0.6cm, minimum height=0.45cm] at (2.2+\x,\y) {};
+    \foreach \c/\x/\y in {q4/0.7/0.35, q9/1.5/0.35, q4/0.7/-0.3, q8/1.5/-0.3} \node[f=\c, minimum width=0.6cm, minimum height=0.45cm] at (4.4+\x,\y) {};
+    \node[note, align=center] at (3.3,-1.2) {si replica \textbf{solo} ciò che serve\\ (qui il servizio rosso, il più richiesto)};
+  \end{scope}
+\end{tikzpicture}
+\caption{Il monolite mette tutte le funzionalità in un unico processo e scala replicandolo per intero; i microservizi
+         mettono ogni funzionalità in un processo distinto e scalano distribuendo i servizi sui server, replicando quelli che
+         servono.}
+\end{figure}
+
+\subsection{Conviene davvero?}
+
+\Needspace{18\baselineskip}
+\noindent\begin{minipage}[c]{0.5\textwidth}
+\textbf{Non prendete neanche in considerazione i microservizi, a meno che il sistema non sia complesso.} La complessità che
+spinge verso i microservizi può venire da:
+\begin{itemize}
+  \item le dimensioni pure, con team di sviluppo molto grandi;
+  \item la \textbf{multi-tenancy} (lo stesso sistema serve molti clienti separati);
+  \item il dover supportare modelli di interazione diversi (web, app, API per terzi\ldots);
+  \item la necessità di scalare.
+\end{itemize}
+Il grafico (Fowler, \textit{Microservice Premium}) lo mostra: per sistemi poco complessi, il sovraccarico dei microservizi
+\textbf{riduce} la produttività. Quando la complessità cresce, la produttività del monolite crolla; quella dei microservizi
+cala molto meno, grazie al minore accoppiamento.
+\end{minipage}\hfill
+\begin{minipage}[c]{0.46\textwidth}
+\centering
+\begin{tikzpicture}[x=0.75cm, y=0.75cm]
+  \draw[-{Stealth[length=2mm]}, line width=0.8pt] (0,0) -- (8.4,0) node[below left, note]{complessità};
+  \draw[-{Stealth[length=2mm]}, line width=0.8pt] (0,0) -- (0,5.6) node[above right, note]{produttività};
+  \draw[line width=1.3pt, draw=swblue, domain=0:8.1, samples=60] plot (\x, {1.0+3.4/(1+exp(1.6*(\x-3.2)))});
+  \draw[line width=1.3pt, draw=sworange, domain=0:8.1, samples=60] plot (\x, {2.3+0.7/(1+exp(1.4*(\x-5.4)))});
+  \node[note, text=swblue, font=\scriptsize\bfseries, anchor=west] at (0.2,4.85) {monolite};
+  \node[note, text=sworange!90!black, font=\scriptsize\bfseries, anchor=west] at (5.9,2.75) {microservizi};
+  \draw[{Stealth[length=1.8mm]}-{Stealth[length=1.8mm]}, swred, line width=0.8pt] (0.9,3.05) -- (0.9,4.3);
+  \node[note, font=\tiny, text=swred, anchor=west, align=left] at (1.0,3.6) {costo fisso dei\\ microservizi};
+  \draw[{Stealth[length=1.8mm]}-{Stealth[length=1.8mm]}, swgreen, line width=0.8pt] (6.4,1.05) -- (6.4,2.35);
+  \node[note, font=\tiny, text=swgreen!70!black, anchor=west, align=left] at (6.5,1.6) {guadagno a\\ complessità alta};
+\end{tikzpicture}
+\end{minipage}
+
+Adottare i microservizi significa rispondere a quattro domande: come progettare i microservizi, come gestire la
+comunicazione fra servizi, come gestire i dati, come organizzare i team di sviluppo. Le vediamo una alla volta.
+
+\subsection{Progettare i microservizi}
+
+Definire i \textbf{confini} di ogni servizio è una delle sfide più grandi. La regola generale è che un servizio dovrebbe
+fare «\textbf{una cosa sola}» (è il Single Responsibility Principle del Capitolo 10, applicato ai servizi), ma nessun
+procedimento meccanico garantisce il risultato giusto. Viene in aiuto il \term{Domain-Driven Design} (DDD), un approccio alla
+progettazione centrato sul modello del dominio. Le slide lo chiamano \textit{Domain-Driven Development}, ma il nome
+corretto, introdotto da Eric Evans nel 2003, è \textit{Domain-Driven \textbf{Design}}. Il procedimento ha quattro passi.
+
+\begin{center}
+\begin{tikzpicture}[
+    fase/.style={phase=#1, minimum width=3.0cm, minimum height=0.95cm, font=\scriptsize\bfseries}]
+  \node[fase=ph1] (a) at (0,0)   {Analizzare\\ il dominio};
+  \node[fase=ph2] (b) at (3.5,0) {Definire i\\ bounded context};
+  \node[fase=ph3] (c) at (7.0,0) {Definire entità,\\ aggregati, servizi};
+  \node[fase=ph4] (d) at (10.5,0) {Identificare i\\ microservizi};
+  \draw[flow] (a) -- (b); \draw[flow] (b) -- (c); \draw[flow] (c) -- (d);
 \end{tikzpicture}
 \end{center}
-L'architettura è \textbf{chiusa}: l'interfaccia usa solo il dominio, il dominio solo i servizi tecnici. Le partizioni dello
-stesso livello dovrebbero dipendere il meno possibile l'una dall'altra; dove serve (ad esempio \textit{Esami} che aggiorna
-la \textit{Carriera}) la dipendenza va resa esplicita e tenuta in una sola direzione.
-\end{esercizio}
+
+\begin{enumerate}
+  \item \textbf{Analizzare il dominio.} Si comprendono i requisiti funzionali; il risultato è una descrizione informale del
+        dominio del sistema, che si può raffinare in un insieme di modelli di dominio (Capitolo 7).
+  \item \textbf{Definire i bounded context.} Ogni \term{bounded context} (contesto delimitato) contiene un modello di dominio
+        che rappresenta un particolare \textbf{sottodominio}. Unificare tutto il dominio in un solo modello potrebbe non essere
+        né possibile né conveniente.
+  \item \textbf{Definire entità, aggregati e servizi di dominio.} Per ogni bounded context si applicano i pattern del DDD:
+        \begin{itemize}
+          \item le \textbf{entità}: oggetti con un'\textbf{identità} che persiste nel tempo (un cliente resta lo stesso
+                cliente anche se cambia indirizzo);
+          \item gli \textbf{aggregati}: confini di \textbf{consistenza} attorno a una o più entità, che modellano gli
+                invarianti da rispettare in una transazione (un ordine con le sue righe: il totale deve sempre essere la
+                somma delle righe);
+          \item i \textbf{servizi di dominio}: oggetti che implementano logica senza conservare uno stato.
+        \end{itemize}
+  \item \textbf{Identificare i microservizi.} Si parte da un bounded context: le funzionalità di un microservizio non
+        dovrebbero estendersi su più bounded context. Aggregati e servizi di dominio sono buoni candidati a diventare
+        microservizi.
+\end{enumerate}
+
+\begin{esempio}{La stessa parola, due contesti}
+In un e-commerce, «prodotto» significa cose diverse a seconda di chi ne parla.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[draw=ph2!70!black, fill=ph2!6, rounded corners=6pt, line width=0.9pt, minimum width=5.4cm, minimum height=2.6cm]
+    (cat) at (0,0) {};
+  \node[font=\scriptsize\bfseries, text=ph2!80!black, anchor=north] at (cat.north) {Bounded context: Catalogo};
+  \umlclass[3.4cm]{p1}{(0,-0.25)}{Prodotto}{nome, descrizione\\ foto, prezzo di listino}{}
+  \node[draw=ph4!70!black, fill=ph4!6, rounded corners=6pt, line width=0.9pt, minimum width=5.4cm, minimum height=2.6cm]
+    (mag) at (7.0,0) {};
+  \node[font=\scriptsize\bfseries, text=ph4!80!black, anchor=north] at (mag.north) {Bounded context: Magazzino};
+  \umlclass[3.4cm]{p2}{(7.0,-0.25)}{Prodotto}{codice, quantità disponibile\\ scaffale, peso}{}
+  \draw[dashed, line width=0.7pt, draw=swgray] (p1.east) -- node[note, above]{stesso codice} (p2.west);
+\end{tikzpicture}
+\end{center}
+Forzare un unico modello «Prodotto» per tutto il sistema produrrebbe una classe enorme, che cambia ogni volta che cambia
+il catalogo \textit{o} il magazzino: è la God Class del Capitolo 10, a livello di sistema. Con due bounded context, ognuno
+ha il proprio modello, e i due condividono solo l'identificativo. Catalogo e Magazzino sono due buoni candidati a diventare
+due microservizi.
+\end{esempio}
+
+\subsection{La comunicazione fra microservizi}
+
+In un monolite i componenti comunicano con \textbf{chiamate di metodo}. In un'architettura a microservizi la comunicazione
+dovrebbe essere \textbf{indipendente dalla tecnologia}: spesso i team usano i protocolli e le tecnologie su cui è costruito
+il Web. La comunicazione può essere:
+\begin{itemize}
+  \item \textbf{sincrona}: REST (API HTTP orientate alle risorse), Apache Thrift (che supporta più protocolli: binari,
+        basati su JSON\ldots);
+  \item \textbf{asincrona}: code di messaggi.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  % sincrona
+  \node[font=\small\bfseries] at (2.3,0.7) {Comunicazione sincrona};
+  \foreach \x/\n in {0/Frontend, 2.3/DataService, 4.6/LogService} {\node[partec] at (\x,0) {\n}; \draw[vita] (\x,-0.3) -- (\x,-3.2);}
+  \draw[sinc] (-0.9,-0.7) -- node[msgl]{click()} (-0.08,-0.7);
+  \attiv{0}{-0.7}{-2.9}
+  \draw[sinc] (0.08,-1.1) -- node[msgl]{update(data)} (2.22,-1.1);
+  \attiv{2.3}{-1.1}{-2.6}
+  \draw[sinc] (2.38,-1.5) -- node[msgl]{log("update")} (4.52,-1.5);
+  \attiv{4.6}{-1.5}{-2.2}
+  \draw[ritorno] (4.52,-2.2) -- (2.38,-2.2);
+  \draw[ritorno] (2.22,-2.6) -- (0.08,-2.6);
+  % asincrona
+  \begin{scope}[shift={(7.6,0)}]
+    \node[font=\small\bfseries] at (3.2,0.7) {Comunicazione asincrona};
+    \foreach \x/\n in {0/Frontend, 2.1/DataService, 4.2/Queue, 6.3/LogService} {\node[partec] at (\x,0) {\n}; \draw[vita] (\x,-0.3) -- (\x,-3.2);}
+    \draw[sinc] (-0.9,-0.7) -- node[msgl]{click()} (-0.08,-0.7);
+    \attiv{0}{-0.7}{-1.9}
+    \draw[sinc] (0.08,-1.1) -- node[msgl]{update(data)} (2.02,-1.1);
+    \attiv{2.1}{-1.1}{-1.75}
+    \draw[asinc] (2.18,-1.45) -- node[msgl]{add("update")} (4.12,-1.45);
+    \draw[ritorno] (2.02,-1.75) -- (0.08,-1.75);
+    \attiv{6.3}{-2.2}{-3.0}
+    \draw[sinc] (6.22,-2.4) -- node[msgl]{get()} (4.28,-2.4);
+    \draw[ritorno] (4.28,-2.8) -- node[msgl]{"update"} (6.22,-2.8);
+  \end{scope}
+\end{tikzpicture}
+\caption{A sinistra il \code{DataService} aspetta il \code{LogService} prima di rispondere; a destra deposita il messaggio
+         nella coda e risponde subito, e il \code{LogService} lo preleva quando vuole.}
+\end{figure}
+
+Le chiamate sincrone possono penalizzare le prestazioni, e soprattutto, quando sono molte, si manifesta un \textbf{effetto
+moltiplicativo} dei fermi: se per servire una richiesta devono funzionare tutti i servizi di una catena, la disponibilità
+complessiva è il \textbf{prodotto} delle disponibilità dei singoli servizi. O si rende asincrona la comunicazione, o si
+gestiscono i fermi.
+
+\warning{{Si moltiplicano le disponibilità, non i fermi}}{
+  Le slide dicono che il fermo del sistema diventa «il prodotto dei fermi dei singoli servizi». A moltiplicarsi, in realtà,
+  sono le \textbf{disponibilità}: se una richiesta attraversa in modo sincrono $n$ servizi indipendenti, con disponibilità
+  $A_1, \ldots, A_n$, la disponibilità complessiva è $A = A_1 \cdot A_2 \cdots A_n$. Con dieci servizi al 99{,}9\% ciascuno,
+  $A = 0{,}999^{10} \approx 99{,}0\%$: si passa da circa 9 ore a circa 3 giorni e mezzo di fermo all'anno. Il fermo
+  complessivo è quindi circa la \textbf{somma} dei fermi, non il prodotto.
+}
+
+\subsection{La gestione dei dati}
+
+I monoliti sono tipicamente associati a un unico database \textbf{centralizzato}, spesso anche per via dei costi di licenza
+dei DBMS. Anche i microservizi possono lavorare con un database centralizzato, ma allora le modifiche allo schema vanno
+\textbf{coordinate} fra i team, e i servizi tornano ad essere accoppiati attraverso i dati.
+
+L'alternativa è un \textbf{database per ogni servizio}: ogni microservizio (e ogni team) è davvero indipendente, e si può
+scegliere per ognuno il tipo di database più adatto (\textit{polyglot persistence}: un database relazionale per gli ordini,
+uno a documenti per il catalogo, uno chiave-valore per le sessioni\ldots).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  % monolite
+  \node[servizio, fill=q6!10, draw=q6!70!black, minimum height=1.3cm, minimum width=1.6cm] (m) at (0,0.4) {Monolite};
+  \node[db] (md) at (0,-1.4) {DB};
+  \draw[frd] (m) -- (md);
+  \node[note, font=\scriptsize\bfseries] at (0,-2.4) {Monolite};
+  % microservizi, database condiviso
+  \begin{scope}[shift={(4.6,0)}]
+    \node[servizio] (a) at (-1.2,0.9) {A}; \node[servizio] (b) at (0,0.9) {B}; \node[servizio] (c) at (1.2,0.9) {C};
+    \node[db, minimum width=2.6cm] (sd) at (0,-1.4) {DB condiviso};
+    \foreach \s in {a,b,c} \draw[frd] (\s) -- (sd);
+    \node[note, font=\scriptsize\bfseries, align=center] at (0,-2.4) {Microservizi,\\ database condiviso};
+  \end{scope}
+  % un database per servizio
+  \begin{scope}[shift={(10.0,0)}]
+    \foreach \s/\x/\t in {a/-1.6/relazionale, b/0/documenti, c/1.6/chiave-valore} {
+      \node[servizio] (\s) at (\x,0.9) {\MakeUppercase{\s}};
+      \node[db, font=\tiny\bfseries] (\s-d) at (\x,-1.1) {DB\\ \t};
+      \draw[frd] (\s) -- (\s-d);
+    }
+    \draw[frd, dashed] (a) -- (b); \draw[frd, dashed] (b) -- (c);
+    \node[note, font=\scriptsize\bfseries, align=center] at (0,-2.4) {Microservizi,\\ un database per servizio};
+  \end{scope}
+\end{tikzpicture}
+\caption{Tre modi di gestire i dati. Nel terzo i servizi si scambiano dati solo attraverso le loro interfacce (tratteggio).}
+\end{figure}
+
+Con i dati distribuiti su molti database, garantire una \textbf{consistenza forte} diventa sempre più difficile: spesso ci si
+accontenta della \textbf{consistenza finale} vista per i database NoSQL. A un certo punto nel futuro, tutte le letture di
+un'entità restituiranno il valore aggiornato.
+
+\subsection{È una questione di compromessi}
+
+\Needspace{10\baselineskip}
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.6cm} >{\raggedright\arraybackslash}p{6.6cm}@{}}
+  \toprule
+  \textcolor{swgreen}{\textbf{I microservizi danno\ldots}} & \textcolor{swred}{\textbf{\ldots ma non gratis}} \\
+  \midrule
+  confini forti fra i moduli & più complessità (un sistema distribuito) \\
+  rilasci indipendenti & consistenza solo finale \\
+  libertà di scelta delle tecnologie & più complessità operativa (molti servizi da rilasciare e monitorare) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Bisogna quindi avere una \textbf{buona ragione} per adottarli. Un caso spesso citato è quello di Istio, un noto progetto
+open source che nel 2020 è \textbf{tornato} da un'architettura a microservizi a una monolitica, perché la complessità
+operativa superava i benefici (Mendonça et al., \textit{The Monolith Strikes Back}, IEEE Software, 2021).
+
+% ============================================================
+\section{Architettura e organizzazione dei team}
+
+Che cosa c'entra l'organizzazione dei team con l'architettura? Moltissimo.
+
+\dfn{Legge di Conway}{
+  \textit{«Qualunque organizzazione che progetta un sistema produrrà un progetto la cui struttura è una copia della
+  struttura di comunicazione dell'organizzazione.»}
+
+  \hfill --- Melvin Conway, \textit{How do committees invent?}, Datamation, 1968
+}
+
+Il motivo è che l'accoppiamento del software è reso possibile e incoraggiato dalla \textbf{comunicazione fra persone}. Se si
+può parlare con l'autore di un pezzo di codice, è più facile capire davvero quel codice; e quindi è più facile che il
+proprio codice interagisca con esso, cioè che vi si \textbf{accoppi}. Due team che non si parlano produrranno, quasi
+inevitabilmente, due moduli con un'interfaccia stretta fra loro.
+
+\subsection{Come si organizza un team grande}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    team/.style={rectangle, rounded corners=3pt, draw=#1!70!black, fill=#1!12, line width=0.8pt, font=\scriptsize\bfseries,
+                 minimum width=3.4cm, minimum height=0.65cm, align=center},
+    liv/.style={rectangle, draw=#1!70!black, fill=#1!12, line width=0.8pt, font=\scriptsize,
+                minimum width=3.6cm, minimum height=0.65cm}]
+  % team per livello tecnologico
+  \node[font=\small\bfseries] at (2.6,1.0) {Team per livello tecnologico};
+  \node[team=q4] at (0.5,0.1) {\iuser\iuser\iuser\ specialisti UI/UX};
+  \node[team=q7] at (0.5,-0.75) {\iuser\iuser\iuser\ middleware};
+  \node[team=q5] at (0.5,-1.6) {\iuser\iuser\iuser\ DB admin};
+  \node[liv=q4] (l1) at (5.0,0.1) {interfaccia};
+  \node[liv=q7] (l2) at (5.0,-0.75) {logica};
+  \node[liv=q5] (l3) at (5.0,-1.6) {dati};
+  \foreach \y in {0.1,-0.75,-1.6} \draw[fr] (2.3,\y) -- (3.1,\y);
+  \node[note, align=center, text=swred] at (2.6,-2.45) {nuova funzionalità: tre team da coordinare,\\ logica sparsa ovunque};
+  % team trasversali
+  \begin{scope}[shift={(8.6,0)}]
+    \node[font=\small\bfseries] at (2.6,1.0) {Team trasversali (cross-functional)};
+    \foreach \t/\y/\n in {A/0.1/Ordini, B/-0.75/Catalogo, C/-1.6/Pagamenti} {
+      \node[team=swgreen, minimum width=2.6cm] at (0.6,\y) {\iuser\iuser\iuser\ Team \t};
+      \node[servizio, minimum width=2.2cm, minimum height=0.6cm] at (4.4,\y) {\n};
+      \draw[fr] (2.0,\y) -- (3.2,\y);
+    }
+    \node[note, align=center, text=swgreen!70!black] at (2.6,-2.45) {ogni team ha tutte le competenze\\ e possiede un servizio};
+  \end{scope}
+\end{tikzpicture}
+\caption{La legge di Conway all'opera: team divisi per tecnologia producono un'architettura a livelli; team trasversali
+         producono servizi organizzati attorno alle capacità di business.}
+\end{figure}
+
+Spesso il management organizza i team in base al \textbf{livello tecnologico}: specialisti di interfaccia, di middleware, di
+database. Team funzionali divisi per livello portano ad \textbf{architetture a livelli}. E se serve aggiungere una nuova
+funzionalità? Bisogna coordinare tutti i team, e la logica finisce un po' ovunque.
+
+I microservizi favoriscono invece team \textbf{piccoli e indipendenti}, e \textbf{trasversali} (\textit{cross-functional}):
+ogni team include l'intera gamma di competenze necessarie (interfaccia, logica, dati, test, rilascio) e possiede uno o più
+servizi.
+
+\subsection{Che fare con la legge di Conway}
+
+\begin{itemize}
+  \item \textbf{Ignorarla}: non tenerne conto, perché non se ne è mai sentito parlare o perché si pensa che non valga nel
+        proprio caso. \textit{Spoiler}: vale.
+  \item \textbf{Accettarla}: riconoscerne l'impatto, e fare in modo che l'architettura non si scontri con i canali di
+        comunicazione del team.
+  \item \textbf{La manovra di Conway inversa} (\textit{Inverse Conway Maneuver}): cambiare la struttura di comunicazione del
+        team per \textbf{favorire l'architettura desiderata}. Se vogliamo tre servizi indipendenti, organizziamo tre team
+        indipendenti.
+\end{itemize}
+
+\info{Il messaggio da portare a casa}{
+  La scomposizione di un sistema e la scomposizione dell'organizzazione che lo sviluppa \textbf{non si possono fare
+  indipendentemente}: né all'inizio del progetto, né durante tutto il suo ciclo di vita. Far evolvere l'architettura e
+  riorganizzare le persone devono andare di pari passo.
+}
 
 % ============================================================
 \gbox{In sintesi}{azure-gradient-6!80!black}{
 \begin{itemize}
-  \item L'\textbf{architettura software} è l'insieme delle strutture di un sistema: elementi, proprietà visibili dall'esterno
-        e relazioni. È un'astrazione, ogni sistema ne ha una (meglio progettarla), e un disegno a scatole e frecce non basta.
-  \item Si definisce nella \textbf{progettazione architetturale}, identificando i sottosistemi e le politiche di controllo:
-        scelte difficili da cambiare in seguito.
-  \item Il sistema si divide in \textbf{livelli} e \textbf{sottosistemi}, poi in package, classi e metodi; funzioni e livelli
-        sono due dimensioni ortogonali.
-  \item In un'architettura a livelli ogni livello dipende solo da quelli inferiori. \textbf{Chiusa} (solo il livello
-        immediatamente sotto): manutenibilità e portabilità. \textbf{Aperta} (tutti i livelli sotto): efficienza.
-  \item Gli stili principali sono \textbf{client/server}, \textbf{repository}, \textbf{a livelli}, \textbf{three-tier} e
-        \textbf{multi-tier}, \textbf{SOA}: ognuno con vantaggi e svantaggi da pesare rispetto agli obiettivi di progetto.
+  \item L'architettura è l'insieme delle \textbf{decisioni principali}: quelle difficili da cambiare in seguito. Una buona
+        qualità interna costa all'inizio, ma ripaga in poche settimane.
+  \item \textbf{Scalabilità}: le prestazioni crescono in proporzione alle risorse. Si scala orizzontalmente,
+        verticalmente o diagonalmente; per scalare orizzontalmente serve un \textbf{load balancer}, che non deve diventare
+        un collo di bottiglia o un single point of failure.
+  \item \textbf{Disponibilità}: si misura in «nove» e si ottiene con il \textbf{fail-over} attivo-passivo o attivo-attivo,
+        con heartbeat e osservabilità per accorgersi dei guasti.
+  \item \textbf{Dati}: le proprietà \textbf{ACID} rendono difficile scalare un RDBMS; le tecniche sono replica
+        (master-slave, master-master), federazione, sharding, denormalizzazione. I database \textbf{NoSQL} (BASE) scalano
+        meglio rinunciando alla consistenza immediata: \textbf{consistenza finale}.
+  \item Le \textbf{code di messaggi} rendono asincrone le elaborazioni lente e riducono la latenza.
+  \item I \textbf{microservizi} danno confini forti, rilasci indipendenti e libertà tecnologica, al prezzo di complessità,
+        consistenza finale e costi operativi: vanno adottati solo per sistemi complessi, progettandone i confini con il
+        DDD (bounded context, aggregati).
+  \item \textbf{Legge di Conway}: la struttura del sistema copia quella della comunicazione dell'organizzazione. Architettura
+        e organizzazione dei team vanno progettate insieme.
 \end{itemize}
 }

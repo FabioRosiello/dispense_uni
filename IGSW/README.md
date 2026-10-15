@@ -14,10 +14,9 @@ Questa cartella contiene i sorgenti LaTeX di `../Dispensa.pdf`.
 - `chapters/chapter_7.tex` — UML e il diagramma delle classi (L_05, UML Recap)
 - `chapters/chapter_8.tex` — Diagrammi dei package e di sequenza (L_05, UML Recap)
 - `chapters/chapter_9.tex` — Altri diagrammi UML: componenti, deployment, stati, attività (L_06)
-- `chapters/chapter_10.tex` — Esercizi sui diagrammi di stato, con soluzioni ridisegnate e correzioni (L_06-E)
-- `chapters/chapter_11.tex` — System Design e buone pratiche di progettazione: obiettivi di progetto, scomposizione, coesione (tipi e livelli, God Class), accoppiamento, Legge di Demetra, schede CRC (L_09, L_11, L_12)
-- `chapters/chapter_12.tex` — Architetture software: definizione, livelli e partizioni, architettura chiusa e aperta, client/server, repository, a livelli, three-tier, multi-tier, SOA (L_13)
-- `chapters/chapter_13.tex` — Architetture software moderne: scalabilità e load balancing, disponibilità e fail-over, dati (ACID, replica, sharding, NoSQL e consistenza finale), code di messaggi, microservizi e DDD, legge di Conway (L_14, L_15)
+- `chapters/chapter_10.tex` — System Design e buone pratiche di progettazione: obiettivi di progetto, scomposizione, coesione (tipi e livelli, God Class), accoppiamento, Legge di Demetra, schede CRC (L_09, L_11, L_12)
+- `chapters/chapter_11.tex` — Architetture software: definizione, livelli e partizioni, architettura chiusa e aperta, client/server, repository, a livelli, three-tier, multi-tier, SOA (L_13)
+- `chapters/chapter_12.tex` — Architetture software moderne: scalabilità e load balancing, disponibilità e fail-over, dati (ACID, replica, sharding, NoSQL e consistenza finale), code di messaggi, microservizi e DDD, legge di Conway (L_14, L_15)
 - `unina_doc_class.cls`, `fonts/`, `sources/` — template Unina Docs (da `Materiale/Dispense.rar`)
 - `Images/` — immagini tratte dalle slide del corso
 
@@ -37,10 +36,11 @@ cp main.pdf ../Dispensa.pdf
 ## Convenzioni usate
 - `\dfn{Titolo}{...}` definizione · `\info` approfondimento · `\warning` attenzione ·
   `\error` avvertimento forte · `\gbox{In sintesi}{colore}{...}` riepilogo di capitolo
-- ambienti `esempio` ed `esercizio` (numerati per capitolo)
-- `\Needspace{...}` prima di riquadri, esempi, esercizi e listati per evitare che un
+- ambiente `esempio` (numerato per capitolo); la dispensa non contiene esercizi
+  (l'ambiente `esercizio` resta definito in `main.tex`, ma non è usato)
+- `\Needspace{...}` prima di riquadri, esempi e listati per evitare che un
   concetto si spezzi tra due pagine
-- `esempio` ed `esercizio` sono composti in una scatola: se stanno in una pagina non si
+- gli `esempio` sono composti in una scatola: se stanno in una pagina non si
   spezzano mai (passano interi alla pagina successiva)
 - nei listati le legature di FiraCode sono disattivate (`\FiraCodeNL`): `!=` e `>=` restano come nel sorgente
 - i titoli dei riquadri che contengono una virgola vanno racchiusi in doppie graffe:
