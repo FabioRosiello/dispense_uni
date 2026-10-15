@@ -33,7 +33,7 @@ escluse: restano sulle slide e sul sito del docente, dove vengono aggiornate.
 | `chapters/7. JavaScript nel browser.tex` | `window`, DOM e BOM, ricerca e navigazione dei nodi, modifica del DOM, eventi, bubbling e delegazione, ordine di esecuzione degli script |
 | `chapters/8. Asincronismo e rete.tex` | Cookie e Web Storage, callback, Promise e concatenazione, API statiche, `async`/`await`, `fetch` |
 | `chapters/9. Il Web sotto il cofano.tex` | Applicazioni di rete, client-server e P2P, processi e socket, IP e porte, protocolli applicativi, DNS, versioni di HTTP, TCP/UDP e QUIC, connessioni persistenti, metodi sicuri e idempotenti (GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS, QUERY), risposte e codici di stato, HTTPS e TLS, dal clic alla pagina e tempistiche nei DevTools |
-| `chapters/10. Web statico e dinamico.tex` | Limiti del web statico, CGI, scripting lato server, PHP, NGINX e PHP-FPM |
+| `chapters/10. Web statico e dinamico.tex` | Limiti del web statico, programmazione lato server, CGI (flusso, interfaccia con variabili d'ambiente, stdin e stdout, lista di cose da fare), scripting lato server, PHP, NGINX e PHP-FPM |
 | `chapters/11. Node.tex` | Event loop, modello non bloccante, npm e `package.json`, primo server HTTP, debug, nodemon |
 | `chapters/12. Web app con Node.tex` | Routing, motori di template e Pug, analisi del corpo delle richieste |
 | `chapters/13. Sessioni.tex` | Cookie, i loro limiti, sessioni memorizzate sul server |

@@ -7,6 +7,12 @@ richieste HTTP asincrone per recuperare i dati da mostrare.
 
 C'è però un limite di fondo che non abbiamo ancora superato.
 
+\info{Il ripasso di inizio lezione}{
+  La lezione si apre con un breve ripasso di Promise (\code{then}, \code{finally}
+  e l'ordine delle stampe) e dell'API \code{fetch} (header, \code{status},
+  \code{ok} e lettura del corpo con \code{.json()}). Sono gli stessi esempi del
+  capitolo 8, a cui rimandiamo.}
+
 \section{I limiti delle web app statiche}
 
 Le nostre pagine hanno un certo dinamismo grazie a JavaScript, ma quel
@@ -30,10 +36,16 @@ nostre pagine, gli viene servito \textbf{sempre lo stesso identico documento}.
 
     \begin{scope}[on background layer]
       \node[rounded corners=5pt, draw=primary!70!black, line width=1pt,
-            fill=primary!3!white, fit=(t)(h)(a)(d), inner sep=9pt] {};
+            fill=primary!3!white, fit=(t)(h)(a)(d), inner sep=9pt] (srv) {};
     \end{scope}
+
+    \node[wtnode, fill=accent!8!white, draw=accent!60!black, minimum width=2.2cm,
+          minimum height=1.1cm] (br) at (-8.6,0.85) {\textbf{Browser}};
+    \draw[{Stealth[length=6pt,width=5pt]}-{Stealth[length=6pt,width=5pt]}, line width=1pt,
+          draw=orange-gradient-6] (br.east) -- node[wtlab, above]{HTTP} (srv.west |- br.east);
   \end{tikzpicture}
-  \caption{Un server che serve solo file: la risposta è sempre la stessa.}
+  \caption{Un server che serve solo file dalla sua document root: a ogni richiesta
+           del browser la risposta è sempre la stessa.}
   \label{fig:static-server}
 \end{figure}
 
@@ -134,14 +146,21 @@ dinamiche si ottenevano tramite la \term{Common Gateway Interface} (CGI).
 
     \def\xb{0} \def\xs{4.6} \def\xc{9.2}
 
-    \node[hdr] (B) at (\xb,0) {\textbf{Browser}};
-    \node[hdr] (S) at (\xs,0) {\textbf{Server HTTP}};
+    \node[hdr] (B) at (\xb,0.2) {\textbf{Browser}};
+    \node[hdr] (S) at (\xs,0.2) {\textbf{Server HTTP}};
     \node[hdr, draw=orange-gradient-6, fill=orange-gradient-1!40!white]
-      (C) at (\xc,0) {\textbf{Programma CGI}};
+      (C) at (\xc,0.2) {\textbf{Programma CGI}};
 
     \draw[life] (B.south) -- (\xb,-3.6);
     \draw[life] (S.south) -- (\xs,-3.6);
     \draw[life] (C.south) -- (\xc,-3.6);
+
+    \begin{scope}[on background layer]
+      \draw[rounded corners=6pt, dashed, line width=0.8pt, draw=primary!55!black,
+            fill=primary!4!white] (\xs-1.7,1.3) rectangle (\xc+1.7,-3.85);
+    \end{scope}
+    \node[font=\Lato\scriptsize\bfseries, text=primary!65!black, anchor=north]
+      at ({(\xs+\xc)/2},1.27) {Application Server};
 
     \draw[msg] (\xb,-0.9) -- (\xs,-0.9) node[ml]{richiesta HTTP};
     \node[num] at (-0.5,-0.9) {1};
@@ -155,12 +174,35 @@ dinamiche si ottenevano tramite la \term{Common Gateway Interface} (CGI).
     \draw[rsp] (\xs,-3.3) -- (\xb,-3.3) node[ml]{risposta HTTP};
     \node[num] at (-0.5,-3.3) {4};
   \end{tikzpicture}
-  \caption{Il flusso di una richiesta gestita tramite CGI.}
+  \caption{Il flusso di una richiesta gestita tramite CGI. Server HTTP e
+           programma CGI formano insieme l'\textit{application server}.}
   \label{fig:cgi-flow}
 \end{figure}
 
 La specifica CGI definisce con precisione come server web e programmi conformi
-devono comunicare.
+devono comunicare: come il programma accede ai suoi \textbf{input}, e come il
+server costruisce la \textbf{risposta}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      n/.style={wtnode, minimum width=2.8cm, minimum height=1.0cm},
+      a/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt, draw=primary!70!black},
+      r/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt, draw=accent!70!black}]
+    \node[n] (b) at (0,0) {\textbf{Browser}};
+    \node[n] (s) at (5.2,0) {\textbf{Server HTTP}};
+    \node[n, draw=orange-gradient-6, fill=orange-gradient-1!40!white] (c) at (12.4,0)
+      {\textbf{Programma CGI}};
+    \draw[a] ([yshift=7pt]b.east) -- node[wtlab, above]{richiesta HTTP} ([yshift=7pt]s.west);
+    \draw[r] ([yshift=-7pt]s.west) -- node[wtlab, below]{risposta HTTP} ([yshift=-7pt]b.east);
+    \draw[a] ([yshift=7pt]s.east) -- node[wtlab, above, align=center]
+      {header e query string: \textbf{variabili d'ambiente}\\ corpo: \textbf{stdin}} ([yshift=7pt]c.west);
+    \draw[r] ([yshift=-7pt]c.west) -- node[wtlab, below]{corpo della risposta: \textbf{stdout}}
+      ([yshift=-7pt]s.east);
+  \end{tikzpicture}
+  \caption{L'interfaccia CGI: gli input arrivano al programma come variabili
+           d'ambiente e su stdin, la risposta esce da stdout.}
+\end{figure}
 
 \begin{center}
 \renewcommand{\arraystretch}{1.4}
@@ -216,6 +258,39 @@ responsabile di un'operazione:
         genera la pagina HTML;
   \item un altro richiama \code{reset-todo}, che svuota il file.
 \end{itemize}
+
+\begin{center}
+\begin{tikzpicture}[font=\Lato\small,
+    scr/.style={rectangle, rounded corners=2pt, fill=primary!70!black, text=white,
+      font=\FiraCodeNL\scriptsize, minimum width=2.1cm, minimum height=0.6cm},
+    a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=neutral!45!black},
+    d/.style={{Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+      draw=neutral!45!black}]
+  \draw[rounded corners=6pt, dashed, line width=0.9pt, draw=primary!55!black,
+        fill=primary!3!white] (-0.4,1.55) rectangle (11.4,-2.4);
+  \node[font=\Lato\small\bfseries, anchor=north west] at (-0.3,1.5) {Web Server (Apache)};
+  % index.html
+  \draw[rounded corners=3pt, fill=accent!70!black, draw=accent!80!black] (0,0.9) rectangle (2.6,-2.1);
+  \node[font=\FiraCodeNL\scriptsize, text=white] at (1.3,0.65) {index.html};
+  \node[rectangle, fill=black!85, text=white, font=\FiraCodeNL\scriptsize, minimum width=1.6cm,
+        minimum height=0.5cm] (form) at (1.3,0.0) {<form>};
+  \coordinate (a1) at (2.6,-0.85); \coordinate (a2) at (2.6,-1.7);
+  % script CGI
+  \draw[rounded corners=4pt, dashed, line width=0.7pt, draw=primary!55!black, fill=primary!8!white]
+    (5.6,1.0) rectangle (8.4,-2.15);
+  \node[font=\Lato\scriptsize\bfseries, anchor=north] at (7.0,0.98) {Script CGI};
+  \node[scr] (s1) at (7.0,0.0)  {save-todo};
+  \node[scr] (s2) at (7.0,-0.85) {list-todo};
+  \node[scr] (s3) at (7.0,-1.7)  {reset-todo};
+  \node[cylinder, shape border rotate=90, aspect=0.25, draw=primary!70!black,
+        fill=primary!15!white, minimum width=1.4cm, minimum height=0.9cm,
+        font=\FiraCodeNL\scriptsize] (txt) at (10.2,-0.85) {todo.txt};
+  \draw[a] (form.east) -- node[wtlab, above, font=\FiraCodeNL\scriptsize]{invio del form} (s1.west);
+  \draw[a] (a1) -- node[wtlab, above, font=\FiraCodeNL\scriptsize]{<a>} (s2.west);
+  \draw[a] (a2) -- node[wtlab, above, font=\FiraCodeNL\scriptsize]{<a>} (s3.west);
+  \draw[d] (s1.east) -- (txt.west); \draw[d] (s2.east) -- (txt.west); \draw[d] (s3.east) -- (txt.west);
+\end{tikzpicture}
+\end{center}
 
 L'esempio completo del corso è disponibile su
 \urlx{https://github.com/luistar/cgi-to-do-list-with-bash}.
@@ -301,7 +376,9 @@ operazioni noiose tipiche della gestione di una richiesta HTTP:
   \item in PHP i parametri della richiesta sono disponibili in array
         associativi (\code{\$\_GET}, \code{\$\_POST}). Per esempio
         \code{\$\_POST['todo']} accede al parametro \code{todo};
-  \item i cookie sono già analizzati nell'array \code{\$\_COOKIE};
+  \item i cookie sono già analizzati nell'array associativo \code{\$\_COOKIE}
+        (nelle slide compare \code{\$\_COOKIES}, ma il nome corretto in PHP è
+        senza la S finale);
   \item non serve scrivere esplicitamente sullo standard output l'intera
         risposta.
 \end{itemize}
@@ -320,44 +397,46 @@ interessante e più realistico:
 \begin{itemize}
   \item la persistenza è gestita con un vero database (SQLite);
   \item si usa Bootstrap per rendere le pagine responsive e più gradevoli;
-  \item si introducono un'intestazione e un piè di pagina come \textit{parti di
-        template} riutilizzabili;
+  \item si introducono una barra di navigazione e un piè di pagina come
+        \textit{parti di template} riutilizzabili;
   \item si adotta un'architettura moderna basata su NGINX e PHP-FPM.
 \end{itemize}
 
 \begin{figure}[H]
   \centering
   \begin{tikzpicture}[font=\Lato\small,
-      n/.style={wtnode, minimum width=3.0cm, minimum height=1.0cm},
-      w/.style={wtnodeplain, minimum width=2.9cm, minimum height=0.6cm},
-      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
-                draw=neutral!45!black}]
-
-    \node[n] (srv) at (0,0) {\textbf{Web Server}\\\scriptsize NGINX};
-
-    \node[w] (q) at (4.4,0) {coda delle richieste};
-
-    \node[w] (w1) at (8.6,1.3) {Worker 1};
-    \node[w] (w2) at (8.6,0.3) {Worker \textit{i}};
-    \node[w] (w3) at (8.6,-1.0) {Worker \textit{n}};
-    \node[font=\Lato\small, text=neutral!45!black] at (8.6,-0.35) {\vdots};
-
-    \draw[a] (srv) -- node[wtlab, above]{\code{\textbackslash.php\$}} (q);
-    \draw[a] (q.east) -- (w1.west);
-    \draw[a] (q.east) -- (w2.west);
-    \draw[a] (q.east) -- (w3.west);
-
-    \begin{scope}[on background layer]
-      \node[rounded corners=5pt, draw=orange-gradient-6, line width=1pt,
-            fill=orange-gradient-1!20!white, fit=(w1)(w2)(w3),
-            inner sep=9pt, label={[font=\Lato\scriptsize,
-            text=orange-gradient-6!70!black]above:PHP-FPM: pool di processi}] {};
-    \end{scope}
-
-    \node[font=\Lato\scriptsize\itshape, text=neutral!35!black, align=center]
-      at (4.4,-1.3) {se tutti i worker sono occupati,\\ le richieste attendono};
+      w/.style={rectangle, draw=accent!60!black, fill=accent!25!white, line width=0.7pt,
+                minimum width=2.9cm, minimum height=0.6cm, font=\Lato\scriptsize},
+      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.9pt, draw=primary!70!black},
+      d/.style={{Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]}, line width=0.9pt,
+                draw=neutral!50!black}]
+    % NGINX
+    \draw[line width=0.9pt, draw=green-gradient-6, fill=green-gradient-1!25!white] (0,1.6) rectangle (4.2,-1.6);
+    \node[font=\Lato\small\bfseries, anchor=north] at (2.1,1.55) {Web Server (NGINX)};
+    \node[rectangle, draw=green-gradient-6, fill=green-gradient-1!55!white, line width=0.7pt,
+          minimum width=3.4cm, minimum height=1.1cm, align=center, font=\Lato\scriptsize] (q) at (2.1,-0.8)
+      {\textbf{Coda delle richieste}\\ se tutti i worker FPM sono\\ occupati, le richieste attendono};
+    % PHP-FPM
+    \draw[line width=0.9pt, draw=accent!60!black, fill=accent!8!white] (8.0,1.6) rectangle (12.0,-1.6);
+    \node[font=\Lato\small\bfseries, anchor=north] at (10.0,1.55) {PHP-FPM};
+    \node[font=\Lato\scriptsize\bfseries, anchor=north] at (10.0,1.05) {pool di processi};
+    \node[w] at (10.0,0.25) {Worker 1};
+    \node[w, dashed] at (10.0,-0.5) {Worker \textit{i}};
+    \node[w] at (10.0,-1.25) {Worker \textit{n}};
+    % richieste e risposte
+    \draw[a] (-1.9,0.75) -- node[wtlab, above, font=\FiraCodeNL\scriptsize]{richiesta HTTP} (0,0.75);
+    \draw[a, draw=accent!70!black] (0,0.2) -- node[wtlab, below, font=\FiraCodeNL\scriptsize]{risposta HTTP} (-1.9,0.2);
+    \draw[d] (4.2,0.5) -- node[wtlab, above, font=\FiraCodeNL\scriptsize]{\textbackslash.php\$ -> TCP:9000} (8.0,0.5);
+    % volume condiviso
+    \node[rectangle, fill=primary!70!black, text=white, font=\Lato\small, minimum width=12.0cm,
+          minimum height=0.75cm, anchor=north west] (vol) at (0,-2.3) {Volume di dati condiviso};
+    \draw[d] (2.1,-1.6) -- (2.1,-2.3);
+    \draw[d] (10.0,-1.6) -- (10.0,-2.3);
   \end{tikzpicture}
-  \caption{NGINX inoltra le richieste PHP a un pool di processi persistenti.}
+  \caption{NGINX riceve le richieste e inoltra quelle per i file \code{.php} a un
+           pool di processi PHP-FPM, sulla porta TCP 9000. I due componenti
+           condividono lo stesso volume di dati: i sorgenti dell'applicazione e il
+           database SQLite.}
   \label{fig:php-fpm}
 \end{figure}
 
@@ -365,11 +444,19 @@ interessante e più realistico:
   Il salto qualitativo sta nel pool: i processi \textbf{esistono già} e restano
   vivi fra una richiesta e l'altra, invece di essere creati e distrutti ogni
   volta. NGINX si limita a inoltrare le richieste che finiscono in \code{.php} a
-  PHP-FPM tramite una connessione TCP, e continua a servire da sé i file statici
+  PHP-FPM tramite una connessione TCP (qui sulla porta 9000), e continua a servire da sé i file statici
   (immagini, CSS, JavaScript), per cui non serve alcuna elaborazione. È lo stesso
   principio che ritroveremo con Node.js.
 
   L'esempio completo è su \urlx{https://github.com/luistar/php-to-do-list}.}
+
+\info{Per mettere le mani sul codice}{
+  La lezione non assegna compiti, ma suggerisce di eseguire in proprio gli
+  esempi CGI e PHP (i due repository indicati sopra) e di provare a modificare
+  le applicazioni della lista di cose da fare: ad esempio aggiungendo a ogni
+  voce una \textbf{data di scadenza}. È un buon modo per toccare con mano i passi
+  di una richiesta: il campo nel form, il parametro letto dal server,
+  il dato salvato e la pagina generata.}
 
 \section{Riferimenti}
 
@@ -387,5 +474,6 @@ interessante e più realistico:
         \urlx{https://httpd.apache.org/docs/2.4/howto/cgi.html}
   \item \textbf{PHP} --- sito ufficiale e manuale. \\
         \urlx{https://www.php.net/} \\
-        \urlx{https://www.php.net/manual/en/getting-started.php}
+        \urlx{https://www.php.net/manual/en/getting-started.php} \\
+        \urlx{https://www.php.net/manual/en/}
 \end{itemize}
