@@ -17,13 +17,109 @@ questo corso useremo il primo, di gran lunga il più diffuso.
   I/O \textbf{basato sugli eventi, asincrono per impostazione predefinita e non
   bloccante}.}
 
+È di gran lunga l'ambiente di esecuzione JavaScript più usato: nel sondaggio
+\textit{State of JavaScript 2022} lo indicava il 93,6\% di chi ha risposto, più
+ancora del browser.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize, x=0.085cm, y=0.5cm]
+    % griglia e scala
+    \foreach \p in {0,20,...,100} {
+      \draw[neutral!22!white, line width=0.4pt] (\p,0.55) -- (\p,-6.55);
+      \node[text=neutral!40!black, anchor=south] at (\p,0.55) {\p\%};
+    }
+    \foreach \nome/\val/\testo [count=\i from 0] in
+        {Node.js/93.6/{93,6\%}, Browser/81.6/{81,6\%},
+         Service Worker/17.8/{17,8\%}, Deno/11.2/{11,2\%}, Bun/4.3/{4,3\%},
+         Hermes/3.0/{3,0\%}, ChakraCore/0.4/{0,4\%}} {
+      \ifnum\i=0
+        \fill[green-gradient-6, rounded corners=1pt] (0,-\i-0.3) rectangle (\val,-\i+0.3);
+        \node[anchor=east, font=\Lato\scriptsize\bfseries] at (-1.5,-\i) {\nome};
+        \node[anchor=west, font=\Lato\scriptsize\bfseries] at (\val+1,-\i) {\testo};
+      \else
+        \fill[primary!35!white, rounded corners=1pt] (0,-\i-0.3) rectangle (\val,-\i+0.3);
+        \node[anchor=east] at (-1.5,-\i) {\nome};
+        \node[anchor=west, text=neutral!30!black] at (\val+1,-\i) {\testo};
+      \fi
+    }
+  \end{tikzpicture}
+  \caption{Gli ambienti in cui si esegue JavaScript, secondo il sondaggio
+           \textit{State of JavaScript 2022}. Si poteva indicarne più d'uno, per
+           questo le percentuali non sommano a 100.}
+  \label{fig:stateofjs}
+\end{figure}
+
 Per capire perché quel modello di I/O sia così importante, conviene partire da
 come funzionano gli altri ambienti.
 
 \section{Il modello multi-thread}
 
 In molti ambienti e linguaggi, \textbf{una richiesta è gestita da un
-thread o processo dedicato}, prelevato da un pool preallocato.
+thread o processo dedicato}, prelevato da un pool preallocato dall'application
+server. Quel thread resta legato alla sua richiesta dall'inizio alla fine,
+comprese le operazioni di I/O necessarie per servirla.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      cl/.style={wtnode, minimum width=1.9cm, minimum height=0.7cm},
+      rq/.style={rounded corners=2pt, draw=primary!65!black, fill=primary!14!white,
+                 line width=0.7pt, minimum width=4.6cm, minimum height=0.72cm,
+                 font=\Lato\scriptsize, text depth=0pt},
+      th/.style={circle, draw=primary!65!black, fill=white, line width=0.7pt,
+                 inner sep=0pt, minimum size=0.6cm, font=\Lato\scriptsize},
+      io/.style={wtnodewarn, minimum width=2.5cm, minimum height=0.62cm,
+                 font=\Lato\scriptsize},
+      box/.style={rounded corners=5pt, line width=0.8pt},
+      dbl/.style={{Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]},
+                  line width=0.9pt, draw=primary!70!black}]
+
+    % client
+    \node[cl] (c1) at (0,1.1)  {Client 1};
+    \node[cl] (c2) at (0,0.2)  {Client 2};
+    \node[font=\Lato\small, text=neutral!45!black] at (0,-0.55) {\vdots};
+    \node[cl] (cn) at (0,-1.4) {Client \textit{n}};
+
+    % application server
+    \draw[box, draw=green-gradient-6, fill=green-gradient-1!30!white]
+      (2.0,2.2) rectangle (8.4,-3.55);
+    \node[font=\Lato\scriptsize\bfseries, text=green-gradient-6!70!black,
+          anchor=north] at (5.2,2.15) {Application server};
+    \draw[box, dashed, draw=primary!55!black, fill=white]
+      (2.3,1.65) rectangle (8.1,-1.95);
+    \foreach \i/\y in {1/1.1, 2/0.2, n/-1.4} {
+      \node[rq, anchor=west] at (2.55,\y)
+        {\hspace*{-1.9cm}richiesta \textit{\i} gestita da};
+      \node[th] at (7.35,\y) {T\textsubscript{\textit{\i}}};
+      \draw[dbl] (c\i.east) -- (2.0,\y);
+    }
+    \node[font=\Lato\small, text=neutral!45!black] at (5.2,-0.55) {\vdots};
+    \draw[box, dashed, draw=primary!55!black, fill=white]
+      (2.3,-2.2) rectangle (8.1,-3.35);
+    \node[font=\Lato\scriptsize\bfseries, text=primary!65!black, anchor=north]
+      at (5.2,-2.22) {pool interno di thread / processi};
+    \foreach \x/\t in {3.2/1, 4.1/2, 5.0/3, 7.2/\textit{m}} {
+      \node[th, minimum size=0.48cm, font=\Lato\tiny] at (\x,-2.95) {T\textsubscript{\t}};
+    }
+    \node[text=neutral!45!black] at (6.1,-2.95) {$\cdots$};
+
+    % operazioni di I/O
+    \draw[box, draw=orange-gradient-6, fill=orange-gradient-1!25!white]
+      (9.6,2.2) rectangle (12.6,-3.55);
+    \node[font=\Lato\scriptsize\bfseries, text=orange-gradient-6!80!black,
+          anchor=north] at (11.1,2.15) {Operazioni di I/O};
+    \node[io, shape=cylinder, shape border rotate=90, aspect=0.25,
+          minimum height=0.8cm, minimum width=2.3cm] at (11.1,1.0) {database};
+    \node[io] at (11.1,-0.2) {filesystem};
+    \node[io] at (11.1,-1.3) {API esterne};
+    \node[io] at (11.1,-2.4) {dati di sistema};
+    \draw[dbl] (8.4,-0.6) -- (9.6,-0.6);
+  \end{tikzpicture}
+  \caption{Il modello multi-thread: ogni richiesta occupa un thread del pool
+           per tutta la sua durata, anche mentre aspetta le operazioni di I/O.}
+  \label{fig:multithread}
+\end{figure}
 
 Il problema è che, per servire una richiesta, un'applicazione web deve spesso
 compiere operazioni di I/O \textbf{lente e bloccanti}:
@@ -46,8 +142,12 @@ tempo ad aspettare} che queste operazioni si completino.
       wait/.style={fill=neutral!14!white, draw=neutral!45!white, line width=0.5pt,
                    minimum height=0.45cm, anchor=west, inner sep=0pt},
       io/.style={fill=orange-gradient-2!60!white, draw=orange-gradient-6,
-                 line width=0.5pt, minimum height=0.35cm, anchor=west,
-                 inner sep=0pt}]
+                 line width=0.5pt, minimum height=0.38cm, anchor=west,
+                 inner sep=0pt, font=\Lato\tiny, text=orange-gradient-6!70!black},
+      ev/.style={rounded corners=2pt, fill=primary!75!black, text=white,
+                 font=\Lato\scriptsize\bfseries, inner sep=3pt},
+      fr/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.9pt,
+                 draw=primary!75!black}]
 
     % barra del thread
     \node[act,  minimum width=0.9cm] at (0,0) {};
@@ -62,9 +162,9 @@ tempo ad aspettare} che queste operazioni si completino.
       at (-0.2,0) {thread};
 
     % operazioni di I/O
-    \node[io, minimum width=2.0cm] at (0.9,-0.75) {};
-    \node[io, minimum width=2.4cm] at (3.6,-0.75) {};
-    \node[io, minimum width=1.8cm] at (6.7,-0.75) {};
+    \node[io, minimum width=2.0cm] at (0.9,-0.75) {database};
+    \node[io, minimum width=2.4cm] at (3.6,-0.75) {filesystem};
+    \node[io, minimum width=1.8cm] at (6.7,-0.75) {database};
     \node[font=\Lato\scriptsize, anchor=east, text=neutral!25!black, align=right]
       at (-0.2,-0.75) {operazioni\\ di I/O};
 
@@ -78,11 +178,15 @@ tempo ad aspettare} che queste operazioni si completino.
     \node[font=\Lato\scriptsize, text=neutral!35!black, anchor=north]
       at (9.6,-1.42) {tempo};
 
-    \node[font=\Lato\scriptsize, text=primary!70!black, anchor=south]
-      at (0.45,0.25) {};
+    % la richiesta arriva, la risposta parte
+    \node[ev] (rq) at (0.12,1.15) {richiesta};
+    \draw[fr] (rq.south) -- (0.12,0.25);
+    \node[ev] (rs) at (9.28,1.15) {risposta};
+    \draw[fr] (9.28,0.25) -- (rs.south);
   \end{tikzpicture}
-  \caption{In azzurro il tempo in cui il thread lavora davvero; in grigio quello
-           in cui aspetta.}
+  \caption{Il thread che serve una richiesta: in azzurro il tempo in cui lavora
+           davvero, in grigio quello in cui aspetta che finisca un'operazione di
+           I/O \textbf{bloccante} (in arancione).}
   \label{fig:blocking-io}
 \end{figure}
 
@@ -165,36 +269,91 @@ efficiente.
 \begin{figure}[H]
   \centering
   \begin{tikzpicture}[font=\Lato\small,
-      n/.style={wtnode, minimum width=3.0cm, minimum height=1.0cm},
-      q/.style={wtnodeplain, minimum width=2.4cm, minimum height=0.9cm},
-      a/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.85pt,
-                draw=neutral!45!black},
-      c/.style={font=\Lato\scriptsize, anchor=east, text=neutral!25!black}]
+      cl/.style={wtnode, minimum width=1.7cm, minimum height=0.65cm,
+                 font=\Lato\scriptsize},
+      box/.style={rounded corners=5pt, line width=0.8pt},
+      slot/.style={rounded corners=1.5pt, draw=primary!55!black,
+                   fill=primary!12!white, line width=0.6pt, minimum width=1.55cm,
+                   minimum height=0.36cm, font=\Lato\tiny, inner sep=0pt},
+      vuoto/.style={slot, dashed, fill=white},
+      io/.style={wtnodewarn, minimum width=2.2cm, minimum height=0.6cm,
+                 font=\Lato\scriptsize},
+      a/.style={-{Stealth[length=6pt,width=5pt]}, line width=1.4pt,
+                draw=primary!70!black},
+      dbl/.style={{Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]},
+                  line width=0.9pt, draw=primary!70!black},
+      giro/.style={-{Stealth[length=8pt,width=8pt]}, line width=3pt,
+                   draw=primary!70!black},
+      lab/.style={font=\Lato\scriptsize, text=neutral!20!black, align=center}]
 
-    \node[c] (c1) at (-0.4,0.9)  {Client 1};
-    \node[c] (c2) at (-0.4,0.1)  {Client 2};
-    \node[c] (c3) at (-0.4,-0.9) {Client \textit{n}};
-    \node[font=\Lato\small, text=neutral!45!black] at (-0.75,-0.4) {\vdots};
+    % client
+    \node[cl] (c1) at (0,1.0)  {Client 1};
+    \node[cl] (c2) at (0,0.15) {Client 2};
+    \node[font=\Lato\small, text=neutral!45!black] at (0,-0.5) {\vdots};
+    \node[cl] (cn) at (0,-1.3) {Client \textit{n}};
 
-    \node[q] (ev) at (1.9,0) {coda\\ degli eventi};
-    \node[n, draw=green-gradient-6, fill=green-gradient-1!45!white]
-      (el) at (5.6,0) {\textbf{Event Loop}\\\scriptsize (un solo thread)};
-    \node[q] (wt) at (9.4,0.9) {worker\\ thread};
-    \node[wtnodeplain, minimum width=2.4cm, minimum height=0.9cm]
-      (io) at (9.4,-1.0) {database,\\ filesystem, rete};
+    % il runtime
+    \draw[box, draw=green-gradient-6, fill=green-gradient-1!30!white]
+      (1.4,2.25) rectangle (10.95,-2.45);
+    \node[font=\Lato\small\bfseries, text=green-gradient-6!70!black, anchor=north]
+      at (6.2,2.2) {Node.js};
 
-    \draw[a] (c1.east) -- (ev.west |- c1);
-    \draw[a] (c2.east) -- (ev.west |- c2);
-    \draw[a] (c3.east) -- (ev.west |- c3);
-    \draw[a] (ev) -- (el);
-    \draw[a] (el.east) -- (wt.west);
-    \draw[a] (wt.south) -- (io.north);
-    \draw[a, draw=accent!70!black] (io.west) to[out=180, in=-60]
-      node[wtlab, pos=0.5]{callback} (el.south east);
+    % coda degli eventi
+    \draw[box, draw=primary!55!black, fill=white] (1.85,1.75) rectangle (3.85,-2.05);
+    \node[lab, font=\Lato\scriptsize\bfseries, anchor=north] at (2.85,1.7)
+      {coda degli\\eventi};
+    \foreach \y in {0.45,0.0,-1.05,-1.5} \node[slot] at (2.85,\y) {};
+    \node[font=\Lato\small, text=neutral!45!black] at (2.85,-0.45) {\vdots};
+    \foreach \c/\y in {c1/1.0, c2/0.15, cn/-1.3} \draw[dbl] (\c.east) -- (1.85,\y);
+
+    % l'event loop
+    \def\cx{6.35} \def\cy{-0.15} \def\r{1.2}
+    \draw[giro] (\cx,\cy) ++(160:\r) arc[start angle=160, end angle=22, radius=\r];
+    \draw[giro] (\cx,\cy) ++(-20:\r) arc[start angle=-20, end angle=-158, radius=\r];
+    \node[lab] at (\cx,\cy) {\textbf{Event loop}\\[-1pt]\tiny(un solo thread)};
+
+    % worker thread
+    \draw[box, draw=primary!55!black, fill=white] (8.7,1.75) rectangle (10.6,-2.05);
+    \node[lab, font=\Lato\scriptsize\bfseries, anchor=north] at (9.65,1.7)
+      {worker\\thread};
+    \node[slot] at (9.65,0.45)  {filesystem};
+    \node[slot] at (9.65,0.0)   {rete};
+    \node[slot] at (9.65,-0.45) {database};
+    \node[vuoto] at (9.65,-1.05) {};
+    \node[vuoto] at (9.65,-1.5) {};
+
+    % il giro: coda -> loop -> worker -> loop -> coda
+    \draw[a] (3.95,0.65) -- (5.2,0.65);
+    \draw[a] (7.5,0.65) -- node[lab, above=1pt]{I/O\\bloccante} (8.6,0.65);
+    \draw[a] (8.6,-0.95) -- node[lab, below=1pt]{callback} (7.5,-0.95);
+    \draw[a] (5.2,-0.95) -- (3.95,-0.95);
+
+    % operazioni di I/O
+    \draw[box, draw=orange-gradient-6, fill=orange-gradient-1!25!white]
+      (11.55,2.25) rectangle (14.05,-2.45);
+    \node[font=\Lato\scriptsize\bfseries, text=orange-gradient-6!80!black,
+          anchor=north] at (12.8,2.2) {Operazioni di I/O};
+    \node[io, shape=cylinder, shape border rotate=90, aspect=0.25,
+          minimum height=0.75cm, minimum width=2.0cm] at (12.8,1.05) {database};
+    \node[io] at (12.8,0.0)   {filesystem};
+    \node[io] at (12.8,-0.85) {API esterne};
+    \node[io] at (12.8,-1.7)  {dati di sistema};
+    \draw[dbl] (10.6,-0.15) -- (11.55,-0.15);
   \end{tikzpicture}
-  \caption{L'event loop a thread singolo di Node.js.}
+  \caption{L'event loop di Node.js. Un solo thread esegue il codice JavaScript;
+           l'I/O bloccante è affidato ai worker thread interni al runtime, e a
+           operazione conclusa la sua callback torna all'event loop.}
   \label{fig:event-loop}
 \end{figure}
+
+Lo schema si legge come il ristorante efficiente. Le richieste dei client
+diventano \textbf{eventi} in coda. L'\term{event loop} (il cameriere) preleva un
+evento alla volta ed esegue il codice JavaScript che lo gestisce. Quando quel
+codice avvia un'operazione di I/O, l'event loop non aspetta: la affida ai
+\textbf{worker thread} del runtime (la cucina) e passa subito all'evento
+successivo. A operazione conclusa, la \textbf{callback} che le era stata
+associata (la campanella) viene rimessa in coda, e l'event loop la esegue appena
+è libero.
 
 \info{Un thread solo, ma non per tutto}{
   \guillemotleft Node.js è a thread singolo\guillemotright\ è una semplificazione utile ma
@@ -218,16 +377,73 @@ Ci sono tre modi:
         rapidamente dall'una all'altra.
 \end{itemize}
 
-Nel corso si usa Node.js \textbf{20.9.0}; con qualunque versione supportata non
-dovrebbero esserci problemi. Per verificare che tutto funzioni:
+Nel corso (A.A.\ 2026/27) si usa Node.js \textbf{22.14.0}; con qualunque
+versione supportata non dovrebbero esserci problemi.
 
-\begin{affianco}[0.45][c]
-\begin{lstlisting}[style=shell]
-node --version
-\end{lstlisting}
+\subsection{Un gestore di versioni: nvm}
+
+Con \code{nvm} installare una versione precisa è un solo comando. nvm scarica
+l'archivio dal sito di Node.js, ne verifica l'integrità confrontando il
+\textit{checksum} e passa subito a usarla. Insieme a Node.js arriva anche
+\textbf{npm}, il gestore di pacchetti che vedremo fra poco, nella versione
+abbinata.
+
+\begin{console}[Terminale]
+$ nvm install 22.14.0
+Downloading and installing node v22.14.0...
+Downloading https://nodejs.org/dist/v22.14.0/node-v22.14.0-darwin-arm64.tar.xz...
+############################################################################ 100.0%
+Computing checksum with sha256sum
+Checksums matched!
+Now using node v22.14.0 (npm v10.9.2)
+\end{console}
+
+Si possono tenere installate più versioni. \code{nvm list} le elenca: la
+freccia indica quella in uso nel terminale corrente, \code{default} quella che
+si attiva in ogni nuovo terminale. Per passare a un'altra versione si usa
+\code{nvm use}, per esempio \code{nvm use 22.14.0}.
+
+\begin{affianco}[0.36][c]
+\begin{console}[Terminale]
+$ nvm list
+->     v22.14.0
+       v26.8.2
+default -> 26 (-> v26.8.2)
+\end{console}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[d/.style={mnota, anchor=west, text width=6.4cm}]
+  \node[mcod, anchor=west, text=green-gradient-6!80!black] at (0,0) {->};
+  \node[d] at (1.4,0)    {la versione in uso adesso, in questo terminale};
+  \node[mcod, anchor=west, text=accent!70!black] at (0,-0.75) {default};
+  \node[d] at (1.4,-0.75) {la versione predefinita (qui la 26), che ogni
+                           nuovo terminale userà finché non la si cambia};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
+
+\subsection{Verificare l'installazione}
+
+Per controllare che tutto sia a posto si chiede a Node.js la sua versione. Se
+invece si lancia \code{node} \textbf{senza argomenti}, si apre la \term{REPL}
+(\textit{Read-Eval-Print Loop}): un interprete interattivo che legge
+un'espressione JavaScript, la valuta e ne stampa il risultato, come la console
+dei DevTools ma senza browser. Si esce con \code{.exit} (o premendo due volte
+\code{CTRL+C}).
+
+\begin{affianco}[0.5][t]
+\begin{console}[Terminale]
+$ node --version
+v22.14.0
+\end{console}
 \risultato
 \begin{console}[Terminale]
-v20.9.0
+$ node
+Welcome to Node.js v22.14.0.
+Type ".help" for more information.
+> "web".toUpperCase()
+'WEB'
+> .exit
 \end{console}
 \end{affianco}
 
@@ -269,9 +485,15 @@ un singolo linguaggio al mondo. Esiste un pacchetto per (quasi) tutto.
 
 npm viene installato insieme a Node.js. Per verificarlo:
 
+\begin{affianco}[0.45][c]
 \begin{lstlisting}[style=shell]
 npm --version
 \end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+10.9.2
+\end{console}
+\end{affianco}
 
 \subsection{Creare un pacchetto}
 
@@ -315,7 +537,7 @@ come la versione npm del \code{pom.xml} di Maven.
   \node[v] (t) at (0,-1.0)  {"type"};
   \node[d] at (2.1,-1.0)    {\code{"module"} abilita \code{import} ed \code{export}};
   \node[v] (s) at (0,-2.0)  {"scripts"};
-  \node[d] at (2.1,-2.0)    {comandi eseguibili con \code{npm <nome>}};
+  \node[d] at (2.1,-2.0)    {comandi eseguibili con \code{npm run <nome>}};
 \end{tikzpicture}
 \end{immagine}
 \end{affianco}
@@ -325,12 +547,15 @@ come la versione npm del \code{pom.xml} di Maven.
         quando il codice client importa il nostro pacchetto: di norma esporta le
         variabili e le funzioni pubbliche;
   \item la proprietà \code{scripts} permette di definire \textbf{attività} da
-        riga di comando, eseguibili con \code{npm <nome>};
+        riga di comando. Si eseguono con \code{npm run <nome>}; per le attività
+        standard, come \code{start} e \code{test}, basta \code{npm <nome>}.
+        L'attività \code{test} creata da \code{npm init} non fa granché: stampa
+        un errore ed esce;
   \item \code{"type": "module"} è ciò che abilita i moduli ES, cioè la sintassi
         \code{import}/\code{export} vista nel capitolo 6.
 \end{itemize}
 
-Aggiungiamo un'attività \code{start}:
+Aggiungiamo un'attività \code{start}, che esegue il file principale:
 
 \begin{affianco}[0.55][c]
 \begin{lstlisting}[style=json, name=package.json]
@@ -339,6 +564,10 @@ Aggiungiamo un'attività \code{start}:
   "test": "echo \"Error: no test specified\" && exit 1"
 },
 \end{lstlisting}
+\begin{lstlisting}[style=js, name=app.js]
+"use strict";
+console.log("Hello Node.js!");
+\end{lstlisting}
 \risultato
 \begin{console}[Terminale]
 $ npm start
@@ -346,9 +575,12 @@ $ npm start
 > hello-web-technologies@0.0.1 start
 > node app.js
 
-Hello Web Technologies!
+Hello Node.js!
 \end{console}
 \end{affianco}
+
+npm stampa il nome e la versione del pacchetto, poi il comando associato
+all'attività, e infine lo esegue.
 
 \subsection{Installare dipendenze}
 
@@ -425,7 +657,7 @@ console.log(cowsay.think({
 
 \section{Una prima applicazione web con Node.js}
 
-\begin{esempio}{Un server HTTP in venti righe}
+\begin{esempio}{Un server HTTP in venti righe}\label{es:server-http}
 \begin{affianco}[0.6][c]
 \codicepiccolo
 \begin{lstlisting}[style=js, name=app.js]
@@ -484,32 +716,175 @@ risposta.
 \subsection{Debug in Visual Studio Code}
 
 Il modo più semplice è abilitare la funzione \term{Auto Attach}, che collega un
-debugger ai processi Node.js avviati dentro VS Code. Per abilitarla si preme
-\code{CTRL+SHIFT+P} per aprire la palette dei comandi e si cerca
-\guillemotleft Toggle Auto Attach\guillemotright; conviene poi selezionare la modalità
-\textbf{Smart}, che si collega automaticamente solo agli script fuori da
-\code{node\_modules}.
+debugger ai processi Node.js avviati dal terminale di VS Code. Per abilitarla si
+apre la palette dei comandi (\code{CTRL+SHIFT+P} su Windows e Linux,
+\code{CMD+SHIFT+P} su Mac), si cerca \guillemotleft Toggle Auto
+Attach\guillemotright\ e si sceglie una modalità. Conviene la modalità
+\textbf{Smart}, che si collega automaticamente solo agli script che non stanno
+in \code{node\_modules}: il debugger si ferma nel nostro codice, non in quello
+delle librerie.
 
-I punti di interruzione si aggiungono come di consueto, facendo clic accanto al
-numero di riga. Quando l'esecuzione raggiunge un punto di interruzione si ferma,
-e il pannello \textit{Run and Debug} permette di ispezionare le variabili,
-osservare espressioni, esaminare la pila delle chiamate e controllare il flusso.
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      voce/.style={anchor=west, text=vscfg, inner sep=0pt},
+      desc/.style={anchor=west, text=vsctabdim, inner sep=0pt}]
+    \def\w{12.2}
+    \fill[vsctabbar, rounded corners=3pt] (0,0) rectangle (\w,-3.55);
+    \node[text=vsctabdim] at (\w/2,-0.3) {Toggle auto attach on this machine};
+    \draw[vscaccent, fill=vscbg, line width=0.6pt] (0.2,-0.55) rectangle (\w-0.2,-0.95);
+    \fill[vsctabtext] (0.33,-0.64) rectangle (0.36,-0.86);
+    \node[desc] at (0.25,-1.3) {Temporarily disable auto attach in this session};
+    \foreach \v/\d [count=\i] in
+        {Always/Auto attach to every Node.js process launched in the terminal,
+         Smart/Auto attach when running scripts that aren't in a node\_modules folder,
+         Only With Flag/Only auto attach when the `{-}{-}inspect' flag is given,
+         Disabled/Auto attach is disabled and not shown in status bar} {
+      \ifnum\i=2
+        \fill[vscaccent!70!black] (0.1,-1.3-\i*0.45-0.2) rectangle (\w-0.1,-1.3-\i*0.45+0.2);
+        \node[voce, text=vsctabtext, font=\Lato\scriptsize\bfseries]
+          (v) at (0.25,-1.3-\i*0.45) {\v};
+        \node[desc, text=vsctabtext] at ([xshift=5pt]v.east) {\d};
+      \else
+        \node[voce] (v) at (0.25,-1.3-\i*0.45) {\v};
+        \node[desc] at ([xshift=5pt]v.east) {\d};
+      \fi
+    }
+  \end{tikzpicture}
+  \caption{Le modalità di Auto Attach, nella palette dei comandi di VS Code.}
+  \label{fig:autoattach}
+\end{figure}
+
+Avviando l'applicazione dal terminale di VS Code, il debugger si collega da
+solo. Lo si capisce dalle righe che Node.js stampa prima dell'output del
+programma (\textit{Debugger attached}) e dal pannello \textit{Run and Debug},
+che si attiva.
+
+\begin{console}[Terminale di VS Code]
+$ npm start
+
+> hello-web-technologies@0.0.1 start
+> node app.js
+
+Debugger listening on ws://127.0.0.1:58896/06d4d583-e2b3-4a5f-baca-8635eb9dbedf
+For help, see: https://nodejs.org/en/docs/inspector
+Debugger attached.
+Web app in ascolto sulla porta 3000
+\end{console}
+
+I \term{punti di interruzione} (\textit{breakpoint}) si aggiungono come di
+consueto, facendo clic accanto al numero della riga: compare un pallino rosso.
+Quando l'esecuzione raggiunge un breakpoint si \textbf{ferma}, e la riga su cui
+è sospesa viene evidenziata. Il pannello \textit{Run and Debug} permette allora
+di ispezionare le variabili in scope (\textit{Variables}), di osservare delle
+espressioni scelte da noi (\textit{Watch}), di esaminare la pila delle chiamate
+(\textit{Call Stack}) e molto altro.
+
+% Il codice dell'editor e' un listato vero (con scheda e numeri di riga); il
+% segno nel listato registra la posizione della riga 6, su cui si disegnano il
+% breakpoint e l'evidenziazione.
+\newcommand{\wtdbgsegno}{\tikz[remember picture, overlay]\coordinate (dbgriga);}
+\newsavebox{\wtdbgeditor}
+\begin{lrbox}{\wtdbgeditor}
+\begin{minipage}{12.6cm}
+\begin{lstlisting}[style=js, name=app.js, aboveskip=0pt, belowskip=0pt]
+import http from 'http';
+
+const PORT = 3000;
+
+let server = http.createServer(function (request, response) {
+  let course = "Web Technologies";
+
+  (*@\wtdbgsegno@*)response.writeHead(200, { "Content-Type": "text/html" });
+  response.write(`<!DOCTYPE html>
+    <html><body>
+      <h1>Hello ${course}</h1>
+      <p>La data corrente e' ${new Date().toDateString()}</p>
+    </body></html>`);
+  response.end();
+}).listen(PORT);
+
+console.log(`Web app in ascolto sulla porta ${PORT}`);
+\end{lstlisting}
+\end{minipage}
+\end{lrbox}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[remember picture, font=\Lato\scriptsize,
+      sez/.style={anchor=west, inner sep=0pt, text=vscfg,
+                  font=\Lato\fontsize{6}{7}\selectfont\bfseries},
+      var/.style={anchor=west, inner sep=0pt, text=vscfg,
+                  font=\FiraCodeNL\fontsize{6.2}{7}\selectfont}]
+    \pgfmathsetlengthmacro{\h}{\ht\wtdbgeditor+\dp\wtdbgeditor}
+    \def\sb{5.0}
+    % barra laterale "Run and Debug" (prosegue sotto l'angolo dell'editor)
+    \fill[vsctabbar] (\sb+0.3,-\h) -- (0,-\h) {[rounded corners=3pt] -- (0,0)
+      -- (\sb+0.3,0)} -- cycle;
+    \node[anchor=north west, inner sep=0pt] (ed) at (\sb,0) {\usebox{\wtdbgeditor}};
+    \draw[vscbg, line width=0.6pt] (\sb,0) -- (\sb,-\h);
+
+    \node[sez, text=vsctabdim] at (0.2,-0.3) {RUN AND DEBUG};
+    \node[sez] at (0.2,-0.75) {\rotatebox[origin=c]{-90}{›}\ \ VARIABLES};
+    \node[var] at (0.35,-1.1)  {\rotatebox[origin=c]{-90}{›}\ Local};
+    \node[var] at (0.55,-1.42) {\ \ \textcolor{vscpurple}{course}: \textcolor{vscstring}{'Web Technologies'}};
+    \node[var] at (0.55,-1.74) {› \textcolor{vscpurple}{request}: IncomingMessage \{…\}};
+    \node[var] at (0.55,-2.06) {› \textcolor{vscpurple}{response}: ServerResponse \{…\}};
+    \node[var] at (0.55,-2.38) {› \textcolor{vscpurple}{this}: Server};
+    \node[var] at (0.35,-2.74) {\rotatebox[origin=c]{-90}{›}\ Module};
+    \node[var] at (0.55,-3.06) {› \textcolor{vscpurple}{http}: \{createServer: ƒ, …\}};
+    \node[var] at (0.55,-3.38) {\ \ \textcolor{vscpurple}{PORT}: \textcolor{vsccomment!60!vscfunc}{3000}};
+    \node[var] at (0.55,-3.70) {› \textcolor{vscpurple}{server}: Server \{…\}};
+    \node[sez] at (0.2,-4.16)  {\rotatebox[origin=c]{-90}{›}\ \ WATCH};
+    \node[var] at (0.55,-4.48) {response.statusCode: \textcolor{vsccomment!60!vscfunc}{200}};
+    \node[sez] at (0.2,-\h+0.75cm) {›\ \ CALL STACK};
+    \node[sez] at (0.2,-\h+0.35cm) {›\ \ BREAKPOINTS};
+
+    % riga in cui l'esecuzione e' sospesa, e il suo breakpoint
+    \fill[yellow!80!orange, opacity=0.2]
+      ([xshift=14pt, yshift=-2.8pt]ed.west |- dbgriga) rectangle
+      ([yshift=7.4pt]ed.east |- dbgriga);
+    \fill[red!85!black] ([xshift=3.4pt, yshift=2.4pt]ed.west |- dbgriga) circle (2.3pt);
+
+    % barra delle azioni di debug
+    \node[anchor=north east, fill=vsctabbar!70!vscfg, rounded corners=2pt,
+          inner xsep=5pt, inner ysep=3pt]
+      at ([xshift=-12pt, yshift=-2.5pt]ed.north east)
+      {\wtdbgiconscura{maniglia}\hspace{6pt}\wtdbgiconscura{resume}\hspace{6pt}%
+       \wtdbgiconscura{stepover}\hspace{6pt}\wtdbgiconscura{stepinto}\hspace{6pt}%
+       \wtdbgiconscura{stepout}\hspace{6pt}\wtdbgiconscura{restart}\hspace{6pt}%
+       \wtdbgiconscura{disconnect}};
+  \end{tikzpicture}
+  \caption{VS Code fermo su un breakpoint alla riga 8 dell'\code{app.js}
+           dell'esempio~\ref{es:server-http}. A sinistra le variabili in scope (le
+           locali della callback e quelle del modulo) e un'espressione
+           osservata; in alto, la barra delle azioni di debug.}
+  \label{fig:debug}
+\end{figure}
+
+Con le \textbf{azioni di debug}, i pulsanti della barra in alto, si controlla
+il flusso dell'esecuzione un passo alla volta:
 
 \begin{center}
-\renewcommand{\arraystretch}{1.4}
-\begin{tabular}{@{}l@{\hspace{1.0cm}}>{\raggedright\arraybackslash}p{9.0cm}@{}}
-  \textbf{Azione} & \textbf{Descrizione} \\
-  \textit{Resume}     & riprende il normale flusso di esecuzione, fino al
-                        prossimo punto di interruzione. \\
-  \textit{Step Over}  & esegue l'istruzione successiva come un blocco unico,
-                        senza entrare nei suoi passi interni. \\
-  \textit{Step Into}  & entra nell'istruzione successiva per seguirne
-                        l'esecuzione riga per riga. \\
-  \textit{Step Out}   & essendo dentro un metodo, ne completa le righe restanti
-                        e torna al contesto di esecuzione precedente. \\
-  \textit{Restart}    & termina l'esecuzione e ricomincia il debug con la
-                        configurazione corrente (non funziona con Auto Attach). \\
-  \textit{Disconnect} & termina la sessione di debug. \\
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{@{}c@{\hspace{8pt}}l@{\hspace{0.8cm}}>{\raggedright\arraybackslash}p{9.6cm}@{}}
+  & \textbf{Azione} & \textbf{Descrizione} \\
+  \wtdbgicon{resume}     & \textit{Resume}     & riprende il normale flusso di
+                           esecuzione, fino al prossimo breakpoint. \\
+  \wtdbgicon{stepover}   & \textit{Step Over}  & esegue l'istruzione successiva
+                           come un blocco unico, senza entrare nei suoi passi
+                           interni (se è una chiamata, la funzione viene eseguita
+                           per intero). \\
+  \wtdbgicon{stepinto}   & \textit{Step Into}  & entra nell'istruzione
+                           successiva per seguirne l'esecuzione riga per riga. \\
+  \wtdbgicon{stepout}    & \textit{Step Out}   & essendo dentro una funzione, ne
+                           completa le righe restanti come se fossero un'unica
+                           istruzione e torna al contesto di esecuzione
+                           precedente. \\
+  \wtdbgicon{restart}    & \textit{Restart}    & termina l'esecuzione e
+                           ricomincia il debug con la configurazione corrente
+                           (\textbf{non} funziona con Auto Attach). \\
+  \wtdbgicon{disconnect} & \textit{Disconnect} & termina la sessione di debug. \\
 \end{tabular}
 \end{center}
 
@@ -533,13 +908,42 @@ Una di queste è \term{nodemon}:
 npm install nodemon
 \end{lstlisting}
 
-Basta poi sostituire \code{node app.js} con \code{nodemon app.js}:
+Basta poi sostituire \code{node app.js} con \code{nodemon app.js}, per
+esempio nell'attività \code{start}:
 
+\begin{affianco}[0.36][c]
 \begin{lstlisting}[style=json, name=package.json]
 "scripts": {
   "start": "nodemon app.js"
 },
 \end{lstlisting}
+\risultato
+\begin{console}[Terminale di VS Code]
+$ npm start
+
+> hello-web-technologies@0.0.1 start
+> nodemon app.js
+
+[nodemon] 3.0.1
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching path(s): *.*
+[nodemon] watching extensions: js,mjs,cjs,json
+[nodemon] starting `node app.js`
+Debugger attached.
+Web app in ascolto sulla porta 3000
+[nodemon] restarting due to changes...
+[nodemon] starting `node app.js`
+Debugger attached.
+Web app in ascolto sulla porta 3000
+\end{console}
+\end{affianco}
+
+All'avvio nodemon dice che cosa sorveglia: tutti i file della directory
+(\code{*.*}) con estensione \code{js}, \code{mjs}, \code{cjs} o \code{json}.
+Appena uno di questi cambia, termina il processo e lo riavvia
+(\textit{restarting due to changes}); per un riavvio manuale basta scrivere
+\code{rs} nel terminale e premere invio. Con Auto Attach attivo, il debugger
+di VS Code si ricollega da solo a ogni riavvio.
 
 \section{Riferimenti}
 
