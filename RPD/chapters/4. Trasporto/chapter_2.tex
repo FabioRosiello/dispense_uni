@@ -16,10 +16,11 @@ Cosa succede se la comunicazione è inaffidabile?
 \end{itemize}
 
 Nel primo caso ci si accorge che il messaggio è sbagliato; negli altri si rischia di prendere il treno
-sbagliato o di perdere quello giusto.
+sbagliato o di perdere quello giusto. Nel terzo, in particolare, ogni parola è arrivata: non è arrivato il significato.
 
-Il controllo degli errori (per esempio con il checksum) permette al destinatario almeno di capire se un
-messaggio è corrotto, ma non basta. Il trasferimento affidabile è uno dei problemi centrali delle reti, e
+A volte ci si accorge che il messaggio è rotto, a volte si prende il treno sbagliato: e \textbf{accorgersene non è
+la stessa cosa che rimediare}. Il controllo degli errori (per esempio con il checksum) permette al destinatario almeno di
+capire se un messaggio è corrotto, ma non basta. Il trasferimento affidabile è uno dei problemi centrali delle reti, e
 non viene affrontato solo dal trasporto, ma anche dal livello di collegamento e spesso da quello applicativo.
 
 \dfn{Canale affidabile}{
@@ -33,9 +34,14 @@ non viene affrontato solo dal trasporto, ma anche dal livello di collegamento e 
 
 \warning{Si parte da un canale inaffidabile}{
     In generale si deve assumere che il livello di rete sottostante sia \textbf{inaffidabile}. È un'ipotesi
-    realistica: TCP è un protocollo affidabile costruito sopra IP, che è inaffidabile. Studieremo il problema
-    complicando il canale un passo alla volta: prima solo bit corrotti, poi anche pacchetti persi.
+    realistica: TCP è un protocollo affidabile costruito sopra IP, che è inaffidabile, e tutto il lavoro si fa
+    \textbf{ai due estremi}, a partire da un canale punto-punto inaffidabile. Studieremo il problema complicando il canale
+    un passo alla volta: prima solo bit corrotti, poi anche pacchetti persi.
 }
+
+È esattamente ciò che abbiamo già fatto a mano nell'ultima versione della chat, su UDP: conferme, timeout,
+ritrasmissioni e numeri di sequenza. Qui gli stessi quattro meccanismi tornano come meccanismo \textbf{generale},
+costruito un modello di canale alla volta.
 
 \begin{figure}[H]
 \centering
@@ -68,6 +74,16 @@ memorizzato in buffer molte volte durante il viaggio.
     \end{itemize}
     I protocolli basati sulla ritrasmissione si chiamano \textbf{ARQ} (\emph{Automatic Repeat reQuest}).
 }
+
+Un protocollo ARQ ha bisogno di tre cose, e nessuna è facoltativa:
+\begin{itemize}
+    \item \textbf{rilevazione degli errori}: bit in più che permettono al ricevente di accorgersi che il messaggio è
+          cambiato (il checksum già visto);
+    \item \textbf{riscontro dal ricevente}: il mittente è a migliaia di chilometri e non vede niente, l'unico modo di
+          sapere è sentirselo dire. In linea di principio basta un bit: un valore per sì e uno per no;
+    \item \textbf{ritrasmissione}: ciò che è arrivato con errori viene inviato di nuovo; non c'è altra riparazione.
+\end{itemize}
+E, come si vedrà subito, nemmeno tutte e tre insieme bastano.
 
 \begin{figure}[H]
 \centering
@@ -118,6 +134,21 @@ sequenza, basta distinguere il pacchetto attuale dal precedente. È sufficiente 
 \end{tikzpicture}
 \caption{Con un bit di sequenza il ricevente distingue un messaggio nuovo da una ritrasmissione.}
 \end{figure}
+
+% ══════════════════════════════════════════════════════════════
+\subsection{Con gli ACK numerati il NAK non serve più}
+
+\begin{itemize}
+    \item Un NAK dice «rimanda». Una conferma che porta un numero dice «ho tutto fino a qui», che dice di più.
+    \item Se il mittente riceve due volte la conferma del messaggio precedente, non si è mosso niente: è un NAK con un
+          altro nome.
+    \item Il ricevente ha quindi una sola risposta per entrambi i casi, messaggio danneggiato o duplicato: sempre un
+          \textbf{ACK con un numero}.
+    \item Un tipo di pacchetto in meno, e un ricevente che non deve mai spiegare che cosa è andato storto, solo che cosa
+          ha.
+    \item Quegli \textbf{ACK duplicati} torneranno: sono il modo in cui TCP si accorge di una perdita senza aspettare un
+          timer.
+\end{itemize}
 
 % ══════════════════════════════════════════════════════════════
 \section{Stop-and-wait con perdita dei pacchetti}
@@ -180,12 +211,42 @@ il messaggio sia se si perde l'ACK: in entrambi i casi A non riceve lo stimolo p
 La difficoltà è scegliere un timeout adatto, e questo dipende dall'\textbf{RTT}:
 
 \begin{itemize}
-    \item un timeout \textbf{troppo lungo} rallenta la comunicazione (dopo una perdita si aspetta a vuoto);
-    \item un timeout \textbf{troppo breve} fa sovrapporre i pacchetti, con ritrasmissioni inutili (caso (c) della figura).
+    \item un timeout \textbf{troppo lungo} fa pagare ogni perdita con una lunga attesa a vuoto: il protocollo resta
+          corretto, ma l'utente se n'è andato;
+    \item un timeout \textbf{troppo breve} scatta su un messaggio ancora in viaggio, e le copie si accumulano su un canale
+          che non sta perdendo niente (caso (c) della figura);
+    \item il minimo non è una costante: almeno un'andata e ritorno, più il tempo che il ricevente impiega a rispondere;
+    \item e il caso peggiore su un percorso reale non si può nemmeno stimare, perché le code fanno variare il ritardo da un
+          pacchetto all'altro.
 \end{itemize}
 
-Un timeout ragionevole deve essere \textbf{un po' più lungo dell'RTT}. Il timeout salva lo stop-and-wait dal
-blocco, ma le \textbf{prestazioni} restano pessime, come vediamo ora.
+Il valore si sceglie quindi perché una perdita sia \textbf{probabile}, non certa: il protocollo è costruito sapendo che il
+timer a volte sbaglierà. Un timeout ragionevole è \textbf{un po' più lungo dell'RTT}.
+
+\warning{Un timeout più corto dell'RTT}{
+    Il timer è più corto dell'andata e ritorno. Che cosa può fare di giusto il mittente? \textbf{Niente}. La conferma non
+    può arrivare prima che il timer scatti, quindi ogni messaggio viene ritrasmesso, su un canale che non perde niente, e il
+    ricevente riceve due copie di tutto. È il timer da 50 ms sul percorso da 80 ms dell'ultima chat: il numero di sequenza
+    al ricevente è l'unica ragione per cui il programma funziona ancora.
+}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l}
+\toprule
+\textbf{Che cosa fa il canale} & \textbf{Che cosa deve aggiungere il protocollo} \\
+\midrule
+non succede niente di male      & niente: si costruisce il pacchetto e lo si invia \\
+i bit possono essere corrotti   & checksum, conferme, ritrasmissione \\
+anche la conferma               & un numero di sequenza, perché una copia sia riconoscibile \\
+i pacchetti possono perdersi    & un timer al mittente, e la ritrasmissione che fa partire \\
+\bottomrule
+\end{tabular}
+\caption{Dal canale perfetto a quello reale. L'ultima riga è il \textbf{protocollo ad alternanza di bit}: checksum,
+         numero di sequenza di un bit, conferme numerate, un timer. È corretto su ogni canale descritto finora.}
+\end{table}
+
+Il timeout salva lo stop-and-wait dal blocco, ma le \textbf{prestazioni} restano pessime, come vediamo ora.
 
 % ══════════════════════════════════════════════════════════════
 \section{Il modello “ad acqua”}
@@ -263,6 +324,18 @@ Su 0,030008 s di tempo complessivo, il mittente ha trasmesso solo lo 0,027\% del
 \textbf{in attesa il 99,973\% del tempo}. Un collegamento da 1 Gb/s usato così trasmette in media
 circa 267 kb/s!
 
+Niente è rotto e niente si è perso: il protocollo invia semplicemente \textbf{un messaggio per andata e ritorno}. Il
+limite quindi non si sposta comprando un collegamento più veloce: si sposta cambiando il protocollo.
+
+\begin{esempio}{Una chat stop-and-wait}
+Un messaggio, una conferma, poi il successivo. Su un percorso con 100 ms di andata e ritorno, messaggi da 1 KB
+($L \approx 8000$ bit) e un collegamento da 100 Mb/s:
+\[ \frac{L}{R} = 80\ \mu\text{s} \qquad U = \frac{0{,}00008}{0{,}10008} \approx 0{,}0008 \]
+e la chat muove circa 80 kb/s. Su loopback e sulla rete del laboratorio l'andata e ritorno è una frazione di
+millisecondo, e non lo si vede mai. Dieci messaggi al secondo vanno benissimo per una chat; non sono un modo di spostare un
+file, e non sono ciò che fa TCP.
+\end{esempio}
+
 % ══════════════════════════════════════════════════════════════
 \section{Il pipelining}
 % ══════════════════════════════════════════════════════════════
@@ -298,19 +371,22 @@ circa 267 kb/s!
 Con 3 pacchetti invece di uno: l'ultimo bit dell'ultimo pacchetto entra nel canale a $t_0 + 0{,}000024$ s,
 arriva a $0{,}015024$ s e l'ACK torna a $0{,}030024$ s. Il mittente ha lavorato tre volte tanto:
 $$U = \frac{3\cdot L/R}{\text{RTT} + L/R} = \frac{0{,}000024}{0{,}030008} \approx 0{,}0008$$
-cioè ha aspettato il 99,92\% del tempo invece del 99,973\%. Il guadagno cresce con il numero di pacchetti
-inviati in parallelo.
+cioè ha aspettato il 99,92\% del tempo invece del 99,973\%, e il throughput sale a circa 800 kb/s. Il guadagno cresce
+con il numero di pacchetti inviati in parallelo, finché il limite torna a essere il canale invece del protocollo.
 
 Il pipelining ha però delle conseguenze:
 
 \begin{itemize}
     \item l'intervallo dei \textbf{numeri di sequenza} deve crescere: ogni pacchetto in viaggio (escluse le
-          ritrasmissioni) deve avere un numero univoco, e ci possono essere più pacchetti in viaggio non ancora confermati;
-    \item servono dei \textbf{buffer} per conservare i pacchetti, sia al mittente (quelli inviati ma non
-          confermati) sia eventualmente al ricevente (non sappiamo se ci sono ``buchi'' nella trasmissione).
+          ritrasmissioni) deve avere un numero univoco, quindi un solo bit alternato non basta più;
+    \item servono \textbf{buffer al mittente}: tutto ciò che è stato inviato e non ancora confermato va conservato, perché
+          potrebbe dover ripartire;
+    \item e \textbf{buffer al ricevente}: pacchetti corretti possono ora arrivare con un buco davanti, e con loro qualcosa
+          bisogna fare.
 \end{itemize}
 
-I due protocolli fondamentali basati sul pipelining sono \textbf{Go-Back-N} e \textbf{Selective Repeat}.
+Quest'ultima decisione è \textbf{tutta la differenza} fra i due protocolli fondamentali basati sul pipelining:
+\textbf{Go-Back-N} li butta via, \textbf{Selective Repeat} li tiene.
 
 % ══════════════════════════════════════════════════════════════
 \section{Go-Back-N}
@@ -350,10 +426,18 @@ $[\texttt{base}+N,\ +\infty)$ & non utilizzabili finché non arriva una nuova co
 \caption{Le zone della finestra di Go-Back-N ($N$ è la dimensione della finestra).}
 \end{table}
 
+Quando la finestra è piena il mittente \textbf{rifiuta} i dati e li restituisce all'applicazione: un livello di
+trasporto che dice «non ora» all'applicazione è una novità, ed è da qui che nascerà il controllo di flusso.
+
 Quando arriva la conferma di \texttt{base}, la finestra \textbf{scorre} in avanti. In GBN gli ACK sono
-\textbf{cumulativi}: ``ACK $n$'' significa ``ho ricevuto correttamente tutto fino a $n$ compreso''. C'è un
-unico timer, per il pacchetto più vecchio non confermato; se scade, il mittente \textbf{ritrasmette tutti i
-pacchetti inviati e non confermati}: da qui il nome ``torna indietro di $N$''.
+\textbf{cumulativi}: ``ACK $n$'' significa ``ho ricevuto correttamente tutto fino a $n$ compreso''.
+\begin{itemize}
+    \item Una conferma persa quindi si ripara da sola: ACK 5 rende inutili ACK 3 e ACK 4, e la finestra salta in avanti.
+    \item C'è un \textbf{unico timer}, e appartiene al pacchetto più vecchio non confermato, non a ciascun pacchetto.
+    \item Allo scadere il mittente \textbf{ritrasmette tutti i pacchetti inviati e non confermati}: da qui il nome
+          ``torna indietro di $N$''.
+    \item Quando arriva una conferma il timer riparte se resta qualcosa in sospeso, e si ferma se non resta niente.
+\end{itemize}
 
 \subsection{Il ricevente in GBN}
 
@@ -365,8 +449,9 @@ Il ricevente di GBN è molto semplice:
     \item i pacchetti scartati (non confermati) verranno prima o poi ritrasmessi dal mittente.
 \end{itemize}
 
-Si buttano via anche pacchetti buoni, ma il processo resta semplice: il mittente mantiene gli indici della
-finestra, il ricevente solo il numero di sequenza del prossimo pacchetto atteso.
+Si buttano via anche pacchetti buoni: un pacchetto perfetto che arriva in anticipo viene scartato esattamente come se
+fosse danneggiato. Ma la complessità è tutta da una parte, di proposito: il mittente mantiene una finestra, il ricevente
+un intero, \texttt{expectedseqnum}, il numero del prossimo pacchetto che è disposto a consegnare.
 
 \begin{figure}[H]
 \centering
@@ -435,6 +520,34 @@ Non si rispediscono pkt3, pkt4 e pkt5, evitando altre possibili perdite o errori
 \caption{Selective Repeat in azione.}
 \end{figure}
 
+\begin{table}[H]
+\centering
+\begin{tabular}{p{0.45\textwidth} p{0.45\textwidth}}
+\toprule
+\textbf{Mittente} & \textbf{Ricevente} \\
+\midrule
+Dati dall'alto: se il numero cade nella finestra, si costruisce il pacchetto e lo si invia. &
+Un pacchetto dentro la finestra: lo si conferma, e lo si mette nel buffer se è nuovo. \\
+Un timer per pacchetto. Allo scadere si rimanda quel pacchetto e nessun altro. &
+Se è la base della finestra: lo si consegna, insieme a tutti i pacchetti del buffer consecutivi a esso. \\
+ACK $n$: si segna $n$ come ricevuto; se $n$ era la base, si scorre fino al prossimo non confermato. &
+Un pacchetto appena sotto la finestra: lo si conferma di nuovo, e lo si scarta. \\
+\bottomrule
+\end{tabular}
+\caption{Che cosa fa ciascun lato in Selective Repeat. Sono i timer a renderlo costoso: $N$, dove Go-Back-N ne ha uno.}
+\end{table}
+
+\warning{Confermare ciò che sta già sotto la finestra}{
+    Il ricevente ha quel pacchetto, consegnato da tempo. Perché rispondere? \textbf{Perché il mittente non lo sa}. Se la
+    conferma del più vecchio pacchetto non confermato si è persa, il mittente continuerà a ritrasmetterlo, e la sua
+    finestra non avanzerà mai.
+    \begin{itemize}
+        \item I due lati non condividono la visione di ciò che è arrivato, e in Selective Repeat questo scarto è permanente,
+              non temporaneo.
+        \item Il silenzio non è mai una risposta accettabile a una ritrasmissione: è indistinguibile da una seconda perdita.
+    \end{itemize}
+}
+
 \subsection{Il vincolo sui numeri di sequenza}
 
 In SR la dimensione della finestra è legata al numero di sequenza, che è \textbf{finito} (il campo nell'header ha
@@ -468,6 +581,24 @@ Il ricevente \textbf{non può distinguere} i due casi: ai suoi occhi sono identi
 }
 
 % ══════════════════════════════════════════════════════════════
+\section{Un'ipotesi fatta fin dall'inizio}
+% ══════════════════════════════════════════════════════════════
+
+\begin{itemize}
+    \item Ogni modello di canale finora poteva corrompere e perdere, ma \textbf{mai riordinare}: ciò che usciva, usciva
+          nell'ordine in cui era entrato.
+    \item È vero per un singolo cavo. Non è vero per una rete, dove due pacchetti possono seguire strade diverse e arrivare
+          nell'ordine sbagliato.
+    \item Allora una vecchia copia del numero di sequenza $x$ può riemergere molto dopo che $x$ è stato ritirato, ed essere
+          accettata come se fosse attuale.
+    \item La difesa è il \textbf{tempo}: un numero non si riusa finché il mittente non è sicuro che nessuna vecchia copia
+          possa essere ancora viva là fuori.
+    \item Internet assume una \textbf{durata massima di un pacchetto} di circa tre minuti, ed è per questo che TCP non può
+          semplicemente cominciare a contare da zero.
+\end{itemize}
+
+\Needspace{20\baselineskip}
+% ══════════════════════════════════════════════════════════════
 \section{Riepilogo}
 % ══════════════════════════════════════════════════════════════
 
@@ -489,6 +620,24 @@ Complessità & minima & bassa & più alta \\
 \caption{I protocolli di trasferimento affidabile a confronto.}
 \end{table}
 
+\begin{table}[H]
+\centering
+\begin{tabular}{l p{0.62\textwidth}}
+\toprule
+\textbf{Meccanismo} & \textbf{A che cosa serve} \\
+\midrule
+Checksum              & rileva errori sui bit dentro un pacchetto \\
+Timer                 & scatta quando non è tornato niente, e la risposta è sempre la stessa: rimandare; i duplicati
+                        sono il prezzo \\
+Numero di sequenza    & un buco dice che qualcosa si è perso; un valore ripetuto dice che è una copia \\
+Conferma (ACK)        & dice al mittente che cosa ha il ricevente: un pacchetto alla volta, o tutto fino a un numero \\
+Conferma negativa     & dice che un pacchetto non è arrivato bene; inutile quando le conferme portano un numero \\
+Finestra, pipelining  & limita ciò che può essere in sospeso, e ricompra l'utilizzo che lo stop-and-wait butta via \\
+\bottomrule
+\end{tabular}
+\caption{I meccanismi, in una tabella.}
+\end{table}
+
 \riepilogo{
 \begin{itemize}
     \item Un canale affidabile garantisce bit non corrotti, niente perdite o duplicati, ordine corretto.
@@ -498,5 +647,7 @@ Complessità & minima & bassa & più alta \\
     \item Il \textbf{pipelining} invia più pacchetti senza aspettare: \textbf{Go-Back-N} (ACK cumulativi, scarta i
           fuori ordine, ritrasmette tutto) e \textbf{Selective Repeat} (ACK individuali, bufferizza, ritrasmette
           solo i persi, sequenze $\geq 2N$).
+    \item Ora viene il protocollo che non è né l'uno né l'altro: conferme cumulative come in Go-Back-N, buffer come in
+          Selective Repeat. È TCP.
 \end{itemize}
 }

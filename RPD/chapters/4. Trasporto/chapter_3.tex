@@ -4,6 +4,10 @@
 \section{TCP a confronto con UDP}
 % ══════════════════════════════════════════════════════════════
 
+Tutti i meccanismi sono pronti: checksum, numeri di sequenza, conferme, timer, una finestra. Ora ricevono un header.
+TCP conferma in modo cumulativo, come Go-Back-N, e tiene ciò che arriva in anticipo, come Selective Repeat; e una
+decisione attraversa tutto il capitolo: \textbf{i numeri contano byte, non pacchetti}.
+
 Rispetto a UDP, TCP è:
 
 \begin{itemize}
@@ -22,8 +26,25 @@ Rispetto a UDP, TCP è:
             mittente a molti riceventi con una sola connessione (UDP, invece, permette il \emph{multicasting}).
       \item \textbf{Orientato al flusso di byte} (\emph{stream}): più segmenti TCP possono far parte di un unico
             flusso ordinato di dati, mentre i datagrammi UDP sono sostanzialmente indipendenti tra loro.
+            L'applicazione consegna byte, non messaggi, e dove cadono i confini dei segmenti lo decide TCP.
     \end{itemize}
 }
+
+\subsection{Una connessione senza niente in mezzo}
+
+\dfn{Connessione logica}{
+    I due moduli di trasporto si comportano come se un canale affidabile li unisse direttamente. Sotto, i segmenti
+    attraversano una rete che sa solo instradare.
+}
+
+\begin{itemize}
+    \item \textbf{Non è un circuito}: non si riserva capacità, e dentro la rete non si mette da parte niente per la
+          connessione.
+    \item Buffer, variabili e timer esistono \textbf{nei due sistemi terminali} e da nessun'altra parte.
+    \item I router vedono datagrammi, non connessioni: inoltrano il segmento senza leggere un byte del suo header.
+    \item È per questo che l'affidabilità si costruisce qui: il livello di rete è occupato a decidere \emph{dove} va un
+          pacchetto, non \emph{se} è arrivato.
+\end{itemize}
 
 % ══════════════════════════════════════════════════════════════
 \section{I buffer TCP}
@@ -61,10 +82,17 @@ accumulano nei buffer prima di essere spediti (lato mittente) o riassemblati (la
 \end{figure}
 
 \begin{itemize}
-    \item \textbf{In invio}: i segmenti vengono creati a partire dai dati dell'applicazione e passati al livello di
-          rete, dove ciascuno viene incapsulato in un datagramma IP.
-    \item \textbf{In ricezione}: i dati vengono messi nel buffer di ricezione, e l'applicazione li preleva quando è pronta.
+    \item \textbf{In invio}: \texttt{write} non trasmette; \textbf{copia} i byte nel buffer di invio, e TCP li spedisce da lì
+          quando gli conviene, creando i segmenti e passandoli al livello di rete.
+    \item \textbf{In ricezione}: \texttt{read} non riceve; prende ciò che è già nel buffer di ricezione, messo lì da
+          segmenti arrivati prima.
+    \item I due buffer assorbono la differenza fra quanto velocemente scrive l'applicazione, quanto velocemente si muove la
+          rete e quanto velocemente legge l'altro lato. Ogni estremo ne ha uno di ciascun tipo, perché ogni estremo sia
+          invia sia riceve.
 \end{itemize}
+
+Ecco perché, nella parte sulla programmazione, una \texttt{write} di 1000 byte poteva arrivare in tre \texttt{read}:
+le due chiamate non toccano la rete, toccano due buffer diversi.
 
 % ══════════════════════════════════════════════════════════════
 \section{La Maximum Segment Size (MSS)}
@@ -87,6 +115,9 @@ accumulano nei buffer prima di essere spediti (lato mittente) o riassemblati (la
 \end{tikzpicture}
 \caption{Con MTU di 1500 byte e header da 20 + 20 byte, la MSS tipica è di 1460 byte.}
 \end{figure}
+
+La MSS è la quantità di \textbf{dati} in un segmento, non la dimensione del segmento. E un'immagine da tre megabyte non è
+un messaggio: sono duemila segmenti, e l'applicazione non viene mai a sapere dove sono caduti i tagli.
 
 % ══════════════════════════════════════════════════════════════
 \section{Il segmento TCP}
@@ -131,10 +162,12 @@ applicativi. I campi dell'header:
     \begin{itemize}
       \item \textbf{ACK}: il segmento contiene una conferma (il campo acknowledgment è valido);
       \item \textbf{RST}, \textbf{SYN}, \textbf{FIN}: apertura e chiusura della connessione;
-      \item \textbf{CWR} e \textbf{ECE}: notifica esplicita della congestione (facoltativa);
-      \item \textbf{PSH}: chiede al ricevente di passare subito i dati all'applicazione (raro);
-      \item \textbf{URG}: il segmento contiene dati ``urgenti'' (raro);
+      \item \textbf{CWR} e \textbf{ECE}: notifica esplicita della congestione (ECN), in cui è la rete a dire ai due estremi
+            che è congestionata, invece di limitarsi a scartare;
+      \item \textbf{PSH}: chiede al ricevente di passare subito i dati all'applicazione;
+      \item \textbf{URG}: il segmento contiene dati ``urgenti'', e il puntatore dice dove finiscono.
     \end{itemize}
+    Otto flag, con quattro bit inutilizzati accanto; gli ultimi due (PSH e URG) in pratica non si usano;
     \item \textbf{checksum} (16 bit): controllo di integrità, come in UDP;
     \item \textbf{puntatore ai dati urgenti} (16 bit): la posizione dell'ultimo byte dei dati urgenti (raro).
 \end{itemize}
@@ -190,8 +223,30 @@ sequenza 0, il secondo 1000, il terzo 2000, e così via. Trascurando per semplic
 
 \warning{ACK $n$ non conferma il byte $n$}{
     L'errore più comune: ACK = 1000 \textbf{non} significa ``ho ricevuto il byte 1000'', ma ``ho ricevuto tutto
-    fino al 999, mandami dal 1000 in poi''.
+    fino al 999, mandami dal 1000 in poi''. Il numero esiste anche prima di qualsiasi dato: appena la connessione è aperta,
+    B aspetta già un byte preciso.
 }
+
+\subsection{Conferme cumulative, e un segmento in anticipo}
+
+\begin{esempio}{Un buco nel flusso}
+A ha ricevuto da B i byte 0--535, e poi un segmento con i byte 900--1000. I byte 536--899 non sono mai arrivati. A
+conferma \textbf{536}.
+\end{esempio}
+
+\begin{itemize}
+    \item Una conferma dice «tutto ciò che sta sotto questo numero è arrivato», e \textbf{niente} su ciò che sta sopra.
+    \item Quindi una conferma copre un numero qualsiasi di segmenti, e perderne una non costa niente purché ne passi una
+          successiva.
+    \item Non c'è modo di riferire i cento byte che A sta tenendo: l'header ha un numero solo, e il buco viene prima.
+    \item Quel numero unico è ciò che rende economico il mittente, e costoso un segmento mancante.
+\end{itemize}
+
+E i byte 900--1000, arrivati in anticipo: tenerli o buttarli? \textbf{Le RFC non lo decidono}: entrambi i comportamenti
+sono corretti, e la scelta è lasciata a chi scrive l'implementazione. Buttandoli il ricevente resta semplice e il
+mittente paga rimandandoli; tenendoli i byte aspettano che il buco si riempia, e la rete trasporta ogni byte una volta.
+\textbf{Tutte le implementazioni in uso li tengono}, ed è per questo che una perdita costa una ritrasmissione e non una
+finestra intera.
 
 \subsection{Il caso full-duplex}
 
@@ -231,7 +286,67 @@ A$\rightarrow$B, in rosso quelle sul flusso B$\rightarrow$A.
     \item \textbf{Da A a B}: un ACK puro, con numero di sequenza 43 (come atteso da B) e ACK $79 + 1 = 80$.
 \end{enumerate}
 In ogni scambio vale: \textbf{ACK ricevuto = Seq inviato + byte inviati}, e \textbf{Seq inviato = ACK ricevuto}.
+I due flussi partono da 42 e 79, concordati all'apertura della connessione, e non da zero.
 \end{esempio}
+
+\warning{Anche un segmento senza dati ha un numero di sequenza}{
+    Il terzo segmento non porta niente. Che cosa ci fa \texttt{Seq=43}? Il campo è nell'header che lo si usi o no, quindi
+    dice dove comincerebbe A se avesse qualcosa da inviare. \textbf{Non consuma alcun byte}: il prossimo segmento di A
+    porterà di nuovo 43.
+    \begin{itemize}
+        \item Un ACK puro non fa avanzare il flusso, e ciò che B aspetta non si muove: sempre il byte 43.
+        \item Quindi nessuno lo conferma: non c'è niente da confermare, e per lui non parte nessun timer.
+        \item Se si perde non si ritrasmette niente: la prossima conferma di A porterà la stessa informazione, o di più.
+    \end{itemize}
+}
+
+\subsection{Da dove parte la numerazione}
+
+In tutti gli esempi il primo byte era numerato 0. In una connessione reale \textbf{non lo è mai}.
+\begin{itemize}
+    \item Ciascun lato sceglie a caso il proprio \textbf{numero di sequenza iniziale} (ISN) e lo comunica all'altro durante
+          l'apertura della connessione.
+    \item Il motivo è quello visto con il riuso dei numeri di sequenza: un segmento di una connessione precedente può essere
+          ancora vivo nella rete.
+    \item Stessi due host, stesse due porte, numerazione da zero ogni volta: una vecchia copia verrebbe accettata come
+          dato attuale.
+    \item Un inizio casuale non lo rende impossibile, lo rende \textbf{improbabile}, ed è il massimo che il protocollo può
+          fare.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il mittente TCP in tre eventi}
+% ══════════════════════════════════════════════════════════════
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{0.3\textwidth} p{0.62\textwidth}}
+\toprule
+\textbf{Evento} & \textbf{Che cosa fa il mittente} \\
+\midrule
+Arrivano dati dall'applicazione &
+Costruisce un segmento con numero di sequenza \texttt{NextSeqNum}, avvia il timer se non è già in corsa, lo passa a IP e
+fa avanzare \texttt{NextSeqNum} del numero di byte inviati. \\
+Il timer scade &
+Ritrasmette il segmento non confermato con il numero di sequenza più piccolo, e riavvia il timer. \\
+Arriva una conferma $y$ &
+Se $y > \texttt{SendBase}$, porta \texttt{SendBase} a $y$, e riavvia il timer se resta qualcosa di non confermato. \\
+\bottomrule
+\end{tabular}
+\caption{Due variabili contengono l'intero mittente: \texttt{SendBase}, il byte più vecchio non ancora confermato, e
+         \texttt{NextSeqNum}, il prossimo che partirà.}
+\end{table}
+
+\subsection{Un timer, non uno per segmento}
+
+\begin{itemize}
+    \item Un timer per ogni segmento in sospeso è il progetto naturale, ed è ciò che chiede Selective Repeat.
+    \item TCP ne tiene \textbf{uno}, legato al segmento più vecchio non confermato, quello a cui punta \texttt{SendBase}.
+    \item Quando scatta riparte \textbf{solo quel segmento}, per quanti altri ce ne siano in volo senza risposta: un mittente
+          con dieci segmenti in sospeso ne ritrasmette uno, e lascia che le conferme cumulative sistemino il resto.
+    \item Il motivo è il costo: una scadenza da seguire invece di una per segmento, su una macchina che può avere migliaia
+          di connessioni.
+\end{itemize}
 
 % ══════════════════════════════════════════════════════════════
 \section{Il timeout di ritrasmissione}
@@ -242,9 +357,13 @@ l'approccio di base è ritrasmettere un segmento \textbf{solo se il suo ACK non 
 La stima del timeout è quindi critica:
 
 \begin{itemize}
-    \item \textbf{troppo lungo}: la comunicazione rallenta, perché dopo una perdita si aspetta a lungo;
-    \item \textbf{troppo breve}: si ritrasmettono segmenti non persi, producendo traffico inutile sulla rete.
+    \item \textbf{troppo lungo}: ogni perdita si paga con una lunga attesa a vuoto, e il trasferimento si ferma finché il
+          timer corre;
+    \item \textbf{troppo breve}: segmenti soltanto lenti vengono dichiarati persi, e la rete trasporta copie che nessuno
+          aveva chiesto. Il caso estremo lo conosciamo: con un timeout più corto dell'andata e ritorno si ritrasmette tutto,
+          senza perdere niente.
 \end{itemize}
+Il timeout deve quindi essere più grande dell'RTT, e l'RTT non è una costante, e nessuno dice al mittente quanto vale.
 
 \begin{figure}[H]
 \centering
@@ -282,8 +401,22 @@ La stima del timeout è quindi critica:
     \node[text width=3cm, align=center] at (1.6,-4.1) {nessuna ritrasmissione: ACK=120 conferma anche i byte 92--99};
   \end{scope}
 \end{tikzpicture}
-\caption{Tre scenari di ritrasmissione TCP.}
+\caption{Tre scenari di ritrasmissione TCP. Nel terzo una conferma si è persa e nulla è stato inviato due volte: ACK=120
+         dice che tutto ciò che sta sotto 120 è arrivato, copre entrambi i segmenti, e \texttt{SendBase} salta subito a
+         120 fermando il timer.}
 \end{figure}
+
+\subsection{Raddoppiare il timeout}
+
+\begin{itemize}
+    \item Quando il timer scade, TCP ritrasmette e imposta il timeout successivo al \textbf{doppio} dell'intervallo appena
+          trascorso: tre quarti di secondo diventano 1,5, poi 3, poi 6. Le attese crescono esponenzialmente finché non torna
+          niente.
+    \item Nel frattempo la stima non si usa: torna appena arriva una conferma e il timer riparte normalmente.
+    \item Un timeout di solito significa congestione, e ritrasmettere più forte in una rete congestionata la peggiora.
+          Quindi il mittente \textbf{si ritira}: è una forma rudimentale di controllo di congestione, e la stessa idea
+          tornerà quando le stazioni collidono su un collegamento condiviso.
+\end{itemize}
 
 % ══════════════════════════════════════════════════════════════
 \section{La stima dell'RTT}
@@ -292,9 +425,30 @@ La stima del timeout è quindi critica:
 Per fissare il timeout serve una stima del \textbf{round-trip time}: il timeout (quanto aspettare l'ACK di un
 segmento) deve essere maggiore dell'RTT, altrimenti si ritrasmette inutilmente.
 
-TCP stima l'RTT misurando il tempo tra l'invio di un segmento e l'arrivo del suo ACK
-(\textbf{SampleRTT}). Si campionano solo segmenti \textbf{confermati e non ritrasmessi}: per un segmento
-ritrasmesso non si saprebbe a quale invio si riferisce l'ACK.
+\dfn{SampleRTT}{
+    Il tempo fra la consegna di un segmento a IP e l'arrivo di una conferma che lo copre. Una misura, per un segmento.
+}
+
+\begin{itemize}
+    \item TCP misura un segmento alla volta, non tutti: più o meno un nuovo campione per andata e ritorno.
+    \item I campioni si muovono, e di molto: le code dei router si riempiono e si svuotano, e l'host all'altro capo ha un
+          carico suo.
+    \item Un singolo campione è quindi una cattiva stima dell'andata e ritorno, e una base pessima per una scadenza.
+    \item E i segmenti ritrasmessi non vengono \textbf{mai} campionati.
+\end{itemize}
+
+\warning{A quale trasmissione risponde quella conferma?}{
+    Un segmento parte, il timer scatta, riparte, e poi arriva una conferma. Porta un numero di byte, non un istante: è
+    identica sia che risponda alla prima copia sia alla seconda, e il mittente \textbf{non può saperlo}.
+    \begin{itemize}
+        \item Misurando dalla prima trasmissione, il campione è troppo lungo se la conferma risponde in realtà alla
+              seconda.
+        \item Misurando dalla seconda, è troppo corto se la prima copia era arrivata e la sua conferma era solo lenta.
+        \item Un campione corto accorcia il timeout, che produce più ritrasmissioni premature, che producono più campioni
+              corti.
+    \end{itemize}
+    La regola (di Karn) taglia il ciclo prima che cominci: \textbf{mai campionare un segmento ritrasmesso}.
+}
 
 \dfn{EstimatedRTT}{
     Poiché i campioni oscillano (congestione, carico del ricevente, \dots), la stima è una \textbf{media mobile
@@ -303,8 +457,13 @@ ritrasmesso non si saprebbe a quale invio si riferisce l'ACK.
     con $\alpha$ tipicamente $0{,}125 = 1/8$.
 }
 
-I campioni recenti pesano più di quelli vecchi, il cui peso decresce esponenzialmente: la stima segue
-l'andamento reale ma senza farsi trascinare da ogni singolo picco.
+\begin{itemize}
+    \item Ogni nuovo campione tira la stima di un ottavo verso di sé: una misura strana non può trascinarla lontano.
+    \item Il peso di un campione vecchio si riduce di $7/8$ a ogni aggiornamento, esponenzialmente, da cui il nome.
+    \item Quindi la media \textbf{dimentica}: ciò che faceva il percorso un minuto fa ora non conta quasi niente, ed è
+          proprio lo scopo.
+    \item Non si conserva alcuna storia: una variabile, e due operazioni per conferma.
+\end{itemize}
 
 \begin{figure}[H]
     \centering
@@ -322,8 +481,11 @@ l'andamento reale ma senza farsi trascinare da ogni singolo picco.
 
 \dfn{TimeoutInterval}{
     $$\text{TimeoutInterval} = \text{EstimatedRTT} + 4\cdot\text{DevRTT}$$
-    La deviazione fornisce un \textbf{margine adattivo}: quando l'RTT oscilla molto il margine cresce, cioè si
-    aspetta di più proprio quando si è meno sicuri dell'RTT. Il valore iniziale (a $t=0$) è di \textbf{1 secondo}.
+    La stima fissa il \textbf{minimo}: sotto, le conferme arriverebbero dopo che il timer è già scattato. La deviazione
+    fornisce il \textbf{margine}, ampio quando il percorso è irregolare, stretto quando è stabile. Così il timeout segue
+    un collegamento che comincia a comportarsi male senza che nessuno debba scegliere un numero. Prima del primo campione
+    non c'è niente da cui calcolare, quindi il valore iniziale è di \textbf{1 secondo}; e dopo una ritrasmissione la
+    formula si mette da parte e l'intervallo raddoppia, finché non torna qualcosa.
 }
 
 \begin{esempio}{Aggiornare stima e timeout}
@@ -349,7 +511,40 @@ Siano $\text{EstimatedRTT} = 100$ ms, $\text{DevRTT} = 10$ ms, e arrivi un campi
 \section{Fast retransmit}
 % ══════════════════════════════════════════════════════════════
 
-La ritrasmissione dopo il timeout funziona, ma il timeout può essere relativamente lungo.
+La ritrasmissione dopo il timeout funziona, ma il timeout può essere relativamente lungo. Prima di vedere come
+accorciarlo, bisogna sapere quando il ricevente invia una conferma.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{0.44\textwidth} p{0.48\textwidth}}
+\toprule
+\textbf{Che cosa arriva} & \textbf{Che cosa fa il ricevente} \\
+\midrule
+Segmento in ordine, e tutto ciò che lo precede è già confermato &
+Aspetta fino a 500 ms il successivo; se non arriva, conferma. \\
+Segmento in ordine, con un segmento precedente ancora da confermare &
+Conferma entrambi insieme, con un numero solo. \\
+Segmento fuori ordine, con numero più alto dell'atteso: un buco &
+Conferma \textbf{subito}, ripetendo il numero del fondo del buco. \\
+Un segmento che riempie il buco &
+Conferma subito, fino alla fine di ciò che ora è contiguo. \\
+\bottomrule
+\end{tabular}
+\caption{Quando il ricevente TCP invia una conferma. La prima riga è la \textbf{conferma ritardata}
+         (\emph{delayed ACK}): due segmenti, una risposta. La terza è da dove vengono i duplicati.}
+\end{table}
+
+\subsection{Le conferme duplicate}
+
+\begin{itemize}
+    \item Una conferma duplicata ripete un numero che il mittente aveva già: presa da sola non porta alcuna informazione
+          nuova.
+    \item Ma è stata inviata per una ragione: al ricevente è arrivato qualcosa, e non era ciò che serviva al buco.
+    \item Ogni duplicato è quindi la prova che i segmenti dopo quello mancante stanno passando: il percorso funziona, un
+          segmento no.
+    \item Un mittente che qui aspetta il suo timer sta aspettando una scadenza di cui ha già la risposta.
+    \item TCP non ha conferme negative: un numero ripetuto è la cosa più vicina, e non costa un nuovo tipo di pacchetto.
+\end{itemize}
 
 \dfn{Fast retransmit}{
     Con la \textbf{ritrasmissione veloce} il ricevente segnala al mittente che un segmento potrebbe essere
@@ -384,9 +579,28 @@ La ritrasmissione dopo il timeout funziona, ma il timeout può essere relativame
     Perché non ritrasmettere al primo ACK duplicato? Perché un ACK ``sbagliato'' può arrivare anche per
     motivi diversi da una perdita. Per esempio, se due segmenti arrivano \textbf{scambiati di ordine}, il ricevente
     invia un ACK duplicato (per il primo segmento) prima di accorgersi dello scambio. Aspettare tre duplicati
-    evita ritrasmissioni inutili dovute al semplice riordinamento.
+    evita ritrasmissioni inutili dovute al semplice riordinamento: tre di fila sono difficili da spiegare così, perché
+    vuol dire che tre segmenti successivi sono passati mentre quello no. Il numero è un compromesso fissato dalle misure
+    più che derivato: tre è il valore su cui si è assestato lo standard.
 }
 
+% ══════════════════════════════════════════════════════════════
+\section{Go-Back-N o Selective Repeat?}
+% ══════════════════════════════════════════════════════════════
+
+\begin{itemize}
+    \item \textbf{Come Go-Back-N}: conferme cumulative, nessuna risposta individuale per ciò che arriva in anticipo, un timer
+          e due variabili.
+    \item \textbf{Diversamente da Go-Back-N}: un timeout ritrasmette un segmento, non tutto ciò che è in sospeso, e
+          nemmeno quello se la conferma successiva lo copre.
+    \item \textbf{Come Selective Repeat}: il ricevente tiene in un buffer ciò che arriva in anticipo invece di buttarlo.
+\end{itemize}
+
+TCP quindi \textbf{non è nessuno dei due}: conferme cumulative sopra un ricevente che conserva, cioè la metà utile di
+ciascuno. Un'opzione, la \key{conferma selettiva} (\emph{SACK}), permette al ricevente di nominare i blocchi che sta
+tenendo, e porta TCP il resto della strada.
+
+\Needspace{20\baselineskip}
 % ══════════════════════════════════════════════════════════════
 \section{Riepilogo}
 % ══════════════════════════════════════════════════════════════
@@ -402,6 +616,10 @@ La ritrasmissione dopo il timeout funziona, ma il timeout può essere relativame
     \item $\text{EstimatedRTT} = 0{,}875\cdot\text{Est} + 0{,}125\cdot\text{Sample}$;
           $\text{DevRTT} = 0{,}75\cdot\text{Dev} + 0{,}25\cdot|\text{Sample}-\text{Est}|$;
           $\text{Timeout} = \text{Est} + 4\cdot\text{Dev}$.
+    \item Un solo timer, sul segmento più vecchio non confermato; dopo un timeout l'intervallo raddoppia, e i segmenti
+          ritrasmessi non si campionano.
     \item \textbf{Fast retransmit}: 3 ACK duplicati $\Rightarrow$ ritrasmissione immediata.
+    \item Resta aperto: come i due estremi si accordano sui numeri iniziali, e a che cosa serve la finestra di ricezione
+          nell'header.
 \end{itemize}
 }

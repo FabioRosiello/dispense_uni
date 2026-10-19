@@ -1,446 +1,715 @@
-\chapter{DHCP, NAT e IPv6}
+\chapter{ICMP e la diagnosi di una rete}
 
-% ══════════════════════════════════════════════════════════════
-\section{L'assegnazione degli indirizzi IP}
-% ══════════════════════════════════════════════════════════════
-
-Dentro un blocco di indirizzi, gli indirizzi IP vanno assegnati alle singole interfacce. Un amministratore di sistema
-può farlo in due modi:
-
+Avevamo lasciato il livello di rete con una promessa: un router che non riesce a consegnare un datagramma lo scarta e
+\textbf{avvisa la sorgente}. Quell'avviso non è una cortesia di IP: è un protocollo di questo livello a pieno titolo, e
+qui lo leggiamo.
 \begin{itemize}
-    \item \textbf{manualmente}: assegnando a mano un indirizzo a ciascun host (indirizzo \emph{statico});
-    \item \textbf{automaticamente}: è la rete ad assegnare un indirizzo libero agli host che arrivano.
+    \item Con lui tornano tre questioni rimaste aperte: chi dice che nessuno ascolta su una porta, che cosa legge davvero uno
+          scanner di porte, e quale messaggio indica l'MTU che sarebbe passata.
+    \item Poi i due programmi che tutti usano senza sapere che cosa inviano, \texttt{ping} e \texttt{traceroute}, e un
+          \textbf{metodo} per scoprire dove una rete è rotta.
+    \item Il metodo è il punto. I comandi sono dieci minuti; sapere quale domanda fare dopo è il resto del capitolo.
 \end{itemize}
 
-Il secondo approccio, il più comune, si realizza con il \textbf{Dynamic Host Configuration Protocol} (DHCP).
+% ══════════════════════════════════════════════════════════════
+\section{Parlare della rete, non attraverso la rete}
+% ══════════════════════════════════════════════════════════════
 
-\dfn{DHCP}{
-    Il \textbf{DHCP} assegna automaticamente a un host che si collega alla rete le informazioni necessarie per
-    usarla: oltre all'\textbf{indirizzo IP}, la \textbf{subnet mask}, l'indirizzo del \textbf{gateway predefinito}
-    (per uscire dalla rete) e quello del \textbf{server DNS locale}. È \emph{plug-and-play}, ed è quello che si usa
-    nelle nostre case.
+\dfn{ICMP}{
+    L'\textbf{Internet Control Message Protocol} (ICMP) è il protocollo con cui host e router si scambiano informazioni di
+    livello di rete \textbf{sulla rete stessa}: segnalazioni di errore (destinazione irraggiungibile, TTL scaduto) e richieste
+    di verifica (\emph{echo}).
 }
 
-% ══════════════════════════════════════════════════════════════
-\section{Il funzionamento del DHCP}
-% ══════════════════════════════════════════════════════════════
-
-Il DHCP è un protocollo \textbf{client-server}: un host appena arrivato (client) contatta il server DHCP per ricevere
-la configurazione di rete. Il servizio può essere offerto da un computer o dal router stesso. Formalmente, il DHCP è un
-protocollo di \textbf{livello applicativo} (usa UDP).
-
-Riprendiamo l'esempio delle tre subnet collegate da un router, e supponiamo che la subnet di destra
-(\texttt{223.1.2.0/24}) abbia un server DHCP: quando un nuovo host entra nella rete, ``contratta'' il proprio indirizzo
-con il server. L'aggiunta di un host avviene in quattro passi (ricordati spesso con l'acronimo \textbf{DORA}):
+\begin{itemize}
+    \item Dentro non viaggia niente di nostro: nessuna applicazione lo chiede, e nessuna applicazione ne è il mittente.
+    \item Il suo output lo leggiamo da anni: un \emph{destination network unreachable} nel browser è nato come messaggio ICMP
+          di un router che non trovava un percorso.
+    \item Esiste perché IP non promette niente e, lasciato a sé, non riferisce niente: un datagramma che muore muore in
+          silenzio.
+    \item E non tutto ciò che porta è un errore: due dei suoi messaggi sono una domanda e la sua risposta, e su quelle due si
+          regge \texttt{ping}.
+\end{itemize}
 
 \begin{figure}[H]
 \centering
-\begin{minipage}{0.34\linewidth}\centering
-  \includegraphics[width=0.9\linewidth]{cap15/dhcp_messaggi.png}
-\end{minipage}\hfill
-\begin{minipage}{0.62\linewidth}
-\begin{enumerate}
-  \item \textbf{Discover} --- ricerca del server: il nuovo host invia in \textbf{broadcast} un messaggio \emph{DHCP discover}
-        (UDP, porta \textbf{67}) per trovare un server DHCP.
-        \begin{itemize}
-          \item IP destinazione: \texttt{255.255.255.255} (broadcast);
-          \item IP sorgente: \texttt{0.0.0.0} (``questo host'', che non ha ancora un indirizzo);
-          \item un identificativo di transazione casuale.
-        \end{itemize}
-  \item \textbf{Offer} --- offerta: poiché possono esserci più server, ogni server che riceve il discover risponde con un
-        messaggio in broadcast (porta \textbf{68}) che offre una possibile configurazione (campo \texttt{yiaddr}, \emph{Your
-        Internet ADDRess}). IP destinazione \texttt{255.255.255.255}, IP sorgente quello del server (\texttt{223.1.2.5}).
-  \item \textbf{Request} --- richiesta: il client sceglie un'offerta tra quelle ricevute e la accetta ``facendo l'eco''
-        del messaggio di offerta.
-  \item \textbf{ACK} --- conferma: il server conferma la transazione con un messaggio finale.
-\end{enumerate}
-\end{minipage}
-\caption{I quattro messaggi del DHCP (da Kurose).}
-\end{figure}
-
-\warning{Perché tutto in broadcast}{
-    Nel passo 1 il client \textbf{non ha ancora un indirizzo} e \textbf{non sa dove sia il server}: l'unico modo di
-    raggiungerlo è il broadcast. Anche l'offerta viaggia in broadcast, perché il client non può ancora ricevere
-    pacchetti indirizzati a un IP che non ha. L'indirizzo assegnato ha una \textbf{durata} (\emph{lease time}): scaduta,
-    va rinnovata, altrimenti può essere riassegnata a un altro host.
-}
-
-\subsection{Il DHCP relay agent}
-
-\begin{itemize}
-    \item Nell'esempio tutto funziona perché il server DHCP e l'host sono nella \textbf{stessa subnet}: i broadcast non
-          attraversano i router.
-    \item Se il server esiste ma sta in un'altra subnet, serve un \textbf{DHCP relay agent} che inoltri i messaggi DHCP (può
-          farlo un router).
-    \item Configurando il router come relay agent, anche gli host delle subnet \texttt{223.1.1.0/24} e \texttt{223.1.3.0/24}
-          vengono serviti dal server DHCP della subnet \texttt{223.1.2.0/24}.
-\end{itemize}
-
-\subsection{Verificare la configurazione}
-
-Su Linux il comando \texttt{ip} mostra la configurazione ricevuta dal DHCP:
-
-\begin{lstlisting}[language=bash]
-$ ip addr       # indirizzo IP e maschera delle interfacce
-$ ip route      # gateway predefinito (riga "default via ...")
-\end{lstlisting}
-
-% ══════════════════════════════════════════════════════════════
-\section{Il problema della visibilità}
-% ══════════════════════════════════════════════════════════════
-
-Su Internet ci sono miliardi di dispositivi che dovrebbero avere un indirizzo IP univoco per essere raggiungibili da
-chiunque. Ma è davvero necessario che \textbf{tutti} i dispositivi siano visibili a tutti? È una buona idea che la mia
-stampante sia raggiungibile (e usabile) da chiunque su Internet?
-
-Avere tutti i dispositivi raggiungibili dall'esterno delle reti locali pone problemi evidenti:
-
-\begin{itemize}
-    \item gli indirizzi IP sono \textbf{finiti} (e gli IPv4 praticamente esauriti);
-    \item se i dispositivi sono collegati localmente, spesso è irragionevole o indesiderabile esporli tutti su Internet;
-    \item gli amministratori locali dovrebbero conoscere la struttura dei blocchi di indirizzi soprastanti per assegnare
-          indirizzi liberi, cosa che spesso non dipende da loro (per esempio nelle reti di casa).
-\end{itemize}
-
-% ══════════════════════════════════════════════════════════════
-\section{Il NAT}
-% ══════════════════════════════════════════════════════════════
-
-\dfn{Network Address Translation (NAT)}{
-    Il servizio di \textbf{NAT} permette di \textbf{rimappare} gli indirizzi IP dei pacchetti di una rete in indirizzi
-    diversi (\emph{network masquerading}). Si usa una \textbf{tabella di traduzione} che associa molte coppie
-    indirizzo/porta locali (della LAN) a una coppia indirizzo/porta globale (della WAN). Il servizio può essere offerto
-    dai router.
-}
-
-La rete locale mascherata si chiama \textbf{rete privata} (o \emph{realm} con indirizzi privati): gli indirizzi privati
-sono validi \textbf{solo all'interno} della rete privata.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
-  \node (pc) at (0,1.4) {\icon[0.9cm]{pc}}; \node[left=0pt of pc, font=\scriptsize\ttfamily] {192.168.0.23};
-  \node (lp) at (0,0) {\icon[1cm]{laptop}}; \node[left=0pt of lp, font=\scriptsize\ttfamily] {192.168.0.11};
-  \node (ph) at (0,-1.4) {\icon[0.6cm]{smartphone}}; \node[left=0pt of ph, font=\scriptsize\ttfamily] {192.168.0.7};
-  \node (r) at (4,0) {\icon[1.3cm]{router}}; \node[below=0pt of r, align=center] {router NAT};
-  \foreach \n in {pc,lp,ph} \draw[wired] (\n) -- (r);
-  \node[netcloud, minimum width=3cm] (i) at (9,0) {Internet};
-  \draw[wired, line width=2pt] (r) -- node[above, font=\scriptsize\ttfamily] {203.0.113.221} (i);
-  \draw[decorate, decoration={brace, amplitude=6pt, mirror}] (-1.8,-2.1) -- (4.6,-2.1) node[midway, below=7pt, text=netgreen!50!black] {rete privata: indirizzi 192.168.0.x};
-  \draw[decorate, decoration={brace, amplitude=6pt, mirror}] (4.8,-2.1) -- (10.6,-2.1) node[midway, below=7pt, text=netblue] {per Internet c'è un solo indirizzo pubblico};
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    fl/.style={field, minimum height=0.7cm, align=center}]
+  \node[fl, fill=lnet, minimum width=2.6cm] (ip) at (0,0) {header IP\\protocollo = 1};
+  \node[fl, fill=netred!25, minimum width=1.0cm, right=0pt of ip] (ty) {tipo};
+  \node[fl, fill=netred!25, minimum width=1.1cm, right=0pt of ty] (co) {codice};
+  \node[fl, fill=netred!25, minimum width=1.4cm, right=0pt of co] (ck) {checksum};
+  \node[fl, fill=netred!12, minimum width=2.4cm, right=0pt of ck] (x) {altri 4 byte\\id, MTU, inutilizzati};
+  \node[fl, fill=lnet!50, minimum width=2.2cm, right=0pt of x] (q) {header IP\\del colpevole};
+  \node[fl, fill=ltra!60, minimum width=1.6cm, right=0pt of q] (e) {primi\\8 byte};
+  \draw[decorate, decoration={brace, amplitude=4pt}] ([yshift=2pt]ty.north west) -- node[above=5pt]{messaggio ICMP: il payload di un datagramma IP qualsiasi} ([yshift=2pt]e.north east);
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] ([yshift=-2pt]ty.south west) -- node[below=5pt, align=center]{gli stessi tre campi\\in ogni messaggio} ([yshift=-2pt]ck.south east);
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] ([yshift=-2pt]q.south west) -- node[below=5pt, align=center]{l'header di trasporto: le porte\\che dicono quale flusso è morto} ([yshift=-2pt]e.south east);
+  \node[anchor=west, text=black!60, align=left] at (ip.west |- 0,-1.35) {6 è TCP, 17 è UDP,\\1 è questo};
 \end{tikzpicture}
-\caption{Con il NAT tutti i dispositivi di casa escono verso Internet con lo stesso indirizzo pubblico del router.}
+\caption{Un messaggio di errore ICMP dentro un datagramma IP. Il ricevente smista sul numero di protocollo esattamente come
+         farebbe per un segmento; non ci sono porte, perché sopra non c'è niente da indirizzare: il messaggio è per la
+         macchina, non per un processo.}
 \end{figure}
 
-\subsection{Un esempio di NAT}
+\subsection{L'errore torna con la sua causa allegata}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.7\linewidth]{cap15/nat_esempio.png}
-    \caption{Un router NAT tra una rete privata 10.0.0.0/24 e Internet (da Kurose).}
-\end{figure}
-
-Le quattro interfacce della rete locale hanno indirizzi della subnet \texttt{10.0.0.0/24}; lato Internet il router ha un solo
-indirizzo, \texttt{138.76.29.7}. Il router si comporta da ``passamessaggi'' che sovrascrive gli indirizzi secondo la tabella:
-
-\begin{enumerate}
-    \item L'host \texttt{10.0.0.1} invia un datagramma verso il server Web \texttt{128.119.40.186}, porta 80, usando la porta sorgente 3345.
-    \item Il router NAT riceve il datagramma, sceglie una porta libera (\textbf{5001}), \textbf{sostituisce} indirizzo e porta sorgente
-          con \texttt{138.76.29.7, 5001} e aggiunge la riga alla tabella di traduzione.
-    \item Il server risponde a \texttt{138.76.29.7, 5001}: per lui, la richiesta è arrivata dal router.
-    \item Il router riceve la risposta, cerca \texttt{138.76.29.7, 5001} nella tabella e \textbf{riscrive} destinazione e porta con
-          \texttt{10.0.0.1, 3345}, poi la inoltra nella LAN.
-\end{enumerate}
+\begin{itemize}
+    \item Ogni messaggio comincia allo stesso modo: un tipo, un codice dentro quel tipo, un checksum, e quattro byte il cui uso
+          dipende dal tipo.
+    \item Poi qualcosa di insolito: una \textbf{copia dell'header del datagramma che l'ha causato}, più i suoi primi
+          \textbf{8 byte}.
+    \item Perché otto: perché sono i byte dell'header di trasporto che portano i due numeri di porta (oppure, per un echo,
+          l'identificatore e il numero di sequenza).
+    \item Un host può avere centinaia di conversazioni aperte. Senza quegli otto byte saprebbe che qualcosa è fallito, e
+          nient'altro.
+\end{itemize}
+Un errore ICMP quindi si può \textbf{leggere}: dice che cosa è andato storto, e a quale dei nostri pacchetti.
 
 \begin{table}[H]
 \centering
-\begin{tabular}{ll}
+\begin{tabular}{ccl}
 \toprule
-\textbf{Lato WAN} & \textbf{Lato LAN} \\
+\textbf{Tipo} & \textbf{Codice} & \textbf{Significato} \\
 \midrule
-138.76.29.7, 5001 & 10.0.0.1, 3345 \\
-138.76.29.7, 5002 & 10.0.0.2, 3345 \\
-\dots & \dots \\
+0  & 0  & echo reply (risposta a ping) \\
+3  & 0  & destinazione irraggiungibile: rete \\
+3  & 1  & destinazione irraggiungibile: host \\
+3  & 2  & destinazione irraggiungibile: protocollo \\
+3  & 3  & destinazione irraggiungibile: \textbf{porta} \\
+3  & 4  & frammentazione necessaria ma vietata (DF) \\
+3  & 13 & comunicazione vietata dall'amministratore \\
+4  & 0  & source quench (controllo di congestione, in disuso) \\
+8  & 0  & echo request (richiesta di ping) \\
+9  & 0  & annuncio di un router \\
+10 & 0  & scoperta dei router \\
+11 & 0  & \textbf{TTL scaduto} (Wireshark: \emph{time-to-live exceeded}) \\
+12 & 0  & header IP errato \\
 \bottomrule
 \end{tabular}
-\caption{La tabella di traduzione NAT: la seconda riga mostra perché serve una porta nuova.}
+\caption{I tipi di messaggi ICMP. Quattro bastano per tutto il capitolo: 8 e 0 sono ping, 11 e 3/3 sono traceroute.}
 \end{table}
 
-\warning{Perché il NAT cambia anche la porta}{
-    Gli host non sanno nulla del traffico degli altri host: due host della LAN potrebbero scegliere \textbf{la stessa
-    porta} sorgente (3345) nello stesso momento. Il NAT non può quindi riusare la porta iniziale, e ne assegna una nuova.
-    Poiché la porta è di 16 bit, un NAT può gestire \textbf{oltre 60\,000 connessioni} contemporanee con un solo indirizzo IP pubblico.
+\subsection{Quando non si invia alcun messaggio}
+
+\begin{itemize}
+    \item Un errore ICMP non causa mai un altro errore ICMP: altrimenti un datagramma malformato potrebbe far litigare due
+          router per sempre.
+    \item Non si invia niente per un datagramma diretto a un indirizzo di broadcast o multicast: un pacchetto sbagliato, mille
+          risposte.
+    \item Per un datagramma frammentato riceve un messaggio solo il primo frammento, l'unico che porta gli otto byte che vale
+          la pena citare.
+    \item I router limitano il ritmo di ciò che generano, quindi gli errori sono la prima cosa scartata proprio quando sono
+          più numerosi. E un firewall può togliere il resto per scelta.
+\end{itemize}
+
+\warning{Un messaggio mancante non significa niente}{
+    Ogni altra cosa in questo capitolo dipende da questa frase. Che un errore non sia arrivato non dice che il pacchetto sia
+    passato: può non essere mai stato generato, essere stato limitato, o filtrato.
 }
 
-\subsection{Il limite del NAT}
+% ══════════════════════════════════════════════════════════════
+\section{ping}
+% ══════════════════════════════════════════════════════════════
 
-\info{NAT traversal}{
-    Nell'esempio la comunicazione è stata \textbf{iniziata dall'host interno} \texttt{10.0.0.1}: la riga della tabella nasce
-    proprio da quel primo pacchetto in uscita. Se un pacchetto arriva da Internet \textbf{senza comunicazioni precedenti}
-    (qualcuno vuole contattare un server che sta dietro il NAT), il router non ha informazioni sufficienti per sapere a quale
-    host interno consegnarlo. Servono allora tecniche aggiuntive, dette di \textbf{NAT traversal} (per esempio l'inoltro
-    manuale delle porte sul router, o protocolli per scoprire e aprire le mappature). Il NAT è anche criticato perché un router,
-    dispositivo di livello 3, modifica i numeri di porta, che appartengono al livello 4.
+\dfn{ping}{
+    \textbf{ping} invia a un host messaggi ICMP \textbf{echo request} (tipo 8), il cui unico contenuto sono alcuni byte a
+    scelta; la destinazione rimanda un \textbf{echo reply} (tipo 0) con quegli stessi byte copiati invariati. È tutto il
+    test. Per ogni coppia ping mostra l'\textbf{RTT}, e alla fine le statistiche sulle perdite.
 }
 
-% ══════════════════════════════════════════════════════════════
-\section{Gli indirizzi IP riservati}
-% ══════════════════════════════════════════════════════════════
+\begin{itemize}
+    \item E la destinazione risponde \textbf{da sola}: il server di echo è dentro il sistema operativo, non è un processo,
+          non c'è niente da installare né niente in ascolto.
+    \item Per questo risponde anche una macchina che non esegue alcun servizio, ed è per questo che una risposta dimostra molto
+          meno di quanto si pensi: un datagramma ha raggiunto quell'indirizzo, e lì qualcosa era disposto a rispondere.
+\end{itemize}
 
-Perché gli amministratori locali possano organizzare una rete privata senza interferenze, per convenzione alcuni blocchi di
-indirizzi sono \textbf{riservati}: ISP e ICANN non possono assegnarli a nessuna organizzazione.
+\begin{lstlisting}[language=bash, title={Leggere un ping}]
+$ ping iana.org
+PING iana.org (192.0.43.8) 56(84) bytes of data.
+64 bytes from 192.0.43.8: icmp_seq=1 ttl=51 time=98.2 ms
+64 bytes from 192.0.43.8: icmp_seq=2 ttl=51 time=98.0 ms
+64 bytes from 192.0.43.8: icmp_seq=3 ttl=51 time=99.4 ms
 
-\begin{table}[H]
-\centering
-\begin{tabular}{llp{7.5cm}}
-\toprule
-\textbf{Blocco} & \textbf{Intervallo} & \textbf{Uso} \\
-\midrule
-10.0.0.0/8 & 10.0.0.0 -- 10.255.255.255 & reti private \\
-172.16.0.0/12 & 172.16.0.0 -- 172.31.255.255 & reti private \\
-192.168.0.0/16 & 192.168.0.0 -- 192.168.255.255 & reti private (tipiche delle case) \\
-127.0.0.0/8 & 127.0.0.0 -- 127.255.255.255 & ``questa macchina'' (\emph{loopback}), di solito 127.0.0.1 \\
-0.0.0.0 & --- & rete corrente; per estensione, un indirizzo con la parte di host a 0 indica la rete \\
-255.255.255.255 & --- & broadcast; per estensione, un indirizzo con la parte di host tutta a 1 è il broadcast della subnet \\
-\bottomrule
-\end{tabular}
-\caption{Indirizzi IPv4 riservati.}
-\end{table}
-
-La riserva è necessaria perché gli indirizzi privati potrebbero coincidere con indirizzi pubblici, rendendo ambiguo
-l'instradamento dentro la rete. Con blocchi riservati, un router sa che \texttt{192.168.x.x} non è mai un indirizzo di Internet.
-
-% ══════════════════════════════════════════════════════════════
-\section{ping e nmap per la scoperta degli host}
-% ══════════════════════════════════════════════════════════════
-
-Per verificare se un host è raggiungibile si usa \textbf{ping} (identico su Linux e Windows), basato su \textbf{ICMP}
-(\emph{Internet Control Message Protocol}): invia all'host un pacchetto \emph{echo request} a cui l'host risponde
-automaticamente con un \emph{echo reply}, e misura il tempo trascorso, cioè l'\textbf{RTT}. Lo vedremo in dettaglio nel
-prossimo capitolo.
-
-Oltre alla scansione delle porte, \textbf{nmap} può mappare i dispositivi di una rete, usando ping (ICMP) per scoprire gli host:
-
-\begin{lstlisting}[language=bash]
-$ ping [indirizzo]                               # l'host risponde?
-$ sudo nmap -sn [indirizzo gateway]/[bit di subnet]  # quali host sono accesi nella subnet?
+--- iana.org ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss
+rtt min/avg/max/mdev = 98.0/98.5/99.4/0.60 ms
 \end{lstlisting}
 
-% ══════════════════════════════════════════════════════════════
-\section{Esempio completo: configurare una LAN}
-% ══════════════════════════════════════════════════════════════
-
-Vogliamo creare una nuova rete locale (LAN) dentro una rete più grande preesistente (WAN). L'amministratore della WAN
-ci fornisce:
-
 \begin{itemize}
-    \item l'indirizzo della WAN: \texttt{150.100.0.0/16};
-    \item l'indirizzo del gateway che porta all'esterno (WAN/Internet): \texttt{150.100.50.1};
-    \item un indirizzo libero per la nostra rete: \texttt{150.100.50.10}.
+    \item \texttt{56(84)}: 56 byte scelti da noi, più 8 di header ICMP e 20 di header IP. Non si aggiunge altro: non c'è un
+          header di trasporto.
+    \item \texttt{ttl=51} è ciò che restava all'arrivo, non ciò che è stato inviato: era partito da 64, quindi la risposta ha
+          attraversato circa tredici router.
+    \item \texttt{icmp\_seq} conta le sonde, e un buco nella numerazione è l'unico modo in cui una perdita diventa visibile.
 \end{itemize}
 
-Useremo un router con NAT e decidiamo che la nuova LAN avrà indirizzo \texttt{192.168.1.0/24} (riservato alle reti private).
+\subsection{Un'applicazione senza livello di trasporto}
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
-  \node[netcloud, minimum width=2.8cm] (inet) at (0,3.2) {Internet};
-  \node[draw=netblue, thick, rounded corners, fill=cloudbg, minimum width=7cm, minimum height=2.2cm] (wan) at (0,0.8) {};
-  \node[anchor=north east, text=netblue] at (wan.north east) {WAN \texttt{150.100.0.0/16}};
-  \node (rw) at (-1.8,1.0) {\icon[1.1cm]{router}}; \node[below=-1pt of rw, align=center, font=\scriptsize\sffamily] {router WAN\\\texttt{150.100.50.1}};
-  \draw[wired, line width=2pt] (inet) -- (rw);
-  \node[draw=netgreen!70!black, thick, rounded corners, fill=netgreen!8, minimum width=7cm, minimum height=2.6cm] (lan) at (0,-2.4) {};
-  \node[anchor=south east, text=netgreen!50!black] at (lan.south east) {LAN \texttt{192.168.1.0/24}};
-  \node (rl) at (-1.8,-1.6) {\icon[1.1cm]{router}};
-  \node[anchor=west, font=\scriptsize\ttfamily, text=netblue] at (-1.2,-0.9) {WAN: 150.100.50.10};
-  \node[anchor=west, font=\scriptsize\ttfamily, text=netgreen!50!black] at (-1.2,-1.8) {LAN: 192.168.1.1};
-  \draw[wired] (rw) -- (rl);
-  \node (h1) at (-2.3,-3.2) {\icon[0.8cm]{laptop}}; \node[right=0pt of h1, font=\scriptsize\ttfamily, align=left] {192.168.1.100\\(DHCP)};
-  \node (h2) at (1.2,-3.2) {\icon[0.8cm]{pc}}; \node[right=0pt of h2, font=\scriptsize\ttfamily, align=left] {192.168.1.10\\(manuale)};
-  \draw[wired] (rl) -- (h1); \draw[wired] (rl) -- (h2);
-\end{tikzpicture}
-\caption{La LAN da configurare: il router locale ha un'interfaccia nella WAN e una nella LAN.}
-\end{figure}
+ping è un programma come gli altri. Quale protocollo di trasporto usa? \textbf{Nessuno}. Costruisce da sé il messaggio
+ICMP e lo consegna direttamente a IP; la risposta torna nello stesso modo. ICMP in entrambe le direzioni: in un ping non c'è
+alcun segmento, alcuna porta, alcuna connessione.
 
-\subsection{1. Il lato WAN del router}
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={I due modi di aprire un socket ICMP}]
+int fd = socket(AF_INET, SOCK_RAW,   IPPROTO_ICMP);   /* il modo classico */
+int fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMP);   /* senza privilegi, su Linux */
+\end{lstlisting}
 
-Il router locale ha \textbf{due interfacce}, una verso la WAN e una verso la LAN. Sul lato WAN vanno impostati:
+Un \textbf{raw socket} richiede privilegi, ed è per questo che ping veniva installato \emph{setuid}; oggi Linux offre la
+seconda forma agli utenti normali.
 
-\begin{itemize}
-    \item l'indirizzo del router nella WAN: \texttt{150.100.50.10};
-    \item la subnet mask della WAN: \texttt{255.255.0.0};
-    \item il gateway: \texttt{150.100.50.1};
-    \item uno o più server DNS.
-\end{itemize}
+\info{L'identificatore che fa il lavoro della porta}{
+    Due ping girano insieme, verso due host diversi. Entrambe le risposte arrivano come ICMP, senza alcuna porta. Come trova
+    ciascuna il proprio programma? La richiesta porta un \textbf{identificatore} e un \textbf{numero di sequenza} in quei
+    quattro byte, e la risposta li ricopia entrambi: l'identificatore dice quale ping, il numero di sequenza quale sonda. La
+    chiave che smista il traffico esiste, solo che sta dentro il messaggio invece che in un header proprio; ed è anche ciò che
+    permette a ping di abbinare ogni risposta alla richiesta che ha cronometrato. Un protocollo senza porte ha comunque
+    bisogno di demultiplexing: qualcuno lo paga sempre.
+}
 
-Se la WAN ha un servizio DHCP, si può anche scegliere un indirizzo dinamico.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.6\linewidth]{cap15/config_wan.png}
-    \caption{La pagina di configurazione ``Internet'' (lato WAN) di un router domestico: indirizzo statico, maschera, gateway e DNS (valori di un esempio reale, diversi da quelli del testo).}
-\end{figure}
-
-\subsection{2. Il lato LAN del router}
-
-\begin{itemize}
-    \item All'interfaccia LAN del router si dà un indirizzo della nuova rete: poiché la LAN è \texttt{192.168.1.0/24}, al router si
-          assegna \texttt{192.168.1.1/24} (è consuetudine dare al router l'indirizzo \texttt{.1}).
-    \item Se il router offre anche il DHCP, si specificano:
+\warning{Un silenzio non è una risposta}{
+    Si fa ping a un host e non torna niente. È spento? \textbf{Non ne segue nulla}. La richiesta può essere stata scartata,
+    la risposta può essere stata scartata, l'host può essere configurato per non rispondere, e un firewall lungo la strada
+    può inghiottire l'una o l'altra direzione.
     \begin{itemize}
-      \item il \textbf{pool di indirizzi} per gli host DHCP, per esempio da \texttt{192.168.1.100} a \texttt{192.168.1.250};
-      \item il \textbf{lease time}: la durata dell'assegnazione, dopo la quale l'indirizzo può essere riusato;
-      \item gateway e DNS da comunicare agli host.
+        \item Molte reti filtrano ICMP per scelta, quindi nessuna risposta è il comportamento normale di macchine perfettamente
+              sane.
+        \item Il contrario è peggio: un host che risponde può avere tutti i servizi morti. L'echo lo risponde il kernel, e non
+              dimostra niente di ciò che sta sopra.
     \end{itemize}
-\end{itemize}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.6\linewidth]{cap15/config_lan.png}
-    \caption{La configurazione del server DHCP del router: pool di indirizzi, lease time, gateway e DNS.}
-\end{figure}
-
-\subsection{3. Gli host}
-
-Su un nuovo host (per esempio con Linux Mint) si può scegliere come configurare la connessione:
-
-\begin{figure}[H]
-\centering
-\begin{minipage}{0.44\linewidth}\centering
-  \includegraphics[width=0.85\linewidth]{cap15/host_dhcp.png}\\{\small (a) automatica (DHCP)}
-\end{minipage}\hfill
-\begin{minipage}{0.44\linewidth}\centering
-  \includegraphics[width=0.85\linewidth]{cap15/host_manuale.png}\\{\small (b) manuale}
-\end{minipage}
-\caption{Configurazione della connessione su un host.}
-\end{figure}
-
-\begin{itemize}
-    \item \textbf{Automatica (DHCP)}: l'host riceve dal DHCP un indirizzo tra \texttt{192.168.1.100} e \texttt{192.168.1.250}.
-    \item \textbf{Manuale}: bisogna conoscere la configurazione della rete e gli indirizzi disponibili, e indicare
-          l'\textbf{indirizzo dell'host} (statico, \textbf{fuori dal pool} del DHCP, per esempio \texttt{192.168.1.10}), la
-          \textbf{subnet mask}, il \textbf{gateway} e uno o più \textbf{DNS}.
-\end{itemize}
-
-Gli host collegati inviano i loro pacchetti al router locale, senza sapere nulla della WAN esterna; il router locale è
-configurato per inoltrarli al router della WAN, e da lì eventualmente a Internet.
-
-\warning{Indirizzi manuali fuori dal pool}{
-    Un indirizzo assegnato a mano deve stare \textbf{fuori} dall'intervallo del DHCP: altrimenti prima o poi il DHCP lo
-    assegnerà anche a un altro host, e due interfacce avranno lo stesso indirizzo (conflitto).
+    Va letto come un bit: una risposta significa che il percorso funziona in entrambe le direzioni, adesso. L'assenza significa
+    che non si è imparato niente, che è anch'esso un risultato.
 }
 
-% ══════════════════════════════════════════════════════════════
-\section{IPv6}
-% ══════════════════════════════════════════════════════════════
+\subsection{Dove va il tempo}
 
-All'inizio degli anni '90 l'IETF (organizzazione nata nel 1986) avviò lo sviluppo di un successore di IPv4, per
-affrontare la \textbf{carenza di indirizzi} a 32 bit. IPv6 fu progettato per avere molti più indirizzi, ma fu anche
-l'occasione per aggiornare altri aspetti di IPv4 sulla base dell'esperienza accumulata.
+\begin{lstlisting}[language=bash, title={Vicino e lontano}]
+$ ping -c3 192.168.1.1                # il gateway, a un salto
+rtt min/avg/max/mdev = 0.9/2.4/5.1/1.7 ms
 
-\info{E IPv5?}{
-    Non si sa esattamente quando gli IPv4 si esauriranno del tutto (si era ipotizzato il 2008, poi il 2018, e qualche
-    indirizzo è ancora disponibile). \textbf{IPv5} fu proposto nel 1979 e si basava sullo sperimentale \emph{Internet Stream
-    Protocol} (ST); usava ancora indirizzi a 32 bit, e fu abbandonato soprattutto per la stessa carenza di indirizzi.
-}
-
-\subsection{I vantaggi di IPv6}
+$ ping -c3 iana.org                   # un altro continente
+rtt min/avg/max/mdev = 98.0/98.5/99.4/0.60 ms
+\end{lstlisting}
 
 \begin{itemize}
-    \item \textbf{Indirizzi molto più grandi}: da 32 a \textbf{128 bit}, cioè $2^{128} \approx 3{,}4\cdot 10^{38}$ indirizzi. Il mondo
-          non resterà senza indirizzi: si potrebbe dare un indirizzo a ogni granello di sabbia del pianeta.
-    \item \textbf{Header di lunghezza fissa}, 40 byte: alcuni campi di IPv4 sono stati eliminati o resi facoltativi, e i router
-          elaborano i pacchetti più velocemente.
-    \item \textbf{Etichettatura dei flussi} (\emph{flow labeling}): i pacchetti di certe applicazioni (per esempio lo streaming
-          audio/video) possono essere raggruppati in un flusso con un identificativo. Il ruolo preciso dei flussi è ancora discusso.
-\end{itemize}
-
-\info{Come si scrive un indirizzo IPv6}{
-    Un indirizzo IPv6 si scrive come 8 gruppi di 4 cifre esadecimali separati da due punti, per esempio
-    \texttt{2001:0db8:0000:0000:0000:ff00:0042:8329}. Gli zeri iniziali di ogni gruppo si possono omettere, e una sequenza di
-    gruppi tutti a zero si può sostituire (una sola volta) con \texttt{::}: l'indirizzo diventa \texttt{2001:db8::ff00:42:8329}.
-    L'indirizzo di loopback è \texttt{::1}.
-}
-
-\subsection{Il datagramma IPv6}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.55\linewidth]{cap15/ipv6_datagramma.png}
-    \caption{Il datagramma IPv6: header fisso di 40 byte.}
-\end{figure}
-
-\begin{itemize}
-    \item \textbf{Version} (4 bit): la versione, cioè 6.
-    \item \textbf{Traffic class} (8 bit): come il TOS di IPv4, serve a dare priorità ai datagrammi (per esempio voce su IP rispetto a SMTP).
-    \item \textbf{Flow label} (20 bit): identifica un flusso di datagrammi.
-    \item \textbf{Payload length} (16 bit): numero di byte del payload (esclusi i 40 byte di header).
-    \item \textbf{Next header} (8 bit): il protocollo superiore a cui consegnare i dati (TCP, UDP, \dots), come il campo protocollo di IPv4.
-    \item \textbf{Hop limit} (8 bit): il time-to-live, decrementato a ogni inoltro.
-    \item \textbf{Indirizzi sorgente e destinazione} (128 + 128 bit).
-    \item \textbf{Data}: il payload.
-\end{itemize}
-
-\subsection{Cosa manca rispetto a IPv4}
-
-\begin{itemize}
-    \item \textbf{Campi della frammentazione}: IPv6 non permette frammentazione e riassemblaggio nei router intermedi, ma solo negli
-          host. Se un router riceve un datagramma IPv6 troppo grande da inoltrare, lo \textbf{scarta} e rimanda al mittente un
-          messaggio di errore ``\emph{Packet Too Big}''; il mittente rinvia i dati con datagrammi più piccoli.
-    \item \textbf{Checksum dell'header}: richiede tempo in ogni router ed è ridondante, perché i protocolli di collegamento di
-          solito controllano già l'intero pacchetto (e TCP/UDP controllano i propri dati).
-    \item \textbf{Opzioni}: non fanno più parte dell'header standard; alcune si possono indicare nel campo \emph{next header}
-          (accanto agli identificativi di TCP/UDP), come header di estensione.
+    \item L'RTT è la somma dei quattro ritardi già noti (elaborazione, accodamento, trasmissione, propagazione) su ogni salto
+          di entrambe le direzioni.
+    \item Lontano, il minimo è quasi pura \textbf{propagazione}: un pavimento fissato dalla distanza, che nessun
+          aggiornamento abbasserà.
+    \item Vicino, il minimo è trascurabile e tutto ciò che si vede è \textbf{accodamento}: stesso comando, grandezza del tutto
+          diversa.
+    \item Per questo \texttt{mdev} conta più della media: 100 ms stabili sono un percorso lungo, 20 ms instabili sono un
+          percorso congestionato.
 \end{itemize}
 
 % ══════════════════════════════════════════════════════════════
-\section{Dalla IPv4 alla IPv6}
+\section{traceroute}
 % ══════════════════════════════════════════════════════════════
 
-C'è un grosso problema: IPv6 \textbf{non è retrocompatibile}. I sistemi che capiscono solo IPv4 non sanno gestire i datagrammi IPv6.
-Come può Internet adottare IPv6?
-
-\begin{itemize}
-    \item \textbf{Flag day}: a una certa data e ora tutte le macchine di Internet vengono spente e aggiornate da IPv4 a IPv6. Un
-          approccio simile fu usato quando fu introdotto TCP, e fu un disastro anche nella piccola Internet di allora: con miliardi
-          di dispositivi è impensabile.
-    \item \textbf{Tunneling}: router specifici (i \emph{tunnel}) incapsulano i datagrammi IPv6 dentro datagrammi IPv4 (e viceversa)
-          in modo quasi trasparente, per attraversare le parti di rete che parlano solo IPv4. È l'approccio più realistico, già
-          usato nella pratica.
-\end{itemize}
+Il campo si chiama \emph{time to live}, e niente in lui misura il tempo: ogni router lo decrementa di uno. A zero il
+datagramma viene scartato, e il router che l'ha scartato rimanda \textbf{TTL scaduto}, tipo 11. Quel messaggio porta il
+nome del suo mittente: un datagramma che muore è un datagramma che riferisce \textbf{dove} è morto. Il campo era stato messo
+lì per fermare i cicli di instradamento; si è rivelato uno strumento di misura, e \textbf{traceroute} è tutta l'idea:
+uccidere di proposito i propri pacchetti, un salto più in là ogni volta.
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
-  \foreach \x/\n/\c in {0/A/lnet, 2.6/B/lnet, 5.2/C/lphy, 7.8/D/lphy, 10.4/E/lnet, 13/F/lnet} {
-    \node (\n) at (\x,0) {\icon[0.9cm]{router}}; \node[above=-2pt of \n] {\n};
-  }
-  \node[below=0pt of A] {IPv6}; \node[below=0pt of B] {IPv6/v4}; \node[below=0pt of C] {IPv4}; \node[below=0pt of D] {IPv4}; \node[below=0pt of E] {IPv6/v4}; \node[below=0pt of F] {IPv6};
-  \foreach \a/\b in {A/B, B/C, C/D, D/E, E/F} \draw[wired] (\a) -- (\b);
-  \draw[very thick, netorange, rounded corners, dashed] (2.4,-1.2) rectangle (10.6,0.9);
-  \node[text=netorange, font=\footnotesize\bfseries\sffamily] at (6.5,1.1) {tunnel};
-  \node[field, fill=lnet!60, minimum width=1.6cm] at (1.3,-1.8) {datagramma IPv6};
-  \node[field, fill=lphy!80, minimum width=1.1cm] (h4) at (5.6,-1.8) {header IPv4};
-  \node[field, fill=lnet!60, minimum width=1.6cm, right=0pt of h4] {datagramma IPv6};
-  \node[field, fill=lnet!60, minimum width=1.6cm] at (11.7,-1.8) {datagramma IPv6};
+  \node (h) at (0,0) {\icon[1cm]{laptop}}; \node[below=-2pt of h, align=center] {host\\\texttt{100.75.5.21}};
+  \node (r1) at (3.2,0) {\icon[0.9cm]{router}}; \node[below=0pt of r1] {salto 1};
+  \node (r2) at (6.4,0) {\icon[0.9cm]{router}}; \node[below=0pt of r2] {salto 2};
+  \node (r3) at (9.6,0) {\icon[0.9cm]{router}}; \node[below=0pt of r3] {salto 3};
+  \node (d) at (12.8,0) {\icon[0.6cm]{server}}; \node[below=-2pt of d, align=center] {\texttt{italia.it}\\\texttt{151.101.195.10}};
+  \foreach \a/\b in {h/r1, r1/r2, r2/r3, r3/d} \draw[wired] (\a) -- (\b);
+  \draw[msg, netblue] (0.6,0.8) -- node[above] {TTL=1} (3.0,0.8);
+  \draw[msg, netred, dashed] (3.0,1.1) -- node[above] {TTL scaduto (11/0): sono il salto 1} (0.6,1.1);
+  \draw[msg, netblue] (0.6,1.7) -- node[above, pos=0.15] {TTL=2} (6.2,1.7);
+  \draw[msg, netred, dashed] (6.2,2.0) -- node[above, pos=0.55] {TTL scaduto: sono il salto 2} (0.6,2.0);
+  \draw[msg, netblue] (0.6,2.6) -- node[above, pos=0.1] {TTL=3} (9.4,2.6);
+  \draw[msg, netred, dashed] (9.4,2.9) -- node[above, pos=0.5] {TTL scaduto: sono il salto 3} (0.6,2.9);
+  \draw[msg, netblue] (0.6,-1.3) -- node[below, pos=0.12] {TTL=4} (12.6,-1.3);
+  \draw[msg, netgreen!60!black, dashed] (12.6,-1.7) -- node[below, pos=0.55] {porta irraggiungibile (3/3): nessuno lo scarta, la porta è chiusa; stop} (0.6,-1.7);
 \end{tikzpicture}
-\caption{Tunneling: B incapsula il datagramma IPv6 in un datagramma IPv4 per attraversare C e D; E lo estrae.}
+\caption{Una sonda per salto. Ogni sonda è un normale datagramma diretto alla destinazione finale: cambia solo il TTL, e solo
+         di uno. La sorgente cronometra ciascuna, quindi ogni riga dell'output è un indirizzo e un tempo di andata e ritorno
+         per quel salto; tre sonde per TTL, quindi tre tempi per riga.}
 \end{figure}
 
-L'adozione di IPv6, inizialmente lenta, sta accelerando.
+\subsection{Come sa di essere arrivato}
 
+\begin{itemize}
+    \item Prima o poi il TTL è abbastanza grande e la sonda raggiunge la destinazione, che non ha ragione di scartarla.
+    \item Per questo le sonde sono costruite \textbf{per essere rifiutate}: ciascuna porta un segmento UDP diretto a una porta
+          molto alta dove nessuno ascolta (Linux parte da 33434 e conta in su).
+    \item La destinazione risponde \emph{port unreachable}, tipo 3 codice 3, e quel messaggio è il segnale di smettere.
+    \item Due messaggi, due mittenti: i router dicono \emph{TTL scaduto}, la destinazione dice \emph{porta irraggiungibile}.
+          Il primo disegna il percorso, il secondo lo chiude. La porta improbabile non è un trucco giocato alla destinazione: è
+          l'unico modo di rendere l'arrivo distinguibile dal transito.
+\end{itemize}
+
+\begin{lstlisting}[language=bash, title={Leggere un traceroute}]
+$ traceroute italia.it
+traceroute to italia.it (151.101.195.10), 30 hops max, 60 byte packets
+ 1 _gateway (100.75.0.1) 1.785 ms 1.726 ms 2.633 ms
+ 2 ru-unina-l2-rl1-na01.na01.garr.net (193.206.130.9) 3.907 ms 3.869 ms 3.831 ms
+ 3 212.189.220.46 31.333 ms 212.189.220.218 4.657 ms 212.189.220.46 11.247 ms
+ 4 212.189.220.41 17.597 ms 18.875 ms 212.189.220.43 9.881 ms
+ 5 rs1-bo01-re1-rm02.rm02.garr.net (185.191.181.78) 27.630 ms 27.593 ms 27.556 ms
+ 6 * * *
+\end{lstlisting}
+
+\begin{itemize}
+    \item Il salto 1 è il proprio gateway; il salto 2 nomina già la rete che si sta attraversando (GARR, la rete della ricerca
+          italiana). I nomi valgono più degli indirizzi.
+    \item Il salto 3 risponde da due indirizzi diversi: le tre sonde non hanno preso lo stesso percorso. È
+          \textbf{bilanciamento del carico}, non un errore, e lo stesso salto mostra 31 ms e poi 4 ms.
+    \item I tempi non sono monotoni lungo la colonna, perché ciascuno è una misura nuova con il proprio accodamento.
+\end{itemize}
+
+\warning{Gli asterischi}{
+    La traccia arriva fino al salto 30 senza mai arrivare. I pacchetti sono arrivati? \textbf{Molto probabilmente sì}. La
+    destinazione sta dietro un filtro che scarta le sonde in silenzio, quindi il \emph{port unreachable} che fermerebbe il
+    comando non arriva mai, e il comando continua a contare fino al limite.
+    \begin{itemize}
+        \item Un asterisco è nessuna risposta entro il timeout: un filtro, un limite di ritmo, o un router che semplicemente non
+              genera ICMP.
+        \item Asterischi in mezzo, con risposte dopo, dicono solo che quel salto resta zitto: il percorso è intatto.
+        \item Né la direzione inversa deve coincidere: ciò che si misura è un'andata e ritorno, e la strada del ritorno può non
+              essere quella dell'andata.
+        \item Un traduttore di indirizzi a un confine è un altro motivo per cui una traccia smette di essere informativa.
+    \end{itemize}
+}
+
+\subsection{Due varianti della stessa idea}
+
+\begin{itemize}
+    \item \textbf{Sonde UDP}: il default su Linux, quello appena descritto; la traccia finisce su un \emph{port unreachable}.
+    \item \textbf{Sonde echo}: \texttt{traceroute -I}, ed è ciò che fa \texttt{tracert} su Windows: echo request con TTL
+          crescente, e la traccia finisce su un echo reply.
+    \item Il meccanismo è identico: cambiano solo la sonda e la condizione di arresto, e i router in mezzo rispondono allo
+          stesso modo.
+    \item Conta perché le due vengono filtrate in modo diverso: un percorso che inghiotte UDP verso porte strane può rispondere
+          all'echo, e uno che blocca tutto ICMP non risponde a nessuna delle due. Quando una traccia sembra sbagliata, lanciare
+          l'altra variante è il secondo parere più economico che ci sia.
+\end{itemize}
+
+\info{Quale processo riceve la risposta?}{
+    Il messaggio del router è indirizzato al nostro host e non porta porte. Quale dei nostri programmi lo riceve?
+    \textbf{Nessuno}, per la via ordinaria. traceroute legge ICMP da un raw socket, oppure chiede al kernel di riferire gli
+    errori sul socket con cui ha inviato la sonda, e riconosce la propria sonda dagli \textbf{otto byte citati}, che sono le
+    porte che ha scelto. È lì che la regola della citazione si guadagna il posto: senza, una risposta non potrebbe essere
+    abbinata a una sonda. Quindi traceroute invia UDP e comunque non usa alcun servizio di trasporto: il segmento è un
+    contenitore scelto perché nessuno ascolti. Due programmi, la stessa forma: entrambi vivono al livello di rete e prendono in
+    prestito l'API dei socket per arrivarci.
+}
+
+\subsection{Il nome risolto prima della prima sonda}
+
+\begin{lstlisting}[language=bash, title={Il primo pacchetto della cattura, in Wireshark}]
+Domain Name System (query)
+  Flags: 0x0100 Standard query
+    .... ...1 .... .... = Recursion desired: Do query recursively
+  Queries
+    italia.it: type AAAA, class IN
+\end{lstlisting}
+
+\begin{itemize}
+    \item Il primo pacchetto di una cattura non è una sonda: è una query DNS, perché al comando si è dato un nome. È acceso
+          \emph{recursion desired}: l'host chiede al resolver di fare tutto il lavoro e restituire una risposta.
+    \item E succede di nuovo al contrario, una volta per salto, per trasformare ogni indirizzo in un nome: è per questo che
+          \texttt{traceroute -n} è più veloce.
+    \item Quindi una traccia rotta può essere un servizio dei nomi rotto, e la cattura distingue i due casi nei primi due
+          pacchetti.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{traceroute e la frammentazione IP}
+% ══════════════════════════════════════════════════════════════
+
+Con il traceroute di Linux si può indicare, come secondo argomento, la \textbf{lunghezza totale} del pacchetto sonda (non
+il payload; il default è 60 byte):
+
+\begin{lstlisting}[language=bash]
+$ traceroute italia.it          # pacchetti piccoli (dimensione di default)
+$ traceroute italia.it 3000     # pacchetti da 3000 byte: verranno frammentati
+\end{lstlisting}
+
+La dimensione comprende la parte dati più gli header UDP e IP che la incapsulano (20 byte di header IP, 8 di header UDP,
+il resto è payload). Se supera l'MTU del percorso la sonda viene \textbf{frammentata}. La dimensione riguarda le sonde, non i
+messaggi ICMP ricevuti, che contengono solo una parte del pacchetto che ha generato l'errore.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l c c c c}
+\toprule
+ & \textbf{Dati} & \textbf{Nel campo} & \textbf{Wireshark stampa} & \textbf{MF} \\
+\midrule
+frammento 1 & 1480 & 0   & 0    & 1 \\
+frammento 2 & 1480 & 185 & 1480 & 1 \\
+frammento 3 & 20   & 370 & 2960 & 0 \\
+\bottomrule
+\end{tabular}
+\caption{Una sonda da 3000 byte su un collegamento Ethernet. L'header conta l'offset in unità di 8 byte; Wireshark lo
+         moltiplica per 8 prima di stamparlo. La sua stessa visualizzazione dei bit lo conferma: \texttt{0 0000 1011 1001} è
+         185, etichettato 1480. Tutti e tre hanno lo stesso identificatore e lo stesso TTL: la frammentazione avviene sotto la
+         sonda e non la disturba.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Destinazione irraggiungibile, e chi lo dice}
+% ══════════════════════════════════════════════════════════════
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c l l}
+\toprule
+\textbf{Codice} & \textbf{Significa} & \textbf{Inviato da} \\
+\midrule
+0  & nessuna rotta verso quella rete                 & un router lungo la strada \\
+1  & la rete c'è, l'host no                          & l'ultimo router \\
+2  & nessuno gestisce quel numero di protocollo      & la destinazione \\
+3  & nessuno ha fatto \texttt{bind} su quella porta  & la destinazione \\
+4  & troppo grande, e la frammentazione è vietata    & un router lungo la strada \\
+13 & vietato dall'amministratore                     & un firewall \\
+\bottomrule
+\end{tabular}
+\caption{I codici del tipo 3. La colonna utile è quella del mittente: i codici 0, 1 e 4 vengono dal mezzo del percorso, 2 e 3
+         dimostrano che si è arrivati. Il codice 3 è quello che incontrano i nostri programmi, ed è quello che chiude una
+         traccia.}
+\end{table}
+
+\warning{Frammentazione necessaria, e il buco nero}{
+    Il datagramma è troppo grande per il collegamento successivo e porta \emph{don't fragment}. Il router lo scarta e
+    avvisa, e l'avviso viene filtrato sulla via del ritorno. Che cosa vede il mittente? \textbf{Niente}. Ritrasmette per
+    sempre lo stesso datagramma troppo grande. L'handshake è riuscito, i messaggi piccoli passano, quelli grandi
+    spariscono, e la connessione si blocca a metà di un trasferimento.
+    \begin{itemize}
+        \item Il tipo 3 codice 4 porta, nei suoi quattro byte liberi, l'MTU che sarebbe passata: la scoperta dell'MTU di
+              percorso è costruita su quel numero.
+        \item Bloccare tutto ICMP rompe quindi un meccanismo da cui TCP dipende, e il sintomo indica ovunque tranne che il
+              firewall. Nasconde ben poco (un host si trova in altri modi) e costa esattamente i messaggi che servono quando
+              qualcosa si rompe.
+    \end{itemize}
+}
+
+\subsection{I messaggi caduti in disuso}
+
+\begin{itemize}
+    \item \textbf{Source quench}: controllo di congestione via ICMP, un router che chiede a un host di rallentare. Non si usa
+          più: quel compito è passato al livello di trasporto, e ai due bit ECN nell'header IP.
+    \item \textbf{Redirect}: un router che dice a un host che ha scelto il primo salto sbagliato. Oggi di solito si ignora,
+          perché uno falsificato dirotta il traffico.
+    \item \textbf{Scoperta dei router}: un host che chiede chi sono i router. Sopravvive, ma l'indirizzo arriva di solito per
+          un'altra via (DHCP).
+    \item La versione nuova del protocollo (ICMPv6) riorganizza tutto questo e aggiunge \emph{packet too big}, che lì non è
+          facoltativo: i router non frammentano più, quindi il messaggio è l'unico modo di scoprirlo.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Una scala di domande}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    rung/.style={draw=netblue!60!black, fill=netblue!8, rounded corners=2pt, minimum width=7.2cm, minimum height=0.5cm,
+                 anchor=west, align=left, text width=6.9cm}]
+  \foreach \y/\q/\c in {
+      0/{l'interfaccia è accesa?}/{ip link},
+      1/{ho un indirizzo e un gateway?}/{ip addr, ip route},
+      2/{il gateway risponde?}/{ping 192.168.1.1},
+      3/{un indirizzo esterno risponde?}/{ping 8.8.8.8},
+      4/{e se no, dove si ferma?}/{traceroute 8.8.8.8},
+      5/{un nome diventa un indirizzo?}/{dig unina.it},
+      6/{la porta è aperta, e il servizio parla?}/{nmap -p 80, nc host 80}} {
+    \node[rung] at (0,\y*0.62) {\q};
+    \node[anchor=west, font=\scriptsize\ttfamily] at (7.4,\y*0.62) {\c};
+  }
+  \draw[-{Stealth[length=2.5mm]}, very thick, primary] (-0.4,0) -- node[left, rotate=90, anchor=south, align=center]{ogni risposta rende utile\\la domanda successiva} (-0.4,3.9);
+  \node[text=netred, align=left, anchor=west] at (0,-0.75) {il primo gradino che fallisce è quello da riparare: tutto ciò che sta sopra non è stato misurato};
+\end{tikzpicture}
+\caption{Una scala di domande per diagnosticare una rete, dal basso verso l'alto.}
+\end{figure}
+
+\begin{itemize}
+    \item Si comincia dal basso anche quando si è sicuri: le due domande più economiche sono quelle che falliscono più spesso.
+    \item Ciò che ICMP aggiunge è che ai gradini di mezzo si possa rispondere: senza, tutto ciò che sta fra noi e il servizio è
+          un unico silenzio indiviso.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l l l}
+\toprule
+\normalfont\textbf{Comando} & \textbf{A quale domanda risponde} & \textbf{Dove guarda} \\
+\midrule
+ip link, ip addr & sono connesso, e chi sono                  & questa macchina \\
+ip route         & dove va per primo il mio traffico          & questa macchina \\
+ping             & un datagramma arriva e torna?              & il percorso \\
+traceroute       & fin dove arriva prima di fermarsi          & il percorso \\
+dig              & il nome diventa un indirizzo?              & il servizio dei nomi \\
+ss -tn           & ci sono i socket che mi aspetto?           & questa macchina \\
+nmap             & chi è acceso, quali porte rispondono       & l'altro capo \\
+nc               & il servizio parla davvero?                 & l'altro capo \\
+tcpdump          & che cosa ha lasciato davvero la macchina   & ogni livello \\
+\bottomrule
+\end{tabular}
+\caption{La cassetta degli attrezzi. Nessuno risponde a una domanda che quello sopra ha lasciato aperta: è l'ordine lo
+         strumento, i comandi sono solo comandi.}
+\end{table}
+
+\subsection{Chi c'è su questa rete}
+
+\begin{lstlisting}[language=bash, title={nmap -sn: chi esiste, senza toccare le porte}]
+$ sudo nmap -sn 192.168.1.0/24
+Nmap scan report for _gateway (192.168.1.1)
+Host is up (0.0024s latency).
+MAC Address: 10:BD:18:E5:74:80 (Cisco Systems)
+Nmap scan report for 192.168.1.17
+Host is up (0.0031s latency).
+Nmap done: 256 IP addresses (4 hosts up) scanned in 2.35 seconds
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{-sn} chiede chi esiste e si ferma lì: nessuna porta viene sondata.
+    \item Sulla propria subnet gli indirizzi MAC tradiscono il metodo: non sta facendo ping a nessuno, sta chiedendo al livello
+          di collegamento chi possiede ogni indirizzo (ARP). Nient'altro potrebbe restituire un MAC.
+    \item Fuori dalla subnet quell'opzione non c'è più, e la scansione ripiega su echo request più una sonda a una o due porte
+          comuni. Lo stesso comando risponde a una domanda diversa da dentro e da fuori una rete.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l l}
+\toprule
+\textbf{Risultato} & \textbf{Che cosa torna} & \textbf{Chi l'ha inviato} \\
+\midrule
+\emph{open}     & SYNACK                   & il servizio stesso \\
+\emph{closed}   & RST                      & il TCP remoto: l'host è acceso \\
+\emph{filtered} & niente, oppure ICMP 3/13 & qualcosa lungo la strada \\
+\bottomrule
+\end{tabular}
+\caption{Aperta, chiusa, filtrata, e chi lo dice. La terza riga è dove compare questo livello: un firewall può essere
+         educato e dire \emph{administratively prohibited}, o non dire niente.}
+\end{table}
+
+Su UDP non c'è RST: una porta chiusa risponde \emph{port unreachable}, una filtrata non risponde niente, quindi lo scanner deve
+aspettare un timeout per distinguerle. E il limite di ritmo sugli errori ICMP rende una scansione UDP lenta di proposito: è il
+protocollo che si difende.
+
+% ══════════════════════════════════════════════════════════════
+\section{DNS, VPN e spoofing: un caso di studio}
+% ══════════════════════════════════════════════════════════════
+
+Durante un'esercitazione si è provato a interrogare direttamente un root server, collegati attraverso una
+\textbf{VPN} (una rete privata virtuale che cifra tutto il traffico verso un server remoto).
+
+\begin{lstlisting}[language=bash, title={Ciò che una cattura non può vedere}]
+$ dig +norecurse @<un root server> iana.org A        # chiedere direttamente alla radice
+;; flags: qr; QUERY: 1, ANSWER: 0, AUTHORITY: 6, ADDITIONAL: 13
+org.        172800 IN NS a0.org.afilias-nst.info.     <- atteso: un rinvio, nessun indirizzo
+
+$ dig +norecurse @<un root server> iana.org A        # stesso comando, dietro una VPN
+iana.org.      340 IN A     192.0.43.8               <- una risposta che non poteva dare
+\end{lstlisting}
+
+Qualcosa non torna. Un root server \textbf{non} ha un indirizzo per quel nome: dovrebbe restituire i server della zona
+\texttt{org}. Dietro un certo fornitore di VPN, ha restituito l'indirizzo.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (h) at (0,0) {\icon[1cm]{laptop}}; \node[below=-2pt of h] {host};
+  \node (v) at (5,0) {\icon[0.7cm]{server}}; \node[below=-2pt of v, align=center] {server VPN};
+  \node (dns) at (10,1.3) {\icon[0.6cm]{server}}; \node[right=0pt of dns, align=left] {DNS del provider};
+  \node (root) at (10,-1.3) {\icon[0.6cm]{server}}; \node[right=0pt of root] {c.root-servers.net};
+  \draw[very thick, netorange] (h) -- node[above] {tunnel cifrato} node[below] {Wireshark vede solo byte cifrati} (v);
+  \draw[msg, netblue] (v) -- node[above, sloped] {risolve il nome} (dns);
+  \draw[msg, dashed, black!40] (v) -- node[below, sloped] {la query non arriva mai qui} (root);
+  \draw[msg, netred, very thick] (4.6,0.6) to[bend right=25] node[above] {risposta ``falsificata'' come se venisse dal root server} (0.5,0.6);
+\end{tikzpicture}
+\caption{Il server VPN intercetta la query DNS, la risolve da sé e risponde fingendo di essere il server interrogato.}
+\end{figure}
+
+\begin{itemize}
+    \item Wireshark non ha mostrato niente: il traffico verso la VPN è cifrato, e la cattura non aveva pacchetti da mostrare.
+    \item La spiegazione è che il server VPN ha risolto il nome da sé e ha restituito la risposta come se venisse dal server
+          interrogato, facendo \textbf{spoofing} dei datagrammi UDP/IP. Con un altro fornitore il rinvio è tornato come atteso.
+    \item Lo strumento non ha mentito: ha riferito ciò che è arrivato. Ciò che non può riferire è chi l'ha inviato davvero;
+          ma l'header sì: un root server \textbf{non accende mai \texttt{ra}} (e in un rinvio nemmeno \texttt{aa}). Non serve una
+          VPN per vederlo: molte connessioni domestiche intercettano sempre la porta 53.
+\end{itemize}
+
+\info{La lezione}{
+    Il campo ``indirizzo sorgente'' di un datagramma IP \textbf{non è una prova} di chi l'abbia davvero inviato: chi controlla un
+    punto del percorso può falsificarlo. È esattamente il problema dell'\textbf{IP spoofing} che affronteremo nella parte sulla
+    sicurezza, e il motivo per cui servono meccanismi di autenticazione.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{La nostra chat vista da un livello più in basso}
+% ══════════════════════════════════════════════════════════════
+
+\begin{lstlisting}[language=bash]
+$ ./chatd 5000 &
+$ sudo tcpdump -i lo -n -X 'port 5000'       # oppure il filtro ip.addr==... in Wireshark
+\end{lstlisting}
+
+\begin{itemize}
+    \item Tutto ciò che la chat invia è un segmento dentro un datagramma: protocollo 6 per la versione connessa, 17 per quella
+          su datagrammi.
+    \item Su loopback il TTL parte a 64 e arriva a 64: nessuno l'ha instradato. Attraverso il laboratorio arriva a 63, e quello
+          che manca è il router.
+    \item Nel payload si legge la nostra delimitazione: quattro byte di lunghezza, uno di tipo, poi il corpo. È il primo header
+          del corso scritto da noi. Niente di ciò che sta sotto sa che cosa significano quei cinque byte: il formato è un
+          accordo fra i nostri due programmi e nessun altro.
+\end{itemize}
+
+\warning{Il messaggio che la chat riceve già}{
+    Si avvia il client su datagrammi senza alcun server: nessuno ha fatto \texttt{bind} sulla porta 5000. Che cosa succede sul
+    filo? L'host a cui si è scritto risponde \emph{port unreachable}, tipo 3 codice 3: proprio il messaggio che chiude un
+    traceroute. Se il programma lo viene mai a sapere dipende da una chiamata: senza \texttt{connect} il kernel non sa quale
+    socket riguardi il messaggio, e lo butta; il client va in timeout e ritrasmette per sempre.
+}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Con connect, l'ICMP diventa un errno}]
+connect(fd, (struct sockaddr *) &srv, sizeof srv);   /* registra il peer */
+sendto(fd, msg, len, 0, NULL, 0);                    /* ritorna bene: e' partito */
+
+ssize_t n = recv(fd, buf, sizeof buf, 0);
+if (n < 0 && errno == ECONNREFUSED)
+    ;                                                /* l'ICMP e' tornato, ed e' stato tenuto */
+\end{lstlisting}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l l l}
+\toprule
+\normalfont\textbf{errno} & \textbf{Che cosa è arrivato} & \textbf{Che cosa se ne deduce} \\
+\midrule
+ECONNREFUSED \normalfont(TCP) & un RST              & host acceso, niente su quella porta \\
+ECONNREFUSED \normalfont(UDP) & ICMP 3/3            & host acceso, nessuno in ascolto lì \\
+EHOSTUNREACH                  & ICMP 3/1            & un router non è riuscito a consegnare \\
+ENETUNREACH                   & ICMP 3/0            & nessuna rotta verso quella rete \\
+EACCES                        & ICMP 3/13           & un firewall l'ha rifiutato, e l'ha detto \\
+ETIMEDOUT                     & niente del tutto    & non si è imparato niente \\
+\bottomrule
+\end{tabular}
+\caption{Che cosa dice \texttt{connect}, e chi gliel'ha detto. Quattro dei sei sono un messaggio ICMP tradotto in un intero:
+         il livello di rete che riferisce attraverso una chiamata dei socket. Il primo è un segmento TCP, e solo l'ultimo è
+         niente; ed è proprio l'ultimo che viene riferito come «il server è giù», che è l'unico a non dire nulla del genere.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Esercizi}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Catturare un traceroute}
+Si avvia la cattura, si lancia \texttt{traceroute italia.it} e lo si lascia finire. Filtro di visualizzazione:
+\texttt{ip.src==<mio indirizzo> \&\& ip.dst==<il server> \&\& udp}. Si seleziona la prima sonda e si apre la sezione
+\emph{Internet Protocol}.
+\begin{enumerate}[label=(\alph*)]
+    \item Qual è l'indirizzo dell'host, e che cosa c'è nel campo TTL di questa prima sonda?
+    \item Quale protocollo superiore dichiara l'header, e con quale numero?
+    \item Quanti byte di header IP ci sono, e quanti di payload? Dire come si è ricavato il secondo: non è un campo.
+    \item Questo datagramma è stato frammentato? Indicare i campi guardati, e che cosa avrebbero detto se lo fosse stato.
+\end{enumerate}
+Poi si guarda l'intera sequenza di sonde, e ciò che è tornato con \texttt{ip.dst==<mio indirizzo> \&\& icmp}.
+\begin{enumerate}[label=(\alph*), resume]
+    \item Fra le sonde, quali campi dell'header restano costanti e quali cambiano? Per ciascuno costante, perché deve
+          esserlo?
+    \item Descrivere l'andamento del campo \emph{Identification} delle sonde.
+    \item Nei datagrammi inviati dai router, quale protocollo superiore è dichiarato?
+    \item I loro valori di \emph{Identification} sono legati a quelli delle sonde? Dovrebbero esserlo?
+    \item I TTL dei messaggi che tornano sono simili fra loro? Da dove è partito ciascuno?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Il campo \emph{Source} è l'indirizzo dell'host (sulla rete di ateneo per esempio \texttt{100.75.5.21}); il TTL
+          della prima sonda vale \textbf{1}.
+    \item \textbf{17}, UDP: le sonde sono segmenti UDP verso porte alte.
+    \item Il campo \emph{Header Length} vale 5 parole da 32 bit, cioè \textbf{20 byte}; il payload si ottiene come
+          \emph{Total Length} meno l'header: con le sonde di default da 60 byte, \textbf{40 byte} (8 di header UDP e 32 di dati).
+    \item No: \emph{More Fragments} vale 0 e \emph{Fragment Offset} vale 0. In un frammento uno dei due sarebbe diverso da
+          zero (MF a 1 in tutti tranne l'ultimo, offset diverso da 0 in tutti tranne il primo).
+    \item Restano costanti versione, lunghezza dell'header, protocollo e i due indirizzi: la sonda deve andare sempre alla stessa
+          destinazione e la risposta tornare allo stesso host, e il tipo di sonda non cambia. Cambiano il \textbf{TTL} (cresce
+          di uno ogni tre sonde), l'\textbf{identificatore} e quindi il \textbf{checksum dell'header}, ricalcolato perché TTL e
+          identificatore cambiano; nel segmento UDP cambia anche la porta di destinazione.
+    \item Cresce di uno a ogni sonda: è il contatore dell'host che numera i propri datagrammi.
+    \item \textbf{1}, ICMP.
+    \item No, e non devono esserlo: ogni router numera i datagrammi che genera con il proprio contatore. Il legame con la
+          sonda sta altrove, negli otto byte citati.
+    \item No: ogni router parte dal TTL iniziale del proprio sistema (spesso 255, oppure 64), e il valore che arriva è quello
+          iniziale meno i salti del ritorno; i router più lontani arrivano con valori più bassi.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Tremila byte, sulla propria macchina}
+Si ripete con \texttt{traceroute italia.it 3000} e il filtro \texttt{ip.src==<mio indirizzo> \&\& ip.dst==<il server>}.
+\begin{enumerate}[label=(\alph*)]
+    \item Trovare il primo frammento della prima sonda. In quanti datagrammi si sono trasformati i 3000 byte?
+    \item Quali campi dell'header dicono che si tratta di un frammento?
+    \item Come si distingue un primo frammento da quelli successivi, e l'ultimo da quelli precedenti?
+    \item Quanti byte porta ciascuno, header compreso? Verificare che tornino.
+    \item Confrontare i bit del campo offset con il numero che Wireshark stampa accanto. Quale dei due sta nel datagramma?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item In \textbf{tre}: l'MTU Ethernet è 1500 byte.
+    \item Il flag \emph{More Fragments} e il campo \emph{Fragment Offset}.
+    \item Il primo ha offset 0 e MF $= 1$; quelli in mezzo offset $> 0$ e MF $= 1$; l'ultimo offset $> 0$ e MF $= 0$.
+    \item 1500, 1500 e 40 byte. Tolti i tre header da 20 byte restano $1480 + 1480 + 20 = 2980$ byte, cioè i 3000 della sonda
+          meno il suo header originale.
+    \item Nel datagramma c'è il numero in unità di 8 byte: per il secondo frammento \texttt{0 0000 1011 1001} $= 185$.
+          Wireshark stampa $185 \times 8 = 1480$, la posizione in byte.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{E il ping}
+Si cattura \texttt{ping -c5 iana.org} con il solo filtro \texttt{icmp}.
+\begin{enumerate}[label=(\alph*)]
+    \item Individuare gli echo request inviati e le risposte corrispondenti. Quali indirizzi sono sorgente e destinazione in
+          ciascuna direzione?
+    \item In un echo request: qual è il TTL nell'header IP, il tipo nell'header ICMP, l'identificatore e il numero di sequenza?
+    \item Misurare il tempo fra una richiesta e la sua risposta, e confrontarlo con quello stampato da ping per quel numero di
+          sequenza.
+    \item Ripetere verso un host che non risponde. Che cosa contiene la cattura, e che cosa permette di concludere?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Le richieste vanno dal proprio indirizzo a \texttt{192.0.43.8}; le risposte fanno il percorso inverso.
+    \item TTL 64 (il default di Linux), tipo \textbf{8}; l'identificatore è lo stesso in tutte e cinque le richieste (identifica
+          questo ping), il numero di sequenza va da 1 a 5. Le risposte, di tipo 0, ricopiano entrambi.
+    \item I due tempi coincidono quasi esattamente: ping misura lo stesso intervallo, dal lato dell'applicazione, con in più il
+          poco che serve a passare dal kernel.
+    \item Solo echo request, nessuna risposta. Non si può concludere che l'host sia spento: è il «silenzio che non è una
+          risposta» del capitolo.
+\end{enumerate}
+\end{esercizio}
+
+\Needspace{20\baselineskip}
 % ══════════════════════════════════════════════════════════════
 \section{Riepilogo}
 % ══════════════════════════════════════════════════════════════
 
 \riepilogo{
 \begin{itemize}
-    \item Il \textbf{DHCP} assegna automaticamente indirizzo, maschera, gateway e DNS con quattro messaggi: discover, offer,
-          request, ACK (broadcast, porte UDP 67/68); oltre le subnet serve un relay agent.
-    \item Il \textbf{NAT} fa uscire una rete privata con un solo indirizzo pubblico, riscrivendo indirizzi e porte secondo una
-          tabella; le connessioni avviate dall'esterno richiedono NAT traversal.
-    \item Blocchi \textbf{riservati}: 10/8, 172.16/12, 192.168/16 (privati), 127/8 (loopback), 0.0.0.0, 255.255.255.255.
-    \item \textbf{IPv6}: indirizzi a 128 bit, header fisso di 40 byte, flow label; niente frammentazione nei router, niente checksum,
-          niente opzioni nell'header; transizione con \textbf{tunneling}.
+    \item \textbf{ICMP} è il modo in cui host e router parlano della rete: sta sopra IP, viaggia dentro IP (protocollo 1), e non
+          ha porte.
+    \item Un messaggio porta un tipo, un codice, e l'header più i primi otto byte del datagramma che l'ha causato: un errore
+          nomina la propria causa.
+    \item \textbf{ping} sono i tipi 8 e 0, e risponde a una sola domanda: un datagramma ha raggiunto quell'indirizzo e qualcosa
+          ha risposto.
+    \item \textbf{traceroute} uccide di proposito le proprie sonde: TTL scaduto (11) da ogni router, porta irraggiungibile (3/3)
+          dalla destinazione, che è come sa di doversi fermare.
+    \item Un silenzio non è una risposta: gli errori sono limitati, filtrati, e in diversi casi mai generati. Bloccare tutto
+          ICMP rompe la scoperta dell'MTU di percorso.
+    \item La diagnosi è un ordine di domande, dal basso verso l'alto. Prossimo argomento: come un host ottiene il proprio
+          indirizzo, e che cosa succede quando un'intera rete si nasconde dietro uno solo.
 \end{itemize}
 }

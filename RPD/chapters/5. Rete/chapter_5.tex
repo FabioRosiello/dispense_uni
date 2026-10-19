@@ -1,4 +1,4 @@
-\chapter{Il piano di controllo: gli algoritmi di routing}
+\chapter{Il piano di controllo: routing, sistemi autonomi e BGP}
 
 % Grafo di esempio (Kurose) usato in tutto il capitolo
 \tikzset{
@@ -30,6 +30,13 @@
 \section{Introduzione al routing}
 % ══════════════════════════════════════════════════════════════
 
+Per quattro capitoli la forwarding table è stata data: una riga è un prefisso, la riga nomina un'interfaccia di uscita, vince
+la corrispondenza più lunga. Nessuno ha detto \textbf{chi scrive le righe}. È il piano di controllo, e ne abbiamo già nominato
+le due organizzazioni possibili: un algoritmo che gira in ogni router e le cui copie si parlano, oppure un controller che
+calcola tutte le tabelle e le distribuisce. Qui apriamo la scatola: che cosa calcola un tale algoritmo, e come router che vedono
+solo il proprio vicinato finiscono per accordarsi su percorsi da un capo all'altro. Due famiglie di algoritmi, entrambe in uso,
+e poi la ragione per cui nessuna delle due gira su Internet nel suo insieme.
+
 Ricordiamo che, alla ricezione di un pacchetto, un router può:
 
 \begin{itemize}
@@ -51,7 +58,8 @@ all'avvio un router \textbf{non sa nulla} del resto della rete.
 }
 
 Il problema di trovare percorsi buoni su una rete (o su un grafo) è cruciale per le reti di calcolatori, ma è
-rilevantissimo anche altrove: videogiochi, guida autonoma, robotica, navigatori.
+rilevantissimo anche altrove: videogiochi, guida autonoma, robotica, navigatori. Ciò che è nostro è il vincolo: \textbf{nessun
+nodo ha la mappa}, e la mappa cambia mentre ci si calcola sopra.
 
 % ══════════════════════════════════════════════════════════════
 \section{Il flooding}
@@ -76,13 +84,16 @@ rilevantissimo anche altrove: videogiochi, guida autonoma, robotica, navigatori.
 \end{figure}
 
 \begin{itemize}
-    \item Tutti i cammini vengono esplorati, compreso quello ottimo: se un cammino esiste, il pacchetto \textbf{arriverà}.
-    \item I pacchetti che non vanno da nessuna parte raggiungono prima o poi il limite di hop e vengono scartati.
+    \item Nessuna tabella, nessun calcolo, nessun accordo fra router. Tutti i cammini vengono esplorati, compreso quello
+          ottimo: se un cammino esiste, il pacchetto \textbf{arriverà}.
+    \item I pacchetti che non vanno da nessuna parte raggiungono prima o poi il limite di hop e vengono scartati: lo stesso
+          campo che fa scadere una traccia un router più in là ogni volta.
     \item È \textbf{robustissimo} grazie alla ridondanza: se alcuni router sono spenti, i cammini alternativi vengono comunque usati.
 \end{itemize}
 
 Il flooding si usa in situazioni particolari in cui serve ridondanza (diffusione di messaggi a tutti, scenari militari),
-ma è impraticabile in reti grandi e ad alte prestazioni come Internet: serve un algoritmo più sofisticato.
+ma è impraticabile in reti grandi e ad alte prestazioni come Internet, dove ogni pacchetto diventa molti, e i molti diventano
+di più: serve un algoritmo che decida \textbf{un} collegamento di uscita.
 
 % ══════════════════════════════════════════════════════════════
 \section{Formalizzazione del problema}
@@ -124,9 +135,20 @@ ma è impraticabile in reti grandi e ad alte prestazioni come Internet: serve un
           (\emph{least-cost path}; \emph{shortest path} se tutti gli archi hanno lo stesso costo).
     \item Nelle reti interessa trovare il cammino ottimo non per una coppia, ma per \textbf{tutte} le coppie di nodi.
     \item Un algoritmo di routing \textbf{converge} quando ha trovato il cammino minimo per tutte le coppie di nodi.
+    \item Da dove vengono i costi è un problema di qualcun altro: per noi sono dati. Gli algoritmi si estendono a collegamenti
+          orientati con un costo diverso per verso.
 \end{itemize}
 
-Nelle reti si usano tipicamente due famiglie di algoritmi: \textbf{Distance Vector} e \textbf{Link State}.
+Nelle reti si usano tipicamente due famiglie di algoritmi, che differiscono in ciò che un nodo \textbf{sa}, non in ciò che
+calcola:
+\begin{itemize}
+    \item \textbf{globali}: all'algoritmo si danno tutta la topologia e tutti i costi prima che cominci. Poiché gli serve lo
+          stato di ogni collegamento, sono gli algoritmi \textbf{link state};
+    \item \textbf{decentralizzati}: un nodo parte conoscendo solo il costo dei propri collegamenti, e ottiene tutto il resto
+          parlando con i vicini, più e più volte. Sono gli algoritmi \textbf{distance vector}.
+\end{itemize}
+Attenzione: «globale» non significa calcolato in un solo posto; un algoritmo link state di solito gira in ogni router, ciascuno
+con la stessa mappa.
 
 % ══════════════════════════════════════════════════════════════
 \section{L'algoritmo Distance Vector}
@@ -135,8 +157,10 @@ Nelle reti si usano tipicamente due famiglie di algoritmi: \textbf{Distance Vect
 \dfn{Distance Vector (DV)}{
     L'algoritmo \textbf{Distance Vector} è un approccio \textbf{decentralizzato}: sfrutta la conoscenza \textbf{locale} della
     rete combinata con la comunicazione tra nodi. Si basa sull'algoritmo di \textbf{Bellman-Ford}. Ogni nodo riceve
-    informazioni da uno o più vicini diretti, fa un calcolo, e ridistribuisce i risultati ai vicini. È
-    \textbf{asincrono}: non richiede che tutti i nodi siano coordinati.
+    informazioni da uno o più vicini diretti, fa un calcolo, e ridistribuisce i risultati ai vicini. È \textbf{iterativo}
+    (lo scambio continua finché non c'è più niente di nuovo da dire, e si ferma da solo: nessun segnale annuncia la fine) e
+    \textbf{asincrono}: non richiede che tutti i nodi siano coordinati, e agisce quando le notizie gli arrivano, il che lo
+    rende usabile su una rete reale dove i router si riavviano.
 }
 
 \subsection{L'equazione di Bellman}
@@ -153,7 +177,11 @@ raggiungere $v$ più il costo del cammino migliore da $v$ a $y$.
 
 \begin{itemize}
     \item Se troviamo questo $v$, basta scriverlo nella forwarding table: tutti i pacchetti diretti a $y$ vanno inoltrati a $v$.
-    \item Per farlo, $x$ deve avere una stima di $d_v(y)$ per tutti i suoi vicini: il \textbf{distance vector}.
+          La parte utile non è il numero, è il \textbf{vicino vincente} $v^*$ che realizza il minimo: il nodo non memorizza mai il
+          cammino, solo il primo salto.
+    \item Per farlo, $x$ deve avere una stima di $d_v(y)$ per tutti i suoi vicini: il \textbf{distance vector}, esattamente ciò che
+          i vicini continuano a inviargli.
+    \item Nell'equazione niente riguarda la topologia oltre $x$: è tutto il punto, e più avanti sarà anche tutto il problema.
 \end{itemize}
 
 \begin{esempio}{L'equazione sul grafo di esempio}
@@ -200,7 +228,8 @@ DistanceVector(x):
     \item La struttura $D_w(v)$ conserva i distance vector dei nodi $w$ verso le destinazioni $v$.
     \item \textbf{Inizializzazione}: sono note solo le distanze verso i vicini.
     \item \textbf{Fase online}: si ricevono le novità dai vicini, si aggiornano i distance vector con l'equazione di Bellman, e i
-          cambiamenti locali vengono comunicati ai nodi adiacenti.
+          cambiamenti locali vengono comunicati ai nodi adiacenti. Niente è periodico: un nodo aspetta, e parla solo quando uno
+          dei suoi numeri si è mosso. Quando nessuno parla, la rete è convergente.
 \end{itemize}
 
 \begin{esempio}{Come si propaga una buona notizia}
@@ -214,7 +243,9 @@ Seguiamo il cammino da u a z:
     \item Il nodo u riceve la notizia: ora esiste un cammino verso z di costo finito, attraverso x:
           $D_u(z) = c(u,x) + D_x(z) = 1 + 3 = 4$.
 \end{enumerate}
-Lo stesso processo avviene per tutti i nodi e tutti i cammini.
+Lo stesso processo avviene per tutti i nodi e tutti i cammini. Nessuno ha calcolato il cammino u, x, y, z: ogni nodo ha
+aggiunto il costo di un collegamento a un numero che gli era stato detto; e u ha lasciato il proprio collegamento diretto verso
+w, che costa 5, per un cammino attraverso x che costa 3.
 \end{esempio}
 
 \begin{esempio}{Le tabelle di un nodo (dalla lavagna)}
@@ -235,15 +266,18 @@ prossimo hop & --- & v & x & x & x & x \\
 
 \subsection{Complessità, pro e contro}
 
-Ogni volta che il costo di un nodo viene aggiornato, tutti i nodi devono rivalutare i propri archi: nel caso peggiore la
-complessità è \textbf{quadratica}.
+Il traffico generato è piccolo e locale: un nodo parla solo ai vicini, e solo quando uno dei suoi cammini minimi è davvero
+cambiato. Non c'è un numero fisso di giri: quanto tempo serve alla convergenza dipende dalla topologia e da dove è avvenuto il
+cambiamento, perché le notizie devono camminare, un salto per scambio. Nel caso peggiore la complessità è
+\textbf{quadratica}.
 
 \begin{itemize}
     \item[\itick] \textbf{Asincrono}: i router possono adattarsi ai costi aggiornati in qualsiasi momento, senza coordinarsi.
     \item[\icross] \textbf{Convergenza lenta}: gli aggiornamenti si propagano lentamente, perché ogni nodo deve accorgersi del
           cambiamento e avvisare i vicini.
-    \item[\icross] \textbf{Count-to-infinity}: i miglioramenti vengono riconosciuti e adottati subito, ma i \textbf{guasti} vengono
-          rilevati lentamente e possono produrre cicli.
+    \item[\icross] \textbf{Count-to-infinity}: le buone notizie viaggiano veloci e quelle cattive lente. Un cammino più economico
+          viene adottato in un paio di scambi; un collegamento che peggiora richiede molto di più, e nel frattempo ci possono
+          essere cicli.
 \end{itemize}
 
 % ══════════════════════════════════════════════════════════════
@@ -333,9 +367,12 @@ D_z(y) &= \min\{c(z,y),\ c(z,x) + D_x(y)\} = c(z,y) = 1
 \end{align*}
 
 \info{Poisoned reverse}{
-    Una tecnica che attenua il problema è il \textbf{poisoned reverse} (inversione avvelenata): se z raggiunge x passando per y,
-    allora z comunica a y che la propria distanza da x è \textbf{infinita}. Così y non userà mai z per raggiungere x, e il ciclo tra
-    due nodi non si forma. Non risolve però i cicli che coinvolgono tre o più nodi.
+    La difesa standard è una bugia. Con il \textbf{poisoned reverse} (inversione avvelenata), se z raggiunge x passando per y,
+    allora z dice a y che la propria distanza da x è \textbf{infinita}, anche se sa benissimo che è 5. Finché y crede che z non
+    abbia un cammino verso x, y non proverà mai a raggiungere x attraverso z, che è proprio la mossa che ha fatto partire il
+    conteggio. Così, quando il collegamento sale a 60, y tiene il collegamento diretto a 60 e lo dice; z passa al proprio
+    collegamento da 50 e ora dice la verità; y si assesta a 51. Tre scambi invece di quarantaquattro. Non è però una cura: un
+    ciclo di tre o più nodi non viene rilevato in questo modo, e il problema generale resta.
 }
 
 % ══════════════════════════════════════════════════════════════
@@ -343,11 +380,15 @@ D_z(y) &= \min\{c(z,y),\ c(z,x) + D_x(y)\} = c(z,y) = 1
 % ══════════════════════════════════════════════════════════════
 
 \dfn{Link State (LS)}{
-    L'algoritmo \textbf{Link State} è un approccio \textbf{centralizzato} (nel senso della conoscenza): sfrutta la conoscenza
-    \textbf{completa} della rete per trovare il cammino migliore. Si basa sull'algoritmo di \textbf{Dijkstra} e \textbf{non soffre
-    del count-to-infinity}. La conoscenza completa si ottiene facendo inviare a ogni nodo, in broadcast, dei \emph{link-state
-    packet} con gli identificativi e i costi dei propri collegamenti.
+    L'algoritmo \textbf{Link State} è un approccio \textbf{globale} (nel senso della conoscenza): ogni nodo conosce tutto il grafo,
+    tutti i nodi, tutti i collegamenti, tutti i costi, prima di cominciare a calcolare. Si basa sull'algoritmo di
+    \textbf{Dijkstra} e \textbf{non soffre del count-to-infinity}: nessuna stima viene costruita sulla stima di qualcun altro, e
+    ogni nodo lavora su fatti, non su dicerie. La conoscenza completa si ottiene facendo inviare a ogni nodo, in broadcast, dei
+    \emph{link-state packet} con gli identificativi e i costi dei propri collegamenti.
 }
+
+Che la mappa sia assemblata dentro ogni router o dentro un unico controller non cambia niente del calcolo: la versione con il
+controller è proprio il piano di controllo centralizzato già disegnato.
 
 La versione di base calcola i cammini minimi \textbf{da un nodo di partenza a tutte le destinazioni}, e va quindi eseguita su
 ogni nodo.
@@ -453,11 +494,28 @@ A ogni iterazione si controllano tutti i nodi della rete che non sono ancora in 
 controlli è $n + (n-1) + \dots + 1 = \frac{n(n+1)}{2}$, cioè $O(n^2)$ nel caso peggiore. Con strutture dati più sofisticate (per
 esempio gli \emph{heap}) si scende a $O(n \log n)$ circa (più precisamente $O((|E| + n)\log n)$).
 
+I messaggi sono l'altra metà del prezzo: lo stato dei collegamenti di ogni nodo deve raggiungere ogni nodo, quindi
+$O(|N|\,|E|)$ messaggi, e di nuovo a ogni cambiamento.
+
 \begin{itemize}
     \item[\itick] \textbf{Convergenza più rapida}: tutte le comunicazioni avvengono contemporaneamente.
-    \item[\itick] \textbf{Niente count-to-infinity}: si propaga lo stato di tutti i collegamenti.
-    \item[\icross] \textbf{Sincrono}: i nodi devono ricevere le informazioni da tutta la rete prima di iniziare.
+    \item[\itick] \textbf{Niente count-to-infinity}: lo stato di ogni collegamento si propaga come un fatto.
+    \item[\icross] \textbf{Sincrono}: un nodo non può calcolare niente finché non è arrivata la mappa; deve prima sentire tutta la
+          rete.
 \end{itemize}
+
+\warning{Quando il costo di un collegamento è il suo traffico}{
+    E se il costo di un collegamento fosse il carico che porta? Allora l'algoritmo cambia i costi che ha appena letto. Tutti
+    calcolano che il giro in senso orario è più economico e ci si spostano, il che lo rende caro e l'altro lato vuoto; al giro
+    successivo tutti tornano indietro. Il traffico oscilla e non si assesta mai.
+    \begin{itemize}
+        \item Non è un difetto del link state: qualsiasi algoritmo con una metrica basata sul carico oscilla allo stesso modo.
+        \item Rendere il costo indipendente dal carico sembra inaccettabile, perché evitare i collegamenti congestionati è tutto
+              lo scopo; eppure è ciò che si fa: RIP, OSPF e BGP sono tutti insensibili al carico.
+        \item Un rimedio parziale per ciò che resta: i router non devono eseguire l'algoritmo nello stesso istante. Lasciati a sé
+              si sincronizzano da soli, quindi l'istante di ogni annuncio viene reso casuale.
+    \end{itemize}
+}
 
 % ══════════════════════════════════════════════════════════════
 \section{DV contro LS}
@@ -489,10 +547,207 @@ Esempi reali & RIP & OSPF, IS-IS \\
     fiducia cieca nei calcoli dei vicini.
 }
 
-Alla fine, \textbf{entrambe} le soluzioni sono usate in Internet. Dentro un'organizzazione si usano protocolli come OSPF (link state) o
-RIP (distance vector); tra organizzazioni diverse (i \emph{sistemi autonomi}) si usa BGP, un protocollo \emph{path vector} derivato da
-DV che tiene conto anche delle policy.
+Nessuno dei due vince, ed \textbf{entrambi} sono usati in Internet: il motivo è ciò che viene dopo.
 
+% ══════════════════════════════════════════════════════════════
+\section{I sistemi autonomi}
+% ══════════════════════════════════════════════════════════════
+
+Il modello a grafo ha ignorato due cose.
+\begin{itemize}
+    \item \textbf{La scala}: Internet contiene centinaia di milioni di router. Una riga per destinazione è memoria impossibile,
+          diffondere ogni cambiamento di collegamento è traffico impossibile, e un distance vector che iterasse su così tanti nodi
+          non convergerebbe mai.
+    \item \textbf{L'autonomia}: un ISP vuole eseguire l'algoritmo che preferisce dentro la propria rete, e tenere per sé la forma
+          di quella rete. Un unico algoritmo mondiale gli chiederebbe di pubblicare tutto.
+\end{itemize}
+
+\dfn{Sistema autonomo (AS)}{
+    Una sola mossa risolve entrambi i problemi: raggruppare i router in \textbf{sistemi autonomi}, ciascuno sotto un unico
+    controllo amministrativo. Spesso un ISP è un AS; alcuni grandi sono più AS. Un AS è identificato da un numero globalmente
+    unico, l'\textbf{ASN}, distribuito dagli stessi registri regionali che distribuiscono gli indirizzi.
+}
+
+Dentro un AS tutti eseguono lo stesso algoritmo e sanno di tutti gli altri: è un protocollo \textbf{intra-AS}. Fra AS deve
+essere qualcos'altro: un protocollo \textbf{inter-AS}.
+
+\subsection{OSPF: link state dentro un AS}
+
+\begin{itemize}
+    \item \key{OSPF} (\emph{Open Shortest Path First}) è un protocollo link state: diffusione degli annunci dello stato dei
+          collegamenti, poi Dijkstra eseguito localmente con il router stesso come radice. \emph{Open} significa che la specifica
+          è pubblica.
+    \item I pesi sono affare dell'amministratore, non del protocollo: tutti a uno danno il routing a numero minimo di salti; pesi
+          inversamente proporzionali alla capacità allontanano il traffico dai collegamenti lenti.
+    \item Un HELLO su ogni collegamento controlla che il vicino sia vivo. Un nuovo annuncio parte ogni volta che un collegamento
+          cambia stato, e comunque almeno ogni 30 minuti anche se non è cambiato niente.
+    \item Gli annunci vanno in broadcast a ogni router dell'AS, non ai vicini: è la mappa dell'intero AS che va ricostruita.
+    \item Si noti dove sta: i messaggi OSPF sono trasportati direttamente da IP, \textbf{protocollo 89}. Né TCP né UDP, quindi deve
+          fornire da sé la propria consegna affidabile.
+\end{itemize}
+
+\info{Le aree, e il resto di OSPF}{
+    Anche un solo AS può essere troppo grande per una sola mappa. Lo si può tagliare in \textbf{aree}: ogni area esegue il proprio
+    algoritmo link state, e un router diffonde i propri annunci solo dentro la propria area. Esattamente un'area è la
+    \textbf{dorsale}, e ogni router di bordo d'area le appartiene: attraversare l'AS significa salire fino a un router di bordo,
+    attraversare la dorsale, scendere nell'area di destinazione. È la stessa mossa delle subnet dentro un blocco di indirizzi, un
+    livello più su: nascondere il dettaglio, tenere il riassunto. Quando più cammini verso una destinazione hanno lo stesso costo
+    OSPF può usarli tutti. Gli scambi possono essere autenticati, con una password condivisa o un hash con chiave (un tempo MD5,
+    oggi HMAC-SHA); per default non lo sono, e un annuncio non autenticato si può falsificare, che è un modo di svuotare una rete.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{BGP: il protocollo che deve essere uguale per tutti}
+% ══════════════════════════════════════════════════════════════
+
+Un protocollo inter-AS funziona solo se gli AS dei due lati eseguono lo stesso, quindi ce n'è esattamente uno: \key{BGP}
+(\emph{Border Gateway Protocol}), e ogni AS di Internet lo parla.
+\begin{itemize}
+    \item Le sue destinazioni non sono indirizzi ma \textbf{prefissi CIDR}: una rotta verso \texttt{138.16.68.0/22} copre 1024
+          indirizzi in una riga. È qui che i blocchi aggregati ripagano.
+    \item \textbf{Primo compito}: imparare dagli AS vicini quali prefissi esistono e attraverso quale sequenza di AS si raggiungono.
+    \item \textbf{Secondo compito}: scegliere, fra le rotte imparate per un prefisso, quella da installare; e il criterio non sarà la
+          distanza.
+    \item Senza BGP una subnet è un'isola: esiste, ha indirizzi, e nessun router da nessuna parte ha una riga che corrisponda.
+\end{itemize}
+
+\subsection{eBGP e iBGP}
+
+Gli AS non parlano: parlano i router. Due di loro tengono una connessione TCP semipermanente sulla \textbf{porta 179}: un
+protocollo di routing costruito sul servizio di trasporto già usato. Attraverso un confine è \textbf{eBGP}; fra router dello stesso
+AS è \textbf{iBGP}, e la notizia di un prefisso straniero viaggia verso l'interno su di essa.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    rt/.style={circle, draw=netblue!80!black, thick, fill=cloudbg, minimum size=0.55cm, inner sep=0pt, font=\scriptsize\bfseries\sffamily}]
+  \foreach \k/\xo in {1/0, 2/4.6, 3/9.2} {
+    \node[draw=black!40, rounded corners, fill=black!3, minimum width=3.6cm, minimum height=2.6cm] at (\xo+1.4,0) {};
+    \node[font=\footnotesize\bfseries\sffamily] at (\xo+1.4,-1.55) {AS\k};
+    \node[rt] (na\k) at (\xo+0.3,0.6) {\k a};
+    \node[rt] (nb\k) at (\xo+1.4,0.9) {\k b};
+    \node[rt] (nc\k) at (\xo+2.6,0.2) {\k c};
+    \node[rt] (nd\k) at (\xo+1.2,-0.7) {\k d};
+    \draw[black!40] (na\k) -- (nb\k) -- (nc\k) -- (nd\k) -- (na\k);
+    \draw[dashed, netgreen!60!black, thick] (na\k) to[bend left=10] (nc\k);
+  }
+  \draw[very thick, netred] (nc1) -- node[above]{eBGP} (na2);
+  \draw[very thick, netred] (nc2) -- node[above]{eBGP} (na3);
+  \node[draw, fill=netorange!25, rounded corners] (x) at (12.3,-0.9) {\texttt{x}};
+  \draw[thick] (nc3) -- (x);
+  \node[text=netred, anchor=south] at (3.8,1.3) {AS2 AS3 x};
+  \node[text=netred, anchor=south] at (8.4,1.3) {AS3 x};
+  \draw[-{Stealth[length=1.5mm]}, netred] (4.4,1.3) -- (3.2,1.3);
+  \draw[-{Stealth[length=1.5mm]}, netred] (8.9,1.3) -- (7.8,1.3);
+  \node[text=netgreen!50!black, align=center] at (6.0,-2.2) {tratteggiato: iBGP, dentro un AS e non per forza lungo un collegamento fisico};
+\end{tikzpicture}
+\caption{L'annuncio del prefisso \texttt{x} viaggia verso sinistra: AS3 lo annuncia ad AS2 come «AS3 x», AS2 lo diffonde dentro di
+         sé con iBGP e lo annuncia ad AS1 come «AS2 AS3 x».}
+\end{figure}
+
+\subsection{Che cosa porta una rotta}
+
+\dfn{Rotta BGP}{
+    Una \textbf{rotta} è un prefisso insieme ai suoi \textbf{attributi}. Due contano qui:
+    \begin{itemize}
+        \item \textbf{AS-PATH}: la lista degli AS che l'annuncio ha attraversato. Ogni AS antepone il proprio numero prima di
+              passarlo, quindi la lista cresce mentre la notizia viaggia. Rileva anche i cicli: un router che trova il proprio AS
+              già nella lista rifiuta l'annuncio. Nessun conteggio di salti, nessun count-to-infinity.
+        \item \textbf{NEXT-HOP}: l'indirizzo IP dell'interfaccia del router che comincia l'AS-PATH, un indirizzo che non appartiene
+              al nostro AS ma sta su una subnet direttamente collegata a esso.
+    \end{itemize}
+}
+
+NEXT-HOP è la giuntura fra i due protocolli: per usare una rotta BGP, un router cerca quell'indirizzo nella tabella costruita dal
+suo protocollo intra-AS.
+
+\subsection{Scegliere fra le rotte}
+
+Un router impara spesso decine di rotte verso lo stesso prefisso. Le regole si applicano in ordine, ciascuna ne elimina alcune,
+finché ne resta una:
+\begin{enumerate}
+    \item \textbf{Preferenza locale}: un valore attaccato alla rotta dall'amministratore. È un numero di \emph{policy}, deciso
+          dentro l'AS, e viene \textbf{prima} di qualsiasi cosa riguardi la distanza.
+    \item \textbf{AS-PATH più corto}: meno sistemi autonomi attraversati. Non meno router: fra AS non c'è altra nozione di costo.
+    \item \textbf{Patata bollente} (\emph{hot potato}): fra le superstiti, quella il cui NEXT-HOP è più vicino secondo il costo
+          intra-AS. Far uscire il pacchetto dal proprio AS nel modo più economico possibile, senza curarsi del resto del suo
+          viaggio.
+\end{enumerate}
+La regola 2 prima della 3 è ciò che impedisce a BGP di essere puramente egoista. E due router dello stesso AS possono comunque
+scegliere AS-PATH diversi per lo stesso prefisso.
+
+\subsection{La policy decide prima del costo}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    pv/.style={circle, draw=netblue!80!black, thick, fill=netblue!12, minimum size=0.7cm, font=\small\bfseries\sffamily},
+    cu/.style={circle, draw=netgreen!70!black, thick, fill=netgreen!12, minimum size=0.7cm, font=\small\bfseries\sffamily}]
+  \node[pv] (A) at (0,0) {A};
+  \node[pv] (B) at (2.6,1.1) {B};
+  \node[pv] (C) at (2.6,-1.1) {C};
+  \node[cu] (W) at (-2.2,0) {W};
+  \node[cu] (X) at (5.2,0.5) {X};
+  \node[cu] (Y) at (5.2,-1.6) {Y};
+  \draw[thick] (W) -- (A) -- (B) -- (C) -- (A);
+  \draw[thick] (B) -- (X) -- (C) -- (Y);
+  \draw[-{Stealth[length=2mm]}, dashed, netred, thick] (X) to[bend right=25] node[above, text=netred, align=center]{X C Y non viene\\mai annunciato a B} (B);
+  \node[text=netred, font=\bfseries] at (4.05,1.15) {$\times$};
+  \node[text=netblue] at (1.3,-2.3) {reti dei fornitori (A, B, C)};
+  \node[text=netgreen!50!black] at (5.4,-2.3) {reti dei clienti (W, X, Y)};
+\end{tikzpicture}
+\caption{X conosce il cammino attraverso C verso Y, e se lo tiene per sé: B non l'ha mai imparato, quindi non manda mai a X traffico
+         per Y. Nessuna regola vieta il transito: lo fa il silenzio.}
+\end{figure}
+
+\begin{itemize}
+    \item B dovrebbe passare a C il cammino che ha imparato verso W? Trasportare il transito fra A e C costa soldi a B e non gli fa
+          guadagnare niente: è il lato del denaro della domanda lasciata aperta con la neutralità della rete.
+    \item La regola pratica, in nessuno standard: il traffico sulla dorsale di un fornitore deve avere una sorgente o una
+          destinazione in uno dei suoi clienti. Il resto è bilaterale e riservato.
+\end{itemize}
+
+\subsection{Perché due protocolli}
+
+\begin{itemize}
+    \item \textbf{Policy}: fra AS domina. Chi può trasportare il traffico di chi è una questione commerciale, e BGP porta gli
+          attributi che permettono di rispondere. Dentro un AS tutto è sotto un'unica amministrazione, e la questione non si pone.
+    \item \textbf{Scala}: fra AS le destinazioni sono l'intera Internet. Dentro, se una rete diventa troppo grande, la si può
+          sempre dividere in due AS, e OSPF può dividere ancora in aree.
+    \item \textbf{Prestazioni}: fra AS la qualità della rotta è secondaria; un cammino più lungo che soddisfa una policy batte uno
+          più corto che non la soddisfa, e non c'è costo oltre ai salti di AS. Dentro un AS il routing può permettersi di
+          ottimizzare.
+\end{itemize}
+La risposta a «quale algoritmo usa Internet» non è quindi un algoritmo, ma una \textbf{divisione del lavoro}.
+
+\subsection{Un indirizzo, molte macchine}
+
+\dfn{Anycast IP}{
+    Con l'\textbf{anycast} si dà lo stesso indirizzo IP a molte macchine in parti diverse del mondo, e ciascuna lo annuncia con BGP.
+    Un router che riceve più annunci per quell'indirizzo crede che siano cammini diversi verso lo stesso posto, ed esegue la
+    selezione: sceglie la copia più vicina senza sapere che ci sono copie.
+}
+
+È ciò che c'era dietro un fatto lasciato senza spiegazione: la radice del DNS ha tredici indirizzi e più di mille macchine. La query
+va alla più vicina che ha quell'indirizzo. Il limite: le reti di distribuzione dei contenuti per lo più non lo usano, perché un
+cambiamento BGP a metà di un trasferimento può consegnare i segmenti successivi della stessa connessione TCP a una macchina diversa,
+che non ne ha mai sentito parlare.
+
+\subsection{Mettere un'azienda su Internet}
+
+\begin{enumerate}
+    \item Un contratto con un ISP locale: un collegamento fisico dal router gateway dell'azienda a uno dei suoi, e un blocco di
+          indirizzi, per esempio un /24, da assegnare al server Web, al server di posta, al server DNS e al gateway.
+    \item Un contratto con un \emph{registrar} per un nome di dominio, a cui si dà l'indirizzo del proprio server DNS: il registrar
+          mette quella voce nei server di \texttt{.com}, così chiunque può trovare l'azienda per nome.
+    \item Nel proprio server DNS si associa \texttt{www.azienda.com} all'indirizzo del server Web.
+    \item E il passo senza il quale niente funziona: l'ISP \textbf{annuncia il prefisso con BGP}. L'annuncio si propaga verso
+          l'esterno, e alla fine ogni router di Internet ha una riga che corrisponde agli indirizzi dell'azienda, o un aggregato che
+          li contiene.
+\end{enumerate}
+Indirizzamento, nomi, forwarding e routing, in una sola procedura.
+
+\Needspace{20\baselineskip}
 % ══════════════════════════════════════════════════════════════
 \section{Riepilogo}
 % ══════════════════════════════════════════════════════════════
@@ -503,6 +758,11 @@ DV che tiene conto anche delle policy.
     \item Il \textbf{flooding} è robusto ma impraticabile su larga scala.
     \item \textbf{DV} (Bellman-Ford, decentralizzato, asincrono): $d_x(y) = \min_v\{c(x,v) + d_v(y)\}$; convergenza lenta e \textbf{count-to-infinity}.
     \item \textbf{LS} (Dijkstra, conoscenza globale): scoperta dei vicini, costi, pacchetti link-state in broadcast, poi Dijkstra con $D(v)$ e $p(v)$; $O(n^2)$.
-    \item LS converge più velocemente ed è più robusto; DV comunica meno. In Internet si usano entrambi.
+    \item LS converge più velocemente ed è più robusto; DV comunica meno. Nessuna delle due metriche segue il traffico, perché un
+          costo che segue il traffico fa oscillare il routing.
+    \item Scala e autonomia dividono Internet in \textbf{sistemi autonomi}: OSPF dentro, BGP fra. BGP instrada verso prefissi, con
+          AS-PATH e NEXT-HOP, e decide prima per policy e poi per costo; l'anycast ne è un'applicazione.
+    \item Ogni cammino calcolato è una sequenza di singoli salti, e non ci siamo mai chiesti che cosa sia davvero un salto: come
+          sono incorniciati i bit su un collegamento, e come si chiama lì la macchina all'altro capo. È dove andiamo ora.
 \end{itemize}
 }

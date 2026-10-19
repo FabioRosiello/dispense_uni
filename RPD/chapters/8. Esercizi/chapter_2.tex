@@ -418,6 +418,39 @@ senza, confrontando i risultati.
     dietro una VPN il risultato può sorprendere: si veda il caso di studio nel capitolo su ICMP.)
 }
 
+\begin{esercizio}{Una domanda senza ricorsione, con dig}
+Prima di chiedere qualcosa a un root server bisogna sapere dov'è: il primo scambio riguarda il server, il secondo va a lui.
+\begin{lstlisting}[language=bash]
+$ dig +short a.root-servers.net A
+198.41.0.4
+$ dig +norecurse @198.41.0.4 www.ox.ac.uk
+$ dig @198.41.0.4 www.ox.ac.uk
+\end{lstlisting}
+\begin{enumerate}[label=(\alph*)]
+    \item Il root server restituisce un indirizzo o un rinvio? Quanti record nella sezione \emph{answer}, quanti nella
+          \emph{authority}?
+    \item Che cosa cambia sul filo fra gli ultimi due comandi, e chi fa il lavoro in ciascun caso?
+    \item Controllare i flag della risposta: quali ci si aspetta da un root server?
+\end{enumerate}
+\end{esercizio}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Un \textbf{rinvio} (\emph{referral}): zero record di risposta, nella sezione \emph{authority} i record NS dei server
+          del TLD \texttt{uk}, e nella sezione \emph{additional} i loro indirizzi (glue record). Il root server non conosce
+          \texttt{www.ox.ac.uk}: sa solo a chi chiedere un livello più in basso.
+    \item Sul filo cambia \textbf{un bit}: con \texttt{+norecurse} il flag RD della domanda vale 0, senza vale 1. La risposta
+          invece è la stessa, perché un root server non fa ricorsione per nessuno (senza l'opzione \texttt{dig} lo segnala
+          con \texttt{WARNING: recursion requested but not available}): in entrambi i casi il lavoro di seguire i rinvii
+          resta a chi chiede, cioè a \texttt{dig} (o al proprio resolver).
+    \item Un root server \textbf{non imposta mai \texttt{ra}}. In un rinvio manca anche \texttt{aa}, che segnala una
+          risposta autorevole per il nome chiesto: la si vede chiedendo un nome della zona radice, per esempio
+          \texttt{dig +norecurse @198.41.0.4 . NS}. Se nella risposta compare \texttt{ra}, a rispondere non è stato il root
+          server ma qualcosa sulla propria linea (un resolver trasparente dell'ISP, un firewall, una VPN) che intercetta il
+          traffico DNS e risponde al suo posto:
+          l'esercizio è falsato, e va ripetuto da un'altra rete.
+\end{enumerate}
+
 % ══════════════════════════════════════════════════════════════
 \section{DNS: domande d'esame}
 % ══════════════════════════════════════════════════════════════
