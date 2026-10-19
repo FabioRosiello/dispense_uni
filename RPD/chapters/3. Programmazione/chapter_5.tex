@@ -1,0 +1,701 @@
+\chapter{Sincronizzazione}
+
+I thread condividono globali, heap e descriptor: è per questo che un server di chat può tenere la lista dei client in una
+variabile. Ed è anche il motivo per cui \texttt{count++} ha stampato 431027 invece di 800000.
+\begin{itemize}
+    \item Il problema non è mai stato l'incremento: è che una \textbf{sequenza di operazioni su uno stato condiviso} può
+          essere interrotta a metà, e niente in C la rende indivisibile.
+    \item Bisogna quindi poter dire: \textbf{da qui a qui, un thread alla volta}.
+    \item E serve l'altra metà, che il contatore non mostrava: un thread che non ha niente da fare deve poter
+          \textbf{aspettare} che un altro abbia fatto qualcosa.
+\end{itemize}
+Due strumenti per i due problemi (il \textbf{mutex} e la \textbf{variabile di condizione}), un terzo che conta (il
+\textbf{semaforo}) e una struttura che li mette insieme (il \textbf{buffer limitato}).
+
+\subsection{Lo stato condiviso di un server}
+
+\begin{itemize}
+    \item La \textbf{tabella dei client connessi}: un thread aggiunge una voce all'\texttt{accept}, un altro la scorre per
+          inoltrare una riga, un terzo toglie una voce quando un client se ne va.
+    \item I \textbf{contatori} che si stampano in una riga di stato: byte serviti, client visti, errori.
+    \item Una \textbf{cache} o una tabella delle stanze: letta da tutti, scritta ogni tanto.
+    \item La \textbf{coda del lavoro} da fare, che costruiremo alla fine del capitolo.
+\end{itemize}
+Ognuna di queste ha un \key{invariante} (\texttt{n} è il numero di voci valide, ogni voce sotto \texttt{n} è un
+descriptor aperto), ed è proprio un invariante che un aggiornamento interrotto a metà rompe.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il mutex}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Mutex}{
+    Un \textbf{mutex} (\emph{mutual exclusion}) è un lucchetto con due stati, aperto e chiuso, tenuto da \textbf{al più un
+    thread alla volta}. Vive in una variabile di tipo \texttt{pthread\_mutex\_t}.
+}
+
+\begin{itemize}
+    \item Il thread che lo chiude ne diventa il \textbf{proprietario}, e solo il proprietario può aprirlo: un mutex non si
+          passa di mano in mano.
+    \item Un thread che lo trova chiuso \textbf{dorme} finché non si libera: non gira a vuoto, e il kernel dà il processore a
+          qualcun altro.
+    \item Ogni thread che tocca i dati deve chiudere \textbf{lo stesso} mutex. La protezione è cooperativa: niente la impone.
+\end{itemize}
+Il mutex non sa nulla di ciò che protegge: quell'associazione esiste solo nel codice che scriviamo.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={L'API del mutex}]
+#include <pthread.h>
+
+pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;     /* statico: non serve altro */
+
+int pthread_mutex_init(pthread_mutex_t *m, const pthread_mutexattr_t *attr);
+int pthread_mutex_destroy(pthread_mutex_t *m);     /* nessuno deve tenerlo */
+
+int pthread_mutex_lock(pthread_mutex_t *m);        /* aspetta che sia libero */
+int pthread_mutex_trylock(pthread_mutex_t *m);     /* EBUSY invece di aspettare */
+int pthread_mutex_unlock(pthread_mutex_t *m);
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{init} serve per un mutex che non è globale: uno dentro una struttura allocata con \texttt{malloc}.
+          \texttt{attr} a \texttt{NULL} significa i valori predefiniti, che vanno bene.
+    \item Restituiscono un codice d'errore, come ogni chiamata \texttt{pthread}, e non $-1$ con \texttt{errno}.
+    \item \texttt{trylock} non è la versione educata di \texttt{lock}: si usa solo quando c'è qualcos'altro da fare nel
+          frattempo.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il contatore, corretto}]
+static int count = 0;
+static pthread_mutex_t count_mtx = PTHREAD_MUTEX_INITIALIZER;
+
+static void *bump(void *arg) {
+    for (int i = 0; i < 100000; i++) {
+        pthread_mutex_lock(&count_mtx);
+        count++;                         /* tutto il load-add-store, da solo */
+        pthread_mutex_unlock(&count_mtx);
+    }
+    return NULL;
+}
+\end{lstlisting}
+
+Ora \texttt{count} vale 800000 a ogni esecuzione: la risposta non dipende più dai tempi. Gli otto thread non possono più
+sovrapporsi su quella riga, e il programma è più lento, perché ora fanno la fila. È questo lo scambio.
+
+\subsection{Un mutex protegge dati, non righe di codice}
+
+\begin{itemize}
+    \item Ogni accesso alla variabile prende lo stesso mutex, \textbf{letture comprese}: un thread che legge una struttura
+          mentre un altro la sta aggiornando legge qualcosa che non è mai stato vero.
+    \item Due mutex sulla stessa variabile non proteggono niente: due thread ne prendono uno ciascuno ed entrano entrambi.
+    \item Se la struttura viene modificata in un solo punto, basta un mutex attorno a quella \textbf{sezione critica}. Se la
+          si tocca da più punti, il mutex appartiene alla struttura e viaggia con lei.
+    \item Bisogna dire ad alta voce che cosa protegge il mutex, e scriverlo accanto alla sua dichiarazione: è l'unico posto
+          in cui quell'associazione resta registrata.
+\end{itemize}
+Niente controlla nulla di tutto questo: \texttt{count++} senza lock compila benissimo.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il lock dentro la struttura che protegge}]
+struct clients {
+    int fd[MAX];
+    int n;                        /* protetto da mtx, insieme a fd[] */
+    pthread_mutex_t mtx;          /* il lock viaggia con i dati */
+};
+
+struct clients *clients_new(void) {
+    struct clients *c = malloc(sizeof *c);
+    if (c == NULL) return NULL;
+    c->n = 0;
+    pthread_mutex_init(&c->mtx, NULL);   /* allocato con malloc: niente inizializzatore statico */
+    return c;
+}
+\end{lstlisting}
+
+Chi riceve il puntatore riceve il lock con esso, e non c'è modo di raggiungere i dati senza vederlo. Un lock per struttura,
+non un lock per tutto il server.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Un oggetto condiviso con un contatore di riferimenti}]
+struct session { int fd; int refs; pthread_mutex_t mtx; };
+
+void session_hold(struct session *s) {          /* un thread in piu' la usa */
+    pthread_mutex_lock(&s->mtx);
+    s->refs++;
+    pthread_mutex_unlock(&s->mtx);
+}
+
+void session_release(struct session *s) {
+    pthread_mutex_lock(&s->mtx);
+    if (--s->refs > 0) { pthread_mutex_unlock(&s->mtx); return; }
+    pthread_mutex_unlock(&s->mtx);              /* l'ultimo a uscire: nessuno la raggiunge */
+    pthread_mutex_destroy(&s->mtx);
+    free(s);
+}
+\end{lstlisting}
+
+Il contatore è stato condiviso come qualunque altro, quindi vuole il lock; e l'oggetto viene liberato da chi lo porta a
+\textbf{zero}, non dal thread che l'ha creato.
+
+\subsection{Per quanto tempo tenere un lock}
+
+\begin{itemize}
+    \item \textbf{Chiudere tardi e aprire presto}: quello che sta fra i due gira un thread alla volta, ed è la parte del
+          server che non scala.
+    \item \textbf{Mai attraverso una chiamata bloccante}. Una \texttt{write} verso un client lento può durare secondi; tenendo
+          il lock mentre succede, ogni altro thread aspetta quel client. Si copia ciò che serve, si apre, poi si invia.
+    \item Ma senza andare all'estremo opposto: chiudere, leggere un valore, aprire e poi agire. A quel punto il valore può essere
+          falso. Ciò che deve essere indivisibile è \textbf{la decisione insieme all'azione}.
+    \item Due strutture indipendenti hanno due mutex, non uno: i thread che lavorano su cose diverse non devono fare la fila
+          l'uno dietro l'altro.
+\end{itemize}
+In una riga: lo si tiene per poche istruzioni sulla memoria, \textbf{mai durante l'I/O}.
+
+\subsection{Due lock, due thread, nessun progresso}
+
+Il thread A inoltra una riga e ha bisogno del log; il thread B scrive il log e ha bisogno della tabella dei client.
+Ciascuno ha già preso un lock. Nessuno dei due andrà più avanti: ognuno tiene ciò che l'altro aspetta, e un mutex lo
+rilascia solo il suo proprietario. È un \key{deadlock}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    th/.style={draw=netblue!70!black, fill=netblue!10, rounded corners=3pt, minimum width=2.2cm, minimum height=0.7cm},
+    lk/.style={draw=netred, fill=netred!10, minimum width=2.2cm, minimum height=0.7cm, font=\scriptsize\ttfamily},
+    a/.style={-{Stealth[length=2mm]}, thick}]
+  \node[th] (A) at (0,1.4)  {thread A};
+  \node[lk] (C) at (5,1.4)  {clients.mtx};
+  \node[lk] (L) at (0,-0.4) {log.mtx};
+  \node[th] (B) at (5,-0.4) {thread B};
+  \draw[a, netgreen!60!black] (A) -- node[above]{tiene} (C);
+  \draw[a, netgreen!60!black] (B) -- node[below]{tiene} (L);
+  \draw[a, netred, dashed] (C) -- node[right]{aspetta} (B);
+  \draw[a, netred, dashed] (L) -- node[left]{aspetta} (A);
+\end{tikzpicture}
+\caption{Un ciclo di attese: A aspetta \texttt{log.mtx}, tenuto da B, che aspetta \texttt{clients.mtx}, tenuto da A.}
+\end{figure}
+
+La cura è fissare un \textbf{ordine} sui lock (prima la tabella, poi il log) e far sì che ogni thread li prenda in
+quell'ordine: il ciclo non può formarsi. Dove l'ordine non si conosce in anticipo, si usa \texttt{trylock}, e su
+\texttt{EBUSY} si rilascia tutto ciò che si tiene e si ricomincia.
+
+\subsection{Tipi di mutex, e mutex fra processi}
+
+\begin{itemize}
+    \item \textbf{Default} (\texttt{PTHREAD\_MUTEX\_NORMAL}): chiuderlo due volte dallo stesso thread è un deadlock: il
+          thread aspetta se stesso.
+    \item \texttt{PTHREAD\_MUTEX\_ERRORCHECK} restituisce invece \texttt{EDEADLK}, e rifiuta un \texttt{unlock} da un thread
+          che non ne è proprietario. Utile mentre si fa il debug.
+    \item \texttt{PTHREAD\_MUTEX\_RECURSIVE} conta, e si apre all'\texttt{unlock} corrispondente. Averne bisogno di solito
+          significa che una funzione che ha chiuso il lock ne chiama un'altra che lo chiude di nuovo: è la struttura da
+          correggere, non il mutex.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}]
+pthread_mutexattr_t a;
+pthread_mutexattr_init(&a);
+pthread_mutexattr_settype(&a, PTHREAD_MUTEX_ERRORCHECK);
+pthread_mutex_init(&m, &a);
+\end{lstlisting}
+
+Un mutex in memoria ordinaria non significa nulla per un figlio dopo la \texttt{fork}: il figlio ne ha una copia. Per
+condividerne uno fra processi deve stare in \textbf{memoria condivisa}, con \texttt{PTHREAD\_PROCESS\_SHARED} impostato negli
+attributi.
+
+% ══════════════════════════════════════════════════════════════
+\section{Le variabili di condizione}
+% ══════════════════════════════════════════════════════════════
+
+Un mutex risponde a una sola domanda: \emph{nessun altro mentre ci sono io}. Non risponde all'altra, \emph{aspetta che ci
+sia qualcosa da fare}, che è ciò di cui ha bisogno un worker con la coda vuota.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Aspettare con il solo mutex: attesa attiva}]
+for (;;) {
+    pthread_mutex_lock(&m);
+    if (queue->count > 0) break;      /* trovato lavoro: si esce tenendo m */
+    pthread_mutex_unlock(&m);         /* ancora niente: si lascia entrare qualcun altro e si richiede */
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item Funziona, e brucia un processore a porre una domanda la cui risposta è quasi sempre no.
+    \item Dormendo fra un tentativo e l'altro si smette di bruciarlo, ma si risponde in ritardo: non esiste un intervallo
+          giusto.
+    \item Manca un modo di \textbf{dormire finché qualcuno non dice che lo stato è cambiato}: le variabili di condizione di
+          Hoare.
+\end{itemize}
+
+\dfn{Variabile di condizione}{
+    Una \textbf{variabile di condizione} è una coda di thread che aspettano che qualcosa diventi vero sullo stato condiviso,
+    con due operazioni: \texttt{wait}, che mette in coda, e \texttt{signal}, che ne fa uscire qualcuno.
+}
+
+\begin{itemize}
+    \item Non contiene alcun valore e non ha memoria: un \texttt{signal} quando nessuno aspetta \textbf{va perso}. Per questo
+          la condizione vera e propria vive nello stato condiviso (\texttt{count > 0}), mai nella variabile.
+    \item Ed è per questo che va sempre insieme al mutex che protegge quello stato.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}]
+pthread_cond_t c = PTHREAD_COND_INITIALIZER;                 /* oppure, in una struttura: */
+int pthread_cond_init(pthread_cond_t *c, const pthread_condattr_t *attr);
+int pthread_cond_destroy(pthread_cond_t *c);                 /* nessuno deve aspettarci sopra */
+\end{lstlisting}
+
+\subsection{Che cosa fa pthread\_cond\_wait con il mutex}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    st/.style={draw=#1, fill=#1!8, rounded corners=3pt, text width=3.6cm, align=center, minimum height=1.3cm},
+    a/.style={-{Stealth[length=2mm]}, thick, black!60}]
+  \node[st=netblue] (s1) at (0,0)   {\textbf{1. prima}\\il thread tiene il mutex\\e trova il predicato falso};
+  \node[st=netgreen!70!black] (s2) at (4.6,0) {\textbf{2. dentro cond\_wait}\\rilascia il mutex ed entra\\in coda, in un passo solo};
+  \node[st=netblue] (s3) at (9.2,0) {\textbf{3. dopo un signal}\\compete di nuovo per il mutex,\\e ritorna tenendolo};
+  \draw[a] (s1) -- (s2); \draw[a] (s2) -- (s3);
+  \node[text=netred] at (0,-1.0) {mutex tenuto};
+  \node[text=netgreen!60!black, align=center] at (4.6,-1.15) {mutex libero: qualcun altro\\può cambiare lo stato};
+  \node[text=netred] at (9.2,-1.0) {mutex tenuto};
+\end{tikzpicture}
+\caption{Solo nella fase centrale un altro thread può rendere vero il predicato.}
+\end{figure}
+
+\begin{itemize}
+    \item Il mutex va tenuto quando la si chiama, perché si è appena letto lo stato condiviso per trovare la condizione falsa.
+    \item Rilascia il mutex ed entra in coda come \textbf{un unico passo indivisibile}: nessun \texttt{signal} può infilarsi
+          in mezzo, ed è proprio quello che andrebbe perso se si aprisse il mutex da soli prima.
+    \item Quando ritorna il mutex è di nuovo tenuto: il chiamante è dov'era, e può guardare lo stato ancora una volta.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l >{\ttfamily}l}
+\toprule
+\normalfont\textbf{Chi aspetta la condizione} & \normalfont\textbf{Chi la rende vera} \\
+\midrule
+pthread\_mutex\_lock(\&m)             & pthread\_mutex\_lock(\&m) \\
+while (condizione falsa)              & \normalfont cambia lo stato condiviso \\
+\ \ pthread\_cond\_wait(\&c, \&m)     & pthread\_cond\_signal(\&c) \\
+\normalfont usa lo stato              & pthread\_mutex\_unlock(\&m) \\
+pthread\_mutex\_unlock(\&m)           & \\
+\bottomrule
+\end{tabular}
+\caption{I due lati dello schema. Entrambi tengono il mutex: chi cambia lo stato perché nessuno lo legga cambiato a metà,
+         chi aspetta perché il controllo e il sonno non si possano separare. Rendere vera una condizione non blocca mai.}
+\end{table}
+
+\warning{Perché la wait sta dentro un while}{
+    \texttt{pthread\_cond\_wait} è appena tornata: la condizione è vera? \textbf{Non necessariamente}. Per questo la chiamata
+    sta dentro un \texttt{while}, mai dentro un \texttt{if}.
+    \begin{itemize}
+        \item Fra il \texttt{signal} e la riacquisizione del mutex un altro thread può aver preso l'elemento: ci è stato detto
+              \emph{c'è qualcosa}, non \emph{c'è qualcosa per te}.
+        \item Un \texttt{broadcast} sveglia dieci thread per un solo elemento, e nove trovano di nuovo la condizione falsa.
+        \item E POSIX ammette i \textbf{risvegli spuri}: la chiamata può tornare senza che nessuno abbia segnalato.
+    \end{itemize}
+    Il \texttt{while} costa un controllo in più e rende i tre casi uno solo: si guarda lo stato, e se non è quello che serve
+    si aspetta di nuovo.
+}
+
+\subsection{signal o broadcast}
+
+\begin{itemize}
+    \item \texttt{pthread\_cond\_signal} sveglia \textbf{esattamente uno} dei thread in attesa, scelto in modo non
+          deterministico. Se nessuno aspetta non fa nulla, e non resta traccia di niente.
+    \item \texttt{pthread\_cond\_broadcast} li sveglia \textbf{tutti}. Escono comunque uno alla volta, perché ciascuno deve
+          riprendere il mutex.
+    \item Si usa \texttt{signal} quando uno qualsiasi dei thread in attesa può gestire ciò che è cambiato: è arrivato un
+          elemento, basta un worker.
+    \item Si usa \texttt{broadcast} quando chi aspetta non è intercambiabile, o quando ciò che è cambiato riguarda tutti (il
+          server si sta chiudendo).
+\end{itemize}
+\texttt{broadcast} dove bastava \texttt{signal} è solo più lento; \texttt{signal} dove serviva \texttt{broadcast} è un
+thread che non si sveglia più.
+
+\subsection{Un produttore, due consumatori}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il consumatore}]
+static struct { int a, b; } shared;
+static pthread_mutex_t m        = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t  nonempty = PTHREAD_COND_INITIALIZER;
+static const struct timespec pause = { 0, 200000000 };   /* 200 ms */
+
+static void *consumer_one(void *arg) {
+    for (;;) {
+        pthread_mutex_lock(&m);
+        while (shared.a == 0)                       /* ancora niente da prendere */
+            pthread_cond_wait(&nonempty, &m);
+        printf("consumer 1: a = %d\n", shared.a);
+        shared.a--;
+        pthread_mutex_unlock(&m);
+        nanosleep(&pause, NULL);                    /* fuori dal lock, di proposito */
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il produttore}]
+static void *producer(void *arg) {
+    for (int j = 0; j < 10; j++) {
+        pthread_mutex_lock(&m);
+        shared.a++; shared.b++;
+        printf("producer: a = %d b = %d\n", shared.a, shared.b);
+        pthread_cond_signal(&nonempty);             /* uno dei due consumatori */
+        pthread_mutex_unlock(&m);
+        nanosleep(&pause, NULL);
+    }
+    return NULL;
+}
+\end{lstlisting}
+
+Il secondo consumatore è lo stesso ciclo sulla stessa variabile di condizione, e prende \texttt{a} e \texttt{b} insieme:
+due thread nella stessa coda. Nell'esecuzione \texttt{a} non supera mai 1: i consumatori lo svuotano alla stessa velocità
+con cui si riempie. Quale dei due riceve l'elemento è una scelta di \texttt{signal}, non nostra.
+
+\subsection{Aspettare con una scadenza}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers]
+int pthread_cond_timedwait(pthread_cond_t *c, pthread_mutex_t *m,
+                           const struct timespec *abstime);   /* un istante, non una durata */
+
+struct timespec deadline;
+clock_gettime(CLOCK_REALTIME, &deadline);
+deadline.tv_sec += 2;
+
+pthread_mutex_lock(&m);
+int rc = 0;
+while (!ready && rc == 0)
+    rc = pthread_cond_timedwait(&c, &m, &deadline);           /* 0, oppure ETIMEDOUT */
+pthread_mutex_unlock(&m);
+\end{lstlisting}
+
+La scadenza è \textbf{assoluta} perché rientrare nel ciclo non faccia ripartire l'orologio. Per default si misura su
+\texttt{CLOCK\_REALTIME}, che salta quando qualcuno regola l'orologio: \texttt{pthread\_condattr\_setclock(\&attr,
+CLOCK\_MONOTONIC)} è ciò che la rende un timeout vero.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il buffer limitato}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    cell/.style={draw=black!60, minimum width=0.7cm, minimum height=0.7cm, fill=#1},
+    a/.style={-{Stealth[length=2mm]}, thick}]
+  \foreach \i/\c in {0/white, 1/white, 2/netgreen!25, 3/netgreen!25, 4/netgreen!25, 5/netgreen!25, 6/white, 7/white, 8/white, 9/white}
+    \node[cell=\c] (c\i) at (\i*0.7,0) {};
+  \node[draw=netred, thick, rounded corners, fit=(c0) (c9), inner sep=4pt,
+        label={[text=netred]below:un mutex su tutto}] {};
+  \draw[a, netblue] (1.4,1.0) node[above]{\texttt{out}} -- (c2.north);
+  \draw[a, netblue] (4.2,1.0) node[above]{\texttt{in}} -- (c6.north);
+  \node[anchor=south] at (5.6,0.6) {\texttt{count = 4}};
+  \node[draw=netblue!70!black, fill=netblue!8, rounded corners, align=center] (p) at (-2.6,0) {produttori\\\texttt{put\_item}};
+  \node[draw=netgreen!70!black, fill=netgreen!8, rounded corners, align=center] (q) at (9.4,0) {consumatori\\\texttt{get\_item}};
+  \draw[a] (p) -- (c0.west);
+  \draw[a] (c9.east) -- (q.west);
+  \node[text=black!60, align=center] at (-2.6,-1.0) {pieno: aspetta\\su \texttt{not\_full}};
+  \node[text=black!60, align=center] at (9.4,-1.0) {vuoto: aspetta\\su \texttt{not\_empty}};
+\end{tikzpicture}
+\caption{$n$ posti, alcuni produttori, alcuni consumatori. Se è pieno un produttore aspetta; se è vuoto aspetta un
+         consumatore.}
+\end{figure}
+
+Servono uno stato condiviso (l'array, \texttt{in}, \texttt{out}, \texttt{count}), \textbf{un} mutex su tutto, e
+\textbf{due} variabili di condizione, perché le cose da aspettare sono due. È lo stesso oggetto che più avanti starà fra un
+ciclo di \texttt{accept} e un insieme fisso di worker.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={La struttura condivisa}]
+#define BUF_SIZE 10
+
+typedef struct {
+    int buf[BUF_SIZE];
+    int in, out, count;          /* 0 <= count <= BUF_SIZE; in e out modulo BUF_SIZE */
+    pthread_mutex_t mtx;
+    pthread_cond_t not_full;     /* qui aspettano i produttori */
+    pthread_cond_t not_empty;    /* qui aspettano i consumatori */
+} bbuff_t;
+
+void bbuff_init(bbuff_t *b) {
+    b->in = b->out = b->count = 0;
+    pthread_mutex_init(&b->mtx, NULL);
+    pthread_cond_init(&b->not_full, NULL);
+    pthread_cond_init(&b->not_empty, NULL);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={put\_item e get\_item}]
+void put_item(bbuff_t *b, int item) {
+    pthread_mutex_lock(&b->mtx);
+    while (b->count == BUF_SIZE)                   /* pieno: si aspetta posto */
+        pthread_cond_wait(&b->not_full, &b->mtx);
+    b->buf[b->in] = item;
+    b->in = (b->in + 1) % BUF_SIZE;
+    b->count++;
+    pthread_cond_signal(&b->not_empty);            /* adesso c'e' qualcosa */
+    pthread_mutex_unlock(&b->mtx);
+}
+
+int get_item(bbuff_t *b) {
+    pthread_mutex_lock(&b->mtx);
+    while (b->count == 0)                          /* vuoto: si aspetta un elemento */
+        pthread_cond_wait(&b->not_empty, &b->mtx);
+    int item = b->buf[b->out];
+    b->out = (b->out + 1) % BUF_SIZE;
+    b->count--;
+    pthread_cond_signal(&b->not_full);             /* di nuovo un posto libero */
+    pthread_mutex_unlock(&b->mtx);
+    return item;
+}
+\end{lstlisting}
+
+Ciascuna funzione aspetta su una condizione e segnala l'altra. Queste due funzioni sono \textbf{tutta l'interfaccia}: chi
+le chiama non vede mai il mutex, e quindi non può dimenticarlo.
+
+\warning{Perché due variabili di condizione e non una}{
+    Una variabile sola per entrambe le condizioni. Il buffer è pieno, i produttori ci aspettano sopra, e un consumatore prende
+    un elemento e segnala: chi si sveglia? Il thread che sceglie l'implementazione, e può essere \textbf{un altro
+    consumatore}, che trova il buffer vuoto e torna a dormire. Il risveglio è sprecato, i produttori aspettano ancora, e
+    c'è posto.
+    \begin{itemize}
+        \item Niente viene memorizzato: un segnale consegnato a un thread che non può usarlo è semplicemente perso.
+        \item O una variabile per condizione, come abbiamo fatto, oppure una sola e sempre \texttt{broadcast}, svegliando
+              tutti ogni volta per trovare l'unico che può procedere.
+    \end{itemize}
+    Da qui la regola: \textbf{una variabile di condizione per ogni cosa che i thread aspettano}.
+}
+
+\subsection{Avviare i thread, e fermarli}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={La pillola avvelenata}]
+for (int i = 0; i < N_PROD; i++) pthread_create(&prod[i], NULL, producer, bb);
+for (int i = 0; i < N_CONS; i++) pthread_create(&cons[i], NULL, consumer, bb);
+
+for (int i = 0; i < N_PROD; i++)
+    pthread_join(prod[i], NULL);          /* nessuno mettera' altro */
+
+for (int i = 0; i < N_CONS; i++)
+    put_item(bb, KILL_PILL);              /* un elemento velenoso per ogni consumatore */
+
+for (int i = 0; i < N_CONS; i++)
+    pthread_join(cons[i], NULL);          /* ciascuno ritorna quando legge il suo */
+\end{lstlisting}
+
+Un consumatore addormentato in \texttt{cond\_wait} non si può avvisare di fermarsi: cancellarlo lascerebbe il mutex chiuso.
+Lo si ferma allora nel modo in cui sta già ascoltando: \textbf{attraverso il buffer}.
+
+% ══════════════════════════════════════════════════════════════
+\section{I semafori}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Semaforo}{
+    Un \textbf{semaforo} è un intero non negativo con due operazioni atomiche: \texttt{wait} lo decrementa, bloccando finché
+    vale zero, e \texttt{signal} lo incrementa. Dijkstra le chiamava \textbf{P} e \textbf{V}.
+}
+
+\begin{itemize}
+    \item Un semaforo \textbf{contatore}: il valore è il numero di \textbf{permessi} ancora disponibili, cioè quante copie di
+          una risorsa sono libere.
+    \item Un semaforo \textbf{binario}, zero o uno, si comporta come un mutex con una differenza: \textbf{non ha
+          proprietario}, quindi qualunque thread può restituire un permesso.
+    \item Ed è questo che lo rende anche un modo di dire \emph{è successo}: parte da zero, un thread aspetta, un altro fa
+          \texttt{post}.
+    \item Il conteggio è tenuto per noi, quindi, a differenza di una variabile di condizione, non c'è un nostro predicato da
+          controllare, e niente \texttt{while}.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    th/.style={draw=netblue!70!black, fill=netblue!10, rounded corners=2pt, minimum width=1.4cm, minimum height=0.55cm},
+    a/.style={-{Stealth[length=2mm]}, thick}]
+  \node[draw=netgreen!70!black, thick, rounded corners, minimum width=3.6cm, minimum height=2.2cm,
+        label={[text=netgreen!60!black]above:\texttt{sem\_init(\&slots, 0, 4)}}] (z) at (4,0) {};
+  \node[th] at (3.2,0.5)  {thread 1};
+  \node[th] at (4.8,0.5)  {thread 2};
+  \node[th] at (3.2,-0.5) {thread 3};
+  \node[th] at (4.8,-0.5) {thread 6};
+  \node[th] (t5) at (-0.9,0) {thread 5};
+  \draw[a, netred] (t5) -- node[above]{\texttt{sem\_wait}} node[below, text=netred, align=center]{valore 0:\\si blocca} (z.west);
+  \node[th] (t4) at (8.9,0) {thread 4};
+  \draw[a, netgreen!60!black] (z.east) -- node[above]{\texttt{sem\_post}} node[below, align=center]{valore 1:\\entra il 5} (t4);
+  \node[text=black!60] at (4,-1.45) {al più quattro dentro, qualunque cosa arrivi};
+\end{tikzpicture}
+\caption{Il valore non è un flag né un lock: è \textbf{quanti possono stare ancora dentro}. Il 4 esce e restituisce il suo permesso, il 5 lo prende. E siccome nessuno possiede un
+         permesso, un thread può restituirne uno che non ha mai preso: è tutta la differenza da un mutex.}
+\end{figure}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={I semafori POSIX}]
+#include <semaphore.h>
+
+sem_t s;
+int sem_init(sem_t *s, int pshared, unsigned value);  /* pshared 0: thread di questo processo */
+int sem_wait(sem_t *s);       /* prende un permesso; blocca finche' il valore e' 0 */
+int sem_trywait(sem_t *s);    /* EAGAIN invece di bloccare */
+int sem_post(sem_t *s);       /* ne restituisce uno, e sveglia chi aspetta */
+int sem_destroy(sem_t *s);
+\end{lstlisting}
+
+\begin{itemize}
+    \item Sono chiamate Unix, non \texttt{pthread}: restituiscono $-1$ e impostano \texttt{errno}.
+    \item \texttt{sem\_wait} restituisce \texttt{EINTR} se un handler di segnale gira mentre aspetta, quindi va messa in un
+          ciclo.
+    \item \texttt{sem\_post} è l'unica chiamata di sincronizzazione che si può usare dentro un handler di segnale.
+    \item Su macOS \texttt{sem\_init} è deprecata e non funziona: si usa il container del corso.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Lo stesso buffer con i semafori}]
+sem_t empty, full, lock;         /* inizializzati a BUF_SIZE, 0 e 1 */
+
+void put_item(int item) {
+    sem_wait(&empty);            /* un posto libero, o si aspetta */
+    sem_wait(&lock);
+    buf[in] = item; in = (in + 1) % BUF_SIZE;
+    sem_post(&lock);
+    sem_post(&full);             /* un elemento in piu' da prendere */
+}
+
+int get_item(void) {
+    sem_wait(&full);
+    sem_wait(&lock);
+    int item = buf[out]; out = (out + 1) % BUF_SIZE;
+    sem_post(&lock);
+    sem_post(&empty);
+    return item;
+}
+\end{lstlisting}
+
+Niente \texttt{while} e niente \texttt{count}: \texttt{empty} e \texttt{full} \textbf{sono} il conteggio. \texttt{lock}
+serve ancora: i due semafori contano gli elementi, non proteggono \texttt{in} e \texttt{out}.
+
+\subsection{Semaforo o variabile di condizione}
+
+\begin{itemize}
+    \item Se ciò che si aspetta è \emph{è disponibile un'unità di qualcosa}, un semaforo lo dice in una chiamata e tiene il
+          conteggio per noi.
+    \item Se è qualunque altro predicato (\emph{due elementi sono pronti}, \emph{questo client entra nella tabella},
+          \emph{il server si sta chiudendo}), lo strumento è la variabile di condizione: il predicato è nostro e può essere
+          qualsiasi cosa.
+    \item L'ordine delle due \texttt{sem\_wait} in \texttt{put\_item} non è libero: prendendo \texttt{lock} prima di
+          \texttt{empty}, un buffer pieno va in deadlock. È di nuovo la regola dell'ordine dei lock.
+    \item Per uno stato che tutti leggono e quasi nessuno scrive (la tabella dei client connessi) POSIX ha
+          \texttt{pthread\_rwlock\_t}: molti lettori insieme, uno scrittore da solo.
+\end{itemize}
+Tre strumenti, una domanda ciascuno: \textbf{chi può stare dentro} (mutex), \textbf{che cosa sto aspettando} (variabile di
+condizione), \textbf{quanti insieme} (semaforo).
+
+\subsection{Limitare la concorrenza con un semaforo contatore}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Al piu' 64 client serviti insieme}]
+static sem_t slots;                      /* quanti client serviamo insieme */
+
+static void *worker(void *arg) {
+    int fd = *(int *) arg; free(arg);
+    serve(fd);
+    close(fd);
+    sem_post(&slots);                    /* il permesso torna indietro */
+    return NULL;
+}
+
+sem_init(&slots, 0, 64);
+for (;;) {
+    int fd = accept(listen_fd, NULL, NULL);
+    sem_wait(&slots);                    /* 64 gia' dentro: il ciclo aspetta qui */
+    int *p = malloc(sizeof *p); *p = fd;
+    pthread_create(&tid, NULL, worker, p);
+}
+\end{lstlisting}
+
+Senza, il server crea un thread per qualunque cosa arrivi. Con, il numero di thread è limitato e gli altri aspettano nella
+coda di \texttt{listen}.
+
+\subsection{Una globale privata di ogni thread}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers]
+static pthread_key_t ctx_key;
+
+static void ctx_free(void *p) { free(p); }       /* gira quando un thread termina */
+
+pthread_key_create(&ctx_key, ctx_free);          /* una volta, prima dei thread */
+
+pthread_setspecific(ctx_key, ctx);               /* in ogni worker: la mia connessione */
+struct ctx *c = pthread_getspecific(ctx_key);    /* ovunque piu' sotto, senza passarlo */
+
+_Thread_local int depth;                         /* C11: la stessa idea, variabile semplice */
+\end{lstlisting}
+
+Una chiave, un valore per thread, \texttt{NULL} ovunque finché qualcuno non lo imposta; il distruttore gira una volta per
+thread, alla sua fine. Serve per un contesto che altrimenti si dovrebbe passare attraverso ogni funzione, non come scusa per
+non passare un argomento.
+
+% ══════════════════════════════════════════════════════════════
+\section{Esercizi}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Produttori e consumatori}
+Prendere $n$ e $m$ dalla riga di comando e avviare $n$ produttori e $m$ consumatori su un array condiviso di 100 interi.
+Ogni produttore aspetta un numero casuale di secondi fra 1 e 10, poi inserisce da 1 a 5 numeri casuali; se trova l'array
+pieno, salta il turno. Ogni consumatore aspetta finché c'è qualcosa, poi stampa il proprio thread id e il valore preso.
+Provare con \texttt{./prodcons 3 2} e poi con 1 produttore e 8 consumatori. Quale delle due attese è una
+\texttt{cond\_wait}, e quale non è affatto un'attesa? E che cosa va storto se le due variabili di condizione diventano
+una?
+
+\svolgimento
+Il produttore \textbf{non aspetta} il posto: se l'array è pieno rinuncia al turno, quindi gli basta il mutex. Solo il
+consumatore aspetta, su \texttt{not\_empty}.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={prodcons.c: le due funzioni dei thread}]
+#define CAP 100
+static int arr[CAP], count = 0;
+static pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t not_empty = PTHREAD_COND_INITIALIZER;
+
+static void *producer(void *arg) {
+    unsigned seed = (unsigned) (uintptr_t) arg;
+    for (;;) {
+        sleep(rand_r(&seed) % 10 + 1);
+        int k = rand_r(&seed) % 5 + 1;
+        pthread_mutex_lock(&m);
+        if (count + k <= CAP) {                       /* c'e' posto per tutti e k */
+            for (int i = 0; i < k; i++) arr[count++] = rand_r(&seed) % 1000;
+            pthread_cond_broadcast(&not_empty);       /* k elementi: piu' consumatori */
+        }                                             /* altrimenti salta il turno */
+        pthread_mutex_unlock(&m);
+    }
+}
+
+static void *consumer(void *arg) {
+    for (;;) {
+        pthread_mutex_lock(&m);
+        while (count == 0)
+            pthread_cond_wait(&not_empty, &m);
+        int v = arr[--count];
+        pthread_mutex_unlock(&m);
+        printf("%lu: %d\n", (unsigned long) pthread_self(), v);   /* fuori dal lock */
+    }
+}
+\end{lstlisting}
+
+Si usa \texttt{broadcast} perché un produttore può aggiungere fino a cinque elementi, e con \texttt{signal} se ne
+sveglierebbe un consumatore solo. Con 1 produttore e 8 consumatori quasi tutti i consumatori passano il tempo in
+\texttt{cond\_wait}: l'output è a raffiche, una ogni volta che il produttore si sveglia.
+
+Nella versione completa, in cui anche il produttore aspetta su \texttt{not\_full}, unire le due variabili in una porta al
+caso del riquadro: un \texttt{signal} destinato a un produttore può svegliare un consumatore, che trova la condizione
+falsa e torna a dormire, e il segnale è perso. Il programma può restare fermo con posto libero e produttori in attesa.
+\end{esercizio}
+
+\Needspace{20\baselineskip}
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Un \textbf{mutex} risponde «uno alla volta»: ogni accesso prende lo stesso, letture comprese, tenuto per poche
+          istruzioni e mai durante l'I/O.
+    \item Due lock presi in due ordini sono un \textbf{deadlock}; un ordine unico per tutto il programma lo elimina.
+    \item Una \textbf{variabile di condizione} serve ad aspettare un predicato nostro: \texttt{wait} dentro un
+          \texttt{while}, sempre tenendo il mutex, e \texttt{signal} dopo aver cambiato lo stato.
+    \item \texttt{signal} sveglia uno, \texttt{broadcast} tutti; un \texttt{signal} che nessuno aspetta va perso, per questo
+          la condizione vive nello stato condiviso.
+    \item Il \textbf{buffer limitato} è un mutex e due condizioni dietro due funzioni: la coda che starà fra un ciclo di
+          \texttt{accept} e i suoi worker.
+    \item Un \textbf{semaforo} conta permessi: lo stesso buffer senza predicato, e il modo di limitare quanti client un server
+          serve insieme.
+\end{itemize}
+}

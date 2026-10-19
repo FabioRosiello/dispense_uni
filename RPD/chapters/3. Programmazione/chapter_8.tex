@@ -1,0 +1,903 @@
+\chapter{Protocolli applicativi, delimitazione e affidabilità su UDP}
+
+Cinque versioni della stessa chat, e ognuna ha cambiato \textbf{chi esegue il codice}: un processo, un thread, un ciclo, un
+pool.
+\begin{itemize}
+    \item Ciò che viaggia sulla connessione non è mai cambiato: una riga di testo, senza nome, senza lunghezza e senza un modo
+          per essere sbagliata.
+    \item Il server non può rifiutare niente, perché non ha modo di rispondere a niente se non con altro testo.
+    \item E tutto funziona perché sotto c'è TCP: i byte arrivano, in ordine, esattamente una volta, oppure la connessione
+          muore.
+    \item Qui il protocollo diventa un oggetto \textbf{da progettare}: tipi di messaggio, confini, codici di errore.
+    \item Poi togliamo TCP, mettiamo sotto i datagrammi, e scriviamo a mano quello che faceva lui per noi.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Le quattro domande, rivolte al nostro protocollo}
+% ══════════════════════════════════════════════════════════════
+
+Un protocollo applicativo fissa i \textbf{tipi} di messaggio, la loro \textbf{sintassi}, la \textbf{semantica} dei campi
+e le \textbf{regole} dello scambio: è la definizione della prima parte, e ne abbiamo già usati tre (HTTP, SMTP, DNS).
+Rivolte alla nostra chat, le quattro domande diventano:
+\begin{itemize}
+    \item \textbf{Tipi}: un client che entra, invia, esce; un server che consegna, conferma, rifiuta. Il nostro ne ha uno
+          solo, e senza nome.
+    \item \textbf{Sintassi}: dove comincia e dove finisce ogni messaggio, e come sono separati i campi al suo interno. È la
+          domanda difficile.
+    \item \textbf{Semantica}: che cosa significa un nome, che cosa significa un corpo vuoto, che cosa fa il server con un
+          messaggio per qualcuno che se n'è andato.
+    \item \textbf{Regole}: chi parla per primo, che cosa si può inviare prima di essere entrati, e che fine fa un messaggio
+          che arriva fuori turno.
+\end{itemize}
+
+\subsection{Testo o byte}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l}
+\toprule
+\textbf{Testo} & \textbf{Binario} \\
+\midrule
+lo si scrive a mano con \texttt{nc}              & serve un programma per inviare qualsiasi cosa \\
+lunghezza variabile: un numero è da 1 a 10 cifre & larghezza fissa: un numero è sempre 4 byte \\
+leggerlo è scandire e convertire                 & leggerlo è copiare e invertire i byte \\
+HTTP, SMTP, WHOIS                                & DNS, TLS, tutto ciò che sta sotto il trasporto \\
+\bottomrule
+\end{tabular}
+\caption{Le due codifiche a confronto.}
+\end{table}
+
+\begin{itemize}
+    \item Il testo costa byte e analisi; il binario costa \textbf{ogni sessione di debug} che si farà mai su di esso.
+    \item Nessuno dei due risponde alla domanda di dove finisce un messaggio: è una decisione separata, e viene subito dopo.
+    \item Un compromesso comune: un'\textbf{intestazione binaria} che dice quanto è lungo il messaggio, e un corpo che è
+          quello che si vuole.
+\end{itemize}
+
+\subsection{Codificare un messaggio come testo, per bene}
+
+La codifica a testo del primo capitolo funzionava, ma aveva tre difetti che un server non può permettersi.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Codificare e decodificare una riga di numeri}]
+char msg[128];
+size_t off = 0;
+for (int i = 0; i < n; i++) {                            /* codifica */
+    int k = snprintf(msg + off, sizeof msg - off, "%d ", a[i]);
+    if (k < 0 || (size_t) k >= sizeof msg - off) return -1;   /* non ci starebbe */
+    off += (size_t) k;
+}
+msg[off++] = '\n';                      /* il delimitatore fa parte del protocollo */
+send_all(fd, msg, off);
+
+char *save, *tok = strtok_r(line, " ", &save);          /* decodifica */
+for (i = 0; tok != NULL && i < MAX_VALUES; i++) {
+    char *end;
+    errno = 0;
+    long v = strtol(tok, &end, 10);
+    if (errno != 0 || *end != '\0') return -1;           /* "abc" non e' zero: e' un errore */
+    vals[i] = (int) v;
+    tok = strtok_r(NULL, " ", &save);
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{snprintf} con il controllo del valore restituito non tronca in silenzio, come faceva \texttt{strncat}.
+    \item \texttt{strtok} tiene il suo stato in una variabile statica: due thread che analizzano due messaggi si distruggono
+          a vicenda la scansione. \texttt{strtok\_r} lo tiene in \texttt{save}, che è nostra.
+    \item \texttt{atoi} non può fallire: \texttt{"abc"} vale zero. Per rifiutare un input sbagliato serve \texttt{strtol}.
+\end{itemize}
+
+\subsection{Codificare un messaggio come byte}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Prima il conteggio, poi i valori}]
+uint32_t n_net = htonl(n);                         /* mittente: prima il conteggio */
+send_all(fd, &n_net, sizeof n_net);
+for (uint32_t i = 0; i < n; i++) {
+    uint32_t v_net = htonl(vals[i]);
+    send_all(fd, &v_net, sizeof v_net);
+}
+
+uint32_t n_net, n;                                 /* destinatario: decide il conteggio */
+if (recv_all(fd, &n_net, sizeof n_net) != sizeof n_net) return -1;
+n = ntohl(n_net);
+if (n > MAX_VALUES) return -1;         /* mai allocare quello che chiede il peer */
+for (uint32_t i = 0; i < n; i++) { /* ... */ }
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{uint32\_t} da \texttt{<stdint.h>}, non \texttt{int}: la larghezza di \texttt{int} è una proprietà del
+          compilatore, non del protocollo.
+    \item L'ordine di rete vale anche per i nostri dati, non solo per le porte e gli indirizzi nelle intestazioni.
+    \item Il conteggio inviato per primo \textbf{è la delimitazione}: il destinatario sa quanto segue prima di leggerlo.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Dove finisce un messaggio}
+% ══════════════════════════════════════════════════════════════
+
+La domanda si è già presentata due volte: con due righe arrivate in una sola \texttt{read}, e con una risposta HTTP che
+non finiva mai. Le risposte possibili sono soltanto tre.
+
+\dfn{Delimitazione dei messaggi}{
+    La \textbf{delimitazione} (\emph{framing}) è la regola con cui il destinatario trova i confini dei messaggi in un
+    flusso di byte. Le regole possibili sono tre:
+    \begin{itemize}
+        \item un \textbf{delimitatore}: si cercano i suoi byte nei dati che arrivano;
+        \item una \textbf{lunghezza davanti}: si legge un'intestazione di dimensione fissa, poi esattamente quei byte;
+        \item la \textbf{chiusura della connessione}: la fine del flusso è la fine del messaggio.
+    \end{itemize}
+}
+
+\begin{itemize}
+    \item Il delimitatore è comodo da scrivere a mano, ma il contenuto non deve mai contenerlo, oppure va protetto con un
+          carattere di escape.
+    \item La lunghezza davanti non richiede né scansione né escape, e il contenuto binario è gratuito.
+    \item La chiusura funziona \textbf{una volta}, e solo per l'ultimo messaggio.
+    \item HTTP usa la prima per l'intestazione e la seconda per il corpo; WHOIS usa la terza; DNS su TCP usa la seconda.
+\end{itemize}
+Il nostro protocollo deve sceglierne una, e il destinatario deve poterla applicare \textbf{senza indovinare}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    seg/.style={draw=black!60, minimum height=0.5cm, inner sep=2pt, font=\scriptsize\ttfamily, anchor=west}]
+  \node[anchor=east] at (-0.2,0.8) {due chiamate a \texttt{send\_all}};
+  \node[seg, fill=ltra!45, minimum width=3.4cm] at (0,0.8) {MSG hello};
+  \node[seg, fill=lapp!45, minimum width=3.4cm] at (3.45,0.8) {MSG world};
+  \node[anchor=west, text=black!60] at (7.1,0.8) {due messaggi, nella nostra testa};
+  \node[anchor=east] at (-0.2,0) {ciò che restituisce \texttt{recv}};
+  \node[seg, fill=netblue!15, minimum width=1.9cm] at (0,0) {MSG he};
+  \node[seg, fill=netblue!15, minimum width=3.2cm] at (1.95,0) {llo MSG wo};
+  \node[seg, fill=netblue!15, minimum width=1.6cm] at (5.2,0) {rld};
+  \node[anchor=west, text=black!60] at (7.1,0) {tagli che non abbiamo scelto};
+  \node[text=black!60] at (3.4,-0.55) {il confine fra le due chiamate non viene trasmesso: non è mai stato un byte};
+  \node[anchor=east] at (-0.2,-1.3) {con la lunghezza davanti};
+  \node[seg, fill=netorange!25, minimum width=0.95cm] (l1) at (0,-1.3) {len=9};
+  \node[seg, fill=netorange!10, minimum width=0.4cm] (t1) at (0.95,-1.3) {t};
+  \node[seg, fill=ltra!45, minimum width=2.0cm] (b1) at (1.35,-1.3) {MSG hello};
+  \node[seg, fill=netorange!25, minimum width=0.95cm] at (3.4,-1.3) {len=9};
+  \node[seg, fill=netorange!10, minimum width=0.4cm] at (4.35,-1.3) {t};
+  \node[seg, fill=lapp!45, minimum width=2.0cm] at (4.75,-1.3) {MSG world};
+  \draw[decorate, decoration={brace, amplitude=3pt, mirror}] (0,-1.6) -- node[below=3pt]{leggi 5} (1.35,-1.6);
+  \draw[decorate, decoration={brace, amplitude=3pt, mirror}] (1.35,-1.6) -- node[below=3pt]{poi esattamente 9} (3.35,-1.6);
+\end{tikzpicture}
+\caption{Il flusso è lo stesso nelle due metà. Cambia che nella seconda i confini sono byte inviati da noi, quindi il
+         destinatario li può trovare.}
+\end{figure}
+
+\subsection{Leggere e scrivere esattamente n byte}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={recv\_all}]
+ssize_t recv_all(int fd, void *buf, size_t n) {
+    size_t got = 0;
+    char *p = buf;
+    while (got < n) {
+        ssize_t r = recv(fd, p + got, n - got, 0);
+        if (r > 0) { got += (size_t) r; continue; }
+        if (r == 0) return (ssize_t) got;   /* il peer ha chiuso: corta, non un errore */
+        if (errno == EINTR) continue;       /* e' girato un handler: nemmeno questo */
+        return -1;
+    }
+    return (ssize_t) n;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={send\_all}]
+ssize_t send_all(int fd, const void *buf, size_t n) {
+    size_t sent = 0;
+    const char *p = buf;
+    while (sent < n) {
+        ssize_t w = send(fd, p + sent, n - sent, MSG_NOSIGNAL);
+        if (w > 0) { sent += (size_t) w; continue; }
+        if (errno == EINTR) continue;
+        return -1;                          /* il peer non c'e' piu', o peggio */
+    }
+    return (ssize_t) n;
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item Una lunghezza davanti è inutile senza \texttt{recv\_all}: \texttt{recv} può restituire meno byte di quanti se ne
+          chiedono, e di solito lo fa.
+    \item \texttt{send} non trasmette: \textbf{copia} nel buffer di invio del socket, nel kernel, la cui dimensione è
+          \texttt{SO\_SNDBUF}. Se quel buffer è pieno di dati non ancora confermati, copia meno di quanto chiesto e dice
+          quanto.
+    \item Su un socket bloccante può anche aspettare; su uno non bloccante restituisce \texttt{EAGAIN}, che il ciclo degli
+          eventi conosce già.
+    \item Queste funzioni hanno dei nomi: \texttt{readn}, \texttt{writen} e \texttt{readline} di \emph{UNIX Network
+          Programming}. Si trovano in ogni codice di rete, e non sono nella libreria C.
+\end{itemize}
+
+\subsection{Leggere un frame}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={read\_frame: due letture, sempre}]
+int read_frame(int fd, uint8_t *type, char *body, size_t max) {
+    uint8_t h[5];               /* mai inviare una struct: il padding e' del compilatore */
+    if (recv_all(fd, h, sizeof h) != (ssize_t) sizeof h) return -1;
+
+    uint32_t len;
+    memcpy(&len, h, 4);
+    len = ntohl(len);
+    *type = h[4];
+
+    if (len > max) return -2;                /* si rifiuta prima di allocare */
+    if (recv_all(fd, body, len) != (ssize_t) len) return -1;
+    return (int) len;
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item Due letture, sempre: l'intestazione ha dimensione fissa, quindi la prima è uguale ogni volta; la seconda è quella
+          che dice l'intestazione.
+    \item Il formato sul filo è una \textbf{sequenza di byte}, non una struct: padding, allineamento e ordine dei campi
+          cambiano da una macchina all'altra.
+\end{itemize}
+
+\warning{La lunghezza a cui si è creduto}{
+    Un client annuncia un corpo di quattro gigabyte e poi non invia niente. Che cosa fa il server? Chiama \texttt{malloc}
+    con un numero scelto dal peer, e poi aspetta dentro \texttt{recv\_all} byte che non arriveranno mai, tenendo occupata
+    la memoria, e un worker, per tutto il tempo che il client vuole.
+    \begin{itemize}
+        \item Ogni campo che arriva dalla rete è un \textbf{input}, e una lunghezza è il più pericoloso di tutti.
+        \item Quindi il protocollo dichiara un \textbf{massimo}, e il controllo avviene prima dell'allocazione e prima della
+              lettura.
+        \item Al client che si ferma risponde l'altro strumento del capitolo: un \textbf{timeout di lettura} sul socket.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il protocollo della chat, messo per iscritto}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    fl/.style={draw=black!70, minimum height=0.95cm, align=center, anchor=west, inner sep=2pt},
+    by/.style={draw=black!50, minimum height=0.5cm, minimum width=1.0cm, anchor=west, font=\scriptsize\ttfamily}]
+  \node[anchor=south] at (0,0.5) {0};
+  \node[anchor=south] at (4,0.5) {4};
+  \node[anchor=south] at (5.6,0.5) {5};
+  \node[anchor=south] at (10.6,0.5) {5 + len $-$ 1};
+  \node[fl, fill=netblue!15, minimum width=4cm] at (0,0) {\textbf{lunghezza}\\\texttt{uint32\_t}, ordine di rete};
+  \node[fl, fill=netorange!20, minimum width=1.6cm] at (4,0) {\textbf{tipo}\\\texttt{uint8\_t}};
+  \node[fl, fill=netgreen!15, minimum width=5cm] at (5.6,0) {\textbf{payload}\\\emph{lunghezza} byte, senza terminatore};
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (0,-0.6) -- node[below=4pt]{intestazione: sempre 5 byte} (5.6,-0.6);
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (5.6,-0.6) -- node[below=4pt]{la lunghezza conta solo il payload} (10.6,-0.6);
+  \foreach \i/\b in {0/00, 1/00, 2/00, 3/05} \node[by, fill=netblue!8] at (\i,-1.8) {\b};
+  \node[by, fill=netorange!10, minimum width=1.6cm] at (4,-1.8) {02};
+  \foreach \i/\b in {0/68, 1/65, 2/6c, 3/6c, 4/6f} \node[by, fill=netgreen!8] at (5.6+\i,-1.8) {\b};
+  \node[anchor=west, align=left, text=black!70] at (10.8,-1.8) {tipo 02 è \texttt{MSG},\\il corpo è \texttt{"hello"}};
+\end{tikzpicture}
+\caption{Il formato sul filo della chat. Sotto, il frame completo di un messaggio \texttt{hello}: dieci byte.}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c >{\ttfamily}l l l}
+\toprule
+\textbf{Tipo} & \normalfont\textbf{Nome} & \textbf{Chi lo invia} & \textbf{Corpo} \\
+\midrule
+01 & JOIN    & client & il nome scelto \\
+02 & MSG     & client & una riga \\
+03 & QUIT    & client & vuoto \\
+10 & OK      & server & un testo facoltativo \\
+11 & ERR     & server & codice di 2 byte in ordine di rete, poi il motivo in testo \\
+12 & DELIVER & server & un byte di lunghezza del nome, il nome, poi la riga \\
+\bottomrule
+\end{tabular}
+\caption{I tipi di messaggio: una numerazione possibile. Dentro il corpo di \texttt{DELIVER} c'è di nuovo una
+         delimitazione, con una lunghezza davanti al nome.}
+\end{table}
+
+\subsection{Saper dire di no}
+
+Un protocollo che non può rifiutare ha un solo modo di essere in disaccordo con un client: riattaccare. È per questo che
+HTTP risponde con un \textbf{numero} e un \textbf{motivo}.
+\begin{itemize}
+    \item Il codice è per il \textbf{programma}: decide se riprovare, lasciar perdere, o chiedere qualcosa all'utente.
+    \item La stringa è per la \textbf{persona}: nessuno fa il debug di un protocollo cercando \texttt{ERR 7} nel nostro
+          sorgente.
+    \item I codici si raggruppano: ciò che ha sbagliato il client, ciò che il server non ha potuto fare, ciò che è
+          temporaneo e vale la pena riprovare.
+    \item Un errore è una \textbf{risposta normale}: la connessione resta aperta, e il messaggio successivo viene servito
+          come sempre.
+    \item La chiusura è per ciò a cui non si può proprio rispondere: un'intestazione che non si analizza, una lunghezza che
+          si rifiuta, un peer che ha smesso di parlare.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l l l}
+\toprule
+\normalfont\textbf{Codice} & \textbf{Significato} & \textbf{Che cosa fa chi lo riceve} \\
+\midrule
+400 & messaggio non valido o tipo sconosciuto & correggere il client: riprovare uguale è inutile \\
+403 & \texttt{MSG} prima di \texttt{JOIN}      & entrare, poi riprovare \\
+409 & nome già in uso                         & chiedere un altro nome all'utente \\
+413 & corpo oltre il massimo dichiarato       & il server chiude dopo averlo inviato \\
+503 & chat piena                              & temporaneo: riprovare più tardi \\
+\bottomrule
+\end{tabular}
+\caption{Un esempio di codici, raggruppati come in HTTP: 4xx sono errori del client, 5xx del server.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Un server che sopravvive ai propri client}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Una chiamata bloccante interrotta da un segnale}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={EINTR non è un errore}]
+for (;;) {
+    int fd = accept(listen_fd, NULL, NULL);
+    if (fd >= 0) break;
+    if (errno == EINTR) continue;    /* e' girato un handler: niente e' andato storto */
+    perror("accept");
+    continue;
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item Qualsiasi chiamata bloccante (\texttt{accept}, \texttt{read}, \texttt{recv}, \texttt{select}) può restituire
+          $-1$ con \texttt{EINTR} quando un handler viene eseguito mentre aspetta.
+    \item Nel nostro server ce n'è uno: l'handler che raccoglie i figli. Ogni \texttt{SIGCHLD} può interrompere
+          l'\texttt{accept}.
+    \item \texttt{EINTR} non è un errore, e un \texttt{perror} su di esso riempie il log di righe che significano soltanto
+          «è uscito un figlio».
+    \item È per questo che \texttt{recv\_all} e \texttt{send\_all} lo controllano prima di restituire $-1$.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={SA\_RESTART}]
+struct sigaction sa;
+memset(&sa, 0, sizeof sa);
+sa.sa_handler = reap;
+sa.sa_flags   = SA_RESTART;          /* riavvia cio' che si puo' riavviare */
+sigemptyset(&sa.sa_mask);
+sigaction(SIGCHLD, &sa, NULL);
+\end{lstlisting}
+
+\begin{itemize}
+    \item Solo \texttt{sigaction} può chiederlo: un motivo in più per cui \texttt{signal} è la chiamata che si trova nel
+          codice vecchio e non si scrive.
+    \item Con esso il kernel rientra da solo in \texttt{accept}, \texttt{read} e \texttt{write}: il ramo \texttt{EINTR}
+          semplicemente non scatta mai.
+    \item \texttt{select}, \texttt{poll} e \texttt{nanosleep} non vengono \textbf{mai} riavviate, con o senza: riavviarle
+          farebbe ripartire anche il loro timeout, e l'attesa non finirebbe più.
+    \item Quindi il ramo \texttt{EINTR} resta comunque nel codice. Costa una riga ed è l'unica risposta portabile.
+\end{itemize}
+
+\subsection{La write che uccide il server}
+
+\warning{Un client sparisce e gli si scrive lo stesso}{
+    Che cosa succede al server? \textbf{Muore}. La disposizione predefinita di \texttt{SIGPIPE} termina il processo, e
+    basta la prima scrittura dopo la chiusura del peer: un client che chiude una finestra butta giù la chat di tutti.
+}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Due modi di sopravvivere}]
+signal(SIGPIPE, SIG_IGN);                     /* una volta, prima del primo client */
+ssize_t w = send(fd, p, len, MSG_NOSIGNAL);   /* oppure per ogni chiamata */
+if (w < 0 && errno == EPIPE) { close(fd); drop_client(fd); }
+\end{lstlisting}
+
+\begin{itemize}
+    \item Ignorarlo trasforma il segnale in un valore che si può controllare; con il flag dentro \texttt{send\_all} è
+          coperto tutto il programma.
+    \item Dal lato della lettura lo si scopre diversamente, e non è un errore: \texttt{recv} restituisce 0.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l l}
+\toprule
+\normalfont\textbf{Flag} & \textbf{Effetto} \\
+\midrule
+0            & esattamente ciò che fanno \texttt{read} e \texttt{write} \\
+MSG\_WAITALL  & aspetta che ci siano tutti i byte richiesti \\
+MSG\_PEEK     & legge senza togliere dalla coda di ricezione \\
+MSG\_DONTWAIT & solo questa chiamata è non bloccante \\
+MSG\_NOSIGNAL & niente \texttt{SIGPIPE}: segnala \texttt{EPIPE} \\
+\bottomrule
+\end{tabular}
+\caption{I flag di \texttt{send} e \texttt{recv}.}
+\end{table}
+
+\begin{itemize}
+    \item \texttt{MSG\_DONTWAIT} è la versione per singola chiamata di ciò che il ciclo degli eventi imposta una volta sul
+          descriptor con \texttt{O\_NONBLOCK}.
+    \item \texttt{MSG\_WAITALL} non sostituisce \texttt{recv\_all}: torna corta lo stesso quando il peer chiude, quando
+          arriva un segnale, o quando il socket va in errore.
+\end{itemize}
+
+\subsection{Arrendersi in tempo}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Un timeout di lettura}]
+struct timeval tv = { .tv_sec = 2, .tv_usec = 0 };
+setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+
+ssize_t n = recv(fd, buf, sizeof buf, 0);
+if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+    ;   /* due secondi e non e' arrivato niente: ritrasmettere, o scartare il client */
+\end{lstlisting}
+
+\begin{itemize}
+    \item L'opzione appartiene al descriptor, quindi ogni lettura su di esso si arrende dopo lo stesso intervallo;
+          \texttt{SO\_SNDTIMEO} è la gemella per le scritture.
+    \item \texttt{recv\_all} ora ha un terzo esito, e chi la chiama deve saperli distinguere: $n$ byte, peer andato,
+          tempo scaduto.
+    \item È questo che risponde al client che invia un'intestazione e si ferma, ed è il timer della ritrasmissione alla
+          fine del capitolo.
+    \item Il controllo d'inattività del kernel, \texttt{SO\_KEEPALIVE}, comincia a sondare dopo circa due ore: una chat che
+          deve accorgersi di un peer morto invia un proprio \emph{heartbeat}.
+\end{itemize}
+
+\subsection{Un protocollo che si può scrivere a mano}
+
+\begin{lstlisting}[language=bash, title={La versione a testo dello stesso protocollo, con nc}]
+$ nc 127.0.0.1 5000
+JOIN alice
+OK welcome, alice
+MSG hello everybody
+HELLO everybody                 <- un errore di battitura, apposta
+ERR 400 unknown message type
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{nc} apre un socket e lo collega al terminale: ciò che si scrive esce, ciò che arriva si stampa. È un
+          \textbf{client generico}.
+    \item Un protocollo a testo quindi si può provare prima che esista il suo client, e smontare a mano quando il client si
+          comporta male.
+    \item È per questo che SMTP, HTTP e WHOIS si possono digitare, ed è esattamente quello che costa un protocollo binario.
+    \item Attenzione alla fine riga: molti protocolli prescrivono \texttt{\textbackslash r\textbackslash n}, e
+          \texttt{nc} invia solo \texttt{\textbackslash n}; \texttt{nc -C} invia \texttt{\textbackslash r\textbackslash n}.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Comunicare senza connessione}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{UDP}{
+    Con UDP si inviano \textbf{messaggi indipendenti}, i \textbf{datagrammi}, da un estremo a un altro, senza connessione
+    e senza garanzia che arrivino.
+}
+
+\begin{itemize}
+    \item Nessun handshake e nessun rilascio: il primo datagramma è il primo pacchetto sul filo, e non c'è stato da creare né
+          da distruggere.
+    \item Quindi non c'è niente da accettare: \textbf{un solo socket} serve tutti i client del server, e l'indirizzo del
+          mittente arriva con ogni messaggio.
+    \item Un datagramma arriva intero o non arriva: \textbf{i confini sono conservati}, ed è la delimitazione di questo
+          capitolo, gratis.
+    \item E nient'altro è promesso: né la consegna, né l'ordine, né che arrivi una volta sola.
+    \item Ne vale la pena quando lo scambio è una richiesta e una risposta, o quando un dato in ritardo è un dato inutile:
+          voce, video, un gioco.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={sendto e recvfrom}]
+ssize_t sendto(int fd, const void *buf, size_t len, int flags,
+               const struct sockaddr *to, socklen_t tolen);
+
+ssize_t recvfrom(int fd, void *buf, size_t len, int flags,
+                 struct sockaddr *from, socklen_t *fromlen);
+\end{lstlisting}
+
+\begin{itemize}
+    \item Ogni invio porta con sé la destinazione: non c'è una connessione che la tenga per noi.
+    \item \texttt{recvfrom} riempie chi l'ha inviato, e quell'indirizzo è l'unico modo che ha il server per rispondere.
+    \item Il valore restituito è la lunghezza di \textbf{un} datagramma: mai un pezzo di uno, mai due attaccati.
+    \item Un errore significa un errore \textbf{locale} (troppo grande, nessuna rotta), e mai che il datagramma non è
+          arrivato. Questo ancora non lo sa nessuno.
+    \item \texttt{fromlen} è valore-risultato: lo si imposta alla dimensione della nostra struttura, e il kernel riscrive
+          la dimensione che ha usato.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    cl/.style={fill=white, draw, rounded corners, font=\scriptsize\ttfamily, minimum width=1.9cm}]
+  \node[font=\footnotesize\bfseries\sffamily] at (0,0.6) {client};
+  \node[font=\footnotesize\bfseries\sffamily] at (6,0.6) {server};
+  \draw[thick, black!40] (0,0.3) -- (0,-5.0);
+  \draw[thick, black!40] (6,0.3) -- (6,-5.0);
+  \node[cl] at (0,0) {socket()};
+  \node[cl] at (6,0) {socket()};
+  \node[cl] at (6,-0.8) {bind()};
+  \node[cl] (rf) at (6,-2.0) {recvfrom()};
+  \node[cl] (st) at (0,-1.6) {sendto()};
+  \draw[msg, netblue] (st) -- node[above, sloped]{datagramma} (rf);
+  \node[cl] (st2) at (6,-3.0) {sendto()};
+  \node[cl] (rf2) at (0,-3.4) {recvfrom()};
+  \draw[msg, netgreen] (st2) -- node[above, sloped]{risposta} (rf2);
+  \node[cl] at (0,-4.6) {close()};
+  \draw[-{Stealth[length=1.8mm]}, thick, netred] (7.2,-3.0) -- (7.6,-3.0) -- node[right, align=left]{il ciclo è\\tutto il server} (7.6,-2.0) -- (7.2,-2.0);
+  \draw[{Stealth[length=1.8mm]}-{Stealth[length=1.8mm]}, dashed, black!50] (-1.3,-1.6) -- node[left, align=center]{si può\\ripetere} (-1.3,-3.4);
+\end{tikzpicture}
+\caption{La forma di un server e di un client UDP. Quattro chiamate invece di sette: niente \texttt{listen}, niente
+         \texttt{accept}, nessun secondo socket.}
+\end{figure}
+
+\subsection{Un server di eco UDP}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il server: un socket, un ciclo}]
+int fd = socket(AF_INET, SOCK_DGRAM, 0);
+struct sockaddr_in addr = {0};
+addr.sin_family      = AF_INET;
+addr.sin_port        = htons(5000);
+addr.sin_addr.s_addr = htonl(INADDR_ANY);
+bind(fd, (struct sockaddr *) &addr, sizeof addr);   /* il client deve trovarci */
+
+for (;;) {
+    struct sockaddr_in from;
+    socklen_t flen = sizeof from;           /* valore-risultato: va reimpostato ogni volta */
+    ssize_t n = recvfrom(fd, buf, sizeof buf, 0,
+                         (struct sockaddr *) &from, &flen);
+    if (n < 0) { if (errno == EINTR) continue; perror("recvfrom"); break; }
+    sendto(fd, buf, (size_t) n, 0, (struct sockaddr *) &from, flen);
+}
+\end{lstlisting}
+
+Non c'è un descriptor per client, quindi non c'è niente da chiudere e niente da dare a un thread: lo stato per client, se
+serve, è nostro da tenere, in una tabella indicizzata da indirizzo e porta.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il client}]
+int fd = socket(AF_INET, SOCK_DGRAM, 0);     /* niente bind: la porta la sceglie il kernel */
+struct sockaddr_in srv = {0};
+srv.sin_family = AF_INET;
+srv.sin_port   = htons(5000);
+inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
+
+sendto(fd, "hello", 5, 0, (struct sockaddr *) &srv, sizeof srv);
+
+ssize_t n = recvfrom(fd, buf, sizeof buf - 1, 0, NULL, NULL);
+if (n >= 0) { buf[n] = '\0'; printf("%s\n", buf); }
+\end{lstlisting}
+
+\begin{itemize}
+    \item Niente \texttt{connect}, niente handshake: la prima \texttt{sendto} è il primo pacchetto, e fissa anche la
+          \textbf{porta effimera} del client.
+    \item Quella porta è l'indirizzo a cui risponde il server, ed esiste solo perché la \texttt{sendto} è avvenuta.
+    \item \texttt{NULL} come mittente significa accettare una risposta \textbf{da chiunque}, non solo dal server a cui si è
+          scritto.
+\end{itemize}
+
+\subsection{Una sendto, un datagramma}
+
+\begin{itemize}
+    \item Una chiamata invia un messaggio e una \texttt{recvfrom} ne riceve uno: due invii non si fondono mai, e un invio
+          non si spezza mai.
+    \item Se il buffer è più piccolo del datagramma, il resto viene \textbf{scartato} e non lo si viene a sapere, a meno di
+          chiederlo con \texttt{MSG\_TRUNC}, che restituisce la lunghezza vera.
+    \item Il massimo è circa 64 KB, ma è il limite del formato, non un buon consiglio: un datagramma troppo grande per i
+          collegamenti lungo il percorso viene spezzato più in basso, e un pezzo perso li perde tutti (lo vedremo al livello
+          di rete).
+    \item In pratica lo si tiene piccolo (qualche centinaio di byte per una riga di chat) e viaggia in un pezzo solo.
+    \item I datagrammi corrotti vengono scartati da un checksum sottostante: ciò che il programma vede è
+          \textbf{silenzio}, mai spazzatura.
+\end{itemize}
+
+\subsection{connect su un socket a datagrammi}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Un peer registrato}]
+connect(fd, (struct sockaddr *) &srv, sizeof srv);   /* non viene trasmesso niente */
+
+send(fd, msg, len, 0);                     /* la destinazione e' registrata */
+ssize_t n = recv(fd, buf, sizeof buf, 0);  /* e solo quel peer viene consegnato */
+\end{lstlisting}
+
+\begin{itemize}
+    \item Su un socket a datagrammi \texttt{connect} \textbf{registra soltanto} il peer: non parte nessun pacchetto, non si
+          negozia niente, nessuno viene avvisato.
+    \item Dopo si possono usare \texttt{send}, \texttt{recv}, \texttt{write} e \texttt{read}, e i datagrammi da altri
+          indirizzi vengono scartati: la risposta economica al punto precedente.
+    \item Ed è l'unico modo di sapere che \textbf{nessuno ascolta} sulla porta remota: senza, il messaggio che lo dice
+          viene buttato, perché il kernel non sa a quale socket darlo. Con \texttt{connect}, la \texttt{recv} successiva
+          restituisce \texttt{ECONNREFUSED}.
+    \item Chi invia quel messaggio, e che cos'altro può dire, è una domanda per il livello di rete (è ICMP).
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Affidabilità scritta a mano}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Che cosa fa la rete ai nostri datagrammi}
+
+\begin{itemize}
+    \item \textbf{Persi}: una coda si riempie in un router, o il buffer del destinatario è pieno. Il datagramma viene
+          scartato e nessuno viene avvisato, né il mittente né il destinatario.
+    \item \textbf{Duplicati}: una ritrasmissione da qualche parte più in basso, o un ciclo di instradamento che si risolve,
+          e lo stesso messaggio arriva due volte.
+    \item \textbf{Riordinati}: due datagrammi prendono strade diverse, e il secondo arriva per primo.
+    \item \textbf{Corrotti}: presi dal checksum e scartati, quindi per il programma sono una perdita in più.
+    \item L'API non riferisce niente di tutto questo: \texttt{sendto} ha successo appena il datagramma parte, e
+          \texttt{recvfrom} continua ad aspettare.
+\end{itemize}
+TCP faceva questo lavoro da sempre. Se lo si vuole qui, \textbf{lo si scrive}.
+
+\subsection{Che cosa bisogna aggiungere}
+
+\begin{itemize}
+    \item Una \key{conferma} (\emph{acknowledgement}): l'unico modo di sapere che un messaggio è arrivato è che l'altro
+          lato lo dica. Niente più in basso ce lo dirà.
+    \item Un \key{timeout}: l'unico modo di accorgersi di una perdita è che la conferma non arrivi entro un tempo scelto da
+          noi.
+    \item Una \key{ritrasmissione}: quando il timer scade, si invia di nuovo. È tutto il recupero.
+    \item Un \key{numero di sequenza}: perché una ritrasmissione che si rivela non necessaria arriva come una seconda copia.
+\end{itemize}
+
+\dfn{Stop-and-wait}{
+    Con un solo messaggio in volo alla volta il protocollo si chiama \textbf{stop-and-wait}: si invia, si aspetta la
+    conferma, solo allora si invia il successivo. È semplice, corretto, e lento quanto \textbf{un tempo di andata e ritorno
+    per messaggio}.
+}
+
+Ritroveremo tutti e quattro come meccanismo generale quando ci chiederemo come si costruisce un trasferimento affidabile
+su un canale inaffidabile.
+
+\subsection{La ritrasmissione che nessuno aveva chiesto}
+
+Il messaggio è arrivato, e lo si ritrasmette lo stesso. Perché? Perché anche la conferma è un datagramma, e può perdersi.
+Il mittente vede la stessa cosa nei due casi, cioè niente, e il destinatario riceve una copia che non può distinguere da
+un messaggio nuovo.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[font=\small\bfseries\sffamily] at (1.6,1.0) {il messaggio si perde};
+  \timeline{a1}{0}{mittente}{4.4}
+  \timeline{b1}{3.2}{destinatario}{4.4}
+  \draw[msglost] (0,-0.3) -- node[above, sloped]{DATA 3} (1.7,-0.95);
+  \draw[netred, |-|] (-0.3,-0.3) -- node[left]{timeout} (-0.3,-2.0);
+  \draw[msg, netblue] (0,-2.0) -- node[above, sloped]{DATA 3} (3.2,-3.0);
+  \draw[msg, netgreen] (3.2,-3.1) -- node[above, sloped]{ACK 3} (0,-4.1);
+  \node[text=black!70, align=center] at (1.6,-4.9) {una copia consegnata:\\il timer ha fatto il suo lavoro};
+  \begin{scope}[xshift=7.6cm]
+    \node[font=\small\bfseries\sffamily] at (1.6,1.0) {la conferma si perde};
+    \timeline{a2}{0}{mittente}{4.4}
+    \timeline{b2}{3.2}{destinatario}{4.4}
+    \draw[msg, netblue] (0,-0.3) -- node[above, sloped]{DATA 4} (3.2,-1.3);
+    \draw[msglost] (3.2,-1.4) -- node[above, sloped]{ACK 4} (1.5,-1.95);
+    \draw[netred, |-|] (-0.3,-0.3) -- node[left]{timeout} (-0.3,-2.0);
+    \draw[msg, netblue] (0,-2.0) -- node[above, sloped]{DATA 4} (3.2,-3.0);
+    \node[anchor=west, text=netred] at (3.3,-3.0) {vista due volte};
+    \draw[msg, netgreen] (3.2,-3.1) -- node[above, sloped]{ACK 4} (0,-4.1);
+    \node[text=black!70, align=center] at (1.6,-4.9) {non mancava niente, e il destinatario\\ha ricevuto una seconda copia};
+  \end{scope}
+\end{tikzpicture}
+\caption{Dal lato del mittente i due casi sono identici: nessuna conferma prima del timeout. La stessa copia doppia
+         compare senza perdere niente se il timer è più corto dell'andata e ritorno: come sceglierlo è una domanda per TCP.}
+\end{figure}
+
+\subsection{Numeri di sequenza: scartare, ma confermare di nuovo}
+
+\begin{itemize}
+    \item Ogni messaggio porta un numero, e ogni conferma porta il numero del messaggio a cui si riferisce.
+    \item Il destinatario tiene l'ultimo numero accettato: uno già visto è un \textbf{duplicato}, e il contenuto si butta.
+    \item Ma va \textbf{confermato di nuovo}. Il mittente sta ritrasmettendo perché non ha sentito niente, e il silenzio lo
+          farebbe ritrasmettere finché non si arrende.
+    \item Una conferma senza numero è peggio di nessuna: ferma il timer di qualunque messaggio si trovi in volo in quel
+          momento.
+    \item Con un solo messaggio in volo basta un singolo \textbf{bit alternato}; ma un contatore costa quattro byte ed è molto
+          più facile da leggere in un dump.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il ciclo di ritrasmissione}]
+for (int tries = 0; tries < MAX_TRIES; tries++) {
+    send_frame(fd, &srv, seq, body, len);                /* una sendto */
+
+    for (;;) {                                           /* si aspetta la risposta giusta */
+        ssize_t n = recvfrom(fd, ack, sizeof ack, 0, NULL, NULL);
+        if (n < 0 && errno == EINTR) continue;           /* un segnale: si continua ad aspettare */
+        if (n < 0 && errno == EAGAIN) break;             /* il timer e' scaduto */
+        if (n < 0) return -1;                            /* un errore vero */
+        if (ack_seq(ack) == seq) return 0;               /* confermato: fatto */
+        /* la conferma di un messaggio vecchio: la si ignora e si aspetta ancora */
+    }
+}
+return -1;                    /* MAX_TRIES datagrammi, nessuna risposta: si avvisa l'utente */
+\end{lstlisting}
+
+Il timer è \texttt{SO\_RCVTIMEO} su questo socket. Un segnale non deve consumare un tentativo, e arrendersi fa parte del
+protocollo: ritrasmettere per sempre non è affidabilità, è un programma bloccato.
+
+\info{Il timer riparte a ogni recvfrom}{
+    Con \texttt{SO\_RCVTIMEO} il tempo si misura per ogni chiamata, non per il messaggio: una conferma vecchia che arriva
+    a metà attesa fa ripartire il conto da zero. Per un timeout esatto si annota l'istante di invio con
+    \texttt{clock\_gettime} e si aspetta, con \texttt{select}, solo il tempo che resta.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Esercizi}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Il protocollo applicativo più piccolo che ci sia}
+Scrivere un client \texttt{whois}: risolvere \texttt{whois.iana.org} con \texttt{getaddrinfo}, connettersi alla porta 43,
+inviare il nome di dominio seguito da \texttt{\textbackslash r\textbackslash n}, stampare tutto ciò che torna indietro,
+chiudere. Poi rifarlo a mano con \texttt{nc -C whois.iana.org 43}. Quale delle tre delimitazioni usa WHOIS, e che cosa
+dice al ciclo che la risposta è finita? Poi inviare un secondo nome sulla stessa connessione: che cosa succede, e perché
+era prevedibile?
+
+\svolgimento
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={whois.c}]
+int main(int argc, char *argv[]) {
+    if (argc != 2) { fprintf(stderr, "uso: %s dominio\n", argv[0]); return 1; }
+    struct addrinfo hints = {0}, *res;
+    hints.ai_family   = AF_UNSPEC;                 /* IPv4 o IPv6, quello che c'e' */
+    hints.ai_socktype = SOCK_STREAM;
+    int rc = getaddrinfo("whois.iana.org", "43", &hints, &res);
+    if (rc != 0) { fprintf(stderr, "%s\n", gai_strerror(rc)); return 1; }
+    int fd = connect_any(res);                     /* il ciclo del capitolo sugli indirizzi */
+    freeaddrinfo(res);
+    if (fd < 0) { fprintf(stderr, "impossibile connettersi\n"); return 1; }
+
+    char q[256];
+    int k = snprintf(q, sizeof q, "%s\r\n", argv[1]);
+    if (k < 0 || k >= (int) sizeof q || send_all(fd, q, k) < 0) return 1;
+
+    char buf[4096];
+    ssize_t n;
+    while ((n = recv(fd, buf, sizeof buf, 0)) > 0)   /* fino alla chiusura del server */
+        fwrite(buf, 1, (size_t) n, stdout);
+    close(fd);
+    return n < 0;
+}
+\end{lstlisting}
+
+WHOIS usa la terza delimitazione, la \textbf{chiusura della connessione}: la richiesta finisce con
+\texttt{\textbackslash r\textbackslash n}, la risposta finisce quando \texttt{recv} restituisce 0. Il ciclo non conta e non
+cerca niente: legge finché il server non chiude.
+
+Un secondo nome sulla stessa connessione non riceve risposta. Il server ha risposto al primo e ha chiuso: la
+\texttt{send} del secondo può anche riuscire (copia nel buffer), ma il server risponde con un reset, e la lettura
+successiva restituisce 0 o \texttt{ECONNRESET}. Era prevedibile: la chiusura delimita \textbf{un solo} messaggio, quindi
+un protocollo che la usa può servire una sola richiesta per connessione.
+
+Dal 2025 i domini generici (\texttt{.com}, \texttt{.org}, \ldots) pubblicano i loro dati attraverso RDAP, JSON su HTTPS.
+WHOIS sopravvive per molti altri, e per questo esercizio.
+\end{esercizio}
+
+\begin{esercizio}{Iterazione 6: un protocollo con frame ed errori}
+Si riparte dalla chat con il pool. Serve tutti, e un messaggio è ancora una riga di testo: nessun tipo, nessuna lunghezza,
+e nessun modo per il server di rifiutarne uno.
+\begin{itemize}
+    \item \textbf{Che cosa cambia}: il formato sul filo (quattro byte di lunghezza, uno di tipo, poi il corpo), con
+          \texttt{send\_all} e \texttt{read\_frame} al posto di ogni \texttt{read} e \texttt{write} nude.
+    \item \textbf{Che cosa è nuovo}: risposte di errore con un codice, una lunghezza massima dichiarata che si rifiuta prima
+          di allocare, e un timeout di lettura per il client che si ferma a metà di un frame.
+    \item \textbf{Che cosa non cambia}: il pool, la coda e la lista dei client. Se ci si ritrova a modificarli, si sta
+          risolvendo il problema sbagliato.
+\end{itemize}
+
+\svolgimento
+Il frame si costruisce in un buffer solo e parte con una \texttt{send\_all}: due chiamate separate per intestazione e
+corpo funzionerebbero, ma produrrebbero due segmenti per messaggio.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={chat\_proto.c: scrivere un frame}]
+enum { T_JOIN = 0x01, T_MSG = 0x02, T_QUIT = 0x03, T_OK = 0x10, T_ERR = 0x11, T_DELIVER = 0x12 };
+#define MAX_BODY 1024
+
+int write_frame(int fd, uint8_t type, const void *body, uint32_t len) {
+    uint8_t f[5 + MAX_BODY];
+    if (len > MAX_BODY) return -1;
+    uint32_t n = htonl(len);
+    memcpy(f, &n, 4);                       /* byte per byte: mai una struct */
+    f[4] = type;
+    memcpy(f + 5, body, len);
+    return send_all(fd, f, 5 + len) < 0 ? -1 : 0;
+}
+
+int send_err(int fd, uint16_t code, const char *why) {
+    uint8_t b[128];
+    uint16_t c = htons(code);
+    size_t k = strlen(why) > sizeof b - 2 ? sizeof b - 2 : strlen(why);
+    memcpy(b, &c, 2);
+    memcpy(b + 2, why, k);
+    return write_frame(fd, T_ERR, b, (uint32_t) (2 + k));
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={chatd.c: il worker legge un frame e risponde}]
+static void handle(int i) {
+    uint8_t type;
+    char body[MAX_BODY];
+    int len = read_frame(cl[i].fd, &type, body, sizeof body);
+    if (len == -2) { send_err(cl[i].fd, 413, "frame too long"); drop(i); return; }
+    if (len < 0)   { drop(i); return; }    /* chiuso, intestazione rotta o tempo scaduto */
+
+    switch (type) {
+    case T_JOIN: join(i, body, len);  break;          /* OK, oppure ERR 409 */
+    case T_MSG:
+        if (!cl[i].joined) { send_err(cl[i].fd, 403, "join first"); break; }
+        deliver_all(i, body, len);                    /* DELIVER a tutti gli altri */
+        break;
+    case T_QUIT: drop(i); break;
+    default:     send_err(cl[i].fd, 400, "unknown message type");
+    }
+}
+\end{lstlisting}
+
+Per il worker il descriptor è \textbf{bloccante} con \texttt{SO\_RCVTIMEO} di qualche secondo: \texttt{read\_frame}
+legge l'intero frame, e un client che si ferma a metà occupa un worker al massimo per quel tempo, poi viene scartato. Le
+risposte agli altri client restano accodate come nell'iterazione 4, scritte con \texttt{MSG\_DONTWAIT}.
+
+\begin{lstlisting}[language=bash, title={Due frame scritti a mano}]
+$ printf "\x00\x00\x00\x05\x02hello" | nc 127.0.0.1 5000 | xxd
+$ printf "\xff\xff\xff\xff\x02"      | nc 127.0.0.1 5000 | xxd
+\end{lstlisting}
+
+Il primo è un \texttt{MSG} valido ma arriva prima di un \texttt{JOIN}: torna un \texttt{ERR 403}, e la connessione resta
+aperta. Il secondo annuncia quattro gigabyte: il server risponde \texttt{ERR 413} e chiude subito, \textbf{senza
+allocare niente e senza aspettare} il corpo.
+\end{esercizio}
+
+\begin{esercizio}{Iterazione 7: la stessa chat su datagrammi}
+Si riparte dall'iterazione 6, che è corretta perché sotto c'è TCP. Stesso protocollo, stessi tipi di messaggio, un socket
+di tipo \texttt{SOCK\_DGRAM}.
+\begin{itemize}
+    \item \textbf{Che cosa cambia}: niente \texttt{accept} e nessun descriptor per client. La lista dei client è una
+          tabella di indirizzi, e un client esiste perché da lui è arrivato un datagramma.
+    \item \textbf{Che cosa si ottiene gratis}: la delimitazione. Un messaggio è un datagramma.
+    \item \textbf{Che cosa è nuovo}: un numero di sequenza e una conferma per ogni messaggio, \texttt{SO\_RCVTIMEO} come
+          timer, e un duplicato scartato e confermato di nuovo.
+\end{itemize}
+Scartare di proposito un datagramma su cinque e contare le copie che il destinatario vede prima del controllo della
+sequenza. Poi portare il timer a 50 ms su un percorso con 80 ms di andata e ritorno: quante copie arrivano, e quante
+perdite riferisce il mittente?
+
+\svolgimento
+Ogni datagramma porta davanti al tipo un numero di sequenza; la lunghezza non serve più, perché la dà
+\texttt{recvfrom}. Una conferma è un datagramma di tipo \texttt{ACK} con lo stesso numero.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={chatd.c: il lato che riceve}]
+struct peer { struct sockaddr_in addr; uint32_t last_seq; int joined; char name[32]; };
+static struct peer peers[MAXC];               /* la lista: indirizzi, non descriptor */
+
+/* per ogni datagramma arrivato da 'from', con numero 'seq' */
+struct peer *c = find_or_add(&from);          /* confronta indirizzo e porta */
+send_ack(fd, &from, seq);                     /* si conferma sempre, anche un duplicato */
+if (seq == c->last_seq) return;               /* gia' visto: il contenuto si butta */
+c->last_seq = seq;
+dispatch(c, type, body, len);                 /* JOIN, MSG, QUIT come nell'iterazione 6 */
+\end{lstlisting}
+
+Il mittente usa il ciclo di ritrasmissione del capitolo. Perdite e ritardi si ottengono senza toccare il codice, con il
+modulo \texttt{netem} del kernel sull'interfaccia di loopback:
+
+\begin{lstlisting}[language=bash, title={Una rete peggiore, su richiesta}]
+$ sudo tc qdisc add dev lo root netem loss 20%         <- un datagramma su cinque
+$ sudo tc qdisc change dev lo root netem delay 40ms    <- 40 ms per verso: 80 ms di andata e ritorno
+$ sudo tc qdisc del dev lo root                        <- di nuovo la rete di prima
+\end{lstlisting}
+
+\textbf{Con un datagramma su cinque perso} (sia i dati sia le conferme), un tentativo va a buon fine con probabilità
+$0{,}8 \cdot 0{,}8 = 0{,}64$: servono in media $1/0{,}64 \approx 1{,}56$ invii per messaggio, e di questi ne arrivano
+$0{,}8 \cdot 1{,}56 = 1{,}25$. Il destinatario vede quindi circa \textbf{un quarto di copie in più}: sono le conferme perse,
+e il controllo della sequenza le scarta tutte.
+
+\textbf{Con il timer a 50 ms e 80 ms di andata e ritorno}, senza perdite, ogni messaggio scade \textbf{sempre} una volta:
+la conferma del primo invio arriva a 80 ms, dopo la ritrasmissione partita a 50. Arrivano \textbf{due copie} di ogni
+messaggio, e un mittente che conta i timeout come perdite ne riferisce una per messaggio, anche se non si è perso niente.
+La seconda conferma arriva quando il mittente è già passato al messaggio successivo, ed è proprio la «conferma di un
+messaggio vecchio» che il ciclo ignora. Il timer va scelto più lungo dell'andata e ritorno, e misurandola: è ciò che fa
+TCP.
+\end{esercizio}
+
+\Needspace{20\baselineskip}
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Un protocollo fissa tipi di messaggio, sintassi, significato e regole; la più difficile delle quattro è
+          \textbf{dove finisce un messaggio}.
+    \item Tre risposte, e solo tre: un \textbf{delimitatore}, una \textbf{lunghezza davanti}, o la \textbf{chiusura} della
+          connessione.
+    \item Una lunghezza davanti non vale niente senza cicli che leggono e scrivono esattamente $n$ byte, e senza un tetto a
+          ciò a cui si crede.
+    \item Un server che sopravvive ai propri client ignora \texttt{SIGPIPE}, riprova su \texttt{EINTR}, e si arrende in
+          tempo.
+    \item UDP conserva i confini dei messaggi e non promette nient'altro: una \texttt{sendto} è un datagramma, e può essere
+          perso, duplicato o sorpassato.
+    \item L'affidabilità sopra di esso sono quattro cose da scrivere: \textbf{conferma}, \textbf{timeout},
+          \textbf{ritrasmissione}, \textbf{numero di sequenza}.
+\end{itemize}
+}

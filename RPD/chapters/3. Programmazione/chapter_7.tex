@@ -1,0 +1,955 @@
+\chapter{Multiplexing dell'I/O, server a eventi e pool di thread}
+
+Due versioni della stessa chat (un processo per client, un thread per client) e un costo che nessuna delle due evita.
+\begin{itemize}
+    \item Entrambe pagano al momento della connessione e continuano a pagare: uno spazio di indirizzi o uno stack, per un
+          client che tace quasi sempre.
+    \item E abbiamo lasciato una questione aperta: una \texttt{write} verso un client lento congela tutta la chat, perché
+          il lock della lista viene tenuto durante la scrittura.
+    \item Qui il flusso di controllo smette di essere uno per client. \textbf{Uno solo osserva molte connessioni} e serve
+          quelle pronte; un \textbf{insieme fisso di worker} è tenuto occupato da una coda.
+    \item Poi l'altra direzione: un datagramma, molti destinatari, e nessuno che tiene una lista.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Aspettare su più di un descriptor}
+% ══════════════════════════════════════════════════════════════
+
+\begin{itemize}
+    \item \texttt{read} aspetta su un descriptor. Mentre aspetta lì, tutto il resto che il programma potrebbe vedere gli è
+          invisibile.
+    \item È l'unica ragione per cui avevamo un flusso di controllo per connessione: il processo, o il thread, esisteva
+          \textbf{per potersi bloccare}.
+    \item \texttt{select} capovolge la cosa: ci si blocca una volta sola, \textbf{su un insieme di descriptor}, e si torna
+          appena uno qualsiasi può essere servito senza bloccarsi.
+    \item Che cosa compra: nessun thread per socket, nessun ciclo di polling che brucia il processore, e un solo posto in
+          cui vive lo stato di ogni client.
+    \item Che cosa non compra: il \textbf{parallelismo}. Un flusso di controllo fa ancora una cosa alla volta, su un core.
+\end{itemize}
+
+\dfn{Multiplexing dell'I/O}{
+    Si parla di \textbf{multiplexing dell'I/O} quando un solo flusso di controllo attende \textbf{contemporaneamente} su
+    più descriptor, e il kernel gli dice quali sono pronti. In POSIX la chiamata è \texttt{select}; \texttt{poll} ed
+    \texttt{epoll} sono varianti della stessa idea.
+}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={select}]
+#include <sys/select.h>
+
+int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
+           struct timeval *timeout);
+\end{lstlisting}
+
+\begin{itemize}
+    \item Si blocca finché almeno un descriptor degli insiemi può essere usato, oppure scade il timeout, oppure arriva un
+          segnale.
+    \item Restituisce $-1$ ed \texttt{errno} in caso di errore, 0 se il timeout è scaduto senza nulla di pronto, altrimenti
+          \textbf{quanti descriptor sono pronti}, contati su tutti e tre gli insiemi.
+    \item \texttt{nfds} non è un conteggio: è il \textbf{descriptor più alto più uno}, perché il kernel scandisce
+          l'intervallo da 0 a \texttt{nfds-1}.
+\end{itemize}
+
+\subsection{Gli insiemi di descriptor}
+
+Un \texttt{fd\_set} è una \textbf{maschera di bit}: un bit per ogni numero di descriptor, e quattro macro per toccarla.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l l}
+\toprule
+\normalfont\textbf{Macro} & \textbf{Che cosa fa} \\
+\midrule
+FD\_ZERO(fd\_set *set)         & svuota l'insieme: si comincia sempre da qui \\
+FD\_SET(int fd, fd\_set *set)   & mette \texttt{fd} nell'insieme \\
+FD\_CLR(int fd, fd\_set *set)   & toglie \texttt{fd} dall'insieme \\
+FD\_ISSET(int fd, fd\_set *set) & \texttt{fd} è nell'insieme? Si usa dopo la chiamata \\
+\bottomrule
+\end{tabular}
+\caption{Le quattro macro sugli insiemi di descriptor.}
+\end{table}
+
+\begin{itemize}
+    \item \texttt{readfds} per i descriptor da cui si vuole leggere, \texttt{writefds} per quelli su cui si vuole scrivere;
+          \texttt{NULL} significa non osservare nulla di quel tipo.
+    \item La maschera ha dimensione fissa: \texttt{FD\_SETSIZE} vale 1024 su Linux, e un descriptor uguale o superiore non
+          può proprio entrare in un insieme.
+\end{itemize}
+
+\subsection{Quando un descriptor è pronto}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{0.45\textwidth} p{0.45\textwidth}}
+\toprule
+\textbf{Pronto in lettura}: una \texttt{read} tornerebbe subito & \textbf{Pronto in scrittura}: una \texttt{write} non si
+                                                                    bloccherebbe \\
+\midrule
+sono arrivati byte nel buffer di ricezione & c'è posto nel buffer di invio (\texttt{SO\_SNDLOWAT}, 2048 byte per
+                                             default) e il socket è connesso \\
+il peer ha chiuso il suo lato di scrittura, quindi \texttt{read} restituisce 0 & una \texttt{connect} non bloccante è
+                                                                                  terminata, in un modo o nell'altro \\
+è un socket di ascolto e c'è una connessione in attesa & il peer ha chiuso il suo lato di lettura: la \texttt{write}
+                                                          torna con \texttt{EPIPE} \\
+c'è un errore in sospeso sul socket & c'è un errore in sospeso sul socket \\
+\bottomrule
+\end{tabular}
+\caption{Le condizioni che rendono pronto un socket.}
+\end{table}
+
+Pronto significa \textbf{non si bloccherà}, non \emph{riuscirà}: un errore è un'ottima ragione per essere pronti.
+\texttt{exceptfds} è quasi sempre \texttt{NULL}: su Linux l'unica cosa che segnala sono i dati fuori banda.
+
+\subsection{Il timeout}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Tre modi di aspettare}]
+struct timeval {
+    time_t      tv_sec;     /* secondi */
+    suseconds_t tv_usec;    /* microsecondi, non millisecondi */
+};
+
+struct timeval tv   = { .tv_sec = 2, .tv_usec = 500000 };    /* 2,5 secondi */
+struct timeval zero = { .tv_sec = 0, .tv_usec = 0 };
+
+select(nfds, &rset, NULL, NULL, NULL);      /* per sempre */
+select(nfds, &rset, NULL, NULL, &zero);     /* polling: torna subito */
+select(nfds, &rset, NULL, NULL, &tv);       /* al massimo 2,5 s */
+\end{lstlisting}
+
+Su Linux \texttt{select} riscrive in quella struttura il tempo che \textbf{non} ha usato: dentro un ciclo va riempita di
+nuovo prima di ogni chiamata, altrimenti l'attesa si riduce fino a niente.
+
+\subsection{select consuma gli insiemi}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    on/.style={draw=netblue!70!black, fill=netblue!25, minimum width=1.0cm, minimum height=0.5cm, font=\scriptsize\ttfamily},
+    rd/.style={draw=netgreen!70!black, fill=netgreen!35, minimum width=1.0cm, minimum height=0.5cm, font=\scriptsize\ttfamily},
+    off/.style={draw=black!30, fill=white, text=black!35, minimum width=1.0cm, minimum height=0.5cm, font=\scriptsize\ttfamily},
+    a/.style={-{Stealth[length=1.8mm]}, thick, black!60}]
+  \node[anchor=east, font=\scriptsize\ttfamily] at (-0.8,0) {allset};
+  \foreach \i in {3,...,7} \node[on] at ({(\i-3)*1.15},0) {fd \i};
+  \node[anchor=west, text=black!60] at (5.5,0) {ciò che vogliamo osservare};
+  \draw[a] (2.3,-0.3) -- node[right]{\texttt{rset = allset}} (2.3,-0.85);
+  \node[anchor=east, font=\scriptsize\ttfamily] at (-0.8,-1.15) {rset};
+  \foreach \i in {3,...,7} \node[on] at ({(\i-3)*1.15},-1.15) {fd \i};
+  \node[anchor=west, text=black!60] at (5.5,-1.15) {ciò che entra};
+  \draw[a] (2.3,-1.45) -- node[right]{\texttt{select(...)}} (2.3,-2.0);
+  \node[anchor=east, font=\scriptsize\ttfamily] at (-0.8,-2.3) {rset};
+  \node[off] at (0,-2.3)    {fd 3};
+  \node[rd]  at (1.15,-2.3) {fd 4};
+  \node[off] at (2.3,-2.3)  {fd 5};
+  \node[off] at (3.45,-2.3) {fd 6};
+  \node[rd]  at (4.6,-2.3)  {fd 7};
+  \node[anchor=west, text=black!60] at (5.5,-2.3) {ciò che torna: 2};
+\end{tikzpicture}
+\caption{Gli insiemi sono argomenti \emph{e} risultati. I tre descriptor non pronti sono stati azzerati: un insieme
+         costruito una volta, fuori dal ciclo, aspetta la seconda volta solo quelli pronti la prima, e dopo ancora niente.}
+\end{figure}
+
+\warning{L'insieme costruito una volta sola}{
+    Si costruisce l'insieme una volta, prima del ciclo, e si chiama \texttt{select} nel ciclo. Che cosa aspetta la seconda
+    chiamata? \textbf{Solo i descriptor che erano pronti la prima volta}. \texttt{select} sovrascrive l'insieme con il
+    sottoinsieme pronto e azzera tutto il resto. La cura è tenere un insieme \emph{principale} e passarne una
+    \textbf{copia} a ogni giro, oppure ricostruirlo da capo ogni volta.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Un client che ascolta due descriptor}
+% ══════════════════════════════════════════════════════════════
+
+\warning{Il client che non sente il server}{
+    Il client legge una riga, la invia e legge la risposta. Il server però parla anche di sua iniziativa: una riga ogni
+    dieci secondi. Quando la vede l'utente? \textbf{Quando scrive qualcosa}. Il client è fermo nella \texttt{read} sulla
+    tastiera, e le righe del server si accumulano nel buffer del socket finché non torna.
+    \begin{itemize}
+        \item Non è un bug del server: il client può essere bloccato in uno solo dei due posti, e ha scelto quello
+              sbagliato.
+        \item Un secondo thread lo risolverebbe: di nuovo uno per descriptor, con uno schermo condiviso su cui scrivere.
+    \end{itemize}
+}
+
+Per due descriptor basta \textbf{una chiamata}.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Osservare la tastiera e il socket}]
+static void chat_client(int fd) {
+    char buf[256];
+    fd_set rset;
+    int nfds = (fd > STDIN_FILENO ? fd : STDIN_FILENO) + 1;
+
+    for (;;) {
+        FD_ZERO(&rset);                             /* ricostruito a ogni giro */
+        FD_SET(STDIN_FILENO, &rset);
+        FD_SET(fd, &rset);
+
+        if (select(nfds, &rset, NULL, NULL, NULL) < 0) {
+            if (errno == EINTR) continue;           /* un segnale, non un errore */
+            perror("select"); return;
+        }
+        if (FD_ISSET(STDIN_FILENO, &rset)) {        /* l'utente ha scritto */
+            ssize_t n = read(STDIN_FILENO, buf, sizeof buf);
+            if (n <= 0) return;                     /* fine dell'input: abbiamo finito */
+            if (write(fd, buf, n) != n) { perror("write"); return; }
+        }
+        if (FD_ISSET(fd, &rset)) {                  /* ha parlato il server */
+            ssize_t n = read(fd, buf, sizeof buf);
+            if (n == 0) { fprintf(stderr, "server closed\n"); return; }
+            if (n < 0) { perror("read"); return; }
+            write(STDOUT_FILENO, buf, n);
+        }
+    }
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item Due descriptor, un'attesa: il client ora è bloccato \textbf{in entrambi i posti insieme}, ed è tutto il punto.
+    \item Due \texttt{if}, non un \texttt{if/else}: \texttt{select} può segnalarli entrambi, e il secondo resterebbe in
+          attesa fino alla prossima riga digitata.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Un solo flusso di controllo, molte connessioni}
+% ══════════════════════════════════════════════════════════════
+
+Lo stesso server, con il ciclo rovesciato: non aspetta più un client, aspetta \textbf{quello che parla per primo}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    st/.style={draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, align=center, minimum width=3.0cm,
+               minimum height=1.3cm},
+    a/.style={-{Stealth[length=2mm]}, thick}]
+  \node[font=\small\bfseries\sffamily] at (4,1.25) {un processo, un thread, nessun lock};
+  \node[st] (w) at (0,0) {\textbf{l'insieme osservato}\\\texttt{fd 3} ascolto\\\texttt{fd 4 5 6 7} client};
+  \node[st, draw=netred!70!black, fill=netred!6] (s) at (4,0) {\texttt{\textbf{select(...)}}\\l'unica chiamata\\che si blocca};
+  \node[st, draw=netgreen!70!black, fill=netgreen!8] (r) at (8,0) {\textbf{i pronti}\\\texttt{fd 4} e \texttt{fd 7}\\e nient'altro};
+  \draw[a] (w) -- (s);
+  \draw[a] (s) -- (r);
+  \draw[a] (r.south) -- ++(0,-0.6) -| node[pos=0.25, below]{\texttt{accept}, \texttt{read}, \texttt{write}, e di nuovo} (w.south);
+\end{tikzpicture}
+\caption{Ogni client è un posto in un array e un bit in un insieme. Non c'è nulla da proteggere con un lock, perché nient'altro
+         è in esecuzione; e nulla sulla via del ritorno può aspettare, perché tutti aspetterebbero con lui.}
+\end{figure}
+
+\dfn{Server guidato dagli eventi}{
+    Un server \textbf{guidato dagli eventi} (\emph{event-driven}) ha un solo ciclo, il \key{ciclo degli eventi}: si blocca
+    in \texttt{select}, poi esegue per ogni descriptor pronto un pezzo di lavoro breve e che non si blocca mai, e torna in
+    \texttt{select}. Lo stato di ogni client sta in strutture dati, non sullo stack di un thread.
+}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Lo stato del server}]
+#define MAXC 64
+static int clients[MAXC];                    /* socket connessi, -1 = posto libero */
+
+int main(int argc, char *argv[]) {
+    int listen_fd = listening_socket(argc > 1 ? argv[1] : "5000");
+    fd_set allset, rset;                     /* l'insieme principale, e la copia */
+    int maxfd = listen_fd;
+
+    for (int i = 0; i < MAXC; i++) clients[i] = -1;
+    FD_ZERO(&allset);
+    FD_SET(listen_fd, &allset);              /* la porta e' un descriptor come gli altri */
+
+    for (;;) {
+        rset = allset;                       /* assegnamento di struct: una copia */
+        int ready = select(maxfd + 1, &rset, NULL, NULL, NULL);
+        if (ready < 0) { if (errno == EINTR) continue; perror("select"); break; }
+\end{lstlisting}
+
+La stessa lista di client della versione con i thread, \textbf{senza il mutex}: non c'è nient'altro in esecuzione.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Arriva una connessione sul socket di ascolto}]
+        if (FD_ISSET(listen_fd, &rset)) {
+            int fd = accept(listen_fd, NULL, NULL);
+            if (fd < 0) { perror("accept"); continue; }
+
+            int slot = -1;
+            for (int i = 0; i < MAXC; i++)
+                if (clients[i] == -1) { clients[i] = fd; slot = i; break; }
+
+            if (slot < 0) { write(fd, "chat is full\n", 13); close(fd); }
+            else {
+                FD_SET(fd, &allset);         /* osservato dal prossimo giro */
+                if (fd > maxfd) maxfd = fd;
+            }
+            if (--ready == 0) continue;      /* nient'altro era pronto */
+        }
+\end{lstlisting}
+
+Un socket di ascolto leggibile significa una connessione in attesa, quindi questa \texttt{accept} ritorna subito.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Servire le connessioni pronte}]
+        for (int i = 0; i < MAXC && ready > 0; i++) {
+            int fd = clients[i];
+            if (fd == -1 || !FD_ISSET(fd, &rset)) continue;
+            --ready;
+
+            char buf[256];
+            ssize_t n = read(fd, buf, sizeof buf);
+            if (n > 0) {
+                broadcast(i, buf, n);        /* tutti tranne i */
+            } else {                         /* 0: se n'e' andato. <0: si e' rotto */
+                FD_CLR(fd, &allset);
+                close(fd);
+                clients[i] = -1;
+            }
+        }
+    }
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{broadcast} è il \texttt{for} della versione con i thread, meno il mutex.
+    \item \texttt{maxfd} non si abbassa quando un client se ne va: costa una scansione un po' più lunga, e l'alternativa è
+          una ricerca a ogni uscita.
+    \item \texttt{ready} serve a fermarsi presto: quando sono stati serviti tanti descriptor quanti ne ha contati
+          \texttt{select}, il resto dell'array non va guardato.
+\end{itemize}
+
+\subsection{In questo ciclo nulla può bloccarsi}
+
+\warning{Mezza riga, un byte al secondo}{
+    Un client invia mezza riga, un byte alla volta, un byte al secondo. La \texttt{read} ha restituito sei byte e la riga
+    non è finita. E adesso? Si prendono i sei byte, si mettono \textbf{nel buffer di quel client} e si torna in
+    \texttt{select}. Aspettare il resto vorrebbe dire aspettare un client con il tempo di tutti gli altri.
+}
+
+\begin{itemize}
+    \item Ogni client quindi ha bisogno del proprio \textbf{buffer di ingresso}: il ciclo tiene lo stato che un thread teneva
+          sul suo stack.
+    \item E \emph{pronto} non è una promessa: fra la \texttt{select} e l'\texttt{accept} il client può mandare un reset, e
+          l'\texttt{accept} si blocca, con tutto il server dentro.
+    \item Da qui i descriptor \textbf{non bloccanti}: \texttt{EAGAIN} invece di un'attesa, e il ciclo va avanti.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Un descriptor non bloccante}]
+int flags = fcntl(fd, F_GETFL, 0);
+fcntl(fd, F_SETFL, flags | O_NONBLOCK);      /* da ora: mai un'attesa */
+
+ssize_t n = read(fd, buf, sizeof buf);
+if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+    ;                                        /* niente per ora: si torna in select */
+
+n = recv(fd, buf, sizeof buf, MSG_DONTWAIT); /* lo stesso, per una sola chiamata */
+\end{lstlisting}
+
+\subsection{Il client lento, finalmente}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Una coda in uscita per client}]
+static struct { char buf[4096]; size_t len; } out[MAXC];   /* byte in attesa, per client */
+static fd_set wall;                          /* chi ha ancora qualcosa da inviare */
+
+static void queue(int i, const char *msg, size_t n) {      /* non si blocca mai */
+    if (out[i].len + n > sizeof out[i].buf) { drop(i); return; }  /* troppo lento: via */
+    memcpy(out[i].buf + out[i].len, msg, n);
+    out[i].len += n;
+    FD_SET(clients[i], &wall);               /* avvisami quando puo' ricevere byte */
+}
+
+/* e nel ciclo, per ogni i che select ha segnalato scrivibile */
+ssize_t w = write(clients[i], out[i].buf, out[i].len);
+if (w > 0) { out[i].len -= w; memmove(out[i].buf, out[i].buf + w, out[i].len); }
+if (out[i].len == 0) FD_CLR(clients[i], &wall);            /* niente da inviare: basta chiedere */
+\end{lstlisting}
+
+Ora \texttt{select} riceve anche un insieme di scrittura. \texttt{broadcast} non scrive più: \textbf{accoda}. Il client
+lento riempie il proprio buffer e viene scartato quando trabocca, e nessun altro lo aspetta.
+
+\warning{Perché un descriptor entra in wall solo se ha qualcosa}{
+    Un socket connesso è scrivibile quasi sempre, perché il suo buffer di invio è quasi sempre vuoto. Se tutti i client
+    stessero sempre nell'insieme di scrittura, \texttt{select} tornerebbe subito a ogni giro: il server girerebbe al
+    100\% di CPU senza fare nulla. Un descriptor entra nell'insieme di scrittura quando la sua coda si riempie e ne esce
+    quando si svuota.
+}
+
+\subsection{Quanto costa select}
+
+\begin{itemize}
+    \item Gli insiemi sono copiati nel kernel a ogni chiamata, e il kernel percorre tutto l'intervallo da 0 a
+          \texttt{nfds-1}: il costo segue il \textbf{descriptor più alto}, non il numero di quelli pronti.
+    \item Al ritorno si percorre il proprio array per trovare chi è pronto: un secondo passaggio lineare su client che per lo
+          più non hanno detto niente.
+    \item E \texttt{FD\_SETSIZE} vale 1024: un server con diecimila connessioni non può nemmeno nominare i propri descriptor
+          in un insieme.
+    \item \texttt{poll} prende un array invece di una maschera: nessun limite fisso, ma ancora lineare. \texttt{epoll} su
+          Linux e \texttt{kqueue} sui BSD \textbf{registrano i descriptor una volta sola} e restituiscono solo quelli
+          pronti.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Lo stesso ciclo con epoll}]
+int ep = epoll_create1(0);
+struct epoll_event ev = { .events = EPOLLIN, .data.fd = listen_fd };
+epoll_ctl(ep, EPOLL_CTL_ADD, listen_fd, &ev);          /* registrato una volta */
+
+struct epoll_event ready[64];
+for (;;) {
+    int n = epoll_wait(ep, ready, 64, -1);             /* -1: per sempre */
+    for (int k = 0; k < n; k++) {                      /* solo i pronti, nessuna scansione */
+        int fd = ready[k].data.fd;
+        if (fd == listen_fd) { /* accept, poi EPOLL_CTL_ADD del nuovo fd */ }
+        else                 { /* read, oppure EPOLL_CTL_DEL e close */ }
+    }
+}
+\end{lstlisting}
+
+La forma del ciclo non cambia: cambia la chiamata nel mezzo. Tutto quello che vale per \texttt{select} vale ancora.
+
+% ══════════════════════════════════════════════════════════════
+\section{Un insieme fisso di worker}
+% ══════════════════════════════════════════════════════════════
+
+Il ciclo degli eventi ha eliminato il flusso di controllo per client e ne ha lasciato uno per tutti. Un \textbf{pool} ne
+tiene diversi, ma in numero fisso, creati prima che arrivi il primo client.
+
+\dfn{Pool di thread}{
+    Un \textbf{pool di thread} è un insieme di $n$ thread creati all'avvio, che prendono il lavoro da una \textbf{coda
+    limitata} e, finito un lavoro, tornano a prenderne un altro. Chi produce il lavoro lo accoda e basta.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    cell/.style={draw=black!60, minimum width=0.55cm, minimum height=0.55cm, font=\scriptsize\ttfamily, fill=#1},
+    wk/.style={draw=netgreen!70!black, fill=netgreen!8, rounded corners=2pt, minimum width=3.5cm, minimum height=0.55cm,
+               anchor=west},
+    a/.style={-{Stealth[length=2mm]}, thick}]
+  \node[draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, align=center, minimum height=1.2cm] (acc) at (0,0)
+    {\texttt{\textbf{accept}}\\un ciclo\\nient'altro};
+  \foreach \i/\v/\c in {0//white, 1//white, 2/4/netblue!20, 3/7/netblue!20, 4/9/netblue!20}
+    \node[cell=\c] (q\i) at (2.6+\i*0.55,0) {\v};
+  \node[above=0.25cm of q2, text=black!70] {una coda limitata di descriptor};
+  \draw[a] (acc.east) -- node[above]{\texttt{put\_fd}} (q0.west);
+  \node[wk] (w1) at (6.7,0.8)  {worker 1: \texttt{serve(fd 4)}};
+  \node[wk] (w2) at (6.7,0)    {worker 2: \texttt{serve(fd 7)}};
+  \node[wk, text=black!50] (w3) at (6.7,-0.8) {worker 3: \texttt{get\_fd}, dorme};
+  \node[above=0.1cm of w1, text=black!70] {creati una volta, prima di ogni client};
+  \draw[thick] (q4.east) -- node[above]{\texttt{get\_fd}} (6.0,0);
+  \draw[a] (6.0,0) -- (w2.west);
+  \draw[a] (6.0,0) -- (w1.west);
+  \draw[a] (6.0,0) -- (w3.west);
+  \node[text=netred, align=center] at (0,-1.15) {coda piena:\\questo ciclo aspetta};
+  \draw[-{Stealth[length=1.8mm]}, dashed, black!55] (w3.south) -- ++(0,-0.45) -| node[pos=0.25, below]{\texttt{close},
+    poi di nuovo a prendere il prossimo} (q2.south);
+\end{tikzpicture}
+\caption{Una connessione costa un inserimento in coda e un risveglio: quando arriva un client non si crea niente, e niente
+         si distrugge.}
+\end{figure}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={La coda è il buffer limitato, con dentro descriptor}]
+#define QSIZE 128
+
+typedef struct {
+    int fd[QSIZE];                           /* descriptor invece di interi */
+    int in, out, count;
+    pthread_mutex_t mtx;
+    pthread_cond_t not_full, not_empty;      /* le stesse due attese di prima */
+} queue_t;
+
+void put_fd(queue_t *q, int fd);             /* si blocca finche' la coda e' piena */
+int  get_fd(queue_t *q);                     /* si blocca finche' e' vuota */
+\end{lstlisting}
+
+È il buffer produttore-consumatore, intatto: un mutex sullo stato, una variabile di condizione per ogni cosa che qualcuno
+aspetta. Quello che lo attraversa ora è una connessione.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il ciclo di accept è il produttore}]
+int main(int argc, char *argv[]) {
+    int listen_fd = listening_socket(argc > 1 ? argv[1] : "5000");
+    queue_t q; queue_init(&q);
+    pthread_t tid;
+
+    for (int i = 0; i < NWORKERS; i++)       /* una volta, prima di ogni client */
+        if (pthread_create(&tid, NULL, worker, &q) == 0) pthread_detach(tid);
+
+    for (;;) {
+        int fd = accept(listen_fd, NULL, NULL);
+        if (fd < 0) { if (errno == EINTR) continue; perror("accept"); continue; }
+        put_fd(&q, fd);                      /* l'unica cosa che fa il ciclo */
+    }
+}
+\end{lstlisting}
+
+Niente \texttt{fork}, niente \texttt{pthread\_create} nel ciclo, niente \texttt{malloc} per un argomento: una connessione
+costa un inserimento in coda.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il worker è il consumatore}]
+static void *worker(void *arg) {
+    queue_t *q = arg;
+
+    for (;;) {
+        int fd = get_fd(q);                  /* dorme qui finche' non c'e' niente */
+        if (fd == STOP) break;               /* la pillola avvelenata: una per worker */
+
+        serve(fd);                           /* la funzione del server sequenziale */
+        close(fd);
+    }
+    return NULL;
+}
+\end{lstlisting}
+
+Il thread c'era prima del client e c'è dopo: per connessione non si crea né si distrugge niente. E \texttt{serve()} è
+passata ormai per tre cicli diversi senza essere toccata.
+
+\subsection{Quanti worker, e che cosa succede quando la coda si riempie}
+
+\begin{itemize}
+    \item Il numero non è «quanti sono i client»: è \textbf{quanti possono lavorare insieme}. Circa quanti sono i core per un
+          lavoro che calcola, di più quando i worker passano il tempo bloccati in \texttt{read}.
+    \item La coda è limitata \textbf{di proposito}. Quando si riempie, \texttt{put\_fd} blocca il ciclo di \texttt{accept};
+          le connessioni si accumulano allora nella coda di listen, e quando si riempie anche quella il kernel le rifiuta.
+    \item Una coda illimitata sposta solo il guasto più in profondità: accetta tutti e non risponde a nessuno, e il client
+          ha rinunciato molto prima che arrivi il suo turno.
+\end{itemize}
+
+\dfn{Contropressione}{
+    La catena coda piena $\to$ \texttt{accept} ferma $\to$ coda di listen piena $\to$ connessioni rifiutate è la
+    \textbf{contropressione} (\emph{back pressure}): un server che non riesce a stare al passo lo dice, alla porta, invece
+    di allocare memoria finché non muore.
+}
+
+Il numero da misurare quindi non è il throughput, ma \textbf{quanto aspetta una richiesta} prima che un worker la prenda.
+
+\warning{Tutti e sedici i worker parlano con qualcuno}{
+    Sedici worker, sedici client di chat connessi e silenziosi. Si connette il diciassettesimo: quando viene servito?
+    \textbf{Mai}. Ogni worker è dentro \texttt{serve()}, bloccato in \texttt{read} sul proprio client, e \texttt{serve()}
+    ritorna solo quando quel client se ne va. La coda non è piena: semplicemente non viene mai letta.
+    \begin{itemize}
+        \item Un pool il cui lavoro è una connessione serve tanti client quanti worker ha. È la forma giusta quando il
+              lavoro \textbf{finisce}: una richiesta HTTP, una query, un file da inviare.
+        \item Per connessioni che durano, o si tiene un flusso per client limitandone il numero (il semaforo contatore già
+              visto), oppure il lavoro diventa \textbf{il messaggio}.
+        \item Il che richiede qualcuno che si accorga che un messaggio è arrivato: il ciclo di prima. Uno che osserva, un
+              pool che lavora.
+    \end{itemize}
+}
+
+\subsection{Tre forme di server}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l l l}
+\toprule
+ & \textbf{Uno per client} & \textbf{Un ciclo} & \textbf{Pool fisso} \\
+\midrule
+costo di un nuovo client  & uno stack          & un posto e un bit      & un inserimento in coda \\
+quanti insieme            & migliaia           & decine di migliaia     & quanti sono i worker \\
+una chiamata bloccante    & ferma quel client  & ferma tutti            & occupa un worker \\
+stato condiviso           & vuole un mutex     & non vuole niente       & vuole un mutex \\
+usa più core              & sì                 & no                     & sì \\
+\bottomrule
+\end{tabular}
+\caption{Le tre forme di server a confronto.}
+\end{table}
+
+Non restano alternative a lungo: un server reale esegue \textbf{un ciclo per core}, ciascuno con un pool alle spalle per
+il lavoro che non deve fermare il ciclo.
+
+% ══════════════════════════════════════════════════════════════
+\section{Un mittente, molti destinatari}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    a/.style={-{Stealth[length=1.8mm]}, thick}]
+  % broadcast
+  \node[font=\small\bfseries\sffamily] at (2,2.3) {broadcast \texttt{192.168.1.255}};
+  \node (s1) at (2,1.45) {\icon[0.75cm]{pc}};
+  \draw[wired] (0,0.5) -- (4,0.5);
+  \draw[wired] (s1.south) -- (2,0.5);
+  \foreach \x in {0.2,1.4,2.6,3.8} {
+    \node (h) at (\x,-0.45) {\icon[0.65cm]{pc}};
+    \draw[a, netgreen!70!black] (\x,0.5) -- (h.north);
+  }
+  \node[align=center, text=black!70] at (2,-1.6) {la riceve ogni host della sottorete:\\nessuno l'ha chiesta, nessuno può
+    rifiutarla};
+  % multicast
+  \node[font=\small\bfseries\sffamily] at (8,2.3) {multicast \texttt{239.1.2.3}};
+  \node (s2) at (8,1.45) {\icon[0.75cm]{pc}};
+  \draw[wired] (6,0.5) -- (10,0.5);
+  \draw[wired] (s2.south) -- (8,0.5);
+  \node[opacity=0.35] at (6.2,-0.45) {\icon[0.65cm]{pc}};
+  \node (j1) at (7.4,-0.45) {\icon[0.65cm]{pc}};
+  \node[opacity=0.35] at (8.6,-0.45) {\icon[0.65cm]{pc}};
+  \node (j2) at (9.8,-0.45) {\icon[0.65cm]{pc}};
+  \draw[a, netgreen!70!black] (7.4,0.5) -- (j1.north);
+  \draw[a, netgreen!70!black] (9.8,0.5) -- (j2.north);
+  \node[below=-2pt of j1, text=netgreen!60!black] {iscritto};
+  \node[below=-2pt of j2, text=netgreen!60!black] {iscritto};
+  \node[align=center, text=black!70] at (8,-1.6) {solo gli host iscritti al gruppo; una copia\\sul filo, qualunque sia il
+    numero di membri};
+\end{tikzpicture}
+\caption{Entrambi sono datagrammi: non esiste una connessione con molti peer, quindi niente TCP. E solo IPv4: IPv6 ha
+         eliminato il broadcast e ne affida i compiti al multicast.}
+\end{figure}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Broadcast: i due estremi}]
+/* il mittente */
+int fd = socket(AF_INET, SOCK_DGRAM, 0);
+int yes = 1;
+setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &yes, sizeof yes);   /* spento per default */
+to.sin_family = AF_INET;
+to.sin_port   = htons(5000);
+inet_pton(AF_INET, "192.168.1.255", &to.sin_addr);  /* il broadcast di questa sottorete */
+sendto(fd, msg, len, 0, (struct sockaddr *) &to, sizeof to);
+
+/* il ricevente: un normale server UDP */
+setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
+me.sin_family      = AF_INET;
+me.sin_addr.s_addr = htonl(INADDR_ANY);             /* non l'indirizzo di broadcast */
+me.sin_port        = htons(5000);                   /* la stessa porta del mittente */
+bind(fd, (struct sockaddr *) &me, sizeof me);
+recvfrom(fd, buf, sizeof buf, 0, (struct sockaddr *) &from, &flen);
+\end{lstlisting}
+
+\texttt{SO\_BROADCAST} esiste perché nessuno inondi una LAN sbagliando a scrivere un indirizzo: bisogna dire che lo si
+voleva davvero. Senza, la \texttt{sendto} verso un indirizzo di broadcast fallisce con \texttt{EACCES}.
+
+\warning{Il broadcast che non arriva}{
+    Il programma gira, \texttt{sendto} restituisce il numero di byte inviati, e nessuno riceve niente. Dove è finito?
+    \textbf{Fuori dal socket, e non oltre}. \texttt{sendto} riferisce ciò che ha lasciato la nostra macchina: con UDP è
+    tutto ciò che può promettere.
+    \begin{itemize}
+        \item \texttt{255.255.255.255} è il \textbf{broadcast limitato}: non lascia mai l'interfaccia da cui è inviato. I
+              router non inoltrano affatto il broadcast: si ferma alla sottorete, per progetto.
+        \item Il broadcast di sottorete deve essere \textbf{quello di quella sottorete}: va letto, non indovinato.
+        \item Una macchina virtuale in modalità NAT sta su una rete privata tutta sua, e quel NAT non inoltra il broadcast.
+              In modalità bridge prende un indirizzo sulla LAN vera e l'aula lo riceve, se il driver del Wi-Fi permette il
+              bridging.
+    \end{itemize}
+}
+
+\begin{lstlisting}[language=bash, title={L'indirizzo di broadcast, letto e non indovinato}]
+$ ip addr show ens33 | grep inet
+    inet 192.168.1.23/24 brd 192.168.1.255 scope global ens33     <- brd: quello giusto
+\end{lstlisting}
+
+\subsection{Gli indirizzi multicast}
+
+\dfn{Gruppo multicast}{
+    Un \textbf{gruppo multicast} è un indirizzo IPv4 fra \texttt{224.0.0.0} e \texttt{239.255.255.255}. Nomina
+    \textbf{una conversazione, non un host}: nessuno lo possiede, e qualsiasi host può iscriversi.
+}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l l}
+\toprule
+\normalfont\textbf{Intervallo} & \textbf{Uso} \\
+\midrule
+224.0.0.0/24              & link-local: mai inoltrato; qui vivono i protocolli di routing \\
+224.0.1.0 -- 238.255.255.255 & ambito globale: richiede router configurati per questo \\
+239.0.0.0/8               & ambito amministrativo: locale a un'organizzazione \\
+\bottomrule
+\end{tabular}
+\caption{Gli ambiti degli indirizzi multicast IPv4.}
+\end{table}
+
+Per qualsiasi cosa nostra si usa \texttt{239.x.y.z}. L'altro limite a quanto lontano viaggia un datagramma è il suo
+\textbf{TTL}, che per il multicast il mittente sceglie esplicitamente.
+
+\subsection{Entrare in un gruppo}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Iscriversi a 239.1.2.3 sulla porta 5000}]
+int fd = socket(AF_INET, SOCK_DGRAM, 0);
+int yes = 1;
+setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
+setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &yes, sizeof yes);
+
+me.sin_family      = AF_INET;
+me.sin_addr.s_addr = htonl(INADDR_ANY);
+me.sin_port        = htons(5000);
+bind(fd, (struct sockaddr *) &me, sizeof me);         /* la porta, non il gruppo */
+
+struct ip_mreq mreq;
+inet_pton(AF_INET, "239.1.2.3", &mreq.imr_multiaddr); /* quale gruppo */
+mreq.imr_interface.s_addr = htonl(INADDR_ANY);        /* su quale interfaccia */
+setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof mreq);
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{bind} sceglie la porta, l'iscrizione sceglie il gruppo: senza di essa il kernel butta via i datagrammi
+          anche quando arrivano sul filo.
+    \item \texttt{SO\_REUSEADDR} riusa una porta lasciata da un socket precedente; \texttt{SO\_REUSEPORT} permette a più
+          socket vivi di tenere la stessa porta nello stesso momento, ed è ciò che serve per eseguire due peer sulla stessa
+          macchina.
+\end{itemize}
+
+\subsection{Inviare a un gruppo}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il mittente}]
+int fd = socket(AF_INET, SOCK_DGRAM, 0);              /* un normale socket UDP */
+
+unsigned char ttl = 1;                                /* 1: questa sottorete e non oltre */
+setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof ttl);
+
+unsigned char loop = 1;                               /* anche ai membri su questo host */
+setsockopt(fd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof loop);
+
+to.sin_family = AF_INET;
+to.sin_port   = htons(5000);
+inet_pton(AF_INET, "239.1.2.3", &to.sin_addr);
+sendto(fd, msg, len, 0, (struct sockaddr *) &to, sizeof to);
+\end{lstlisting}
+
+Il mittente non si iscrive a niente, non si connette a niente e non sa chi sta ascoltando: questo codice è identico che
+il gruppo abbia zero membri o duecento. TTL 1 e loop attivo sono anche i valori predefiniti; qui sono scritti per
+mostrarli.
+
+\subsection{Chi rende selettivo il multicast}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    a/.style={-{Stealth[length=1.8mm]}, thick}]
+  \node (h1) at (0,1.0)  {\icon[0.6cm]{pc}};
+  \node (h2) at (0,0)    {\icon[0.6cm]{pc}};
+  \node[opacity=0.35] (h3) at (0,-1.0) {\icon[0.6cm]{pc}};
+  \node[left=0pt of h1, text=netgreen!60!black] {iscritto};
+  \node[left=0pt of h2, text=netgreen!60!black] {iscritto};
+  \node[left=0pt of h3, text=black!50] {--};
+  \node (sw) at (2.6,0) {\icon[0.9cm]{switch}};
+  \node[below=0pt of sw, align=center] {switch\\IGMP snooping};
+  \node (ra) at (5.4,0) {\icon[0.9cm]{router}};
+  \node[below=0pt of ra, align=center] {router A\\questa sottorete};
+  \node (rb) at (8.2,0) {\icon[0.9cm]{router}};
+  \node[below=0pt of rb] {router B};
+  \node (src) at (10.6,0) {\icon[0.75cm]{server}};
+  \node[below=0pt of src, align=center] {sorgente\\del gruppo};
+  \draw[wired] (h1.east) -- (sw.west);
+  \draw[wired] (h2.east) -- (sw.west);
+  \draw[wired, black!30] (h3.east) -- (sw.west);
+  \draw[wired] (sw.east) -- (ra.west);
+  \draw[wired] (ra.east) -- node[above]{PIM} (rb.west);
+  \draw[wired] (rb.east) -- node[above]{PIM} (src.west);
+  \draw[a, netred, dashed] (h1.north east) to[out=30, in=150] node[above]{IGMP report} (ra.north west);
+  \node[text=black!60, align=center] at (2.6,-1.6) {solo le porte\\che l'hanno chiesto};
+  \node[text=black!60, align=center] at (6.8,-1.6) {l'albero raggiunge solo le\\sottoreti che hanno un membro};
+\end{tikzpicture}
+\caption{I tre meccanismi che portano un datagramma multicast solo dove serve.}
+\end{figure}
+
+\begin{itemize}
+    \item \key{IGMP}: l'iscrizione non è solo locale. Il kernel annuncia il gruppo al router della sottorete, e lo ripete
+          quando gli viene chiesto.
+    \item \key{PIM}: i router costruiscono un albero fra sottoreti, così che una sottorete senza membri non riceva niente.
+    \item \key{IGMP snooping}: lo switch inoltra il gruppo solo sulle porte che l'hanno chiesto; senza, lo inonda su tutta
+          la LAN e il filtro lo fa ciascun kernel.
+    \item Nessuno dei tre è un controllo di accesso: qualsiasi host lungo il percorso può iscriversi e leggere tutto. Se
+          deve restare privato, \textbf{si cifra il contenuto}.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Esercizi}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{fork, pipe e select}
+Un genitore e un figlio osservano entrambi la tastiera con \texttt{select}; il genitore inoltra al figlio, attraverso una
+pipe, ciò che legge. Il figlio osserva sia la tastiera sia la pipe e stampa da dove arriva ogni riga. Scrivere qualche
+stringa e spiegare che cosa si vede: chi riceve la riga scritta, e si può dire in anticipo?
+
+\svolgimento
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={fork\_pipe\_select.c}]
+int p[2]; char buf[256]; ssize_t n;
+pipe(p);
+if (fork() == 0) {                           /* figlio: tastiera e pipe */
+    close(p[1]);
+    for (;;) {
+        fd_set r; FD_ZERO(&r); FD_SET(STDIN_FILENO, &r); FD_SET(p[0], &r);
+        if (select(p[0] + 1, &r, NULL, NULL, NULL) < 0) continue;
+        if (FD_ISSET(STDIN_FILENO, &r) && (n = read(STDIN_FILENO, buf, sizeof buf)) > 0)
+            printf("figlio, dalla tastiera: %.*s", (int) n, buf);
+        if (FD_ISSET(p[0], &r) && (n = read(p[0], buf, sizeof buf)) > 0)
+            printf("figlio, dal genitore:   %.*s", (int) n, buf);
+    }
+}
+close(p[0]);                                 /* genitore: tastiera, poi pipe */
+for (;;) {
+    fd_set r; FD_ZERO(&r); FD_SET(STDIN_FILENO, &r);
+    if (select(STDIN_FILENO + 1, &r, NULL, NULL, NULL) < 0) continue;
+    if ((n = read(STDIN_FILENO, buf, sizeof buf)) <= 0) break;
+    write(p[1], buf, n);
+}
+\end{lstlisting}
+
+I due processi condividono lo \textbf{stesso} standard input, ereditato con la \texttt{fork}. Quando si preme Invio,
+\texttt{select} sveglia \textbf{entrambi}: per tutti e due la tastiera è pronta. Ma la riga è una sola, e la prende chi
+arriva prima alla \texttt{read}, cosa che decide lo scheduler. Non si può dire in anticipo.
+
+L'altro processo, svegliato per niente, chiama \texttt{read} e \textbf{si blocca} fino alla riga successiva. Se è il
+figlio, la riga che il genitore gli ha appena inoltrato resta nella pipe finché non si scrive ancora qualcosa: le righe
+\emph{dal genitore} compaiono in ritardo e fuori ordine. È il «pronto non è una promessa» del capitolo, con due processi:
+fra la \texttt{select} e la \texttt{read} qualcun altro ha preso i dati. Mettere lo standard input in
+\texttt{O\_NONBLOCK} lo trasforma in un \texttt{EAGAIN}; ma il flag sta nella descrizione del file aperto, quindi vale per
+entrambi i processi, e anche per la shell dopo che il programma è finito.
+\end{esercizio}
+
+\begin{esercizio}{Un peer multicast}
+Scrivere un peer: un solo socket UDP, iscritto a \texttt{239.1.2.3:5000}, con \texttt{select} sullo standard input e sul
+socket. Ciò che si scrive va al gruppo, ciò che arriva va sullo schermo. Nessun server: ogni peer è entrambe le cose.
+Provarne tre sulla stessa macchina (\texttt{./peer 239.1.2.3 5000}), poi su due macchine. Perché si vedono i propri
+messaggi, e quali sono i due modi per non vederli più?
+
+\svolgimento
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={peer.c: il cuore}]
+/* socket, SO_REUSEADDR, SO_REUSEPORT, bind sulla porta e IP_ADD_MEMBERSHIP come nel capitolo */
+struct sockaddr_in to = me;                  /* stessa porta ... */
+inet_pton(AF_INET, argv[1], &to.sin_addr);   /* ... ma l'indirizzo del gruppo */
+
+for (;;) {
+    fd_set r; FD_ZERO(&r); FD_SET(STDIN_FILENO, &r); FD_SET(fd, &r);
+    if (select(fd + 1, &r, NULL, NULL, NULL) < 0) { if (errno == EINTR) continue; break; }
+
+    if (FD_ISSET(STDIN_FILENO, &r)) {        /* da tastiera al gruppo */
+        ssize_t n = read(STDIN_FILENO, buf, sizeof buf);
+        if (n <= 0) break;
+        sendto(fd, buf, n, 0, (struct sockaddr *) &to, sizeof to);
+    }
+    if (FD_ISSET(fd, &r)) {                  /* dal gruppo allo schermo */
+        struct sockaddr_in from; socklen_t fl = sizeof from;
+        char ip[INET_ADDRSTRLEN];
+        ssize_t n = recvfrom(fd, buf, sizeof buf, 0, (struct sockaddr *) &from, &fl);
+        inet_ntop(AF_INET, &from.sin_addr, ip, sizeof ip);
+        printf("[%s:%d] %.*s", ip, ntohs(from.sin_port), (int) n, buf);
+    }
+}
+\end{lstlisting}
+
+Ci si vede perché \texttt{IP\_MULTICAST\_LOOP} vale 1 per default e il nostro socket è iscritto al gruppo: la copia
+rimandata indietro sull'host arriva a tutti i socket iscritti, compreso il mittente. I due modi:
+\begin{itemize}
+    \item \textbf{Spegnere il loop} con \texttt{IP\_MULTICAST\_LOOP} a 0. Ma la copia locale è una sola per tutto l'host:
+          spegnendola, non sentono più i nostri messaggi nemmeno gli altri peer sulla stessa macchina.
+    \item \textbf{Riconoscere i propri messaggi} e scartarli. L'indirizzo del mittente non basta, perché sulla stessa
+          macchina tutti i peer hanno lo stesso IP e la stessa porta 5000: serve un identificatore nel messaggio, per
+          esempio il pid e il nome dell'host in testa a ogni riga.
+\end{itemize}
+Con due macchine, l'indirizzo fra parentesi quadre distingue i peer remoti; se non arriva niente, il colpevole tipico è
+l'interfaccia scelta da \texttt{INADDR\_ANY} per l'iscrizione, o una VM in NAT.
+\end{esercizio}
+
+\begin{esercizio}{Iterazione 4: una chat guidata dagli eventi}
+Si riparte dalla chat con i thread: funziona, e un client che smette di leggere congela tutti, perché il
+\texttt{broadcast} si blocca con il lock della lista in mano.
+\begin{itemize}
+    \item \textbf{Che cosa cambia}: un thread solo. Niente \texttt{pthread\_create}, niente mutex: la lista è un array
+          qualsiasi, e \texttt{accept} avviene quando il socket di ascolto è leggibile.
+    \item \textbf{Che cosa è nuovo}: niente può bloccarsi. I descriptor diventano non bloccanti, e ogni client riceve una
+          coda in uscita che entra nell'insieme di scrittura solo quando contiene qualcosa.
+\end{itemize}
+Misurare la memoria con 200 client connessi, contro la versione con i thread. Poi sospendere un client con Ctrl-Z: che
+cosa succede agli altri 199? E che cosa fa la memoria del server mentre la coda di quel client cresce?
+
+\svolgimento
+Ogni client diventa una struttura con le due metà dello stato che prima stavano sullo stack del suo thread:
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={chatd.c: lo stato di un client}]
+struct client {
+    int    fd;                               /* -1 = posto libero */
+    char   in[512];   size_t inlen;          /* la riga in costruzione */
+    char   out[4096]; size_t outlen;         /* byte che aspettano di partire */
+};
+static struct client cl[MAXC];
+static fd_set allset, wall;
+\end{lstlisting}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={chatd.c: il ciclo}]
+for (;;) {
+    fd_set rset = allset, wset = wall;
+    if (select(maxfd + 1, &rset, &wset, NULL, NULL) < 0) { if (errno == EINTR) continue; break; }
+
+    if (FD_ISSET(listen_fd, &rset)) accept_one();    /* nuovo client, O_NONBLOCK */
+    for (int i = 0; i < MAXC; i++) {
+        if (cl[i].fd != -1 && FD_ISSET(cl[i].fd, &rset)) on_readable(i);
+        if (cl[i].fd != -1 && FD_ISSET(cl[i].fd, &wset)) on_writable(i);
+    }
+}
+\end{lstlisting}
+
+\texttt{on\_readable} legge quello che c'è, lo aggiunge a \texttt{in} e, per ogni \texttt{\textbackslash n} trovato,
+chiama \texttt{queue(j, ...)} per ogni altro client $j$; su 0 o su un errore diverso da \texttt{EAGAIN} chiama
+\texttt{drop(i)}. \texttt{on\_writable} è il pezzo «client lento» del capitolo. \texttt{drop} toglie il descriptor da
+entrambi gli insiemi, lo chiude e libera il posto. Il secondo \texttt{if} ricontrolla \texttt{fd}, perché il primo può
+aver appena scartato quel client.
+
+Con un client sospeso, gli altri 199 \textbf{continuano a chattare}. Le righe per lui riempiono prima i buffer del kernel
+(la sua finestra di ricezione e il nostro buffer di invio, centinaia di KB in tutto), poi la sua coda di 4096 byte; a quel
+punto \texttt{queue} lo scarta. La memoria del server \textbf{non cresce}: le code sono di dimensione fissa. Con una coda
+che si allarga con \texttt{realloc} crescerebbe senza limite, un messaggio alla volta, ed è proprio ciò che il limite
+evita.
+
+Quanto alla memoria: con il ciclo gli stati di 200 client sono 200 strutture da circa 4,6 KB in un solo processo; la
+versione con i thread ha in più 200 stack, 200 thread nel kernel, e i cambi di contesto fra di loro.
+\end{esercizio}
+
+\begin{esercizio}{Iterazione 5: un pool dietro il ciclo}
+Si riparte dall'iterazione 4: un solo flusso di controllo per tutti. Un client che fa lavorare il server (una ricerca, un
+file letto dal disco) ferma ogni altra conversazione per tutto il tempo che serve.
+\begin{itemize}
+    \item \textbf{Che cosa cambia}: il ciclo smette di servire. Quando un descriptor è leggibile, esce dall'insieme
+          osservato e va nella coda; un worker lo legge, fa il lavoro, accoda la risposta e restituisce il descriptor.
+    \item \textbf{Perché non un pool di connessioni}: perché una connessione di chat non finisce mai, e sedici worker
+          servirebbero sedici client per sempre. Il lavoro è il messaggio.
+\end{itemize}
+Misurare, con otto worker e un client che chiede qualcosa di lento, il ritardo visto dagli altri. Perché il descriptor deve
+uscire dall'insieme osservato mentre lo tiene un worker? E dopo quanti worker la risposta smette di migliorare?
+
+\svolgimento
+Il ciclo e i worker si passano il descriptor in due direzioni: verso i worker con la coda limitata, all'indietro con una
+\textbf{pipe} che il ciclo osserva insieme ai socket. È l'unico modo di svegliare un ciclo fermo in \texttt{select}.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={chatd.c: andata e ritorno di un descriptor}]
+/* nel ciclo: un client leggibile va a un worker */
+if (FD_ISSET(fd, &rset)) {
+    FD_CLR(fd, &allset);                     /* finche' lo tiene un worker, select non lo guarda */
+    put_fd(&jobs, fd);
+}
+
+/* il worker */
+for (;;) {
+    int fd = get_fd(&jobs);
+    handle(fd);                              /* legge, lavora, accoda la risposta */
+    write(done[1], &fd, sizeof fd);          /* lo restituisce: 4 byte, scrittura atomica */
+}
+
+/* nel ciclo: done[0] e' nell'insieme osservato */
+if (FD_ISSET(done[0], &rset)) {
+    int fd;
+    read(done[0], &fd, sizeof fd);
+    FD_SET(fd, &allset);                     /* di nuovo osservato */
+}
+\end{lstlisting}
+
+Ora le code dei client sono toccate dal ciclo e dai worker insieme, quindi tornano un mutex (uno per client basta).
+
+Il descriptor esce dall'insieme perché, finché il worker non ha letto, il socket resta \textbf{leggibile}: \texttt{select}
+tornerebbe subito a ogni giro, facendo girare il ciclo a vuoto, e il ciclo potrebbe consegnare lo stesso descriptor a un
+secondo worker. Due worker sulla stessa connessione si dividerebbero le righe, e le risposte arriverebbero mescolate.
+
+Con un solo client lento, il ritardo degli altri crolla già con \textbf{due} worker: uno resta occupato con la richiesta
+lenta, l'altro smaltisce tutte le veloci. In generale si smette di migliorare quando i worker sono tanti quante le
+richieste lente contemporanee più uno; e se il lavoro calcola invece di aspettare il disco, quando sono tanti quanti i
+core.
+\end{esercizio}
+
+\Needspace{20\baselineskip}
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item \texttt{select} si blocca su un insieme invece che su un descriptor, e restituisce quelli che si possono servire
+          senza aspettare: un flusso di controllo per tutte le connessioni.
+    \item Gli insiemi sono argomenti e risultati, quindi l'insieme principale si copia a ogni giro; e niente, sulla via da
+          \texttt{select} a \texttt{select}, può bloccarsi.
+    \item È questo che finalmente risponde al client lento: una \textbf{coda in uscita} per connessione, svuotata quando il
+          socket dice di essere scrivibile.
+    \item Un \textbf{pool} paga i suoi thread una volta e li tiene: il ciclo di \texttt{accept} produce, i worker
+          consumano, e una coda limitata trasforma il sovraccarico in rifiuto invece che in esaurimento.
+    \item Un pool serve tante connessioni lunghe quanti worker ha: quindi il lavoro è un messaggio, e qualcun altro si
+          accorge che un messaggio è arrivato.
+    \item Il \textbf{broadcast} raggiunge ogni host della sottorete e si ferma lì; il \textbf{multicast} raggiunge chi si è
+          iscritto a un gruppo, su UDP, con una copia sul filo e nessuna idea di chi ascolta.
+\end{itemize}
+}

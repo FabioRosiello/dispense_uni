@@ -1,0 +1,639 @@
+\chapter{Processi: fork, ereditarietà dei descriptor e segnali}
+
+Il server della chat è \textbf{corretto e inutilizzabile}: mentre è dentro \texttt{serve}, nessun altro viene letto.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    bar/.style={draw=black!50, minimum height=0.45cm, anchor=west, inner sep=0pt, font=\scriptsize\sffamily}]
+  \node[anchor=east] at (-0.2,0)    {server};
+  \node[anchor=east] at (-0.2,-0.8) {client 1};
+  \node[anchor=east] at (-0.2,-1.6) {client 2};
+  \node[bar, fill=netred!15, minimum width=1.2cm] at (0,0)   {accept};
+  \node[bar, fill=ltra!50,   minimum width=4.0cm] at (1.2,0) {serve(C1)};
+  \node[bar, fill=netred!15, minimum width=1.2cm] at (5.2,0) {accept};
+  \node[bar, fill=ltra!50,   minimum width=3.4cm] at (6.4,0) {serve(C2)};
+  \node[bar, fill=netgreen!20, minimum width=4.0cm] at (1.2,-0.8) {connesso, scambia dati};
+  \node[bar, fill=lphy!50,     minimum width=4.2cm] at (1.0,-1.6) {in coda: nessuno lo legge};
+  \node[bar, fill=netgreen!20, minimum width=3.4cm] at (6.4,-1.6) {connesso, scambia dati};
+  \draw[netred, thick] (1.0,-1.35) -- (1.0,-1.85);
+  \node[text=netred, anchor=north] at (1.0,-1.9) {la sua \texttt{connect()} è già tornata};
+  \draw[-{Stealth[length=2mm]}, black!60] (0,-2.6) -- (10.2,-2.6) node[right] {tempo};
+\end{tikzpicture}
+\caption{Con un server sequenziale il secondo client è connesso ma nessuno lo legge, finché il primo non se ne va.}
+\end{figure}
+
+La via d'uscita è far eseguire \texttt{serve} da \textbf{qualcun altro}, un secondo processo, mentre il server torna ad
+\texttt{accept}. Questo capitolo presenta lo strumento (\texttt{fork}), ciò che il figlio eredita (soprattutto i
+descriptor), come si raccolgono i figli morti, e il meccanismo con cui il kernel interrompe un processo per dirgli che è
+successo qualcosa: i \textbf{segnali}.
+
+% ══════════════════════════════════════════════════════════════
+\section{Un processo, un pid, un genitore}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Processo}{
+    Un \textbf{processo} è un programma in esecuzione: ha la propria memoria, la propria tabella dei descriptor e il proprio
+    posto nelle code dello scheduler.
+}
+
+\begin{itemize}
+    \item Ogni processo ha un \textbf{pid}, un piccolo intero non negativo, e un \textbf{ppid}, il pid di chi l'ha creato.
+    \item \texttt{getpid()} e \texttt{getppid()} li restituiscono e non possono fallire; entrambi hanno tipo \texttt{pid\_t}.
+    \item La relazione di parentela fa dei processi di una macchina un \textbf{albero}, la cui radice è il primo processo
+          avviato dal kernel, il pid 1.
+    \item Un pid è unico finché il processo vive, e viene \textbf{riusato} dopo: identifica un processo, non un programma.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{fork: una chiamata, due ritorni}
+% ══════════════════════════════════════════════════════════════
+
+Un processo la chiama, \textbf{due processi} ne ritornano.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={La forma di ogni fork}]
+#include <unistd.h>
+
+pid_t fork(void);
+
+pid_t pid = fork();
+if (pid < 0) { perror("fork"); exit(EXIT_FAILURE); }
+if (pid == 0) {
+    /* figlio: qui fork ha restituito 0 */
+} else {
+    /* genitore: qui fork ha restituito il pid del figlio */
+}
+\end{lstlisting}
+
+Il figlio non riceve da \texttt{fork} il proprio pid: se lo chiede con \texttt{getpid}. Il genitore sì, perché gli servirà
+per aspettarlo.
+
+\subsection{Che cosa eredita il figlio}
+
+Il figlio nasce come un \textbf{duplicato} del genitore, nello stesso punto dello stesso codice.
+\begin{itemize}
+    \item \textbf{Memoria}: una copia privata di tutto (globali, locali, heap). Il kernel la copia in modo pigro
+          (\emph{copy-on-write}), ma nessuno dei due può accorgersene.
+    \item \textbf{Descriptor}: ogni descriptor aperto viene duplicato, e le due copie si riferiscono allo \textbf{stesso
+          file aperto}. È la cosa importante.
+    \item \textbf{Segnali}: il figlio mantiene gli handler e la maschera del genitore, finché non installa i propri o non
+          sostituisce il programma.
+    \item \textbf{Non ereditati}: il pid, il ppid, e gli eventuali figli che il genitore stava aspettando: quelli sono del
+          genitore, non della famiglia.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={fork1.c: due copie delle stesse variabili}]
+int glob = 1;                          /* una copia ora, due dopo la fork */
+
+int main(void) {
+    int local = 10;
+    pid_t pid = fork();
+    if (pid == 0) { glob++; local++; }  /* il figlio, e solo lui */
+    else            sleep(1);           /* lascia stampare prima il figlio */
+    printf("pid=%d glob=%d local=%d\n", getpid(), glob, local);
+    return 0;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash]
+pid=7183 glob=2 local=11        <- figlio
+pid=7182 glob=1 local=10        <- genitore
+\end{lstlisting}
+
+Nulla dice chi dei due va per primo: qui decide la \texttt{sleep}, e una \texttt{sleep} \textbf{non} è un meccanismo di
+sincronizzazione.
+
+\begin{warningbox}{{La riga stampata due volte}}
+    Se il programma stampa una riga terminata da \texttt{\textbackslash n} \textbf{prima} della \texttt{fork}, quante volte
+    compare? Sul terminale una; rediretto su un file \textbf{due}, senza che un carattere del programma sia cambiato.
+\begin{lstlisting}[language=bash]
+$ ./fork1 > out.txt ; cat out.txt
+before the fork
+pid=7189 glob=2 local=11
+before the fork
+pid=7188 glob=1 local=10
+\end{lstlisting}
+    Verso un terminale \texttt{stdout} viene svuotato a ogni a-capo; verso un file solo quando il buffer si riempie o quando
+    il programma termina. La riga è quindi ancora nel buffer quando \texttt{fork} copia la memoria, buffer compreso, e
+    entrambi i processi la scrivono più tardi. Un \texttt{fflush(stdout)} prima della \texttt{fork} l'avrebbe evitato.
+\end{warningbox}
+
+% ══════════════════════════════════════════════════════════════
+\section{I descriptor dopo la fork}
+% ══════════════════════════════════════════════════════════════
+
+Per capire che cosa viene condiviso bisogna ricordare che i livelli sono \textbf{tre}: una \textbf{tabella dei descriptor}
+per processo, una \textbf{voce di file aperto} per ogni apertura (lì stanno i flag e l'offset, non nel processo), e un
+oggetto per ogni file. La \texttt{fork} tocca soltanto il primo livello.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    tab/.style={draw=black!70, minimum width=1.3cm, minimum height=0.32cm, inner sep=0pt, font=\scriptsize\ttfamily},
+    ent/.style={draw=netgreen!70!black, fill=netgreen!8, rounded corners=2pt, align=left, text width=2.3cm,
+                font=\scriptsize\sffamily},
+    obj/.style={draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, align=left, text width=1.6cm},
+    a/.style={-{Stealth[length=1.8mm]}, thick}]
+  \node[font=\small\bfseries\sffamily, text=netred] at (0,1.3) {tabella del processo};
+  \node[font=\small\bfseries\sffamily, text=netgreen!60!black] at (3.6,1.3) {file aperti};
+  \node[font=\small\bfseries\sffamily, text=netblue] at (6.9,1.3) {oggetti};
+  % genitore
+  \node[font=\scriptsize\bfseries\sffamily] at (0,0.85) {genitore};
+  \foreach \i/\y in {0/0.5, 1/0.18, 2/-0.14, 3/-0.46, 4/-0.78}
+    \node[tab] (p\i) at (0,\y) {fd \i};
+  % figlio
+  \node[font=\scriptsize\bfseries\sffamily] at (0,-1.45) {figlio};
+  \foreach \i/\y in {0/-1.8, 1/-2.12, 2/-2.44, 3/-2.76, 4/-3.08}
+    \node[tab] (c\i) at (0,\y) {fd \i};
+  % voci di file aperto
+  \node[ent] (e1) at (3.6,0.0)  {flag di stato\\offset corrente\\\textbf{riferimenti: 2}};
+  \node[ent] (e2) at (3.6,-2.3) {flag di stato\\offset corrente\\\textbf{riferimenti: 2}};
+  \node[obj] (o1) at (6.9,0.0)  {file sul disco\\(i-node)};
+  \node[obj] (o2) at (6.9,-2.3) {socket\\connesso};
+  \draw[a, netred] (p3.east) -- (e1.west);
+  \draw[a, netred] (c3.east) -- (e1.west);
+  \draw[a, netred] (p4.east) -- (e2.west);
+  \draw[a, netred] (c4.east) -- (e2.west);
+  \draw[a, netgreen!70!black] (e1.east) -- (o1.west);
+  \draw[a, netgreen!70!black] (e2.east) -- (o2.west);
+\end{tikzpicture}
+\caption{Dopo la \texttt{fork}: la tabella è copiata, le voci no. Il \texttt{fd 3} del genitore e il \texttt{fd 3} del
+         figlio sono due frecce verso \textbf{un solo} file aperto, con un solo offset e un contatore di riferimenti che ora
+         vale due.}
+\end{figure}
+
+\begin{itemize}
+    \item Due processi \textbf{non imparentati} che aprono lo stesso file ottengono invece \textbf{una voce ciascuno}: due
+          offset, e ognuno sovrascrive l'altro.
+    \item La condivisione quindi non nasce dal fatto che l'oggetto è lo stesso: nasce dal fatto che il descriptor è stato
+          \textbf{ereditato}.
+    \item \texttt{dup} crea un secondo descriptor sulla stessa voce \textbf{dentro un solo processo}: la stessa
+          duplicazione, senza un secondo processo.
+\end{itemize}
+
+\subsection{Anche il socket connesso viene ereditato}
+
+Un socket è uno di quegli oggetti, quindi qui non c'è nulla di nuovo, se non quanto costa.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    fd/.style={draw=black!70, fill=white, minimum width=3.0cm, minimum height=0.45cm, anchor=west, font=\scriptsize\ttfamily},
+    fdx/.style={fd, dashed, draw=netred, text=netred},
+    ob/.style={draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, align=center, minimum width=4.2cm,
+               minimum height=0.9cm},
+    a/.style={-{Stealth[length=1.8mm]}, thick},
+    ax/.style={a, dashed, netred}]
+  \node[font=\small\bfseries\sffamily, anchor=west] at (0,1.0) {genitore};
+  \node[fd]  (g3) at (0,0.5)   {fd 3 socket di ascolto};
+  \node[fdx] (g4) at (0,-0.05) {fd 4 questa connessione};
+  \node[font=\small\bfseries\sffamily, anchor=west] at (0,-1.0) {figlio, dopo la fork};
+  \node[fdx] (f3) at (0,-1.5)  {fd 3 socket di ascolto};
+  \node[fd]  (f4) at (0,-2.05) {fd 4 questa connessione};
+  \node[ob] (l) at (7.4,0.25) {\textbf{socket di ascolto}\\porta 5000, coda delle connessioni\\2 descriptor};
+  \node[ob, draw=netgreen!70!black, fill=netgreen!8] (c) at (7.4,-1.8)
+    {\textbf{connessione}\\i quattro numeri di questo client\\2 descriptor};
+  \draw[a]  (g3.east) -- (l.west);
+  \draw[ax] (f3.east) -- (l.west);
+  \draw[ax] (g4.east) -- (c.west);
+  \draw[a]  (f4.east) -- (c.west);
+\end{tikzpicture}
+\caption{In rosso tratteggiato i descriptor che ciascun processo deve chiudere. Ogni oggetto resta vivo finché non se ne
+         va il suo ultimo descriptor: né il figlio né il genitore, da soli, possono chiudere la connessione.}
+\end{figure}
+
+\subsection{Chi chiude che cosa}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il ciclo di accept che fa fork}]
+for (;;) {
+    int fd = accept(listen_fd, NULL, NULL);
+    if (fd < 0) { perror("accept"); continue; }
+
+    pid_t pid = fork();
+    if (pid < 0) { perror("fork"); close(fd); continue; }
+
+    if (pid == 0) {                   /* il figlio serve questo client */
+        close(listen_fd);             /* non accettera' mai nulla */
+        serve(fd);
+        close(fd);
+        _exit(0);                     /* non exit(): i buffer non sono suoi */
+    }
+    close(fd);                        /* il genitore non parla su questa connessione */
+}
+\end{lstlisting}
+
+Due \texttt{close} che sembrano ridondanti e non lo sono: ciascun lato rinuncia al descriptor che non usa.
+
+\warning{Il genitore che dimentica di chiudere}{
+    Il figlio ha finito ed è uscito. Perché il client sta ancora aspettando? Perché la connessione \textbf{non è chiusa}: il
+    genitore ha ancora un descriptor su di essa, quindi il contatore non arriva mai a zero e nessun FIN viene inviato.
+    \begin{itemize}
+        \item La \texttt{read} del client non restituisce 0: resta bloccata su una connessione su cui nessuno scriverà più.
+        \item Intanto il genitore accumula un descriptor per ogni client servito, e prima o poi \texttt{accept} fallisce
+              con \texttt{EMFILE}.
+        \item Il caso speculare è altrettanto grave: un figlio che tiene \texttt{listen\_fd} tiene occupata la porta anche
+              dopo che il server se n'è andato.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{La vita di un processo}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    s/.style={draw, rounded corners=4pt, fill=#1, minimum width=1.8cm, minimum height=0.7cm, align=center},
+    a/.style={-{Stealth[length=2mm]}, thick, black!70},
+    l/.style={font=\scriptsize\sffamily, fill=white, inner sep=1pt, align=center}]
+  \node[s=lphy!40]     (ne) at (0,0)     {non esiste};
+  \node[s=ltra!40]     (rn) at (3.6,0)   {pronto};
+  \node[s=netgreen!25] (ru) at (7.4,1.5) {in esecuzione};
+  \node[s=netred!15]   (bl) at (7.4,-1.5){bloccato};
+  \node[s=netorange!25](zo) at (11.2,1.5){zombie};
+  \draw[a] (ne) -- node[l, above]{fork} (rn);
+  \draw[a] (rn.north) |- node[l, pos=0.75, above]{schedulato} ([yshift=0.15cm]ru.west);
+  \draw[a] ([yshift=-0.15cm]ru.west) -| node[l, pos=0.25, below]{prelazione} ([xshift=0.4cm]rn.north);
+  \draw[a] (ru) -- node[l, right]{accept, read:\\attende} (bl);
+  \draw[a] (bl.west) -| node[l, pos=0.25, below]{dati, o un segnale} (rn.south);
+  \draw[a] (ru) -- node[l, above]{exit} (zo);
+  \draw[a, netgreen!60!black] (zo.north) |- ++(0,0.8) -| node[l, pos=0.25, above]{il genitore chiama wait, e lo zombie sparisce} (ne.north);
+  \node[text=black!60, anchor=north, align=center] at (zo.south) {morto, ma il suo stato\\di uscita c'è ancora};
+\end{tikzpicture}
+\caption{Un server passa quasi tutto il tempo \textbf{bloccato}. Il passo interessante è l'ultimo: un figlio morto non
+         sparisce finché qualcuno non chiede come è morto.}
+\end{figure}
+
+\subsection{Tre modi di finire, e lo stato}
+
+\begin{itemize}
+    \item \textbf{return da main}: esattamente come chiamare \texttt{exit} con quel valore.
+    \item \textbf{\texttt{exit(n)}}: esegue gli handler registrati con \texttt{atexit}, svuota gli stream standard, poi
+          chiama \texttt{\_exit}.
+    \item \textbf{\texttt{\_exit(n)}}: dritto al kernel, senza svuotare nulla. Per questo lo usa un figlio creato con
+          \texttt{fork}: i buffer che svuoterebbe sono una copia di quelli del genitore.
+    \item \textbf{In modo anomalo}: un segnale non gestito, oppure \texttt{abort}, che ne invia uno a se stesso.
+\end{itemize}
+
+In qualunque modo finisca, il kernel chiude i descriptor e libera la memoria, e conserva per il genitore uno \textbf{stato
+di terminazione}.
+
+\subsection{wait e waitpid}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers]
+#include <sys/wait.h>
+
+pid_t wait(int *status);
+pid_t waitpid(pid_t pid, int *status, int options);
+
+int status;
+wait(&status);                        /* un figlio qualsiasi; blocca finche' uno termina */
+waitpid(pid, &status, 0);             /* quel figlio, e nessun altro */
+waitpid(-1, &status, WNOHANG);        /* un figlio qualsiasi, senza mai bloccare */
+\end{lstlisting}
+
+\begin{itemize}
+    \item Entrambe restituiscono il pid del figlio raccolto, oppure $-1$ con \texttt{ECHILD} se non ci sono più figli da
+          aspettare.
+    \item Con \texttt{WNOHANG} il valore è 0 quando esistono figli ma nessuno è terminato: niente da raccogliere, si va avanti.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l l}
+\toprule
+\normalfont\textbf{Domanda} & \textbf{Poi} \\
+\midrule
+WIFEXITED(status)   & \texttt{WEXITSTATUS} dà il valore passato a \texttt{exit} \\
+WIFSIGNALED(status) & \texttt{WTERMSIG} dà il segnale che l'ha ucciso \\
+WIFSTOPPED(status)  & \texttt{WSTOPSIG} dà il segnale che l'ha fermato \\
+\bottomrule
+\end{tabular}
+\caption{Leggere lo stato di terminazione.}
+\end{table}
+
+\begin{itemize}
+    \item \texttt{status} non è un numero da stampare: è una parola che il kernel impacchetta, e solo queste macro la leggono.
+    \item Un figlio che ha chiamato \texttt{exit(7)} lascia uno \texttt{status} che \textbf{non} vale 7: solo
+          \texttt{WEXITSTATUS} dice 7.
+    \item Del valore sopravvivono solo gli 8 bit bassi, quindi i codici di uscita stanno fra 0 e 255.
+\end{itemize}
+
+\subsection{Gli zombie}
+
+Un processo terminato ma non ancora aspettato viene tenuto dal kernel: la sua memoria non c'è più, il suo stato sì.
+
+\begin{lstlisting}[language=bash]
+$ ps -o pid,ppid,stat,cmd
+  PID  PPID STAT CMD
+ 4821  3310 S+   ./server
+ 4822  4821 Z+   [server] <defunct>
+\end{lstlisting}
+
+\begin{itemize}
+    \item Costa un posto nella tabella dei processi, e un server che fa una \texttt{fork} per client esaurisce i posti in un
+          pomeriggio.
+    \item Non lo si può uccidere: è già morto. Sparisce quando il genitore lo aspetta, o quando muore il genitore.
+    \item Un \textbf{orfano} è il caso opposto: il genitore è morto per primo, il pid 1 lo ha adottato, e il pid 1 aspetta
+          sempre.
+\end{itemize}
+
+\warning{Un server non può stare in wait()}{
+    Mettendo \texttt{wait(NULL)} dopo la \texttt{fork}, nel ciclo di \texttt{accept}, che cosa si è costruito? Di nuovo il
+    server sequenziale, con un processo in più per client: il genitore torna ad \texttt{accept} solo quando il figlio ha
+    finito di servire.
+    \begin{itemize}
+        \item Il genitore deve tornare ad \texttt{accept} \textbf{subito}, e comunque raccogliere figli terminati in momenti
+              imprevedibili.
+        \item Interrogare con \texttt{WNOHANG} a ogni giro funziona, ma si sveglia solo quando per caso si connette un nuovo
+              client.
+        \item Manca un modo con cui il kernel possa dire \textbf{adesso}, nel mezzo di qualunque cosa il processo stia
+              facendo.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{I segnali}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Segnale}{
+    Un \textbf{segnale} interrompe un processo per dirgli che è successo qualcosa. Porta un numero e nient'altro: niente
+    dati, niente mittente, niente coda.
+}
+
+\begin{itemize}
+    \item \textbf{Dal terminale}: \texttt{Ctrl-C} invia \texttt{SIGINT} a tutti i processi del gruppo in primo piano, figli
+          compresi.
+    \item \textbf{Dal kernel}: un riferimento di memoria non valido, una divisione per zero, un figlio terminato, una
+          scrittura su una connessione chiusa.
+    \item \textbf{Da un altro processo}: \texttt{kill}, che invia un segnale ed è un nome infelice, visto che la maggior
+          parte dei segnali non uccide nulla.
+\end{itemize}
+Arriva \textbf{fra due istruzioni} del programma, e non siamo noi a scegliere quali.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l l l}
+\toprule
+\normalfont\textbf{Segnale} & \textbf{Inviato quando} & \textbf{Default} \\
+\midrule
+SIGCHLD & un figlio è terminato o si è fermato & ignorato \\
+SIGPIPE & si scrive su una connessione che il peer ha chiuso & termina \\
+SIGINT  & \texttt{Ctrl-C} sul terminale & termina \\
+SIGTERM & \texttt{kill} senza indicare un segnale & termina \\
+SIGQUIT & \texttt{Ctrl-\textbackslash} sul terminale & termina, con core \\
+SIGKILL & qualcuno lo vuole fuori, subito & termina \\
+\bottomrule
+\end{tabular}
+\caption{I segnali che un server incontra.}
+\end{table}
+
+Due di questi sono l'intera ragione per cui un server con \texttt{fork} ha bisogno dei segnali: \texttt{SIGCHLD}, che per
+default è ignorato e ci lascia gli zombie, e \texttt{SIGPIPE}, che uccide il server la prima volta che un client chiude a
+metà di una risposta. Su quest'ultimo torneremo parlando di robustezza.
+
+\subsection{Ignorare, catturare, o farsi uccidere}
+
+Per ogni segnale un processo ha una \textbf{disposizione}, e la disposizione viene ereditata attraverso la \texttt{fork}.
+\begin{itemize}
+    \item \textbf{Default}: quello che dice il segnale; per la maggior parte, terminare il processo, a volte con un file core.
+    \item \textbf{Ignorare} (\texttt{SIG\_IGN}): il segnale viene consegnato e buttato via. Per \texttt{SIGCHLD} questo ha un
+          significato speciale, come vedremo.
+    \item \textbf{Catturare}: viene eseguita una funzione nostra, l'\emph{handler}, e poi il programma riprende dov'era stato
+          interrotto.
+    \item \textbf{Nessuna delle due}: \texttt{SIGKILL} e \texttt{SIGSTOP} non si possono né catturare né ignorare: esistono
+          perché un processo si possa sempre fermare.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Installare un handler con sigaction}]
+#include <signal.h>
+
+static void on_child(int sig) { /* ... */ }
+
+struct sigaction sa;
+sa.sa_handler = on_child;        /* oppure SIG_IGN, oppure SIG_DFL */
+sigemptyset(&sa.sa_mask);        /* nient'altro bloccato mentre gira */
+sa.sa_flags   = 0;
+if (sigaction(SIGCHLD, &sa, NULL) < 0) { perror("sigaction"); }
+\end{lstlisting}
+
+\begin{itemize}
+    \item L'handler riceve il numero del segnale, quindi una funzione può servire più segnali; va installata una volta per
+          ciascuno.
+    \item Il codice vecchio scrive \texttt{signal(SIGCHLD, on\_child)}: è più corto, ma il suo comportamento esatto cambia da
+          sistema a sistema. Si usa \texttt{sigaction}. Solo per \textbf{ignorare} un segnale \texttt{signal(sig, SIG\_IGN)}
+          va ancora bene: lo incontreremo per \texttt{SIGPIPE}.
+\end{itemize}
+
+\subsection{Che cosa può fare un handler}
+
+L'handler gira \textbf{dentro} il programma, fra due delle sue istruzioni, e magari dentro una funzione di libreria a metà
+del proprio lavoro.
+\begin{itemize}
+    \item Può chiamare soltanto funzioni \textbf{async-signal-safe}: \texttt{write} sì, \texttt{printf} e \texttt{malloc} no,
+          per quanto spesso le si veda lì.
+    \item Deve salvare e ripristinare \texttt{errno}: il codice interrotto stava probabilmente per leggerlo.
+    \item L'unica variabile che dovrebbe condividere con il programma è una \texttt{volatile sig\_atomic\_t}, letta nel ciclo
+          principale.
+    \item Va tenuto corto: il suo compito è \textbf{registrare} che qualcosa è successo, non gestirlo.
+\end{itemize}
+
+\subsection{Raccogliere i figli con SIGCHLD}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={L'handler che raccoglie i figli}]
+static void reap(int sig) {
+    int saved = errno;                         /* l'handler deve restituirlo */
+    while (waitpid(-1, NULL, WNOHANG) > 0)
+        ;                                      /* ogni figlio che e' terminato */
+    errno = saved;
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item Installato una volta prima del ciclo di \texttt{accept}, raccoglie i figli nel momento in cui muoiono, e il
+          genitore non si blocca mai.
+    \item Alternativa più semplice: impostare \texttt{SIGCHLD} a \texttt{SIG\_IGN}, e il sistema non crea affatto zombie,
+          al prezzo di non sapere mai come è terminato un figlio.
+    \item Mentre l'handler gira, l'\texttt{accept} in cui il genitore era bloccato restituisce $-1$ con \texttt{EINTR}. La
+          gestione di questo caso fa parte del rendere robusto il server.
+\end{itemize}
+
+\warning{Tre figli muoiono nello stesso istante}{
+    Tre client si disconnettono insieme: quante volte gira l'handler? Una, forse due; mai tre su cui si possa contare. I
+    segnali standard \textbf{non sono accodati}: «in attesa» è un flag, non un numero.
+    \begin{itemize}
+        \item Mentre l'handler gira gli altri \texttt{SIGCHLD} sono bloccati, e si fondono nell'unico che resta in attesa.
+        \item Un handler che chiama \texttt{waitpid} una volta sola lascia quindi zombie dietro di sé, e la perdita è
+              abbastanza lenta da sopravvivere ai test.
+        \item Da qui il ciclo: si raccoglie finché \texttt{waitpid} dice che non c'è altro, non finché se n'è raccolto uno.
+    \end{itemize}
+}
+
+\subsection{Inviare segnali: kill}
+
+Un segnale si invia per numero, dalla shell o da un programma, a un processo o a un intero gruppo.
+
+\begin{lstlisting}[language=bash]
+$ kill -TERM 4821       # stessa cosa di: kill 4821
+$ kill -INT 4821
+$ kill -l               # nomi e numeri
+\end{lstlisting}
+
+\begin{lstlisting}[language={[POSIX]C}]
+int kill(pid_t pid, int sig);
+
+kill(pid, SIGTERM);     /* un processo */
+kill(0,   SIGTERM);     /* tutto il mio gruppo */
+kill(pid, 0);           /* non invia nulla: esiste? */
+\end{lstlisting}
+
+Si possono segnalare solo i propri processi. E poiché i pid vengono riusati, \texttt{kill(pid, 0)} risponde «esiste un
+processo con quel pid», che non è esattamente la domanda che ci si era posti.
+
+\subsection{Fermare il server di proposito}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Un arresto ordinato}]
+static volatile sig_atomic_t running = 1;         /* l'unica variabile condivisa */
+
+static void stop(int sig) { running = 0; }        /* registra, non agisce */
+
+while (running) {
+    int fd = accept(listen_fd, NULL, NULL);
+    if (fd < 0) {
+        if (errno == EINTR) continue;              /* e' arrivato un segnale: si ricontrolla */
+        perror("accept"); break;
+    }
+    /* ... fork, serve, close ... */
+}
+close(listen_fd);                                  /* salutare come si deve */
+\end{lstlisting}
+
+Senza questo il server muore dentro \texttt{accept} e lascia i figli in esecuzione, con le connessioni ancora aperte.
+
+% ══════════════════════════════════════════════════════════════
+\section{exec: il processo diventa un altro programma}
+% ══════════════════════════════════════════════════════════════
+
+\begin{itemize}
+    \item \texttt{exec} non crea nulla: \textbf{sostituisce} il programma in esecuzione nel processo che la chiama.
+    \item Testo, dati, heap e stack vengono buttati e ricostruiti dall'eseguibile; l'esecuzione parte dal suo \texttt{main}.
+    \item Il pid, il ppid e i descriptor aperti \textbf{restano}: è lo stesso processo, che indossa un altro programma.
+    \item Se riesce \textbf{non ritorna}. Il codice dopo la chiamata viene eseguito solo se la chiamata è fallita.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l l l l}
+\toprule
+\normalfont\textbf{Funzione} & \textbf{Programma} & \textbf{Argomenti} & \textbf{Ambiente} \\
+\midrule
+execl  & percorso                  & lista   & ereditato \\
+execlp & nome, cercato nel \texttt{PATH} & lista   & ereditato \\
+execle & percorso                  & lista   & dato \\
+execv  & percorso                  & vettore & ereditato \\
+execvp & nome, cercato nel \texttt{PATH} & vettore & ereditato \\
+execve & percorso                  & vettore & dato \\
+\bottomrule
+\end{tabular}
+\caption{Sei nomi per una sola chiamata di sistema (\texttt{execve}): \texttt{p} cerca nel \texttt{PATH}, \texttt{l}
+         argomenti come lista, \texttt{v} come vettore, \texttt{e} ambiente passato esplicitamente.}
+\end{table}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={fork, exec, wait}]
+pid_t pid = fork();
+if (pid < 0) { perror("fork"); return -1; }
+
+if (pid == 0) {                       /* il figlio, e solo per un istante */
+    execlp("gzip", "gzip", "-c", path, (char *) NULL);
+    perror("execlp");                 /* raggiunto solo se exec e' fallita */
+    _exit(127);
+}
+
+int status;
+if (waitpid(pid, &status, 0) < 0) perror("waitpid");
+if (WIFEXITED(status) && WEXITSTATUS(status) == 0) { /* ha funzionato */ }
+\end{lstlisting}
+
+Il nome del programma compare \textbf{due volte}: una per trovare il file, una perché diventa l'\texttt{argv[0]} del nuovo
+programma. Con il vettore: \texttt{char *argv[] = \{"gzip", "-c", "log", NULL\}; execvp("gzip", argv);}.
+
+\begin{warningbox}{{I descriptor sopravvivono a exec}}
+    Il server esegue un programma esterno: che cosa riceve quel programma? \textbf{Ogni} descriptor che il server aveva
+    aperto, socket di ascolto compreso, e può tenere occupata la porta molto dopo che il server se n'è andato. Questa
+    ereditarietà è ciò che rende possibili le redirezioni, quindi è una funzionalità; diventa un bug solo quando la si
+    dimentica. I descriptor che non devono viaggiare si marcano \emph{close-on-exec}: vengono chiusi da \texttt{exec}, e solo
+    da lei.
+\begin{lstlisting}[language={[POSIX]C}]
+fcntl(listen_fd, F_SETFD, FD_CLOEXEC);      /* oppure SOCK_CLOEXEC alla creazione */
+\end{lstlisting}
+\end{warningbox}
+
+% ══════════════════════════════════════════════════════════════
+\section{Esercizi}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Uno zombie e un processo che ascolta i segnali}
+Scrivere due programmi brevi.
+\begin{enumerate}[label=(\alph*)]
+    \item Un programma che crea un figlio che termina subito, mentre il genitore dorme. Trovare entrambi con \texttt{ps},
+          poi aggiungere la \texttt{wait} e guardare lo zombie sparire.
+    \item Un programma che non termina mai da solo e stampa una riga ogni volta che riceve \texttt{SIGINT} o
+          \texttt{SIGUSR1}. Provarlo con \texttt{kill -USR1}, con \texttt{Ctrl-C} e infine con \texttt{kill -KILL}.
+\end{enumerate}
+Perché \texttt{Ctrl-C} raggiunge il programma anche se non abbiamo mai detto al terminale il suo pid?
+
+\svolgimento
+\textbf{(a)} Il figlio esce con \texttt{\_exit(0)}; il genitore dorme 30 secondi. In quei 30 secondi \texttt{ps -o
+pid,ppid,stat,cmd} mostra il figlio in stato \texttt{Z} (\emph{defunct}), con ppid uguale al pid del genitore.
+Aggiungendo \texttt{waitpid(pid, NULL, 0)} prima della \texttt{sleep} lo zombie non compare più.
+
+\textbf{(b)} L'handler deve solo registrare; la stampa avviene nel ciclo principale.
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={waiter.c}]
+static volatile sig_atomic_t last = 0;
+
+static void note(int sig) { last = sig; }       /* registra soltanto */
+
+int main(void) {
+    struct sigaction sa;
+    sa.sa_handler = note;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT,  &sa, NULL);
+    sigaction(SIGUSR1, &sa, NULL);
+    printf("pid %d\n", getpid());
+    for (;;) {
+        pause();                                 /* dorme fino al prossimo segnale */
+        if (last == SIGINT)  printf("ricevuto SIGINT\n");
+        if (last == SIGUSR1) printf("ricevuto SIGUSR1\n");
+        last = 0;
+    }
+}
+\end{lstlisting}
+\texttt{kill -USR1} e \texttt{Ctrl-C} stampano una riga ciascuno; \texttt{kill -KILL} lo termina, perché
+\texttt{SIGKILL} non si può catturare.
+
+\texttt{Ctrl-C} non viene mandato a un pid: il driver del terminale lo trasforma in un \texttt{SIGINT} per tutto il
+\textbf{gruppo di processi in primo piano} di quel terminale, e la shell, avviando il programma, ve lo ha messo. Per
+questo arriva anche ai figli.
+\end{esercizio}
+
+\Needspace{20\baselineskip}
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item \texttt{fork} ritorna due volte: il figlio riceve 0 e una copia privata della memoria, e nessuno dei due sa chi
+          andrà per primo.
+    \item I descriptor sono \textbf{duplicati}, non copiati: due processi puntano a un solo file aperto, una sola
+          connessione, un solo contatore di riferimenti.
+    \item Quindi ciascun lato chiude ciò che non usa, e una connessione finisce solo quando si chiude il suo ultimo
+          descriptor.
+    \item Un figlio morto resta \textbf{zombie} finché qualcuno non lo aspetta, e il server non può permettersi di stare in
+          \texttt{wait}.
+    \item \texttt{SIGCHLD} è il modo in cui il kernel dice «adesso»; i segnali non sono accodati, quindi l'handler raccoglie
+          in un ciclo.
+    \item \texttt{exec} tiene il processo e ne sostituisce il programma, descriptor compresi, a meno di dire altrimenti.
+\end{itemize}
+}

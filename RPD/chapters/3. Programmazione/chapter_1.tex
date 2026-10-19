@@ -5,8 +5,8 @@ Abbiamo letto richieste e risposte e detto che il client ne manda una e il serve
 cosa \textbf{fa} concretamente un programma perché un messaggio esca dalla macchina. Quel passo è una manciata di
 \textbf{chiamate di sistema}, e sono le stesse per tutti i protocolli visti.
 
-Nel capitolo precedente abbiamo incontrato le funzioni dei socket una per una. Qui le riprendiamo dal punto di vista di
-chi deve scrivere un server che funzioni davvero: che cosa sia un \emph{file descriptor}, perché \texttt{read} e
+Con questo capitolo comincia la parte dedicata alla \textbf{programmazione di rete}: le funzioni dei socket viste dal
+punto di vista di chi deve scrivere un server che funzioni davvero: che cosa sia un \emph{file descriptor}, perché \texttt{read} e
 \texttt{write} possono trasferire \textbf{meno} byte di quelli chiesti, come si gestiscono gli errori, e come è fatto un
 server TCP che serve un client dopo l'altro.
 
@@ -198,6 +198,28 @@ a quel codice. Da qui in poi il controllo sarà scritto su una riga sola, ma \te
     \item Essendo un descriptor, accetta \texttt{read}, \texttt{write} e \texttt{close}: le chiamate che già conosciamo.
 \end{itemize}
 
+Il socket è il confine fra il nostro codice e il sistema operativo: sopra c'è l'applicazione, che scriviamo noi; sotto,
+trasporto e rete sono implementati dal kernel, che li offre come una scatola nera attraverso l'\textbf{API dei socket}
+(i \emph{socket di Berkeley}, o socket BSD/POSIX). Esistono librerie e \emph{middleware} che li avvolgono, ma sotto c'è
+sempre questa API.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\small\sffamily}]
+  \node[lay app, minimum width=3.6cm, minimum height=0.9cm] (a) at (0,1.8) {Applicazione};
+  \node[lay tra, minimum width=3.6cm, minimum height=0.9cm] (t) at (0,0.9) {Trasporto (TCP/UDP)};
+  \node[lay net, minimum width=3.6cm, minimum height=0.9cm] (n) at (0,0) {Rete (IP)};
+  \node[lay link, minimum width=3.6cm, minimum height=0.9cm] (l) at (0,-0.9) {Accesso (link + fisico)};
+  \node[draw, fill=lapp!40, rounded corners, minimum width=3.4cm, minimum height=0.9cm] (my) at (6,1.8) {la vostra applicazione};
+  \node[draw, fill=white, very thick, draw=netred, rounded corners, minimum width=3.4cm, minimum height=0.5cm] (api) at (6,1.1) {\textbf{API dei socket}};
+  \node[draw, fill=lphy!50, rounded corners, minimum width=3.4cm, minimum height=1.8cm, align=center] (os) at (6,-0.2) {sistema operativo\\+ hardware};
+  \draw[dashed, netred, thick] (-2.4,1.35) -- (8.2,1.35);
+  \node[text=netred, anchor=west, font=\scriptsize\sffamily] at (8.3,1.35) {socket};
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (-2.1,1.3) -- (-2.1,-1.35) node[midway, left=6pt, align=center, font=\scriptsize\sffamily] {implementati\\dal sistema\\operativo};
+\end{tikzpicture}
+\caption{Dove sono implementati gli strati: l'applicazione è nostra, trasporto e rete stanno nel sistema operativo e si usano attraverso l'API dei socket.}
+\end{figure}
+
 \subsection{Dominio, tipo, protocollo}
 
 I tre argomenti di \texttt{socket()} scelgono che cosa significa l'API generica.
@@ -240,8 +262,38 @@ non ha ancora un indirizzo e non è collegato a niente. Tutto ciò che segue (\t
 
 Client e server, con o senza connessione, \textbf{creano} il socket, si \textbf{scambiano messaggi} e lo
 \textbf{distruggono}. Solo il lato orientato alla connessione ha una \textbf{fase di mezzo}, la connessione: tutto ciò
-che cambia nel codice tra UDP e TCP deriva da quell'unico riquadro (si veda la figura delle due sequenze nel capitolo
-precedente).
+che cambia nel codice tra UDP e TCP deriva da quell'unica fase.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, st/.style={draw, rounded corners, fill=#1, minimum width=2.2cm, minimum height=0.6cm, align=center}]
+  \begin{scope}
+    \node[font=\small\bfseries\sffamily] at (1.4,1) {Senza connessione (UDP)};
+    \node[font=\bfseries\sffamily] at (0,0.4) {Client}; \node[font=\bfseries\sffamily] at (2.8,0.4) {Server};
+    \node[st=lapp!40] (c1) at (0,-0.2) {crea socket}; \node[st=lapp!40] (s1) at (2.8,-0.2) {crea socket};
+    \node[st=ltra!40] (c3) at (0,-1.8) {invia messaggio}; \node[st=ltra!40] (s3) at (2.8,-1.8) {legge messaggio};
+    \node[st=ltra!40] (c4) at (0,-2.6) {legge risposta}; \node[st=ltra!40] (s4) at (2.8,-2.6) {invia risposta};
+    \node[st=lnet!40] (c5) at (0,-3.4) {chiude socket};
+    \foreach \a/\b in {c1/c3, c3/c4, c4/c5, s1/s3, s3/s4} \draw[-{Stealth}] (\a) -- (\b);
+    \draw[msg, netblue] (c3) -- (s3); \draw[msg, netgreen] (s4) -- (c4);
+  \end{scope}
+  \begin{scope}[xshift=9cm]
+    \node[font=\small\bfseries\sffamily] at (1.4,1) {Orientata alla connessione (TCP)};
+    \node[font=\bfseries\sffamily] at (0,0.4) {Client}; \node[font=\bfseries\sffamily] at (2.8,0.4) {Server};
+    \node[st=lapp!40] (c1) at (0,-0.2) {crea socket}; \node[st=lapp!40] (s1) at (2.8,-0.2) {crea socket};
+    \node[st=netred!15] (c2) at (0,-1.0) {connetti}; \node[st=netred!15] (s2) at (2.8,-1.0) {attende\\connessioni};
+    \node[st=ltra!40] (c3) at (0,-1.8) {invia messaggio}; \node[st=ltra!40] (s3) at (2.8,-1.8) {legge messaggio};
+    \node[st=ltra!40] (c4) at (0,-2.6) {legge risposta}; \node[st=ltra!40] (s4) at (2.8,-2.6) {invia risposta};
+    \node[st=lnet!40] (c5) at (0,-3.4) {chiude socket}; \node[st=lnet!40] (s5) at (2.8,-3.4) {chiude socket\\del client};
+    \foreach \a/\b in {c1/c2, c2/c3, c3/c4, c4/c5, s1/s2, s2/s3, s3/s4, s4/s5} \draw[-{Stealth}] (\a) -- (\b);
+    \draw[msg, netred, {Stealth}-{Stealth}] (c2) -- (s2);
+    \draw[msg, netblue] (c3) -- (s3); \draw[msg, netgreen] (s4) -- (c4);
+  \end{scope}
+  \foreach \y/\t in {-0.2/creazione, -1.0/connessione, -2.2/messaggi, -3.4/distruzione} \node[font=\scriptsize\itshape\sffamily, text=black!60] at (6.2,\y) {\t};
+\end{tikzpicture}
+\caption{Le fasi di una comunicazione senza connessione e con connessione.}
+\end{figure}
+
 
 \subsection{Un indirizzo per l'estremo}
 
@@ -261,7 +313,7 @@ struct sockaddr_in {           /* quella IPv4: e' quella che si riempie */
 
 Ogni famiglia ha la propria struttura, ma le chiamate prendono un puntatore a quella \textbf{generica}: da qui il cast
 \texttt{(struct sockaddr *)} che si vede ovunque. Per riempirla servono \texttt{htons} e \texttt{inet\_pton}, perché la
-rete scrive i numeri a modo suo: l'ordine dei byte è l'argomento della prossima lezione.
+rete scrive i numeri a modo suo: l'ordine dei byte è l'argomento del prossimo capitolo.
 
 % ══════════════════════════════════════════════════════════════
 \section{Le chiamate lato server}
@@ -405,7 +457,7 @@ int main(void) {
 
 Quattro chiamate fanno il lavoro: \texttt{socket}, \texttt{connect}, \texttt{write}, \texttt{read}. Il resto è riempire
 un indirizzo. \texttt{inet\_pton} («presentation to network») converte \texttt{"127.0.0.1"} nel formato binario della
-rete; nel capitolo precedente si usava \texttt{inet\_addr}, più vecchia, che non distingue un errore dall'indirizzo
+rete; nel codice più vecchio si trova \texttt{inet\_addr}, che non distingue un errore dall'indirizzo
 \texttt{255.255.255.255}.
 
 \begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={server.c: il socket di ascolto}]
@@ -494,8 +546,8 @@ Abbiamo scritto \texttt{write(fd, \&x, sizeof x)} e compila. Sull'altra macchina
 \begin{itemize}
     \item \textbf{Dimensione}: \texttt{int} non ha la stessa larghezza ovunque; sulla rete sono sicuri solo i tipi a
           larghezza fissa come \texttt{uint32\_t}.
-    \item \textbf{Ordine}: le due macchine possono memorizzare i byte di un numero in ordini opposti (argomento della
-          prossima lezione).
+    \item \textbf{Ordine}: le due macchine possono memorizzare i byte di un numero in ordini opposti (argomento del
+          prossimo capitolo).
     \item \textbf{Confini}: nel flusso nulla dice dove finisce un valore o un messaggio. Questo problema spetta a noi.
 \end{itemize}
 
@@ -696,6 +748,7 @@ nessuno ha ancora chiamato \texttt{accept} per lui.
     Va bene per il client di una chat; un server molto carico userebbe invece un buffer, come fa \texttt{serve}.
 }
 
+\Needspace{20\baselineskip}
 % ══════════════════════════════════════════════════════════════
 \section{Riepilogo}
 % ══════════════════════════════════════════════════════════════
