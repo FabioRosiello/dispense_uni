@@ -6,12 +6,17 @@ Federico II, corso di laurea in Informatica.
 
 Copre **l'intero corso**: tutte le 24 lezioni, più la lezione bonus su CMS e
 GraphQL (inclusa come capitolo finale e segnalata come fuori programma).
-23 capitoli, 348 pagine.
+24 capitoli, 373 pagine.
 
 Il codice è quasi sempre accompagnato, **accanto**, da ciò che produce: il
 rendering nel browser, l'output in console o nel terminale, oppure uno schema
 (variabili e riferimenti in memoria, scope, alberi DOM, sequenze di richieste
 e risposte, diagrammi di flusso, tabelle del database).
+
+Ogni listato è disegnato come una piccola **finestra di Visual Studio Code** con
+il tema scuro predefinito (Dark+): sfondo quasi nero, numeri di riga, colori
+della sintassi del tema e, in alto, la scheda del file aperto con l'icona del
+linguaggio.
 
 La dispensa contiene **solo i contenuti tecnici** visti a lezione, cioè quelli
 che possono essere oggetto d'esame. Le informazioni organizzative (crediti,
@@ -34,7 +39,7 @@ escluse: restano sulle slide e sul sito del docente, dove vengono aggiornate.
 | `chapters/8. Asincronismo e rete.tex` | Cookie e Web Storage, callback, Promise e concatenazione, API statiche, `async`/`await`, `fetch` |
 | `chapters/9. Il Web sotto il cofano.tex` | Applicazioni di rete, client-server e P2P, processi e socket, IP e porte, protocolli applicativi, DNS, versioni di HTTP, TCP/UDP e QUIC, connessioni persistenti, metodi sicuri e idempotenti (GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS, QUERY), risposte e codici di stato, HTTPS e TLS, dal clic alla pagina e tempistiche nei DevTools |
 | `chapters/10. Web statico e dinamico.tex` | Limiti del web statico, programmazione lato server, CGI (flusso, interfaccia con variabili d'ambiente, stdin e stdout, lista di cose da fare), scripting lato server, PHP, NGINX e PHP-FPM |
-| `chapters/11. Node.tex` | Event loop, modello non bloccante, npm e `package.json`, primo server HTTP, debug, nodemon |
+| `chapters/11. Node.tex` | Diffusione dei runtime (State of JS), modello multi-thread e I/O bloccante, event loop, installazione con nvm (Node.js 22.14.0), REPL, npm e `package.json` (`npm run`), primo server HTTP, debug in VS Code (Auto Attach, breakpoint, azioni di debug), nodemon |
 | `chapters/12. Web app con Node.tex` | Routing, motori di template e Pug, analisi del corpo delle richieste |
 | `chapters/13. Sessioni.tex` | Cookie, i loro limiti, sessioni memorizzate sul server |
 | `chapters/14. Express.tex` | Framework e inversione del controllo, routing, middleware, gestione errori, messaggi flash |
@@ -167,8 +172,9 @@ dispensa perché abbiano lo stesso aspetto:
 
 Per i listati: `\begin{lstlisting}[style=html, name=file.html]`. Gli stili
 disponibili sono `html`, `css`, `js`, `ts`, `pug`, `php`, `json`, `shell`,
-`sql`, `http` e `plain`. Il `name` compare come didascalia sotto il blocco; se
-omesso, non viene mostrata alcuna didascalia.
+`sql`, `http` e `plain`. Il `name` compare nella scheda in alto, accanto
+all'icona del linguaggio scelta dallo stile; se omesso, la finestra non ha la
+barra delle schede.
 
 ## Note
 
@@ -188,9 +194,31 @@ Tutte in `preamble/webtech-preamble.tex`, la classe non è stata toccata.
 - **Aspetto `html` di listings caricato** con `\lstloadaspects{html}`: senza,
   le chiavi `tag`, `tagstyle`, `markfirstintag` e `usekeywordsintag` non
   esistono.
-- **Didascalia soppressa quando manca `name`.** Non basta rendere vuoto il
-  testo del titolo: listings emetterebbe comunque il box della didascalia, con
-  il suo spazio verticale.
+- **Listati come finestre di VS Code (tema Dark+).** Sfondo `#1E1E1E`, numeri
+  di riga grigi, cornice di spessore nullo che allarga lo sfondo attorno al
+  codice; i margini sono calcolati da `\wtvscmargini{sinistro}{destro}` perché
+  la finestra occupi esattamente la riga (o la colonna di `affianco`).
+  Il titolo del listato (`captionpos=t`) è ridisegnato in TikZ come barra delle
+  schede: `\lst@maketitle` è sostituito a inizio documento, dopo che il
+  pacchetto caption ha messo il suo. L'icona viene dalla chiave `vscicon`,
+  impostata da ciascuno stile.
+- **Colori della sintassi per classi di parole chiave.** Listings non conosce
+  la grammatica dei linguaggi, quindi le categorie del tema sono elenchi fissi:
+  blu per dichiarazioni e valori (`const`, `this`, `true`), viola per il
+  controllo del flusso (`if`, `return`, `await`), giallo per le funzioni,
+  verde acqua per classi e tipi, azzurro chiaro per tutti gli altri
+  identificatori. VS Code colora di giallo ogni nome seguito da `(`: l'elenco
+  delle funzioni contiene i nomi che negli esempi sono (quasi) sempre chiamate.
+- **Codice in corpo 7,5** (6,6 con `\codicepiccolo`). La colonna dei numeri
+  toglie spazio orizzontale: con il corpo un po' ridotto nessuna riga va a capo,
+  come prima dell'introduzione dei numeri, e la dispensa ha lo stesso numero di
+  pagine.
+- **Ogni listato riparte dalla riga 1** (`firstnumber=1`): altrimenti listings
+  prosegue la numerazione dei listati precedenti con lo stesso `name`.
+- **Barra delle schede solo quando c'è `name`.** La chiave `title` rende la
+  didascalia non vuota per tutti i listati; `everydisplay`, che listings esegue
+  appena prima di disegnare il titolo, la svuota quando manca il nome. (Un hook
+  `InitVars` non va bene: arriva dopo il titolo in alto.)
 - **Titoli dei riquadri protetti** (`\info`, `\warning`, `\error`): la classe
   passa il titolo a tcolorbox come `title=#1`, quindi una virgola nel titolo
   verrebbe letta come separatore di chiavi.
@@ -198,12 +226,17 @@ Tutte in `preamble/webtech-preamble.tex`, la classe non è stata toccata.
   `secnumdepth=0` il contatore di sezione non avanza mai, e le etichette
   sarebbero uscite come "Esempio 1.0.3".
 
-- **Sostituzioni «legatura» disattivate nei listati HTML** (`literate={}`
-  nello stile `html`). Lo stile `FiraCodeStyle` caricato dalla classe
-  trasforma `</`, `/>`, `<!--` e `-->` in simboli unici: così listings non
-  riconosceva i tag di chiusura, che restavano neri. Nel linguaggio `HTML5`,
-  inoltre, il commento va dichiarato *dopo* il tag, altrimenti `<!--` apre un
-  tag.
+- **Sostituzioni «legatura» disattivate in tutti i listati** (`literate={}`).
+  Lo stile `FiraCodeStyle` del pacchetto `lstfiracode`, caricato dalla classe,
+  tiene unite le coppie di caratteri che Fira Code disegna come legature
+  (`</`, `-->`, `--`, `#!`...): così listings non riconosceva i tag di
+  chiusura HTML, i commenti `--` di SQL e la riga `#!/bin/bash` degli script.
+  Nel linguaggio `HTML5`, inoltre, il commento va dichiarato *dopo* il tag,
+  altrimenti `<!--` apre un tag.
+- **Prima classe di parole chiave predisposta nel preambolo**
+  (`\lstset{keywords={}}`): il nome del tag HTML prende il suo stile, che
+  listings crea solo al primo listato con parole chiave; se il primo listato
+  del documento fosse HTML la compilazione si fermerebbe.
 - **Il codice non si spezza fra due pagine.** Ogni `lstlisting` è chiuso in
   una minipage tramite gli hook `env/lstlisting/before` e `after`: se non entra
   in fondo alla pagina, passa per intero alla successiva. Il listato più lungo
