@@ -664,6 +664,51 @@ Fra i \term{message broker} open source più diffusi ci sono RabbitMQ, Apache Ac
   risolvere: un messaggio consegnato due volte, ad esempio, non deve far addebitare due volte un pagamento.
 }
 
+\subsection{Un altro scenario: lo stesso utente su più dispositivi}
+
+Le code non servono solo a spostare in background i compiti lenti. Un altro scenario tipico è quello delle applicazioni a
+cui lo \textbf{stesso utente} accede da \textbf{più dispositivi}, anche contemporaneamente: Microsoft Teams, per esempio,
+può essere aperto nello stesso momento sul telefono, sul portatile e nel browser. Quando arriva un nuovo messaggio deve
+comparire su tutti i dispositivi; quando l'utente lo legge su uno, gli altri devono smettere di segnalarlo come non letto.
+
+Se fosse il servizio di chat a chiamare i dispositivi uno per uno, dovrebbe sapere in ogni momento quali sono connessi,
+aspettare la risposta di ciascuno e gestire quelli momentaneamente irraggiungibili (un telefono in galleria). Con un
+message broker, invece, il servizio \textbf{pubblica} l'evento \textbf{una sola volta}; ogni dispositivo connesso è un
+\textbf{consumatore} iscritto agli eventi del proprio utente, e il broker consegna a ciascuno la sua copia. È proprio il
+caso, citato nel riquadro precedente, in cui lo stesso messaggio arriva a \textbf{più} consumatori: qui è esattamente
+ciò che si vuole. E se il broker conserva i messaggi per i consumatori disconnessi, un dispositivo che si riconnette trova
+in coda gli eventi che si era perso.
+
+\Needspace{12\baselineskip}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    att/.style={rectangle, rounded corners=3pt, fill=swteal!80!black, text=white, font=\scriptsize\bfseries,
+                minimum width=2.2cm, minimum height=0.6cm, align=center},
+    disp/.style={rectangle, rounded corners=3pt, fill=swgreen!75!black, text=white, font=\scriptsize\bfseries,
+                 minimum width=2.6cm, minimum height=0.55cm},
+    lab/.style={font=\tiny, above, inner sep=1.5pt, align=center}]
+  \node[att] (b) at (-0.6,0) {app di Bruno};
+  \node[servizio] (s) at (3.4,0) {servizio\\ di chat};
+  \draw[rounded corners=4pt, fill=yellow!35, draw=q5!60!black, line width=0.8pt] (5.4,1.25) rectangle (8.6,-1.35);
+  \node[font=\small\bfseries] at (7.0,0.95) {Message broker};
+  \node[cylinder, shape border rotate=0, aspect=0.3, draw=q4!70!black, fill=q4!18, line width=0.8pt,
+        minimum width=0.9cm, minimum height=2.1cm, font=\scriptsize\bfseries] (q) at (7.0,-0.2)
+        {eventi di Anna \quad\imail};
+  \node[disp] (d1) at (11.4,0.9)  {telefono di Anna};
+  \node[disp] (d2) at (11.4,0.0)  {portatile di Anna};
+  \node[disp] (d3) at (11.4,-0.9) {Teams web di Anna};
+  \draw[fr] (b) -- node[lab]{nuovo messaggio\\ per Anna} (s);
+  \draw[fr] (s.east) -- node[lab]{pubblica\\ (una volta)} (q.west |- s.east);
+  \draw[fr] (q.east) -- (d1.west);
+  \draw[fr] (q.east) -- (d2.west);
+  \draw[fr] (q.east) -- (d3.west);
+  \node[font=\tiny, text=swgreen!60!black, align=center] at (11.4,-1.55) {una copia a ogni dispositivo connesso};
+\end{tikzpicture}
+\caption{Lo stesso utente collegato da tre dispositivi: il servizio pubblica l'evento una volta sola e il broker lo
+         consegna a ciascun dispositivo.}
+\end{figure}
+
 % ============================================================
 \section{Microservizi}
 
@@ -1001,6 +1046,257 @@ open source che nel 2020 è \textbf{tornato} da un'architettura a microservizi a
 operativa superava i benefici (Mendonça et al., \textit{The Monolith Strikes Back}, IEEE Software, 2021).
 
 % ============================================================
+\section{Un caso reale: un'applicazione a microservizi}
+
+Per vedere che cosa succede quando questi concetti incontrano la pratica, le slide presentano un'esperienza recente: lo
+sviluppo di un'applicazione complessa a microservizi nell'ambito del corso di \textit{Software Architecture Design}.
+
+\subsection{Il progetto}
+
+\begin{itemize}
+  \item L'applicazione è stata sviluppata nell'arco di \textbf{tre edizioni successive} del corso. Nella prima, i team
+        hanno implementato i singoli microservizi, \textbf{separatamente}; nella seconda e nella terza i servizi sono stati
+        integrati e arricchiti di nuove funzionalità. Infine alcuni ricercatori a contratto l'hanno messa in produzione e
+        hanno risolto diversi problemi di prestazioni e di sicurezza.
+  \item Il prodotto finale è un insieme di \textbf{immagini di container} da eseguire su \textbf{Docker}.
+  \item L'applicazione è un \textbf{gioco} per imparare la \textbf{copertura del codice} (\textit{code coverage}). Dai nomi
+        dei servizi e delle API se ne intuisce la meccanica: lo studente scrive casi di test per una classe sotto test
+        (\textit{class under test}), il sistema li compila e ne misura la copertura, e il risultato è confrontato con
+        quello di avversari automatici, i \textit{robot}, i cui test sono generati con strumenti come EvoSuite.
+\end{itemize}
+
+\subsection{L'architettura}
+
+Il diagramma di deployment mostra la struttura concettuale. Il client è un browser, che comunica con il server in HTTP
+sulla porta 80. Sul server, sopra il sistema operativo, gira Docker, che fa da ambiente di esecuzione: ogni microservizio
+è un \textbf{container}. Le sigle T1, \ldots, T8 indicano il \textbf{team} che ha sviluppato ciascun servizio (T23 è il
+servizio nato dall'unione del lavoro dei team 2 e 3).
+
+\Needspace{24\baselineskip}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  % client
+  \nodo{cli}{(-0.6,-0.6)}{2.4}{1.8}{«device»\\ \textbf{Client}}
+  \node[compo, minimum width=1.7cm, minimum height=0.6cm, font=\tiny, inner sep=2pt] at (0.6,-0.15)
+    {«component»\\ \textbf{Browser}};
+  % server, sistema operativo, Docker
+  \nodo{srv}{(4.0,-4.95)}{8.6}{9.1}{«device»\\ \textbf{Server}}
+  \draw[line width=0.7pt, draw=swred!60!black, fill=swred!10] (4.3,-4.7) rectangle (12.3,3.3);
+  \node[font=\tiny\bfseries] at (8.3,3.08) {«OS»};
+  \draw[line width=0.7pt, draw=swblue!60!black, fill=swblue!8] (4.6,-4.45) rectangle (12.0,2.85);
+  \node[font=\tiny, align=center] at (8.3,2.5) {«execution environment»\\ \textbf{Docker}};
+  % i container
+  \foreach \x/\y/\n/\c in {4.8/0.95/API Gateway/q7, 8.7/0.95/UI Gateway/q7,
+                           4.8/-0.25/T1 -- Admin Service/q5, 8.7/-0.25/T23 -- Student Service/q5,
+                           4.8/-1.45/T4 -- Game Repository/q5, 8.7/-1.45/T5 -- Game Front End/q5,
+                           4.8/-2.65/T6 -- Game Engine/q5, 8.7/-2.65/T7 -- Student Test Runner/q5,
+                           6.75/-3.85/T8 -- EvoSuite Runner/q5}
+    \nodocolore{c}{(\x,\y)}{3.1}{0.85}{«container»\\ \textbf{\n}}{\c};
+  % comunicazione
+  \draw[line width=0.8pt] (1.8,0.35) -- node[font=\tiny, above, align=center]{«protocol»\\ HTTP : 80} (4.0,0.35);
+\end{tikzpicture}
+\caption{Il diagramma di deployment dell'applicazione (ridisegnato dalle slide): un container Docker per ogni
+         microservizio, più due gateway.}
+\end{figure}
+
+Il diagramma dei componenti mostra chi chiama chi. Due componenti fanno da \textbf{gateway}: l'\textit{UI Gateway} porta le
+richieste delle pagine ai tre servizi che producono l'interfaccia (il front end del gioco, il servizio degli studenti e
+quello di amministrazione), mentre l'\textit{API Gateway} instrada le richieste di compilazione e di calcolo della copertura.
+Molte chiamate, però, vanno \textbf{direttamente} da un servizio all'altro: tutte sono chiamate REST sincrone.
+
+\Needspace{30\baselineskip}
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    cmp/.style={rectangle, draw=#1!70!black, fill=#1!14, line width=0.8pt, font=\scriptsize, align=center,
+                minimum width=2.4cm, minimum height=1.1cm, inner sep=2pt},
+    gw/.style={cmp=swgreen},
+    ui/.style={cmp=swblue},
+    be/.style={cmp=sworange},
+    chiam/.style={-{Straight Barb[length=2mm]}, dashed, line width=0.7pt, draw=black!70},
+    api/.style={font=\tiny, inner sep=1.5pt, align=center},
+    team/.style={rectangle, draw=sworange!70!black, fill=sworange!28, font=\tiny\bfseries, inner sep=1.5pt,
+                 minimum width=0.75cm, anchor=south west}]
+  \node[gw, minimum width=11.0cm, minimum height=0.9cm] (uig) at (5.8,0) {«component»\\ \textbf{UI Gateway}};
+  \node[ui] (fe) at (1.5,-2.2)  {«component»\\ \textbf{Game Front End}};
+  \node[ui] (st) at (5.8,-2.2)  {«component»\\ \textbf{Student Service}};
+  \node[ui] (ad) at (10.1,-2.2) {«component»\\ \textbf{Admin Service}};
+  \node[be] (re) at (1.5,-4.6)  {«component»\\ \textbf{Game Repository}};
+  \node[be] (en) at (1.5,-7.0)  {«component»\\ \textbf{Game Engine}};
+  \node[gw, minimum width=2.0cm] (apig) at (-3.5,-7.0) {«component»\\ \textbf{API Gateway}};
+  \node[be] (ev) at (1.5,-9.4)  {«component»\\ \textbf{EvoSuite Runner}};
+  \node[be] (tr) at (5.8,-9.4)  {«component»\\ \textbf{Student Test Runner}};
+  \foreach \n/\t in {fe/T5, st/T2-3, ad/T1, re/T4, en/T6, ev/T8, tr/T7}
+    \node[team] at (\n.north west) {\t};
+  \foreach \n in {uig, fe, st, ad, re, en, apig, ev, tr} \compicon{\n};
+
+  % l'UI Gateway serve le pagine dei tre servizi dell'interfaccia
+  \foreach \n in {fe, st, ad}
+    \draw[chiam] (uig.south -| \n) -- node[api, right]{HTTP GET} (\n.north);
+  % chiamate fra i servizi dell'interfaccia
+  \draw[chiam] ([yshift=0.25cm]fe.east) -- node[api, above]{HTTP GET} ([yshift=0.25cm]st.west);
+  \draw[chiam] ([yshift=0.25cm]ad.west) -- node[api, above]{GET via\\ UI Gateway} ([yshift=0.25cm]st.east);
+  \draw[chiam] ([yshift=-0.3cm]fe.east) -- ++(0.8,0) |- (9.6,-3.3)
+    node[api, below, pos=0.75]{GET via UI Gateway} -- (9.6,-2.75);
+  % verso il repository del gioco
+  \draw[chiam] (fe.south) -- node[api, left]{GET /robots\\ GET /turns\\ (via UI Gateway)} (re.north);
+  \draw[chiam] (10.6,-2.75) |- node[api, above, pos=0.75]{GET via UI Gateway, POST /robots} (re.east);
+  \draw[chiam] (en.north) -- node[api, right]{GET /robot\_coverage\\ POST /turn\\ POST /close\_game} (re.south);
+  % il motore di gioco
+  \draw[chiam] ([yshift=0.25cm]en.east) -| node[api, above, pos=0.25]{GET /class\_ut\_code} (11.1,-2.75);
+  \draw[chiam] ([yshift=-0.25cm]en.east) -| node[api, right, pos=0.75]{POST /compile\_and\_coverage} (tr.north);
+  % l'API Gateway
+  \draw[chiam] (fe.west) -| node[api, left, pos=0.75]{POST /compile\_and\_coverage\\ GET /class\_ut} (apig.north);
+  \draw[chiam] (apig.east) -- node[api, below]{GET /class\_ut} (en.west);
+  \draw[chiam] (apig.south) |- node[api, below right, pos=0.5]{/compute\_coverage\_metrics} (ev.west);
+\end{tikzpicture}
+\caption{Il diagramma dei componenti (ridisegnato e semplificato dalle slide). Le frecce tratteggiate sono chiamate REST,
+         con il metodo HTTP e l'endpoint invocato; le etichette T1, \ldots, T8 indicano il team che ha sviluppato il
+         servizio.}
+\end{figure}
+
+\subsection{Gli anti-pattern individuati}
+
+Analizzando il sistema sono stati individuati molti \term{anti-pattern}: soluzioni ricorrenti che sembrano ragionevoli ma
+producono più problemi di quanti ne risolvano. Il numero accanto al nome è quello dell'anti-pattern nel catalogo usato per
+l'analisi; l'ultima colonna dice in quale servizio è stato trovato, oppure se riguarda \textbf{tutto il sistema}. Le slide
+li raggruppano in quattro famiglie.
+
+\Needspace{14\baselineskip}
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}>{\bfseries\raggedright\arraybackslash}p{3.7cm} >{\raggedright\arraybackslash}p{9.6cm}
+                >{\raggedright\arraybackslash}p{2.1cm}@{}}
+  \toprule
+  \multicolumn{3}{@{}l}{\textcolor{swteal}{\textbf{Scomposizione}}} \\
+  \normalfont\textbf{Anti-pattern} & \textbf{Che cosa succede} & \textbf{Dove} \\
+  \midrule
+  \multicolumn{3}{@{}l}{\textit{Progettazione interna dei servizi}} \\
+  No API-versioning (n.~6) & il sistema espone le sue API senza alcuna strategia di \textbf{versionamento}: ogni modifica
+    rischia di rompere chi le usa & tutto il sistema \\
+  Ambiguous service (n.~9) & le \textbf{responsabilità} di un servizio non sono definite con chiarezza: confusione e
+    funzionalità sovrapposte & T23 \\
+  \midrule
+  \multicolumn{3}{@{}l}{\textit{Scomposizione fra servizi}} \\
+  Chatty service (n.~17) & un servizio comunica \textbf{troppo} con gli altri, con molte chiamate a grana fine per
+    raccogliere i dati che gli servono: cresce il tempo di risposta e peggiorano le prestazioni dell'intero sistema & T6 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Sono problemi di \textbf{confini}. Senza versioni delle API viene meno il vantaggio principale dei microservizi, il
+rilascio indipendente: un servizio non può cambiare senza costringere gli altri ad adeguarsi. Un servizio dalle
+responsabilità ambigue e uno che passa il tempo a interrogare gli altri sono il sintomo di bounded context tracciati male:
+dati e operazioni che stanno insieme sono finiti in servizi diversi. Non a caso il servizio chiacchierone è il motore di
+gioco (T6), che nel diagramma dei componenti chiama quasi tutti.
+
+\Needspace{16\baselineskip}
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}>{\bfseries\raggedright\arraybackslash}p{3.7cm} >{\raggedright\arraybackslash}p{9.6cm}
+                >{\raggedright\arraybackslash}p{2.1cm}@{}}
+  \toprule
+  \multicolumn{3}{@{}l}{\textcolor{swteal}{\textbf{Interazione fra servizi}}} \\
+  \normalfont\textbf{Anti-pattern} & \textbf{Che cosa succede} & \textbf{Dove} \\
+  \midrule
+  On-line only (n.~25) & il sistema si affida \textbf{solo} alla comunicazione sincrona fra microservizi ed evita
+    l'elaborazione batch anche per i compiti lunghi o pesanti: colli di bottiglia e inefficienze & T1 \\
+  Hardcoded endpoint (n.~28) & indirizzi, porte o endpoint dei microservizi sono \textbf{scritti} nel codice, nei file di
+    configurazione o nelle variabili d'ambiente: tra l'altro, è difficile scalare & T1, T5, T6 \\
+  No API gateway (n.~29) & manca un API gateway centralizzato: i client devono chiamare \textbf{direttamente} i servizi,
+    e sicurezza e instradamento si complicano & tutto il sistema \\
+  Wobbly service interactions (n.~30) & un servizio interagisce con altri servizi, o con i router dei messaggi, senza
+    meccanismi per \textbf{tollerarne i guasti} & tutto il sistema \\
+  Timeout (n.~31) & chi usa un servizio spesso non riesce a connettersi, probabilmente perché la sua
+    \textbf{indisponibilità} non è gestita come si deve & tutto il sistema \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Qui ritornano quasi tutti i temi del capitolo. \textit{On-line only} è esattamente il problema che le \textbf{code di
+messaggi} risolvono: un compito lungo svolto in linea fa aspettare l'utente. Con gli endpoint scritti nel codice non si
+può mettere un \textbf{load balancer} davanti a più istanze di un servizio, cioè non si può scalare orizzontalmente. Il
+gateway, nei diagrammi, c'è; ma non è l'\textbf{unico} punto d'ingresso, visto che diverse chiamate lo scavalcano e
+alcuni servizi sono raggiungibili direttamente dall'esterno. Infine \textit{Wobbly service interactions} e
+\textit{Timeout} riguardano la \textbf{disponibilità}: in un sistema distribuito i guasti parziali sono la normalità, e un
+servizio che non sa reagire all'assenza di un altro trascina con sé tutto il sistema.
+
+\Needspace{22\baselineskip}
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}>{\bfseries\raggedright\arraybackslash}p{3.7cm} >{\raggedright\arraybackslash}p{9.6cm}
+                >{\raggedright\arraybackslash}p{2.1cm}@{}}
+  \toprule
+  \multicolumn{3}{@{}l}{\textcolor{swteal}{\textbf{Sicurezza}}} \\
+  \normalfont\textbf{Anti-pattern} & \textbf{Che cosa succede} & \textbf{Dove} \\
+  \midrule
+  Unauthenticated traffic (n.~33) & le richieste alle API, sia dei client esterni sia fra microservizi interni, non sono
+    \textbf{autenticate} come si deve & tutto il sistema \\
+  Multiple user authentication (n.~34) & il sistema offre \textbf{più punti} di autenticazione degli utenti: aumentano la
+    superficie d'attacco e i rischi & T1, T23 \\
+  Publicly accessible microservices (n.~35) & i microservizi sono esposti \textbf{direttamente} ai client esterni: senza
+    controlli adeguati possono rivelare informazioni sensibili, e il rischio di attacchi cresce & T1, T23, T4, T8 \\
+  Unnecessary privileges to microservices (n.~36) & i microservizi hanno più accessi, permessi o funzionalità di quanti
+    ne servano al loro compito & tutto il sistema \\
+  Insufficient access control (n.~37) & manca un \textbf{controllo degli accessi} adeguato: dati sensibili e funzioni di
+    business restano esposti e la riservatezza è compromessa & tutto il sistema \\
+  Non-secured service-to-service communications (n.~39) & le interazioni fra servizi non sono \textbf{cifrate} né
+    protette in altro modo: i dati si possono intercettare, alterare, spiare & tutto il sistema \\
+  Hardcoded secrets (n.~42) & dati di configurazione sensibili, come password o chiavi delle API, sono scritti
+    \textbf{direttamente} nel codice sorgente o negli script di deploy & T1, T23, T4 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Un monolite ha un solo ingresso da proteggere; un sistema a microservizi ne ha potenzialmente uno per servizio, più tutte
+le comunicazioni interne, che viaggiano in rete. Molti di questi anti-pattern hanno la stessa cura: un \textbf{gateway}
+che sia davvero l'unico punto d'ingresso, con un'\textbf{autenticazione centralizzata}, servizi raggiungibili solo dalla
+rete interna, comunicazioni cifrate e segreti custoditi fuori dal codice.
+
+\Needspace{24\baselineskip}
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}>{\bfseries\raggedright\arraybackslash}p{3.7cm} >{\raggedright\arraybackslash}p{9.6cm}
+                >{\raggedright\arraybackslash}p{2.1cm}@{}}
+  \toprule
+  \multicolumn{3}{@{}l}{\textcolor{swteal}{\textbf{Organizzazione dei team}}} \\
+  \normalfont\textbf{Anti-pattern} & \textbf{Che cosa succede} & \textbf{Dove} \\
+  \midrule
+  Golden hammer (n.~44) & una tecnologia familiare viene applicata a \textbf{ogni} problema, adatta o no: gli
+    sviluppatori riusano quella che conoscono bene anche dove non serve & tutto il sistema \\
+  Too many standards (n.~46) & si usano troppi linguaggi, protocolli o framework diversi. I microservizi permettono la
+    diversità tecnologica, ma un'eterogeneità \textbf{eccessiva} rende difficile la manutenzione, soprattutto quando gli
+    sviluppatori cambiano, e complica integrazione ed evoluzione & T1, T23, T4, T8 \\
+  Inadequate techniques support (n.~47) & il team usa strumenti, processi o metodi poco adatti a costruire e gestire
+    microservizi, spesso pur avendo a disposizione alternative migliori & tutto il sistema \\
+  No CI/CD (n.~53) & non si adottano l'\textbf{integrazione continua} e la consegna (o il rilascio) continui & tutto il
+    sistema \\
+  Manual configuration (n.~54) & host, servizi e istanze sono configurati \textbf{a mano}: non c'è una separazione netta
+    fra il codice e la gestione della configurazione, e l'automazione è ostacolata & tutto il sistema \\
+  Insufficient monitoring (n.~55) e Local logging (n.~58) & prestazioni e guasti dei microservizi non sono
+    \textbf{monitorati}, quindi i problemi sono difficili da scoprire e da risolvere; e ogni servizio gestisce i propri log
+    per conto suo, senza aggregarli in un punto unico & tutto il sistema \\
+  Dismiss documentation (n.~56) & le API esposte non sono \textbf{documentate} a dovere: diventa difficile avere una
+    visione d'insieme del sistema & tutto il sistema \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\textit{Too many standards} è l'altra faccia di uno dei vantaggi dei microservizi, la libertà di scelta delle tecnologie,
+e qui il ricambio degli sviluppatori è estremo: a ogni edizione del corso arrivano studenti nuovi. Senza CI/CD e con la
+configurazione fatta a mano non si possono migliorare le metriche \textbf{DORA}, che erano la ragione stessa per adottare i
+microservizi. Senza monitoraggio e senza log centralizzati manca l'\textbf{osservabilità} su cui si basa il fail-over.
+
+\info{Che cosa insegna questo caso}{
+  Quasi tutti gli anti-pattern riguardano \textbf{tutto il sistema}, non un singolo servizio: versioni delle API, gateway,
+  autenticazione, tolleranza ai guasti, CI/CD, log centralizzati. Sono le decisioni che stanno \textbf{fra} i servizi, e
+  che nessun team, sviluppando il proprio servizio per conto suo (qui addirittura in edizioni diverse del corso), aveva il
+  compito di prendere. È la «complessità operativa» del prezzo dei microservizi, e insieme un'illustrazione della legge di
+  Conway, a cui è dedicata la prossima sezione: team che non comunicano producono servizi che non si integrano.
+}
+
+% ============================================================
 \section{Architettura e organizzazione dei team}
 
 Che cosa c'entra l'organizzazione dei team con l'architettura? Moltissimo.
@@ -1078,6 +1374,8 @@ servizi.
 }
 
 % ============================================================
+% il riepilogo e' lungo: deve stare tutto in una pagina
+\Needspace{30\baselineskip}
 \gbox{In sintesi}{azure-gradient-6!80!black}{
 \begin{itemize}
   \item L'architettura è l'insieme delle \textbf{decisioni principali}: quelle difficili da cambiare in seguito. Una buona
@@ -1090,10 +1388,14 @@ servizi.
   \item \textbf{Dati}: le proprietà \textbf{ACID} rendono difficile scalare un RDBMS; le tecniche sono replica
         (master-slave, master-master), federazione, sharding, denormalizzazione. I database \textbf{NoSQL} (BASE) scalano
         meglio rinunciando alla consistenza immediata: \textbf{consistenza finale}.
-  \item Le \textbf{code di messaggi} rendono asincrone le elaborazioni lente e riducono la latenza.
+  \item Le \textbf{code di messaggi} rendono asincrone le elaborazioni lente e riducono la latenza; un broker serve anche
+        a consegnare lo stesso evento a più consumatori, per esempio a tutti i dispositivi di un utente.
   \item I \textbf{microservizi} danno confini forti, rilasci indipendenti e libertà tecnologica, al prezzo di complessità,
         consistenza finale e costi operativi: vanno adottati solo per sistemi complessi, progettandone i confini con il
         DDD (bounded context, aggregati).
+  \item Il \textbf{caso reale} di un gioco a microservizi mostra gli \textbf{anti-pattern} tipici (servizi chiacchieroni,
+        endpoint scritti nel codice, nessun gateway unico, autenticazione sparsa, niente CI/CD né log centralizzati):
+        quasi tutti riguardano ciò che sta \textbf{fra} i servizi.
   \item \textbf{Legge di Conway}: la struttura del sistema copia quella della comunicazione dell'organizzazione. Architettura
         e organizzazione dei team vanno progettate insieme.
 \end{itemize}
