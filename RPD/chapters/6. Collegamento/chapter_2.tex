@@ -1,525 +1,558 @@
-\chapter{Il sottolivello MAC e l'accesso multiplo}
+\chapter{Rilevazione e correzione degli errori}
+
+Il ricevente sa ormai trovare dove un frame inizia e dove finisce, ed è tutto ciò che sa fare. Con il solo payload non c'è nulla con
+cui confrontarlo: ogni sequenza di bit è una sequenza di bit legittima. Il mittente calcola quindi qualcosa di \textbf{ridondante}
+sui dati e lo invia insieme ad essi, nel trailer in fondo al frame; il ricevente ripete il calcolo su ciò che è arrivato e confronta.
+In questo capitolo vediamo che cosa sia questo qualcosa, quanto sia forte, e che cosa succede quando non lo è abbastanza.
 
 % ══════════════════════════════════════════════════════════════
-\section{I due tipi di collegamento}
+\section{La rilevazione degli errori}
 % ══════════════════════════════════════════════════════════════
 
-Ricordiamo i quattro servizi del livello di collegamento: \textbf{framing} (incapsulare e decapsulare i datagrammi), \textbf{accesso al
-collegamento} (regolare l'accesso ai collegamenti condivisi, compito del protocollo MAC), \textbf{consegna affidabile} (per lo più
-facoltativa) e \textbf{rilevazione e correzione degli errori} (parità, checksum, CRC). In questo capitolo ci occupiamo del secondo.
-
-I collegamenti da gestire sono essenzialmente di due tipi.
-
-\dfn{Collegamento punto-punto e broadcast}{
-    \begin{itemize}
-      \item Un collegamento \textbf{punto-punto} ha un solo mittente a un'estremità e un solo ricevente all'altra. Un protocollo che
-            gestisce collegamenti di questo tipo è il \textbf{PPP} (\emph{Point-to-Point Protocol}). Esempio: un cavo Ethernet diretto
-            tra due computer.
-      \item Un collegamento \textbf{broadcast} ha più nodi mittenti e riceventi collegati allo \textbf{stesso canale condiviso}. Si
-            chiama broadcast perché quando un nodo trasmette un frame, questo viene \textbf{ricevuto da tutti} i nodi sul canale.
-            Esempi: il bus Ethernet, Ethernet half-duplex (raro, oggi i cavi sono quasi tutti full-duplex), le LAN wireless.
-    \end{itemize}
-}
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
-  \begin{scope}
-    \node[font=\small\bfseries\sffamily] at (2,1.6) {Punto-punto};
-    \node (a) at (0,0) {\icon[1cm]{pc}}; \node[below=-2pt of a] {invia A};
-    \node (b) at (4,0) {\icon[1cm]{laptop}}; \node[below=-2pt of b, text=netgreen!60!black] {accetta A};
-    \draw[wired, line width=1.6pt] (a) -- node[above] {PPP} (b);
-  \end{scope}
-  \begin{scope}[xshift=7.5cm]
-    \node[font=\small\bfseries\sffamily] at (2.5,1.6) {Broadcast};
-    \draw[backbone] (-0.2,0) -- (5.2,0);
-    \foreach \x/\ic/\t/\c in {0/pc/{invia A}/black, 1.7/laptop/{scarta A}/netred, 3.4/pc/{accetta A}/netgreen!60!black, 5/laptop/{scarta A}/netred} {
-      \node (n) at (\x,0.8) {\icon[0.7cm]{\ic}}; \draw[wired] (\x,0) -- (n);
-      \node[text=\c] at (\x,-0.4) {\t};
-    }
-  \end{scope}
-\end{tikzpicture}
-\caption{Nel broadcast tutti ricevono il frame, e solo il destinatario lo accetta.}
-\end{figure}
-
-L'accesso ai collegamenti broadcast va \textbf{coordinato} (\emph{problema dell'accesso multiplo}), perché più comunicazioni sullo
-stesso collegamento possono interferire tra loro.
-
-% ══════════════════════════════════════════════════════════════
-\section{Le collisioni}
-% ══════════════════════════════════════════════════════════════
-
-\dfn{Collisione}{
-    Il problema principale dei collegamenti broadcast è la \textbf{collisione}: se più nodi trasmettono frame \textbf{contemporaneamente}
-    sullo stesso canale, i frame si sovrappongono e diventano \textbf{incomprensibili}.
-}
-
-I frame in collisione vengono ricevuti da tutti i nodi e scartati come errati (non si fa danno), ma:
-
-\begin{itemize}
-    \item \textbf{tutti} i frame trasmessi vanno \textbf{persi};
-    \item l'intervallo di tempo è \textbf{sprecato}, perché il canale è stato usato per trasmettere dati inutili.
-\end{itemize}
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
-  \draw[backbone] (-0.2,0) -- (8.2,0);
-  \node (a) at (0,0.8) {\icon[0.7cm]{pc}}; \draw[wired] (0,0) -- (a); \node[above=-1pt of a] {invia A};
-  \node (b) at (8,0.8) {\icon[0.7cm]{pc}}; \draw[wired] (8,0) -- (b); \node[above=-1pt of b] {invia B};
-  \node (c) at (2.7,0.8) {\icon[0.8cm]{laptop}}; \draw[wired] (2.7,0) -- (c); \node[above=-1pt of c, text=netred] {scarta \$@!};
-  \node (d) at (5.3,0.8) {\icon[0.8cm]{laptop}}; \draw[wired] (5.3,0) -- (d); \node[above=-1pt of d, text=netred] {scarta \$@!};
-  \draw[-{Stealth}, very thick, netblue] (0.3,-0.3) -- (4.8,-0.3);
-  \draw[-{Stealth}, very thick, netorange] (7.7,-0.45) -- (3.2,-0.45);
-  \node[starburst, draw=netred, fill=netred!20, minimum size=0.9cm, inner sep=0pt, font=\scriptsize\bfseries\sffamily] at (4,-0.9) {collisione!};
-\end{tikzpicture}
-\caption{Due trasmissioni contemporanee sullo stesso canale collidono: tutti i nodi ricevono dati illeggibili.}
-\end{figure}
-
-L'accesso al mezzo fisico (come il framing) è regolato dal protocollo \textbf{MAC} (\emph{Medium Access Control}), un
-\textbf{sottolivello} del livello di collegamento.
-
-% ══════════════════════════════════════════════════════════════
-\section{I protocolli ad accesso multiplo}
-% ══════════════════════════════════════════════════════════════
-
-Nelle reti i \textbf{protocolli ad accesso multiplo} regolano le trasmissioni sui canali broadcast in modo che:
-
-\begin{itemize}
-    \item le collisioni siano \textbf{gestite};
-    \item ogni nodo abbia la possibilità di trasmettere, e nessuno \textbf{monopolizzi} il collegamento;
-    \item le connessioni già stabilite non vengano interrotte (per esempio controllando se il collegamento è occupato).
-\end{itemize}
-
-Servono in molti contesti, cablati, senza fili e satellitari, dove centinaia o migliaia di nodi possono comunicare direttamente su un
-canale broadcast. Ne esistono decine, su tecnologie di collegamento diverse; gli approcci principali sono tre:
-
-\begin{itemize}
-    \item \textbf{partizionamento del canale}: la banda viene divisa tra i nodi;
-    \item \textbf{accesso casuale}: i nodi ``tentano la sorte'' per accedere;
-    \item \textbf{a turni} (\emph{taking-turns}): i nodi aspettano il proprio turno.
-\end{itemize}
-
-\dfn{Le proprietà desiderate}{
-    Un protocollo ad accesso multiplo per un canale broadcast a $R$ bit/s dovrebbe essere:
-    \begin{itemize}
-      \item \textbf{efficiente}: se un solo nodo deve trasmettere, dovrebbe avere throughput $R$; se $M$ nodi devono trasmettere, ciascuno
-            dovrebbe avere in media $R/M$ bit/s;
-      \item \textbf{decentralizzato}: un nodo ``master'' sarebbe un single point of failure;
-      \item \textbf{semplice e leggero}: si inviano tantissimi frame, non ci può essere overhead.
-    \end{itemize}
-}
-
-% ══════════════════════════════════════════════════════════════
-\section{Protocolli a partizionamento del canale}
-% ══════════════════════════════════════════════════════════════
-
-\subsection{TDMA}
-
-\dfn{TDMA (Time Division Multiple Access)}{
-    Dato un canale con $N$ nodi e velocità $R$ bit/s, il \textbf{TDMA} divide il tempo in \textbf{trame} (\emph{frame} temporali) e ogni
-    trama in $N$ \textbf{slot}. Ogni slot è assegnato a uno degli $N$ nodi: quando un nodo ha un pacchetto da inviare, aspetta il proprio
-    slot. Di solito la dimensione degli slot è scelta in modo che un pacchetto intero possa essere trasmesso in uno slot.
-}
-
-\subsection{FDMA}
-
-\dfn{FDMA (Frequency Division Multiple Access)}{
-    Il \textbf{FDMA} divide il canale da $R$ bit/s in \textbf{frequenze diverse}, ciascuna con banda $R/N$, e assegna ogni frequenza a uno
-    degli $N$ nodi.
+\dfn{Il problema}{
+    Siano $D$ i nostri dati, di $d$ bit: non solo il datagramma, ma anche l'\textbf{header di collegamento} (indirizzi, numeri di
+    sequenza, ogni campo). Per proteggerli dagli errori sui bit aggiungiamo al messaggio dei \textbf{bit di rilevazione e correzione
+    degli errori}, \textbf{EDC} (\emph{Error Detection and Correction}), calcolati su $D$ prima che parta. Arrivano $D'$ ed $EDC'$,
+    che possono differire da entrambi: il ricevente ricalcola l'EDC su $D'$ e lo confronta con $EDC'$. L'obiettivo è capire se
+    qualcosa è cambiato e, se possibile, ricostruire gli originali.
 }
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
-  \begin{scope}
-    \node[font=\footnotesize\bfseries\sffamily] at (2.8,2.6) {TDMA};
-    \draw[-{Stealth}] (0,0) -- (6,0) node[right] {tempo}; \draw[-{Stealth}] (0,0) -- (0,2.3) node[above] {frequenza};
-    \foreach \k in {0,1} \foreach \i/\c in {1/lapp,2/ltra,3/lnet,4/llink} { \fill[\c] (0.1+\k*2.8+\i*0.65-0.65,0.1) rectangle ++(0.6,1.9); \node at (0.4+\k*2.8+\i*0.65-0.65,1.05) {N\i}; }
-    \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (0.1,-0.15) -- (2.7,-0.15) node[midway, below=4pt] {trama};
-    \draw[decorate, decoration={brace, amplitude=3pt}] (0.1,2.05) -- (0.7,2.05) node[midway, above=3pt] {slot};
-  \end{scope}
-  \begin{scope}[xshift=7.8cm]
-    \node[font=\footnotesize\bfseries\sffamily] at (2.8,2.6) {FDMA};
-    \draw[-{Stealth}] (0,0) -- (6,0) node[right] {tempo}; \draw[-{Stealth}] (0,0) -- (0,2.3) node[above] {frequenza};
-    \foreach \i/\c in {1/lapp,2/ltra,3/lnet,4/llink} { \fill[\c] (0.1,0.1+\i*0.48-0.48) rectangle ++(5.6,0.44); \node at (2.9,0.32+\i*0.48-0.48) {N\i}; }
-  \end{scope}
+  \node[draw, fill=lnet!50, minimum width=1.4cm, minimum height=0.6cm] (dg) at (0,1) {datagramma};
+  \node[draw, fill=llink!60, minimum width=1.2cm, minimum height=0.6cm, right=0pt of dg] {header link};
+  \node[draw, fill=cloudbg, minimum width=2.6cm, minimum height=0.6cm] (d) at (0.6,0) {D};
+  \node[draw, fill=netred!25, minimum width=0.8cm, minimum height=0.6cm, right=0pt of d] (e) {EDC};
+  \node[draw, fill=cloudbg, minimum width=2.6cm, minimum height=0.6cm] (d2) at (9.2,0) {D'};
+  \node[draw, fill=netred!25, minimum width=0.8cm, minimum height=0.6cm, right=0pt of d2] (e2) {EDC'};
+  \draw[very thick, decorate, decoration={snake, amplitude=1.5pt, segment length=8pt}, -{Stealth}] (e.east) -- node[above=3pt] {collegamento soggetto a errori} (d2.west);
+  \node[diamond, draw, aspect=2.5, fill=white, inner sep=1pt] (q) at (9.6,1.3) {D'+EDC' = D+EDC ?};
+  \draw[-{Stealth}] (d2.north) -- (q);
 \end{tikzpicture}
-\caption{TDMA: a turno, ciascuno con tutta la banda. FDMA: sempre, ciascuno con una fetta della banda.}
+\caption{Il ricevente usa EDC' per verificare se D' è integro.}
 \end{figure}
 
-FDMA e TDMA condividono pro e contro:
-
-\begin{itemize}
-    \item[\itick] \textbf{evitano le collisioni} e dividono la banda \textbf{equamente} tra gli $N$ nodi;
-    \item[\icross] un nodo è limitato a una banda di $R/N$ \textbf{anche quando è l'unico} ad avere pacchetti da inviare: capacità sprecata.
-\end{itemize}
-
-\subsection{CDMA}
-
-\dfn{CDMA (Code Division Multiple Access)}{
-    Il \textbf{CDMA} assegna a ogni nodo un \textbf{codice} diverso, con cui codifica e decodifica i bit che invia. Se i codici sono scelti con
-    cura, nelle reti CDMA più nodi possono trasmettere \textbf{contemporaneamente, sulle stesse frequenze}, senza interferire.
+\warning{Rilevato, non avvenuto}{
+    Il controllo va a buon fine: vuol dire che nessun bit si è invertito? \textbf{No}: vuol dire che nessun errore è stato
+    \textbf{rilevato}. Alcune combinazioni di inversioni lasciano i bit ridondanti perfettamente coerenti con i dati danneggiati. La
+    domanda a cui risponde un ricevente è sempre la prima, e le parole contano: gli errori si \textbf{rilevano}, non si osservano.
+    Uno schema più forte rende la probabilità più piccola, nessuno la rende zero; e la forza si paga: più bit da calcolare, più bit
+    da trasmettere, più circuiti per calcolarli.
 }
 
-\begin{esempio}{L'idea del CDMA}
-Siano $c_A = (+1, -1)$ e $c_B = (+1, +1)$ i codici di due stazioni: sono \textbf{ortogonali}, cioè il loro prodotto scalare è
-$c_A \cdot c_B = 1 - 1 = 0$, mentre $c_B \cdot c_B = 2$. Per trasmettere un bit, ogni stazione invia il proprio codice moltiplicato per
-$+1$ (bit 1) o $-1$ (bit 0). Sul canale i segnali si \textbf{sommano}.
-\begin{itemize}
-    \item A invia 1, B invia 1: sul canale arriva $c_A + c_B = (2, 0)$.
-    \item Il ricevente di B calcola $(c_A + c_B)\cdot c_B = c_A\cdot c_B + c_B \cdot c_B = 0 + 2 > 0$: B ha inviato \textbf{1}.
-    \item Il ricevente di A calcola $(c_A + c_B)\cdot c_A = 2 + 0 > 0$: anche A ha inviato \textbf{1}.
-\end{itemize}
-Il contributo dell'altra stazione si annulla grazie all'ortogonalità dei codici (v. Tanenbaum per i dettagli).
-\end{esempio}
+\subsection{Due strategie per lo stesso problema}
+
+Entrambe aggiungono ridondanza; differiscono in \textbf{quanta}.
 
 \begin{itemize}
-    \item Funziona soprattutto sui canali \textbf{senza fili}; è usato da tempo in ambito militare (per le sue proprietà anti-disturbo) e
-          nella telefonia cellulare (per esempio il 3G).
-    \item[\icross] È complesso da realizzare.
-    \item[\icross] Non scala bene con il numero di nodi.
+    \item I \textbf{codici a rilevazione d'errore} ne aggiungono abbastanza per sapere che qualcosa è sbagliato, e chiedere di nuovo.
+    \item I \textbf{codici a correzione d'errore} ne aggiungono abbastanza per ricostruire che cosa doveva essere stato inviato, e
+          ripararlo sul posto. Si parla di \textbf{FEC} (\emph{Forward Error Correction}): \emph{forward} perché nulla torna
+          indietro.
 \end{itemize}
 
-\info{Il segnale modulato}{
-    Sui canali radio i dati non viaggiano ``così come sono'': si trasmette un segnale in \textbf{banda base} (a bassa frequenza) modulando una
-    \textbf{frequenza portante} più alta. Il telefono analogico, per esempio, usa la banda 300--3400 Hz. FDMA e CDMA lavorano proprio sulle
-    frequenze portanti e sulla loro condivisione.
-}
+La scelta non riguarda quale sia più forte: riguarda \textbf{quanto costa una ritrasmissione} su quel particolare collegamento.
+
+\begin{itemize}
+    \item \textbf{Fibra, coassiale, doppino}: gli errori sono rari. Rilevarli e rimandare l'occasionale frame danneggiato costa meno
+          che portare bit di riparazione su ogni frame.
+    \item \textbf{Senza fili, vecchi doppini dell'ultimo miglio}: gli errori sono la norma, e una ritrasmissione ha la stessa
+          probabilità di essere danneggiata del primo tentativo.
+    \item Quindi su un canale rumoroso si ripara localmente, su uno pulito si chiede di nuovo: entrambe le strategie sono in uso, su
+          collegamenti a un metro di distanza.
+    \item Nessuna delle due gestisce tutto: il canale non tratta i bit di controllo diversamente dai bit di dati, per lui sono solo
+          bit. Il codice deve essere abbastanza forte per gli errori \textbf{attesi su quel collegamento}.
+\end{itemize}
 
 % ══════════════════════════════════════════════════════════════
-\section{Protocolli ad accesso casuale}
+\section{Il controllo di parità}
 % ══════════════════════════════════════════════════════════════
 
-\dfn{Accesso casuale}{
-    Nei protocolli ad \textbf{accesso casuale} un nodo che trasmette usa sempre \textbf{tutta la velocità} del canale ($R$ bit/s). Se avviene
-    una collisione (almeno due nodi trasmettono insieme), ogni nodo coinvolto \textbf{aspetta un ritardo casuale} prima di ritrasmettere.
+\dfn{Controllo di parità}{
+    Il \textbf{controllo di parità} è la forma più semplice di rilevazione: si aggiunge al messaggio \textbf{un solo bit di parità},
+    scelto in modo che il numero totale di 1 nei $d+1$ bit sia \textbf{pari} (schema a parità pari) o \textbf{dispari} (schema a parità
+    dispari).
 }
-
-Poiché la scelta del ritardo è fatta indipendentemente, è possibile che i due nodi scelgano ritardi abbastanza diversi da permettere a uno
-dei due di ``infilare'' il proprio messaggio. Se invece scelgono ritardi simili, avviene una nuova collisione e il processo si ripete.
-
-\subsection{ALOHA puro}
-
-Il primo protocollo ad accesso casuale nacque alle Hawaii (ALOHAnet, anni '70), per collegare le isole via radio:
-
-\begin{itemize}
-    \item ogni stazione trasmette \textbf{appena ha un frame} da inviare;
-    \item una stazione centrale ripete ogni frame ricevuto: se non ci sono collisioni, ogni stazione riceve indietro il frame che ha appena
-          trasmesso, e capisce così se è arrivato;
-    \item in caso di collisione si attende un tempo di lunghezza casuale e si ritrasmette.
-\end{itemize}
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
-  \foreach \y/\n in {0/A, -0.7/B, -1.4/C} { \node[anchor=east] at (-0.2,\y) {\n}; \draw[black!30] (0,\y) -- (11,\y); }
-  \draw[-{Stealth}] (0,-1.9) -- (11,-1.9) node[right] {tempo};
-  \fill[netblue!40] (0.5,-0.2) rectangle (2.5,0.2);
-  \fill[netred!40] (2.0,-0.9) rectangle (4.0,-0.5); \fill[netred!40] (3.4,-1.6) rectangle (5.4,-1.2);
-  \fill[netblue!40] (5.8,-0.2) rectangle (7.8,0.2); \fill[netblue!40] (8.4,-0.9) rectangle (10.4,-0.5);
-  \draw[netred, very thick] (2.0,-1.05) -- (5.4,-1.05);
-  \node[text=netred] at (3.7,-2.25) {B e C si sovrappongono (e B anche con A): collisioni};
-  \draw[dashed] (2,0.4) -- (2,-1.9); \draw[dashed] (2.5,0.4) -- (2.5,-1.9);
-\end{tikzpicture}
-\caption{ALOHA puro: basta che due frame si sovrappongano anche in parte perché entrambi vadano persi.}
-\end{figure}
-
-\subsection{Slotted ALOHA}
-
-\dfn{Slotted ALOHA}{
-    \begin{itemize}
-      \item Il tempo è diviso in \textbf{slot} (come in TDMA), ciascuno grande abbastanza da contenere un frame.
-      \item I nodi sono \textbf{sincronizzati}: ogni nodo trasmette frame solo \textbf{all'inizio} di uno slot.
-      \item Se nello slot non c'è collisione, la comunicazione prosegue.
-      \item Se c'è una collisione, ogni nodo coinvolto ritrasmette il frame in ciascuno degli slot successivi \textbf{con probabilità
-            $p \in [0,1]$} (``lancia una moneta''), finché il frame non viene inviato con successo.
-    \end{itemize}
-}
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
-  \foreach \x in {0,1.5,...,9} \draw[dashed, black!30] (\x,0.6) -- (\x,-1.6);
-  \node[anchor=east] at (-0.2,0) {nodo 1}; \node[anchor=east] at (-0.2,-1) {nodo 2};
-  \draw[-{Stealth}] (0,-1.6) -- (9.3,-1.6) node[right] {tempo};
-  \fill[netred!40] (0,-0.2) rectangle (1.5,0.2); \fill[netred!40] (0,-1.2) rectangle (1.5,-0.8);
-  \node[text=netred] at (0.75,-0.5) {collisione};
-  \node at (2.25,0) {non invia}; \node at (2.25,-1) {non invia};
-  \fill[netred!40] (3,-0.2) rectangle (4.5,0.2); \fill[netred!40] (3,-1.2) rectangle (4.5,-0.8);
-  \node[text=netred] at (3.75,-0.5) {collisione};
-  \fill[netgreen!40] (4.5,-0.2) rectangle (6,0.2); \node at (5.25,0) {invia};
-  \node at (5.25,-1) {non invia};
-  \fill[netgreen!40] (7.5,-1.2) rectangle (9,-0.8); \node at (8.25,-1) {invia};
-  \node[text=netgreen!50!black] at (5.25,0.45) {successo}; \node[text=netgreen!50!black] at (8.25,-0.55) {successo};
-\end{tikzpicture}
-\caption{Slotted ALOHA: dopo una collisione, in ogni slot ciascun nodo ritrasmette con probabilità $p$.}
-\end{figure}
-
-\begin{itemize}
-    \item[\itick] Se c'è un solo nodo, usa tutta la velocità $R$ del canale (niente collisioni).
-    \item[\itick] È \textbf{decentralizzato}: i nodi sono del tutto indipendenti tra loro, a parte la sincronizzazione.
-    \item[\itick] È \textbf{semplice} da realizzare ed eseguire (la scelta casuale è velocissima).
-    \item[\itick] Più collisioni consecutive sono improbabili.
-\end{itemize}
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}
-  \begin{axis}[width=10cm, height=5cm, xlabel={$G$ (tentativi per slot, cioè per tempo di frame)}, ylabel={$S$ (throughput per frame)},
-      xmin=0, xmax=3, ymin=0, ymax=0.42, grid=major, grid style={gray!20}, legend pos=north east,
-      legend style={font=\scriptsize\sffamily}, tick label style={font=\scriptsize}, label style={font=\footnotesize\sffamily}]
-    \addplot[very thick, netblue, domain=0:3, samples=80] {x*exp(-x)}; \addlegendentry{slotted ALOHA: $S = Ge^{-G}$}
-    \addplot[very thick, netred, domain=0:3, samples=80] {x*exp(-2*x)}; \addlegendentry{ALOHA puro: $S = Ge^{-2G}$}
-    \addplot[only marks, mark=*, netblue] coordinates {(1,0.368)}; \addplot[only marks, mark=*, netred] coordinates {(0.5,0.184)};
-  \end{axis}
-\end{tikzpicture}
-\caption{Throughput di ALOHA: al meglio lo slotted ALOHA usa il canale per il 37\% del tempo ($1/e$), l'ALOHA puro solo il 18\% ($1/2e$).}
-\end{figure}
-
-\subsection{CSMA e CSMA/CD}
-
-Un punto debole di ALOHA è che si può cominciare a trasmettere (producendo una collisione) anche se il canale \textbf{è già occupato}: ce
-ne accorgiamo solo dall'effetto delle collisioni. La soluzione è \textbf{ascoltare} il canale e tentare di trasmettere solo se è libero.
-
-\dfn{CSMA e CSMA/CD}{
-    I protocolli \textbf{CSMA} (\emph{Carrier Sense Multiple Access}) e \textbf{CSMA/CD} (CSMA con \emph{Collision Detection}) si basano su
-    due principi:
-    \begin{itemize}
-      \item \textbf{carrier sensing}: i nodi ascoltano il canale \textbf{prima} di trasmettere. Se un altro nodo sta trasmettendo un frame,
-            aspettano che la trasmissione finisca;
-      \item \textbf{collision detection}: i nodi ascoltano il canale \textbf{mentre} trasmettono. Se rilevano una collisione, smettono di
-            trasmettere e aspettano un tempo casuale prima di riprovare.
-    \end{itemize}
-}
-
-Ma se tutti i nodi ascoltano prima di trasmettere, perché avvengono comunque collisioni? Per il \textbf{ritardo di propagazione} del
-segnale.
-
-\begin{figure}[H]
-\centering
-\begin{minipage}{0.34\linewidth}\centering
-  \includegraphics[width=0.9\linewidth]{cap19/csma_ritardo.png}
-\end{minipage}\hfill
-\begin{minipage}{0.62\linewidth}
-\begin{itemize}
-  \item Anche se la propagazione è vicina alla velocità della luce, il segnale impiega del \textbf{tempo} per raggiungere gli altri nodi.
-  \item Nella figura (spazio in orizzontale, tempo verso il basso) B comincia a trasmettere al tempo $t_0$ e il segnale si propaga in entrambe
-        le direzioni. Al tempo $t_1$ D non ha ancora ricevuto il segnale di B, ascolta, trova il canale libero e \textbf{inizia a trasmettere}.
-  \item Poco dopo i due segnali si incontrano: collisione. D se ne accorge solo quando riceve il segnale di B.
-\end{itemize}
-Per questo ritardo tra inizio della trasmissione e rilevazione, un nodo può considerare libero un canale che in realtà è già in uso.
-\end{minipage}
-\caption{Collisione in CSMA dovuta al ritardo di propagazione (da Kurose).}
-\end{figure}
-
-\subsubsection*{CSMA puro}
-
-\begin{enumerate}
-    \item Controlla se il canale è occupato.
-    \item Se il canale è libero, invia un frame.
-\end{enumerate}
-
-In CSMA puro le collisioni \textbf{non vengono rilevate}, anche se sono possibili: si capisce che un frame è andato perso solo perché
-\textbf{non arriva l'ACK}.
-
-\info{Varianti di CSMA}{
-    Cosa fare se il canale è occupato? Nel \textbf{CSMA 1-persistente} si aspetta che si liberi e si trasmette subito (con probabilità 1);
-    nel \textbf{non persistente} si attende un tempo casuale e si riascolta; nel \textbf{$p$-persistente} (su canali a slot), quando il canale è
-    libero si trasmette con probabilità $p$ e si rimanda allo slot successivo con probabilità $1-p$.
-}
-
-\subsubsection*{CSMA/CD}
-
-Il \textbf{CSMA/CD}, più sofisticato, è quello implementato in \textbf{Ethernet}:
-
-\begin{enumerate}
-    \item controlla se il canale è occupato;
-    \item se il canale è libero, invia un frame;
-    \item \textbf{durante la trasmissione} controlla eventuali collisioni;
-    \item se rileva una collisione, \textbf{smette subito} di trasmettere e attende un periodo casuale $K \cdot$ (tempo di slot), con
-          $K \in \{0, 1, \dots, 2^n - 1\}$, dove $n$ è il numero di collisioni già rilevate per quel frame (\textbf{binary exponential backoff}).
-\end{enumerate}
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
-  \draw[-{Stealth}] (0,0) -- (13,0) node[right] {tempo};
-  \fill[netblue!40] (0.2,0.1) rectangle (3,0.7); \node at (1.6,0.4) {frame};
-  \fill[netred!30] (3.3,0.1) rectangle (3.8,0.7); \fill[netred!30] (4.0,0.1) rectangle (4.5,0.7); \fill[netred!30] (4.7,0.1) rectangle (5.2,0.7);
-  \draw[decorate, decoration={brace, amplitude=4pt}] (3.3,0.8) -- (5.2,0.8) node[midway, above=4pt, align=center] {periodo di contesa:\\collisioni brevi, interrotte};
-  \fill[netblue!40] (5.5,0.1) rectangle (8.3,0.7); \node at (6.9,0.4) {frame};
-  \fill[black!10] (8.5,0.1) rectangle (10,0.7); \node at (9.25,0.4) {inattivo};
-  \fill[netblue!40] (10.2,0.1) rectangle (12.8,0.7); \node at (11.5,0.4) {frame};
-\end{tikzpicture}
-\caption{Con la collision detection le collisioni durano pochissimo: le stazioni smettono appena se ne accorgono, e il canale torna disponibile.}
-\end{figure}
-
-\begin{esempio}{Il binary exponential backoff}
-\begin{itemize}
-    \item Dopo la \textbf{1\textsuperscript{a}} collisione: $K \in \{0, 1\}$.
-    \item Dopo la \textbf{2\textsuperscript{a}}: $K \in \{0, 1, 2, 3\}$.
-    \item Dopo la \textbf{3\textsuperscript{a}}: $K \in \{0, \dots, 7\}$; dopo la $n$-esima: $K \in \{0, \dots, 2^n - 1\}$ (in Ethernet $n$ si ferma a 10).
-\end{itemize}
-Se due stazioni collidono una prima volta, con probabilità 1/2 scelgono lo stesso $K$ e collidono di nuovo; alla seconda la probabilità scende
-a 1/4, poi a 1/8. La probabilità di riuscire a inviare il frame \textbf{cresce con il numero di collisioni}, adattando l'attesa al carico: con
-poche stazioni le attese sono brevi, con molte si allungano.
-\end{esempio}
-
-\warning{La lunghezza minima dei frame in Ethernet}{
-    Perché la collision detection funzioni, una stazione deve essere \textbf{ancora in trasmissione} quando le arriva il segnale della collisione.
-    Sia $\tau$ il tempo di propagazione tra le due stazioni più lontane. Nel caso peggiore A inizia al tempo 0, e il suo segnale arriva a B al tempo
-    $\tau - \varepsilon$, un attimo dopo che B ha iniziato a trasmettere; B rileva subito la collisione, ma il ``rumore'' della collisione torna ad
-    A solo al tempo $2\tau - \varepsilon$. Quindi il tempo di trasmissione di un frame deve essere di almeno $2\tau$: per questo Ethernet ha un
-    campo \textbf{pad} che allunga artificialmente i frame troppo corti (dati da almeno 46 byte).
-    \begin{center}
-    \begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
-      \node[draw, minimum size=0.5cm] (A) at (0,0) {A}; \node[draw, minimum size=0.5cm] (B) at (6,0) {B};
-      \draw[thick] (A) -- (B);
-      \draw[-{Stealth}, netblue, thick] (0.4,-0.4) -- node[below] {$t = 0$: A inizia} (5.6,-0.4);
-      \draw[-{Stealth}, netred, thick] (5.6,-1.1) -- node[below] {$t = \tau - \varepsilon$: B inizia e collide; il rumore torna ad A a $2\tau - \varepsilon$} (0.4,-1.1);
-    \end{tikzpicture}
-    \end{center}
-}
-
-% ══════════════════════════════════════════════════════════════
-\section{Protocolli a turni}
-% ══════════════════════════════════════════════════════════════
-
-\subsection{Polling}
-
-\dfn{Protocollo di polling}{
-    C'è un nodo \textbf{master} che, a turno (\emph{round-robin}), seleziona un nodo alla volta a cui permettere di trasmettere (fino a una
-    quantità massima). Il processo si ripete ogni volta che la trasmissione termina. È il caso di Bluetooth.
-}
-
-\begin{itemize}
-    \item[\itick] Non ci sono collisioni.
-    \item[\icross] C'è un \textbf{ritardo di polling} (il tempo per selezionare i nodi).
-    \item[\icross] L'approccio è \textbf{centralizzato}: il master è un single point of failure.
-\end{itemize}
-
-\subsection{Token passing}
-
-\dfn{Protocollo a passaggio di token}{
-    Non c'è un master: i nodi si scambiano uno speciale frame detto \textbf{token} (gettone). Chi riceve il token \textbf{può} (ma non deve)
-    trasmettere, poi passa il token al nodo successivo.
-}
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
-  \draw[thick, netblue] (0,0) circle (1.8cm);
-  \foreach \a [count=\i] in {90,30,-30,-90,-150,150} {
-    \node[draw, fill=white, minimum size=0.5cm] at (\a:1.8) {\i};
-  }
-  \draw[-{Stealth}, very thick, netred] (75:1.25) arc (75:40:1.25);
-  \fill[netorange] (57:1.25) circle (4pt); \node[text=netorange] at (57:0.8) {token};
-  \node[text width=6.5cm, anchor=west] at (2.8,0) {La stazione che ha il token, passato lungo l'anello, può trasmettere. Anche i frame di dati viaggiano sull'anello da una stazione alla successiva. L'anello può essere solo \textbf{logico}: a livello fisico le stazioni possono essere collegate a un bus, ma a livello logico c'è sempre il passaggio del token.};
-\end{tikzpicture}
-\caption{Token ring: il gettone circola e dà il diritto di trasmettere.}
-\end{figure}
-
-\begin{itemize}
-    \item[\itick] Non ci sono collisioni.
-    \item[\itick] L'approccio è \textbf{decentralizzato}.
-    \item[\icross] Ci sono problemi se un nodo \textbf{dimentica di rilasciare} il token, monopolizzando il collegamento, o se il token si perde. I
-          protocolli di rilascio hanno diverse varianti, ma è importante che esista un modo per \textbf{recuperare un token perso o bloccato} (per
-          esempio se una stazione smette di funzionare mentre lo custodisce).
-\end{itemize}
 
 \begin{table}[H]
 \centering
-\begin{tabular}{p{3.3cm}p{3.6cm}p{3.6cm}p{3.6cm}}
+\begin{tabular}{lcc}
 \toprule
- & \textbf{Partizionamento} & \textbf{Accesso casuale} & \textbf{A turni} \\
+\textbf{Messaggio} & \textbf{Bit di parità (pari)} & \textbf{Bit di parità (dispari)} \\
 \midrule
-Esempi & TDMA, FDMA, CDMA & ALOHA, CSMA, CSMA/CD & polling, token passing \\
-Collisioni & no & sì, gestite & no \\
-Carico basso & spreco (banda fissa $R/N$) & ottimo (tutta la banda) & buono \\
-Carico alto & ottimo, equo & molte collisioni & buono \\
-Punto debole & banda inutilizzata & collisioni & master o token \\
+\texttt{10101100} (quattro 1) & 0 & 1 \\
+\texttt{11010000} (tre 1) & 1 & 0 \\
 \bottomrule
 \end{tabular}
-\caption{Le tre famiglie di protocolli ad accesso multiplo.}
+\caption{Bit di parità pari e dispari.}
 \end{table}
 
-% ══════════════════════════════════════════════════════════════
-\section{Terminali nascosti ed esposti}
-% ══════════════════════════════════════════════════════════════
+Equivalentemente, con la parità pari il bit di parità è lo \textbf{XOR di tutti i bit di dati}: un solo bit di overhead, per
+quanto lungo sia il messaggio. Il ricevente deve solo contare gli 1 nei $d+1$ bit ricevuti: se con uno schema pari trova un numero
+dispari di 1 (o viceversa), sa che si è verificato \textbf{almeno un errore}. Non gli serve memoria di ciò che è stato inviato, né una
+seconda copia con cui confrontare: conta, e il conteggio o rispetta la convenzione o no. Per questo basta un bit di hardware, alla
+velocità a cui arrivano i bit.
 
-Nelle reti \textbf{senza fili} il carrier sensing non basta: un nodo sente solo le stazioni nel proprio \textbf{raggio radio}, e ciò che conta è
-l'interferenza \textbf{presso il ricevente}, non presso il mittente.
+\begin{esempio}{Un errore rilevato e uno no}
+Si invia \texttt{10101100} con parità pari: \texttt{10101100 0}.
+\begin{itemize}
+    \item Si riceve \texttt{1010\textcolor{netred}{0}100 0}: tre 1, numero dispari $\Rightarrow$ \textbf{errore rilevato}.
+    \item Si riceve \texttt{1010\textcolor{netred}{0}10\textcolor{netred}{1} 0}: quattro 1, numero pari $\Rightarrow$ due errori, \textbf{non rilevati}.
+\end{itemize}
+\end{esempio}
+
+Se si invertono due bit dello stesso frame, il numero di 1 cambia di due e la sua parità non cambia affatto: il conteggio torna,
+il frame è accettato e il danno passa al livello superiore. La parità singola rileva un numero \textbf{dispari} di inversioni, e
+nient'altro: due, quattro, sei sono invisibili. Nel linguaggio di fine capitolo, è un codice di \textbf{distanza due}.
+
+\warning{Gli errori arrivano a raffica}{
+    Quanto è probabile un numero pari di errori? Se le inversioni fossero rare e indipendenti, più di una nello stesso frame sarebbe
+    così improbabile che un bit di parità basterebbe. Ma nelle reti non è così: gli errori sono spesso \textbf{raggruppati a raffica}
+    (\emph{burst}), cioè sequenze in cui il primo e l'ultimo bit sono sbagliati e quelli in mezzo sono un misto di bit sbagliati e
+    corretti. La causa fisica dura più di un tempo di bit: un affievolimento su un canale radio, un transitorio su una linea in rame,
+    un graffio su un disco. In condizioni di burst la probabilità che la parità singola non veda il danno si avvicina al
+    \textbf{50\%}: non è davvero utile.
+}
+
+C'è anche un rovescio della medaglia. Con blocchi di 1000 bit e un errore ogni mille bit, errori indipendenti danneggiano
+\textbf{la maggior parte} dei blocchi; raffiche di cento errori ne danneggiano \textbf{uno su cento}.
+
+\begin{esempio}{Eppure un bit di parità costa poco}
+Prendiamo un cavo abbastanza buono da invertire un bit su un milione, e blocchi di mille bit.
+\begin{itemize}
+    \item Per \textbf{correggere} un errore singolo servono circa dieci bit di controllo per blocco: \textbf{diecimila} bit per
+          megabit di dati.
+    \item Per \textbf{accorgersene} basta un bit per blocco, mille per megabit; un blocco su mille risulta sbagliato e viene
+          rimandato, al costo di 1001 bit. In tutto circa \textbf{duemila} bit.
+\end{itemize}
+Duemila contro diecimila: su un collegamento buono rilevazione e ritrasmissione vincono. Su un collegamento cattivo l'aritmetica
+si rovescia, perché le ritrasmissioni si moltiplicano e ciascuna può fallire a sua volta.
+\end{esempio}
+
+\subsection{Calcolare la parità in un ordine diverso}
+
+L'idea è calcolare i bit di controllo sui dati in un ordine \textbf{diverso} da quello in cui i bit escono sulla linea. Si
+dispongono i dati in righe, si invia riga dopo riga, ma si calcola una parità \textbf{per colonna}.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
-  \begin{scope}
-    \node[font=\footnotesize\bfseries\sffamily] at (1.9,1.9) {Terminale nascosto};
-    \draw[netgreen!60!black, thick] (1.1,0) circle (1.3cm); \draw[netgreen!60!black, thick] (2.7,0) circle (1.3cm);
-    \foreach \x/\n in {0/A, 1.9/B, 3.8/C} \node[draw, fill=white, minimum size=0.5cm] (\n) at (\x,0) {\n};
-    \draw[-{Stealth}, very thick, netblue] (A) -- (B); \draw[-{Stealth}, very thick, netred] (C) -- (B);
-    \node[text width=4cm, align=center] at (1.9,-1.8) {A e C non si sentono: entrambi trasmettono a B e collidono presso B};
-  \end{scope}
-  \begin{scope}[xshift=7.5cm]
-    \node[font=\footnotesize\bfseries\sffamily] at (2.1,1.9) {Terminale esposto};
-    \draw[netgreen!60!black, thick] (1.4,0) circle (1.3cm); \draw[netgreen!60!black, thick] (2.8,0) circle (1.3cm);
-    \foreach \x/\n in {0/A, 1.4/B, 2.8/C, 4.2/D} \node[draw, fill=white, minimum size=0.5cm] (\n) at (\x,0) {\n};
-    \draw[-{Stealth}, very thick, netblue] (B) -- (A); \draw[-{Stealth}, very thick, dashed, netred] (C) -- (D);
-    \node[text width=4.4cm, align=center] at (2.1,-1.8) {C sente B e rinuncia a trasmettere a D, anche se non disturberebbe nessuno};
-  \end{scope}
+\begin{tikzpicture}[every node/.style={font=\small\ttfamily}, c/.style={draw, minimum size=0.5cm, inner sep=0pt}]
+  \foreach \r [count=\i] in {{1,0,0,1,1,1,0},{1,1,0,0,1,0,1},{1,1,1,0,1,0,0},{1,1,1,0,1,1,1}} {
+    \node[font=\scriptsize\sffamily, anchor=east] at (0.15,-\i*0.5) {riga \i};
+    \foreach \v [count=\j] in \r \node[c] (c\i\j) at (\j*0.5+0.3,-\i*0.5) {\v};
+  }
+  \foreach \v [count=\j] in {0,1,0,1,0,0,0} \node[c, fill=llink!60] at (\j*0.5+0.3,-2.75) {\v};
+  \node[font=\scriptsize\sffamily, anchor=east] at (0.15,-2.75) {parità};
+  \foreach \j in {1,2,5,6,7} \node[text=netred, font=\small\bfseries\sffamily] at (\j*0.5+0.3,-3.3) {$\times$};
+  \draw[netred, very thick, rounded corners=2pt] (2.55,-1.27) rectangle (4.05,-0.73);
+  \draw[netred, very thick, rounded corners=2pt] (0.55,-1.77) rectangle (1.55,-1.23);
+  \node[font=\scriptsize\sffamily, text width=5.2cm, align=left, anchor=west] at (4.6,-1.4) {si invia riga dopo riga: una raffica di cinque bit consecutivi (in rosso, a cavallo tra la riga 2 e la riga 3) tocca un bit in ciascuna di cinque colonne diverse, e tutte e cinque le parità di colonna falliscono};
 \end{tikzpicture}
-\caption{I cerchi indicano il raggio radio di B e C.}
+\caption{La parità per colonne cattura una raffica che attraversa le righe.}
+\end{figure}
+
+Una raffica che copre fino a $n$ bit trasmessi (con $n$ colonne) tocca \textbf{al più un bit per colonna}, e ogni colonna toccata fallisce
+la propria parità. La parità non è diventata più forte: lo è diventata la \textbf{disposizione}. Un codice pensato per errori isolati
+ora cattura le raffiche (la tecnica si chiama \textbf{interleaving}).
+
+\subsection{La parità bidimensionale}
+
+\dfn{Parità bidimensionale}{
+    Nella \textbf{parità bidimensionale} i $d$ bit del messaggio vengono disposti in $i$ righe e $j$ colonne, e a \textbf{ogni riga} e
+    \textbf{ogni colonna} si associa un bit di parità: $i + j + 1$ bit di controllo in tutto (l'ultimo, all'angolo, è la parità delle
+    parità).
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\small\ttfamily}, c/.style={draw, minimum size=0.5cm, inner sep=0pt}]
+  \def\tabella#1#2#3{
+    \begin{scope}[shift={#1}]
+      \foreach \r [count=\i] in {#2} {
+        \foreach \v [count=\j] in \r {
+          \pgfmathsetmacro{\fillc}{(\i==5 || \j==6) ? "llink!60" : "white"}
+          \node[c, fill=\fillc] (c\i\j) at (\j*0.5,-\i*0.5) {\v};
+        }
+      }
+      #3
+    \end{scope}
+  }
+  \node[font=\footnotesize\bfseries\sffamily] at (1.75,0.2) {senza errori};
+  \tabella{(0,0)}{{1,0,1,0,1,1},{1,1,1,1,0,0},{0,1,1,1,0,1},{0,0,1,0,1,0},{0,0,0,0,0,0}}{}
+  \node[font=\footnotesize\bfseries\sffamily] at (5.75,0.2) {un errore};
+  \tabella{(4,0)}{{1,0,1,0,1,1},{1,0,1,1,0,0},{0,1,1,1,0,1},{0,0,1,0,1,0},{0,0,0,0,0,0}}{
+     \draw[netred, very thick] (0.25,-1.25) rectangle (3.25,-0.75);
+     \draw[netred, very thick] (0.75,-0.25) rectangle (1.25,-2.75);
+     \node[circle, draw=netred, very thick, minimum size=0.55cm] at (1,-1) {};
+  }
+  \node[font=\footnotesize\bfseries\sffamily] at (9.75,0.2) {due errori};
+  \tabella{(8,0)}{{1,0,1,0,1,1},{1,0,1,1,1,0},{0,1,1,1,0,1},{0,0,1,0,1,0},{0,0,0,0,0,0}}{
+     \draw[netred, very thick] (0.75,-0.25) rectangle (1.25,-2.75);
+     \draw[netred, very thick] (2.25,-0.25) rectangle (2.75,-2.75);
+  }
+  \node[font=\scriptsize\sffamily, text width=3cm, align=center] at (1.75,-3.2) {in giallo i bit di parità (pari)};
+  \node[font=\scriptsize\sffamily, text width=3.4cm, align=center] at (5.75,-3.2) {riga 2 e colonna 2 sbagliate: il bit all'incrocio è quello errato e si può correggere};
+  \node[font=\scriptsize\sffamily, text width=3.4cm, align=center] at (9.75,-3.2) {due colonne sbagliate, righe corrette: errore rilevato ma non correggibile};
+\end{tikzpicture}
+\caption{Parità bidimensionale: dati $4 \times 5$ bit, con parità di riga (ultima colonna) e di colonna (ultima riga).}
 \end{figure}
 
 \begin{itemize}
-    \item \textbf{Terminali nascosti}: mittenti che non riescono a sentirsi a vicenda ma collidono comunque presso il ricevente. A e C trasmettono
-          entrambi a B; poiché A non sente C, il carrier sensing di A dice ``libero'', e i frame collidono in B. Si vuole evitare questa perdita di efficienza.
-    \item \textbf{Terminali esposti}: mittenti che si sentono a vicenda ma potrebbero comunque trasmettere senza problemi a riceventi diversi. B
-          trasmette ad A; C sente B e rimanda la propria trasmissione verso D, anche se D è fuori dalla portata di B. Si vorrebbe permettere questa
-          contemporaneità, che migliora le prestazioni.
+    \item Un bit invertito rompe \textbf{esattamente una riga} ed \textbf{esattamente una colonna}, e l'incrocio delle due nomina il bit
+          sbagliato. Nominarlo basta per rimetterlo a posto: la rilevazione è diventata \textbf{correzione}, senza rimandare indietro
+          alcun messaggio.
+    \item Se invece si invertono due bit della \textbf{stessa riga}, la parità di riga non cambia (le due inversioni si annullano) e
+          protestano solo le due colonne: si sa che il frame è danneggiato, ma nessun bit può essere nominato.
+    \item La parità bidimensionale \textbf{rileva} quindi qualsiasi combinazione di \textbf{due errori}, ma ne \textbf{corregge} uno
+          solo. La distanza tra i due verbi è l'argomento della fine del capitolo.
 \end{itemize}
 
-\subsection{MACA}
+\subsection{La correzione in avanti}
 
-\dfn{MACA (Multiple Access with Collision Avoidance)}{
-    Il protocollo \textbf{MACA} concede l'accesso al canale con un breve scambio preliminare:
-    \begin{enumerate}
-      \item il mittente A invia un breve frame \textbf{RTS} (\emph{Request To Send}) a B, indicando la lunghezza del frame da inviare;
-      \item il ricevente B risponde con un frame \textbf{CTS} (\emph{Clear To Send}), anch'esso con la lunghezza;
-      \item A trasmette il frame.
-    \end{enumerate}
-    Chi sente l'RTS resta in silenzio per il tempo del CTS; chi sente il CTS resta in silenzio per tutta la durata del frame.
+Riparare al ricevente ha un nome, \textbf{FEC}: il frame viene usato così come è arrivato, e nulla viene richiesto di nuovo. Il
+guadagno non sono i bit risparmiati, ma il \textbf{round trip non atteso}, e su alcuni collegamenti quell'attesa è tutto il problema:
+
+\begin{itemize}
+    \item audio e video in tempo reale, dove un dato in ritardo è peggio di un dato sbagliato;
+    \item collegamenti con lo spazio profondo, dove un round trip si misura in \textbf{minuti};
+    \item dischi ottici, dove il danno è un graffio e non c'è nessuno a cui chiedere una seconda copia.
+\end{itemize}
+
+La FEC si combina anche con la ritrasmissione: si ripara ciò che si può riparare, e si chiede di nuovo il resto.
+
+% ══════════════════════════════════════════════════════════════
+\section{I checksum}
+% ══════════════════════════════════════════════════════════════
+
+La seconda famiglia di tecniche legge i dati come una sequenza di interi di $k$ bit e li \textbf{somma}. Ne abbiamo già incontrata una
+al livello di trasporto: parole di 16 bit, complemento a uno della somma, nell'header del segmento.
+
+\begin{itemize}
+    \item È \textbf{economica e debole}: una somma non si accorge di parole \textbf{scambiate di posto}, di zeri aggiunti o tolti, di
+          due pacchetti incollati insieme, ed è proprio questo che produce un hardware difettoso.
+    \item La variante di \textbf{Fletcher} somma ogni parola moltiplicata per la sua posizione, così spostare una parola cambia il
+          risultato.
+    \item Resta comunque una somma, e il livello di collegamento vuole qualcosa di meglio.
+\end{itemize}
+
+\info{Una somma sopra, una divisione qui}{
+    Perché il trasporto somma, mentre il collegamento divide, su dati in gran parte uguali? Il trasporto gira \textbf{in software},
+    nel sistema operativo, sulla CPU dell'host: qualunque cosa calcoli, la calcola su ogni segmento di ogni connessione. Il controllo
+    di collegamento gira \textbf{nell'adattatore}, in circuiti dedicati, su un frame alla volta e alla velocità del filo. Una divisione
+    lì non costa quasi nulla, mentre in un ciclo del kernel costa moltissimo. La forza di un controllo segue \textbf{dove viene
+    calcolato}, non quanto siano preziosi i dati.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il CRC}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Cyclic Redundancy Check (CRC)}{
+    Il \textbf{CRC} è una tecnica di rilevazione degli errori molto diffusa.
+    \begin{itemize}
+      \item Per inviare $d$ bit di dati $D$, mittente e ricevente concordano una sequenza di $r+1$ bit detta \textbf{generatore} $G$,
+            con il bit più significativo (a sinistra) uguale a 1.
+      \item Per ogni $D$ il mittente sceglie $r$ bit aggiuntivi, i \textbf{bit CRC} ($R$), da accodare al messaggio, in modo che il
+            messaggio $M$ (cioè $D$ seguito da $R$) sia \textbf{divisibile modulo 2 per $G$} (resto = 0).
+      \item Il ricevente divide il messaggio ricevuto per $G$: se il resto è zero il messaggio è corretto, altrimenti c'è un errore.
+    \end{itemize}
+    La divisione si esegue allineando $G$ sotto il primo bit a 1 del messaggio e facendo lo \textbf{XOR} bit a bit.
+}
+
+\subsection{L'aritmetica modulo 2}
+
+Nel CRC le stringhe di bit sono interpretate come \textbf{polinomi a coefficienti binari}: \texttt{1011} è $x^3 + x + 1$. L'aritmetica
+è modulo 2 senza riporti né prestiti: \textbf{somma e sottrazione coincidono con lo XOR}.
+
+\begin{center}
+\begin{tabular}{cc|c}
+\toprule
+$x$ & $y$ & $x \oplus y$ \\
+\midrule
+0 & 0 & 0 \\ 0 & 1 & 1 \\ 1 & 0 & 1 \\ 1 & 1 & 0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\info{Perché funziona (con i polinomi)}{
+    Accodare $r$ zeri a $D$ equivale a moltiplicare $D(x)$ per $x^r$. Dividendo per il generatore si ottiene
+    $$x^r D(x) = Q(x)\,G(x) + R(x)$$
+    dove $Q$ è il quoziente e $R$ il resto (di grado minore di $r$). Allora il messaggio trasmesso
+    $$M(x) = x^r D(x) - R(x) = x^r D(x) + R(x) = Q(x)\,G(x)$$
+    è \textbf{divisibile per $G(x)$}. In binario, $M$ è semplicemente $D$ seguito dagli $r$ bit di $R$. Se durante la trasmissione si
+    aggiunge un errore $E(x)$, il ricevente trova resto $\neq 0$ a meno che anche $E(x)$ sia divisibile per $G(x)$, cosa che un buon
+    generatore rende molto improbabile.
+}
+
+\subsection{Un esempio completo}
+
+Messaggio di 6 bit con CRC di 3 bit: $d = 6$, $D = \texttt{101110}$, $r = 3$, $G = \texttt{1001}$.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.47\linewidth}
+\centering\textbf{\small Mittente: calcolo del CRC}\\[4pt]
+\begin{tabular}{r@{\,}l}
+\multicolumn{2}{l}{\small $D$ con $r=3$ zeri: \texttt{101110\textcolor{netred}{000}}} \\[3pt]
+& \texttt{\textbf{1}01110000} \\
+XOR & \texttt{1001\phantom{00000}} \\ \cline{2-2}
+& \texttt{00\textbf{1}01000\phantom{0}}\\[-2pt]
+& \texttt{\phantom{00}101000\phantom{0}} \\
+XOR & \texttt{\phantom{00}1001\phantom{000}} \\ \cline{2-2}
+& \texttt{\phantom{00}00\textbf{1}100\phantom{0}} \\
+XOR & \texttt{\phantom{0000}1001\phantom{0}} \\ \cline{2-2}
+& \texttt{\phantom{0000}0\textbf{1}010} \\
+XOR & \texttt{\phantom{00000}1001} \\ \cline{2-2}
+& \texttt{\phantom{00000}0\textcolor{netred}{\textbf{011}}} \\
+\end{tabular}\\[4pt]
+{\small gli ultimi $r$ bit del resto sono il CRC: \textcolor{netred}{\texttt{011}}}
+\end{minipage}\hfill
+\begin{minipage}{0.47\linewidth}
+\centering\textbf{\small Ricevente: verifica}\\[4pt]
+\begin{tabular}{r@{\,}l}
+\multicolumn{2}{l}{\small ricevuto $D$ + CRC: \texttt{101110\textcolor{netred}{011}}} \\[3pt]
+& \texttt{\textbf{1}01110011} \\
+XOR & \texttt{1001\phantom{00000}} \\ \cline{2-2}
+& \texttt{00\textbf{1}01001\phantom{0}}\\[-2pt]
+& \texttt{\phantom{00}101001\phantom{0}} \\
+XOR & \texttt{\phantom{00}1001\phantom{000}} \\ \cline{2-2}
+& \texttt{\phantom{00}00\textbf{1}101\phantom{0}} \\
+XOR & \texttt{\phantom{0000}1001\phantom{0}} \\ \cline{2-2}
+& \texttt{\phantom{0000}0\textbf{1}001} \\
+XOR & \texttt{\phantom{00000}1001} \\ \cline{2-2}
+& \texttt{\phantom{00000}0\textcolor{netgreen!60!black}{\textbf{000}}} \\
+\end{tabular}\\[4pt]
+{\small resto 0: il messaggio è integro}
+\end{minipage}
+\caption{Calcolo e verifica del CRC con $G = \texttt{1001}$: a ogni passo $G$ si allinea con il primo 1 rimasto.}
+\end{figure}
+
+\begin{enumerate}
+    \item Il mittente accoda $r = 3$ zeri a $D$: \texttt{101110000}.
+    \item Divide modulo 2 per $G$: allinea \texttt{1001} sotto il primo 1, fa lo XOR, poi si sposta sul primo 1 del risultato, e così via
+          (spostamenti di 0, 2, 2 e 1 posizioni).
+    \item Il resto, sugli ultimi $r$ bit, è \texttt{011}: è il CRC. Si trasmette \texttt{101110\,011}.
+    \item Il ricevente divide per $G$ il messaggio ricevuto: il resto è \texttt{000}, quindi il messaggio è integro.
+\end{enumerate}
+
+\warning{Se c'è un errore}{
+    Se durante la trasmissione un bit si inverte, per esempio si riceve \texttt{10\textcolor{netred}{0}110011}, la divisione dà un resto
+    diverso da zero (qui \texttt{001}) e il ricevente scarta il frame. Provate a verificarlo! La divisione dice \textbf{che} c'è un
+    errore, non \textbf{dove}. E resto zero significa \emph{accettato}, che non è la stessa cosa di \emph{integro}.
+}
+
+\subsection{Che cosa cattura un CRC}
+
+Scriviamo ciò che arriva come $T(x) + E(x)$, dove $T(x)$ è il messaggio trasmesso e ogni 1 del \textbf{polinomio d'errore} $E(x)$ è
+un bit invertito durante il viaggio. $T(x)$ è divisibile per $G(x)$, quindi il resto calcolato dal ricevente dipende \textbf{solo da
+$E(x)$}: un errore sfugge soltanto se $G(x)$ divide $E(x)$.
+
+\begin{itemize}
+    \item \textbf{Un solo bit invertito}: $E(x) = x^i$, e un generatore con due o più termini non lo divide mai. Tutti gli errori
+          singoli sono catturati.
+    \item \textbf{Un numero dispari di inversioni}: se $x + 1$ è un fattore di $G(x)$, sono catturate tutte. Statisticamente è la metà
+          dei casi.
+    \item \textbf{Qualsiasi raffica di $r$ bit o meno}: è più corta del generatore, quindi il resto non può venire zero.
+\end{itemize}
+
+\subsection{I CRC standard}
+
+\begin{itemize}
+    \item Sono stati definiti standard internazionali per generatori a 8, 12, 16 e 32 bit ($r = 8, 12, 16, 32$), e un protocollo dichiara
+          quale usa: \textbf{nessuno inventa un generatore}.
+    \item Lo standard \textbf{CRC-32}, adottato in diversi protocolli di collegamento IEEE (tra cui Ethernet), usa il generatore a 33 bit:
+          $$G_{\text{CRC-32}} = \texttt{100000100110000010001110110110111}$$
+    \item Ogni standard CRC rileva \textbf{sicuramente} tutti gli errori a raffica di lunghezza inferiore a $r+1$ bit; per raffiche più
+          lunghe la probabilità di rilevare l'errore è
+          $$P = 1 - 0{,}5^{\,r}$$
+    \item La probabilità di rilevare l'errore quindi \textbf{cresce con $r$}: con CRC-32 sfugge un frame danneggiato su circa quattro
+          miliardi, oltre a tutto ciò che è catturato con certezza. Questi quattro byte stanno in fondo a \textbf{ogni frame
+          Ethernet}.
+\end{itemize}
+
+\warning{Quando il controllo fallisce}{
+    Il CRC non torna. Che cosa fa l'adattatore del frame? Lo \textbf{scarta, e non dice niente}: né al mittente, né al livello di rete
+    sopra di lui. Su Ethernet nessuno viene avvisato. Un frame danneggiato diventa così un \textbf{frame perso}, indistinguibile da uno
+    mai consegnato, e il recupero tocca a chi sopra tiene un timer: il trasporto, o l'applicazione, secondi dopo e un intero round trip
+    più in là. È proprio il prezzo che la correzione sul posto evita, e su un collegamento dove succede spesso vale la pena evitarlo.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{La distanza di Hamming}
+% ══════════════════════════════════════════════════════════════
+
+Oltre a rilevare gli errori, alcuni codici permettono di \textbf{correggerli}.
+
+\dfn{Parole di codice}{
+    Un codice trasforma $m$ bit di dati in $n = m + r$ bit: gli $n$ bit sono una \textbf{parola di codice} (\emph{codeword}), e si
+    parla di codice $(n, m)$. Il \textbf{rate} è la frazione $m/n$ che porta informazione: circa metà su un canale rumoroso, vicino a
+    uno dove il canale è buono.
+}
+
+Poiché i bit di controllo sono calcolati dai dati, solo una stringa su $2^r$ è una parola di codice lecita: le altre \textbf{non possono
+essere prodotte} da un mittente. Questa rarità è tutto il meccanismo: una stringa ricevuta che non è una parola di codice può essere
+solo un \textbf{danno}.
+
+\dfn{Distanza di Hamming}{
+    La \textbf{distanza di Hamming} tra due parole è il numero di posizioni in cui differiscono, cioè il numero di bit che è necessario
+    invertire per trasformare una nell'altra: è il numero di 1 nel loro XOR. La distanza di Hamming \textbf{di un codice} è la
+    \textbf{minima} distanza tra due parole valide qualsiasi: è la coppia più vicina a decidere che cosa il codice può promettere.
+}
+
+\begin{esempio}{Distanza tra due parole}
+$w_1 = \texttt{00110110}$, $w_2 = \texttt{00011010}$. Facendo lo XOR,
+$w_1 \oplus w_2 = \texttt{00101100}$: i bit diversi sono 3, quindi $d(w_1, w_2) = 3$.
+\end{esempio}
+
+I protocolli di collegamento usano per comunicare parole di lunghezza fissa che \textbf{non sono tutte quelle possibili}. Per esempio,
+delle $2^5$ parole possibili di 5 bit se ne usano $2^4$ (la metà), come nella codifica \textbf{4B/5B}. Ciò consente di rilevare gli
+errori, e anche di evitare lunghe sequenze di 1 o di 0 (utili per la sincronizzazione). Ed è proprio da qui che venivano i
+delimitatori di frame del capitolo precedente: le violazioni della codifica sono parole che i dati non producono mai.
+
+\begin{esempio}{Un codice con distanza 5}
+Usiamo parole di 10 bit, ma ne usiamo solo 4 (per codificare 2 bit di dati, $n=2$, $k=8$):
+\begin{center}
+\begin{tabular}{cc}
+\toprule
+\textbf{Dati} & \textbf{Parola di codice} \\
+\midrule
+00 & \texttt{0000000000} \\
+01 & \texttt{0000011111} \\
+10 & \texttt{1111100000} \\
+11 & \texttt{1111111111} \\
+\bottomrule
+\end{tabular}
+\end{center}
+Due bit di informazione in dieci: un rate di $1/5$, volutamente stravagante perché l'aritmetica si veda. La distanza minima tra due
+parole è \textbf{5}. Se si riceve \texttt{0000011111}, è una parola valida. Se si riceve
+\texttt{0\textcolor{netred}{1}000111\textcolor{netred}{0}1}, non è valida e il danno si vede subito: è a distanza 2 da
+\texttt{0000011111} e a distanza 5 o più da tutte le altre, quindi si \textbf{corregge} in \texttt{0000011111} (dato 01).
+\end{esempio}
+
+\dfn{Capacità di rilevazione e correzione}{
+    Con un codice di distanza di Hamming $L$:
+    \begin{itemize}
+      \item si possono \textbf{rilevare} fino a $d$ errori se $L \geq d + 1$ (cioè $d \leq L - 1$): $d$ errori non bastano a trasformare
+            una parola valida in un'altra;
+      \item si possono \textbf{correggere} fino a $d$ errori se $L \geq 2d + 1$: la parola ricevuta resta più vicina a quella originale che
+            a qualsiasi altra.
+    \end{itemize}
+    In breve: si rilevano fino a $L-1$ errori e se ne correggono fino a $\lfloor (L-1)/2 \rfloor$. Nell'esempio ($L = 5$): si rilevano
+    fino a 4 errori e se ne correggono fino a 2. Un codice non può fare entrambe le cose al limite: la stessa distanza si spende una
+    volta sola, e si decide su che cosa spenderla.
 }
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
-  \begin{scope}
-    \node[font=\footnotesize\bfseries\sffamily] at (2.1,1.9) {(a) A invia RTS a B};
-    \fill[netblue!15] (1.4,0) circle (1.35cm); \draw[netblue, thick] (1.4,0) circle (1.35cm);
-    \foreach \x/\y/\n in {0.2/0/C, 1.4/0/A, 2.6/0/B, 3.9/0/D, 1.4/-1.0/E} \node[draw, fill=white, minimum size=0.45cm] (\n) at (\x,\y) {\n};
-    \draw[-{Stealth}, very thick, netblue] (A) -- node[above] {RTS} (B);
-    \node[text width=4.6cm, align=center] at (2,-1.9) {C ed E sentono l'RTS: restano in silenzio per il CTS};
-  \end{scope}
-  \begin{scope}[xshift=7.5cm]
-    \node[font=\footnotesize\bfseries\sffamily] at (2.1,1.9) {(b) B risponde con CTS};
-    \fill[netred!15] (2.6,0) circle (1.35cm); \draw[netred, thick] (2.6,0) circle (1.35cm);
-    \foreach \x/\y/\n in {0.2/0/C, 1.4/0/A, 2.6/0/B, 3.9/0/D, 2.6/-1.0/E} \node[draw, fill=white, minimum size=0.45cm] (\n) at (\x,\y) {\n};
-    \draw[-{Stealth}, very thick, netred] (B) -- node[above] {CTS} (A);
-    \node[text width=4.6cm, align=center] at (2,-1.9) {D ed E sentono il CTS: restano in silenzio per tutto il frame};
-  \end{scope}
+  \draw[thick] (0,0) -- (10,0);
+  \fill[netblue] (0,0) circle (4pt) node[below=5pt] {$w$ (valida)};
+  \fill[netblue] (10,0) circle (4pt) node[below=5pt] {$w'$ (valida)};
+  \foreach \x in {2,4,6,8} \fill[black!40] (\x,0) circle (2.5pt);
+  \draw[decorate, decoration={brace, amplitude=6pt, mirror}] (0,-0.7) -- (10,-0.7) node[midway, below=7pt] {distanza $L = 5$};
+  \fill[netred!20] (0,0.25) rectangle (4.9,0.55); \node[text=netred] at (2.45,0.85) {parole ricevute che si correggono in $w$};
+  \fill[netgreen!20] (5.1,0.25) rectangle (10,0.55); \node[text=netgreen!50!black] at (7.55,0.85) {parole ricevute che si correggono in $w'$};
+  \draw[-{Stealth}, netred, thick] (4,-0.15) to[bend right=30] node[below] {2 errori} (0,-0.15);
 \end{tikzpicture}
-\caption{MACA: RTS e CTS ``prenotano'' il canale attorno al mittente e al ricevente.}
+\caption{Con distanza 5, una parola con al massimo 2 errori è ancora più vicina all'originale: si può correggere.}
 \end{figure}
 
+\textbf{Decodificare è cercare la parola più vicina}: una stringa che non è una parola di codice viene assegnata alla parola di codice
+più vicina, nell'ipotesi che poche inversioni siano più probabili di molte. È giusto finché le inversioni restano sotto
+\textbf{metà della distanza minima}; oltre la metà, la ``riparazione'' produce la parola sbagliata e peggiora le cose.
+
+% ══════════════════════════════════════════════════════════════
+\section{I codici di Hamming}
+% ══════════════════════════════════════════════════════════════
+
+Cercare la parola più vicina tra tutte va bene con quattro parole; con un codice vero è una ricerca che nessuno può permettersi per
+ogni frame. La costruzione di Hamming evita la ricerca.
+
+\dfn{Codice di Hamming}{
+    \begin{itemize}
+      \item Si numerano i bit da 1 e si mettono i \textbf{bit di controllo} nelle posizioni che sono \textbf{potenze di due} (1, 2, 4,
+            8, \dots); le altre posizioni portano i dati.
+      \item Ogni bit di dati è coperto dai bit di controllo che compaiono nella \textbf{scomposizione in potenze di due} della sua
+            posizione: il bit 11 $= 8 + 2 + 1$ è coperto dai controlli 1, 2 e 8.
+      \item Ogni bit di controllo è scelto in modo che la parità dei bit che copre (lui compreso) sia pari.
+      \item Il ricevente ripete ogni controllo: quelli che falliscono, letti insieme come numero binario, danno la \textbf{posizione
+            del bit invertito}. È la \textbf{sindrome}; se è zero, nessun errore rilevato.
+    \end{itemize}
+}
+
+\begin{esempio}{Il codice di Hamming (11, 7)}
+Sette bit di dati, quattro bit di controllo nelle posizioni 1, 2, 4, 8: in tutto 11 bit. Proteggiamo i dati \texttt{1000001} (la A in
+ASCII), che vanno nelle posizioni 3, 5, 6, 7, 9, 10, 11.
+\begin{center}
+\small
+\begin{tabular}{l*{11}{c}}
+\toprule
+posizione & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 & 11 \\
+\midrule
+ruolo & $p_1$ & $p_2$ & $d$ & $p_4$ & $d$ & $d$ & $d$ & $p_8$ & $d$ & $d$ & $d$ \\
+dati & & & 1 & & 0 & 0 & 0 & & 0 & 0 & 1 \\
+inviato & \textbf{0} & \textbf{0} & 1 & \textbf{0} & 0 & 0 & 0 & \textbf{1} & 0 & 0 & 1 \\
+\bottomrule
+\end{tabular}
+\end{center}
 \begin{itemize}
-    \item \textbf{Terminale nascosto risolto}: D non sente A, ma sente il CTS di B, e quindi non disturba la ricezione di B.
-    \item \textbf{Terminale esposto risolto}: C sente l'RTS di A ma non il CTS di B: sa quindi di essere fuori dalla portata del ricevente e, dopo il
-          CTS, può trasmettere senza disturbare.
-    \item Le collisioni restano possibili tra RTS (per esempio due RTS inviati insieme a B), ma riguardano frame piccolissimi: si risolvono con un
-          backoff casuale e costano poco. Una versione evoluta del meccanismo è usata nel Wi-Fi (802.11).
+    \item $p_1$ copre le posizioni 1, 3, 5, 7, 9, 11 (quelle con il bit di peso 1): i dati valgono $1,0,0,0,1$, due 1, quindi
+          $p_1 = 0$.
+    \item $p_2$ copre 2, 3, 6, 7, 10, 11: dati $1,0,0,0,1$, quindi $p_2 = 0$.
+    \item $p_4$ copre 4, 5, 6, 7: dati $0,0,0$, quindi $p_4 = 0$.
+    \item $p_8$ copre 8, 9, 10, 11: dati $0,0,1$, quindi $p_8 = 1$.
 \end{itemize}
+Si invia \texttt{00100001001}. Supponiamo che arrivi con il bit 6 invertito: \texttt{00100\textcolor{netred}{1}01001}. Il ricevente
+rifà i controlli: $p_1$ (1, 3, 5, 7, 9, 11) torna; $p_2$ (2, 3, 6, 7, 10, 11) \textbf{fallisce}; $p_4$ (4, 5, 6, 7)
+\textbf{fallisce}; $p_8$ torna. La sindrome è $0110_2 = 6$: si inverte il bit 6 e si riottiene la parola inviata.
+\end{esempio}
+
+Niente ricerca: l'aritmetica consegna la risposta. La distanza dei codici di Hamming è \textbf{tre}, quindi correggono un errore
+\emph{oppure} ne rilevano due: la scelta del paragrafo precedente, resa concreta.
+
+\subsection{Che cosa usano i collegamenti reali}
+
+\begin{itemize}
+    \item \textbf{Codici convoluzionali}: nessun confine di blocco; ogni bit in uscita dipende dagli ultimi bit in ingresso, e la
+          decodifica cerca l'ingresso più probabile. Si usano in 802.11, e sulle sonde Voyager dal 1977.
+    \item \textbf{Reed-Solomon}: lavorano su \textbf{simboli} anziché su bit, quindi una raffica dentro un simbolo conta come un solo
+          errore. CD, DVD, DSL, collegamenti satellitari.
+    \item \textbf{LDPC} (\emph{Low-Density Parity Check}): ogni bit di controllo copre solo pochi bit di dati; ottimi su blocchi grandi.
+          Ethernet a 10 Gb/s e le versioni recenti di 802.11.
+\end{itemize}
+
+\warning{Non inventatene uno}{
+    I codici per gli errori sono matematica applicata. Se ne prende uno da uno standard; non se ne inventa uno proprio.
+}
+
+\begin{esercizio}{CRC e Hamming a mano}
+\begin{enumerate}[label=(\alph*)]
+    \item Con $G = \texttt{1011}$ ($r = 3$), calcolare il CRC dei dati $D = \texttt{110101}$ e scrivere il messaggio trasmesso.
+    \item Il ricevente riceve \texttt{110\textcolor{netred}{0}01111}. Verificare che la divisione per $G$ dà un resto diverso da zero.
+    \item Un codice usa le quattro parole \texttt{000000}, \texttt{000111}, \texttt{111000}, \texttt{111111}. Qual è la sua distanza
+          di Hamming? Quanti errori rileva e quanti ne corregge?
+    \item Con il codice di Hamming (11, 7) dell'esempio, si riceve \texttt{00100001101}. C'è un errore? Se sì, in quale posizione?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Si accodano tre zeri: \texttt{110101000}. A ogni passo si allinea $G$ sotto il primo 1 rimasto e si fa lo XOR:
+          \texttt{1101}$\oplus$\texttt{1011} $=$ \texttt{0110}, poi \texttt{1100}$\oplus$\texttt{1011} $=$ \texttt{0111},
+          \texttt{1111}$\oplus$\texttt{1011} $=$ \texttt{0100}, \texttt{1000}$\oplus$\texttt{1011} $=$ \texttt{0011},
+          \texttt{1100}$\oplus$\texttt{1011} $=$ \texttt{0111}. Il resto è \texttt{111}: si trasmette \texttt{110101\,111}.
+    \item Sul messaggio ricevuto \texttt{110001111}: \texttt{1100}$\oplus$\texttt{1011} $=$ \texttt{0111}, poi
+          \texttt{1110}$\oplus$\texttt{1011} $=$ \texttt{0101}, \texttt{1011}$\oplus$\texttt{1011} $=$ \texttt{0000}; restano gli
+          ultimi tre bit, \texttt{111} $\neq 0$: errore rilevato. Il resto è proprio quello che $E(x) = x^5$ (il bit invertito)
+          lascia diviso per $G(x)$: la parte trasmessa correttamente dà resto zero, e conta solo l'errore.
+    \item La distanza minima è \textbf{3} (per esempio tra \texttt{000000} e \texttt{000111}). Rileva fino a 2 errori e ne corregge 1.
+    \item Si rifanno i controlli su \texttt{00100001101}: $p_1$ su 1, 3, 5, 7, 9, 11 vede $0,1,0,0,1,1$, tre 1: \textbf{fallisce};
+          $p_2$ su 2, 3, 6, 7, 10, 11 vede $0,1,0,0,0,1$: torna; $p_4$ su 4, 5, 6, 7 vede $0,0,0,0$: torna; $p_8$ su 8, 9, 10, 11
+          vede $1,1,0,1$, tre 1: \textbf{fallisce}. Sindrome $1001_2 = 9$: il bit 9 è invertito, e la parola corretta è
+          \texttt{00100001001}.
+\end{enumerate}
+\end{esercizio}
+
 
 \Needspace{20\baselineskip}
 % ══════════════════════════════════════════════════════════════
@@ -528,12 +561,15 @@ l'interferenza \textbf{presso il ricevente}, non presso il mittente.
 
 \riepilogo{
 \begin{itemize}
-    \item Sui collegamenti \textbf{broadcast} trasmissioni contemporanee \textbf{collidono}; il sottolivello \textbf{MAC} regola l'accesso.
-    \item Proprietà desiderate: $R/M$ a testa (e $R$ se si è soli), decentralizzato, semplice.
-    \item \textbf{Partizionamento}: TDMA (slot), FDMA (frequenze), CDMA (codici ortogonali); niente collisioni ma banda fissa $R/N$.
-    \item \textbf{Accesso casuale}: ALOHA puro e slotted (ritrasmissione con probabilità $p$), CSMA (ascolta prima), CSMA/CD di Ethernet (ascolta
-          anche durante, backoff esponenziale binario $K \in \{0..2^n-1\}$, frame lunghi almeno $2\tau$).
-    \item \textbf{A turni}: polling (master, Bluetooth) e token passing (token ring).
-    \item Nel wireless: terminali \textbf{nascosti} ed \textbf{esposti}; \textbf{MACA} li affronta con RTS/CTS.
+    \item Il mittente calcola bit ridondanti (EDC) sul frame e il ricevente li ricalcola: la risposta è se un errore è stato
+          \textbf{rilevato}, mai se è avvenuto. Rilevare e ritrasmettere conviene sui canali puliti, correggere (FEC) su quelli rumorosi.
+    \item \textbf{Parità} singola: un bit, e solo un numero dispari di inversioni, mentre gli errori veri arrivano a raffica.
+          \textbf{Bidimensionale}: nomina un singolo bit invertito e lo ripara, rileva due errori.
+    \item \textbf{Checksum}: somme, economiche e deboli, calcolate in software sopra. \textbf{CRC}: una divisione modulo 2, forte,
+          calcolata nell'hardware dell'adattatore; si accodano $r$ bit perché $x^r D(x) + R(x)$ sia divisibile per $G(x)$.
+    \item Un CRC cattura ogni errore singolo, ogni numero dispari di errori (se $x+1$ divide $G$) e ogni raffica fino a $r$ bit; il
+          frame che fallisce viene \textbf{scartato in silenzio}, e i livelli superiori se ne accorgono tardi.
+    \item Distanza di Hamming $L$: rileva $L-1$ errori, ne corregge $\lfloor (L-1)/2 \rfloor$. I \textbf{codici di Hamming} trovano il bit
+          sbagliato con la sindrome, senza ricerca.
 \end{itemize}
 }
