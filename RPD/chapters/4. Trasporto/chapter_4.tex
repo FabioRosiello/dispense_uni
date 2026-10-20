@@ -1,0 +1,579 @@
+\chapter{TCP: la gestione della connessione}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il problema}
+% ══════════════════════════════════════════════════════════════
+
+Poiché TCP è orientato alla connessione, i due host devono mettersi d'accordo sia quando la connessione
+si \textbf{apre} sia quando si \textbf{chiude}. Ma i messaggi possono perdersi o danneggiarsi, e trovare un
+accordo è tutt'altro che banale: se un messaggio si perde, un lato può ritenere la connessione aperta (o
+chiusa) mentre l'altro no.
+
+Per evitare, o meglio per \textbf{mitigare}, il problema TCP usa una procedura detta \textbf{three-way
+handshake} (stretta di mano a tre vie): le richieste di apertura e di chiusura devono essere
+\textbf{confermate} prima che la connessione sia considerata stabilita o rilasciata. Niente conta finché non è stato
+confermato, e l'apertura è costruita su questa regola.
+
+Delle cose che fa il trasporto, questa è quella che il nostro codice ha chiesto fin dall'inizio: \texttt{connect},
+\texttt{accept}, \texttt{close}. E non serve niente di nuovo nell'header: bastano tre bit di flag mai usati finora.
+
+\begin{itemize}
+    \item \textbf{SYN}: questo segmento apre una connessione. È acceso nei primi due segmenti di una connessione e mai
+          più.
+    \item \textbf{FIN}: il mittente non ha più dati. Chiude \textbf{una direzione}, e si invia una volta per direzione.
+    \item \textbf{RST}: qui non c'è nessuna connessione. Butta via il segmento e non rimandarlo.
+\end{itemize}
+I campi di sequenza e di acknowledgment portano l'accordo; questi tre bit dicono di che tipo di accordo si tratta.
+
+% ══════════════════════════════════════════════════════════════
+\section{Il problema dei due eserciti}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\footnotesize\sffamily}]
+  \fill[green!15] (-1,-1.2) -- (1.2,1.6) -- (3,0.4) -- (5,1.7) -- (7.4,-1.2) -- cycle;
+  \fill[green!30] (-1,-1.2) -- (0.6,0.4) -- (2,-0.3) -- (3.2,-0.9) -- (4.8,-0.2) -- (6.2,0.5) -- (7.4,-1.2) -- cycle;
+  \node[draw, fill=blue!40, rounded corners, minimum width=1.5cm] (b1) at (0.4,0.9) {blu \#1};
+  \node[draw, fill=blue!40, rounded corners, minimum width=1.5cm] (b2) at (6,1.0) {blu \#2};
+  \node[draw, fill=white, rounded corners, minimum width=2.6cm, minimum height=0.8cm] (w) at (3.2,-0.6) {esercito bianco};
+  \draw[msg, dashed, netred, thick] (b1) to[bend right=15] node[below, sloped, text=netred] {messaggero} (b2);
+  \node[text width=6.5cm, anchor=west] at (8,0.2) {Il bianco è più forte di ciascun esercito blu, ma più debole dei due insieme: i blu vincono solo se attaccano \textbf{nello stesso momento}. Per accordarsi possono mandare messaggeri attraverso la valle, dove possono essere catturati.};
+\end{tikzpicture}
+\caption{Il problema dei due eserciti: comunicare attraverso un canale inaffidabile.}
+\end{figure}
+
+Un esercito bianco è accampato in una valle; sulle due colline ai lati ci sono due eserciti blu. Il
+bianco è più grande di ciascuno dei due eserciti blu, ma insieme i blu sono più numerosi: vincono
+\textbf{solo se attaccano contemporaneamente}. Per sincronizzarsi devono mandare messaggeri attraverso la
+valle, dove possono essere catturati (comunicazione \textbf{inaffidabile}). Esiste un protocollo che permetta
+ai blu di vincere?
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.8, every node/.style={font=\scriptsize\sffamily}]
+  \begin{scope}
+    \node[font=\footnotesize\bfseries\sffamily] at (1.9,1.1) {Due vie};
+    \timeline{a}{0}{blu \#1}{3.4}
+    \timeline{b}{3.8}{blu \#2}{3.4}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {``attacchiamo oggi, ok?''} (3.8,-1.1);
+    \draw[msg, netgreen] (3.8,-1.4) -- node[above, sloped] {``d'accordo!''} (0,-2.2);
+    \node[text=netred, anchor=west] at (3.9,-2.3) {sarà arrivato?};
+  \end{scope}
+  \begin{scope}[xshift=7.5cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (1.9,1.1) {Tre vie};
+    \timeline{a}{0}{blu \#1}{3.4}
+    \timeline{b}{3.8}{blu \#2}{3.4}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {``attacchiamo oggi, ok?''} (3.8,-1.1);
+    \draw[msg, netgreen] (3.8,-1.4) -- node[above, sloped] {``d'accordo!''} (0,-2.2);
+    \draw[msg] (0,-2.4) -- node[above, sloped] {``d'accordo!''} (3.8,-3.2);
+    \node[text=netred, anchor=east] at (-0.1,-2.9) {e il mio, sarà arrivato?};
+  \end{scope}
+\end{tikzpicture}
+\caption{Aggiungere conferme sposta solo il dubbio sull'ultimo messaggio.}
+\end{figure}
+
+\begin{itemize}
+    \item Il comandante del blu \#1 manda: ``\emph{Propongo di attaccare oggi, va bene?}''. Il messaggio arriva, il
+          blu \#2 è d'accordo e la sua risposta torna sana e salva. L'attacco ci sarà? Probabilmente no: il
+          comandante \#2 \textbf{non sa} se la sua risposta è arrivata, e se non fosse arrivata il \#1 non attaccherebbe.
+    \item Proviamo con tre vie: il \#1 conferma la risposta. Se nessun messaggio si perde, il \#2 riceve la conferma,
+          ma ora è il \#1 a esitare: non sa se la sua conferma è arrivata.
+    \item Con quattro vie non cambia nulla. Si può \textbf{dimostrare} che \textbf{non esiste alcun protocollo} che
+          risolva il problema con certezza.
+\end{itemize}
+
+\info{Imperfetto ma adeguato}{
+    Il three-way handshake \textbf{non è perfetto}, ma nella pratica è di solito \textbf{più che adeguato}: le
+    situazioni residue vengono gestite con timer e ritrasmissioni. L'incertezza non riguarda il messaggio: riguarda che
+    cosa sa l'altro.
+}
+
+\dfn{Che cosa è impossibile}{
+    Che entrambi gli estremi siano \textbf{certi, nello stesso istante}, che l'altro sia pronto. Nessun numero di messaggi
+    ci riesce, su un canale che perde messaggi.
+}
+
+\begin{itemize}
+    \item Ciò di cui ha bisogno TCP è più debole: ciascun estremo ha imparato il numero iniziale dell'altro, e sa che il
+          proprio è stato ricevuto.
+    \item Tre segmenti danno esattamente questo, e nessuno va creduto sulla parola: ciascuno è confermato dal successivo.
+    \item Il dubbio che resta è quello del mittente sul suo ultimo messaggio, e lo risolve il primo segmento di dati.
+    \item Dove quel dubbio costa qualcosa è alla chiusura, e ci torneremo con i timer.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{L'apertura della connessione}
+% ══════════════════════════════════════════════════════════════
+
+\begin{enumerate}
+    \item La \texttt{connect} del client invia una richiesta di connessione: un segmento \textbf{SYN}, senza dati.
+    \item Il server risponde con un SYN proprio che conferma anche quello del client: un solo segmento, \textbf{SYN-ACK}
+          (o SYNACK).
+    \item Il client invia la conferma finale: un segmento \textbf{ACK}, che può già portare dati dell'applicazione.
+\end{enumerate}
+Un'intera andata e ritorno, più il tempo che il server impiega a rispondere, prima del primo byte della richiesta.
+
+\subsection{I dettagli}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.9, every node/.style={font=\footnotesize\sffamily}]
+  \timeline{c}{0}{Client}{5.2}
+  \timeline{s}{8}{Server}{5.2}
+  \node[anchor=east, text=black!60] at (-0.2,0) {\texttt{connect()}};
+  \node[anchor=west, text=black!60] at (8.2,0) {\texttt{listen()}, \texttt{accept()}};
+  \draw[msg, very thick, netblue] (0,-0.5) -- node[above, sloped, align=center] {SYN = 1, Seq = client\_isn\\(nessun dato)} (8,-1.7);
+  \node[anchor=west, text width=3.4cm, align=left] at (8.2,-1.9) {alloca buffer e variabili};
+  \draw[msg, very thick, netgreen] (8,-2.2) -- node[above, sloped, align=center] {SYN = 1, ACK = 1, Seq = server\_isn\\Ack = client\_isn + 1} (0,-3.4);
+  \node[anchor=east, text width=3cm, align=right] at (-0.2,-3.6) {alloca buffer e variabili};
+  \draw[msg, very thick, netblue] (0,-3.9) -- node[above, sloped, align=center] {SYN = 0, ACK = 1, Seq = client\_isn + 1\\Ack = server\_isn + 1 (può contenere dati)} (8,-5.1);
+  \node[anchor=west, text=netgreen!60!black, font=\footnotesize\bfseries\sffamily] at (8.2,-5.1) {connessione stabilita};
+\end{tikzpicture}
+\caption{Il three-way handshake nel dettaglio.}
+\end{figure}
+
+\begin{enumerate}
+    \item Il client invia un segmento \textbf{SYN} che ha:
+    \begin{itemize}
+      \item \textbf{nessun dato} applicativo;
+      \item il bit \textbf{SYN a 1};
+      \item come numero di sequenza un \textbf{numero iniziale casuale} (\texttt{client\_isn}, \emph{initial sequence number}).
+    \end{itemize}
+    \item Quando il SYN arriva (si spera), il server \textbf{alloca buffer e variabili} TCP e risponde con un segmento
+          \textbf{SYNACK} che ha:
+    \begin{itemize}
+      \item nessun dato applicativo;
+      \item i bit \textbf{SYN e ACK a 1};
+      \item numero di acknowledgment \texttt{client\_isn + 1};
+      \item come numero di sequenza un proprio numero iniziale casuale (\texttt{server\_isn}).
+    \end{itemize}
+    \item Quando il SYNACK arriva (si spera), anche il client alloca buffer e variabili e invia un segmento
+          \textbf{ACK} finale che ha:
+    \begin{itemize}
+      \item eventualmente \textbf{dati} applicativi (per esempio la richiesta HTTP);
+      \item il bit \textbf{SYN a 0} (la connessione ora è stabilita) e il bit \textbf{ACK a 1};
+      \item numero di acknowledgment \texttt{server\_isn + 1}.
+    \end{itemize}
+\end{enumerate}
+
+\warning{Perché il SYN ``consuma'' un numero di sequenza}{
+    Il SYN non porta dati, eppure l'ACK di risposta vale \texttt{client\_isn + 1}: per convenzione SYN (e FIN)
+    contano come un byte, così possono essere confermati come qualsiasi altro dato.
+}
+
+\subsection{Perché il numero iniziale è estratto a caso}
+
+\begin{itemize}
+    \item Niente obbliga una connessione a partire da zero, e partire da lì sarebbe la scelta peggiore possibile.
+    \item Un segmento di una connessione precedente fra gli stessi quattro numeri può essere ancora in giro nella rete. Con un
+          punto di partenza nuovo cade fuori dalla finestra della nuova connessione, e viene scartato invece di essere
+          accettato come dato.
+    \item Un attaccante che indovina i numeri può iniettare segmenti in una connessione che non vede: renderli casuali è una
+          difesa.
+    \item E il $+1$ che torna indietro è una piccola prova a sé: solo chi ha ricevuto il SYN poteva scriverlo.
+\end{itemize}
+
+\subsection{Diagramma degli stati (apertura)}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, st/.style={draw, rounded corners=6pt, fill=cloudbg, thick, minimum width=2.4cm, minimum height=0.75cm, font=\footnotesize\bfseries\sffamily}]
+  \node[st] (closed) at (0,0) {CLOSED};
+  \node[st] (listen) at (-4,-2) {LISTEN};
+  \node[st] (synsent) at (4,-2) {SYN SENT};
+  \node[st] (synrcvd) at (-4,-4.3) {SYN RECEIVED};
+  \node[st, fill=netgreen!20] (est) at (0,-6.3) {ESTABLISHED};
+  \draw[-{Stealth}, thick] (closed) -- node[above, sloped, align=center] {apertura passiva\\\texttt{listen()}} (listen);
+  \draw[-{Stealth}, thick] (closed) -- node[above, sloped, align=center] {apertura attiva: \texttt{connect()}\\invia SYN} (synsent);
+  \draw[-{Stealth}, thick] (listen) -- node[left, align=right] {ricevuto SYN\\invia SYN+ACK} (synrcvd);
+  \draw[-{Stealth}, thick] (synsent) -- node[right, align=left] {ricevuto SYN+ACK\\invia ACK} (est);
+  \draw[-{Stealth}, thick] (synrcvd) -- node[below left, align=right] {ricevuto ACK} (est);
+  \node[text=netblue, font=\footnotesize\bfseries\sffamily] at (-4,-0.9) {server};
+  \node[text=netred, font=\footnotesize\bfseries\sffamily] at (4,-0.9) {client};
+\end{tikzpicture}
+\caption{Diagramma degli stati semplificato per l'apertura della connessione. Due percorsi dentro la stessa macchina: il
+         server aspetta (apertura passiva) e risponde a un SYN con un SYNACK; il client chiede (apertura attiva) e invia il
+         SYN. Si incontrano in ESTABLISHED, il server un segmento dopo il client.}
+\end{figure}
+
+\subsection{Gli stessi stati, visti dal nostro codice}
+
+\begin{itemize}
+    \item \texttt{listen} è la transizione in LISTEN. Da quell'istante il kernel risponde ai SYN \textbf{da solo}, senza
+          alcun processo coinvolto.
+    \item \texttt{connect} invia il SYN e si blocca; ritorna quando è arrivato il SYNACK ed è partito il terzo segmento.
+    \item \texttt{accept} \textbf{non partecipa affatto} all'handshake: consegna una connessione già stabilita. Un server può
+          quindi essere lento a chiamare \texttt{accept} senza che alcun client se ne accorga: la connessione è aperta, e i
+          dati aspettano in un buffer.
+    \item L'handshake lo fanno i due kernel. Il programma ne legge il risultato, e il suo unico resoconto è un descriptor o
+          un errore.
+\end{itemize}
+
+\dfn{Le due code di listen}{
+    Un socket di ascolto ha una coda delle connessioni \textbf{mezze aperte} (SYN ricevuto, terzo segmento non ancora) e
+    una coda di quelle \textbf{completate} che aspettano \texttt{accept}.
+}
+
+\begin{itemize}
+    \item Un SYN in arrivo crea una voce nella prima coda; l'ACK finale la sposta nella seconda.
+    \item \texttt{accept} toglie una voce dalla seconda coda: il \emph{backlog} passato a \texttt{listen} è la lunghezza di
+          quella coda.
+    \item Se si riempie, le nuove connessioni vengono scartate o rifiutate, e il client vede un ritardo senza mai saperne il
+          motivo.
+    \item La prima coda è più piccola, più vecchia e sguarnita: è quella a cui mira un attaccante.
+\end{itemize}
+
+\subsection{Quanto costa l'handshake}
+
+\begin{itemize}
+    \item Prima che parta il primo byte di una richiesta, un'intera andata e ritorno è già stata spesa per mettersi
+          d'accordo a parlare. Su una rete locale non è niente; attraverso un oceano è un decimo di secondo, per
+          connessione.
+    \item È esattamente ciò che comprano le \textbf{connessioni persistenti} del livello applicativo: si paga l'handshake
+          una volta, e si riusa ciò che ha costruito.
+    \item Costa anche al server: buffer e variabili vengono impegnati al primo segmento, prima che gli sia stato chiesto
+          niente.
+\end{itemize}
+
+\warning{Nessuno risponde, oppure qualcuno rifiuta}{
+    Il client chiama \texttt{connect} e il SYN non riceve risposta. Quanto aspetta? \textbf{Decine di secondi}: TCP
+    ritrasmette il SYN qualche volta con un intervallo crescente, poi abbandona il tentativo e \texttt{connect} fallisce.
+    \begin{itemize}
+        \item Un rifiuto è molto più veloce: se l'host è acceso ma nessuno ha fatto \texttt{bind} su quella porta, risponde
+              con un segmento con \textbf{RST}.
+        \item Il programma vede due errori diversi: un timeout, o l'\texttt{ECONNREFUSED} ottenuto la prima volta che si è
+              avviato il client prima del server.
+        \item Per UDP quella segnalazione arrivava dal livello di rete; qui la risposta è un segmento di trasporto, dal TCP
+              del peer.
+    \end{itemize}
+}
+
+\subsection{Il SYN flood e i SYN cookie}
+
+E se il terzo segmento non arriva mai? Il server ha già impegnato buffer e variabili, e tiene la connessione mezza aperta
+per un minuto o più prima di recuperarla.
+\begin{itemize}
+    \item Inviando abbastanza SYN, la coda delle connessioni mezze aperte si riempie di voci che non si completeranno mai, e
+          i client legittimi vengono rifiutati: si è esaurita una \textbf{coda}, non la banda, e l'attacco richiede pochissimo
+          traffico.
+    \item Gli indirizzi sorgente sono falsificati, quindi i SYNACK vanno a host che non hanno chiesto niente, e
+          l'attaccante non deve mai rispondere.
+    \item Il \key{SYN flood} è stato fra i primi attacchi di \emph{denial of service} documentati, ed è ancora fra i più
+          comuni.
+\end{itemize}
+
+\dfn{SYN cookie}{
+    La difesa capovolge il problema: \textbf{rispondere al SYN senza ricordarlo}. \texttt{server\_isn} non è casuale ma
+    calcolato: un hash dei due indirizzi, delle due porte e di un segreto noto solo al server.
+}
+
+\begin{itemize}
+    \item Non si tiene alcuno stato, quindi un SYN falsificato costa al server una risposta e nient'altro.
+    \item Un client legittimo restituisce quel numero più uno. Il server ricalcola l'hash, confronta, e solo allora crea la
+          connessione e il suo socket.
+    \item La coda non si riempie mai, perché fino al terzo segmento non c'è niente dentro. Oggi lo fanno quasi tutti i
+          sistemi operativi.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l l}
+\toprule
+\textbf{Che cosa torna} & \textbf{Che cosa significa} & \textbf{Stato della porta} \\
+\midrule
+SYNACK  & qualcosa ascolta lì                          & \emph{open} \\
+RST     & l'host è acceso, quella porta non è servita  & \emph{closed} \\
+niente  & non è mai arrivato: qualcosa l'ha scartato   & \emph{filtered} \\
+\bottomrule
+\end{tabular}
+\caption{Le tre risposte a un SYN. Un SYN per porta, e le tre risposte mappano una macchina dall'esterno senza mai
+         completare una connessione: è ciò che fa \texttt{nmap}, ed è il significato degli stati visti con le porte.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{La chiusura della connessione}
+% ══════════════════════════════════════════════════════════════
+
+La chiusura (\emph{teardown}) può essere avviata da \textbf{uno qualsiasi} dei due host. Supponiamo che a
+chiudere sia il client:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.85, every node/.style={font=\footnotesize\sffamily}]
+  \timeline{c}{0}{Client}{5.8}
+  \timeline{s}{7}{Server}{5.8}
+  \node[anchor=east, text=black!60] at (-0.2,-0.4) {\texttt{close()}};
+  \draw[msg, very thick, netred] (0,-0.5) -- node[above, sloped] {FIN = 1} (7,-1.4);
+  \draw[msg, very thick, netgreen] (7,-1.7) -- node[above, sloped] {ACK = 1} (0,-2.6);
+  \node[anchor=west, text=black!60] at (7.2,-2.9) {\texttt{close()}};
+  \draw[msg, very thick, netred] (7,-3.0) -- node[above, sloped] {FIN = 1} (0,-3.9);
+  \draw[msg, very thick, netgreen] (0,-4.2) -- node[above, sloped] {ACK = 1} (7,-5.1);
+  \node[anchor=west, text=netgreen!60!black, font=\footnotesize\bfseries\sffamily] at (7.2,-5.1) {chiusa};
+  \draw[netorange, very thick] (-0.3,-4.2) -- (-0.3,-5.8);
+  \node[anchor=east, text=netorange, text width=2.6cm, align=right] at (-0.4,-5.0) {attesa (TIME WAIT), poi chiusa};
+\end{tikzpicture}
+\caption{La chiusura della connessione: ACK e FIN del server possono viaggiare nello stesso segmento o in due segmenti separati.}
+\end{figure}
+
+\begin{enumerate}
+    \item Il client invia un segmento speciale di chiusura: un segmento \textbf{FIN}, con il bit FIN a 1.
+    \item Quando lo riceve, il server invia una conferma e, quando anche lui ha finito, un proprio segmento di
+          chiusura, con ACK a 1 e FIN a 1. ACK e FIN possono viaggiare nello stesso segmento o in due separati:
+          nel mezzo il server può ancora inviare dati (la connessione è chiusa solo in una direzione).
+    \item Infine il client conferma il FIN del server.
+\end{enumerate}
+
+\subsection{Mezza chiusura: una direzione alla volta}
+
+\begin{itemize}
+    \item Un FIN dice «non ho più dati da inviare». Non dice «questa connessione è finita»: chiude \textbf{una direzione}.
+    \item Dopo aver inviato il suo FIN il client può ancora ricevere; dopo averlo confermato il server può ancora inviare,
+          per tutto il tempo che vuole.
+    \item I due FIN sono quindi indipendenti, e il rilascio normale è di \textbf{quattro} segmenti: FIN, ACK, poi FIN, ACK
+          nell'altro verso. Si riducono a tre solo quando il peer non ha più niente da inviare e chiude subito: allora il suo
+          ACK e il suo FIN viaggiano insieme.
+    \item \texttt{close} invia il FIN e rinuncia al descriptor. \texttt{shutdown(fd, SHUT\_WR)} lo invia e continua a
+          leggere: è il modo in cui un client dice «questa era tutta la richiesta».
+\end{itemize}
+
+E dal lato del programma, il FIN che arriva è proprio lo \texttt{0} restituito da \texttt{recv}: un'istruzione a
+chiudere, non un errore da ignorare.
+
+\subsection{Diagramma degli stati (chiusura)}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, st/.style={draw, rounded corners=6pt, fill=cloudbg, thick, minimum width=2.3cm, minimum height=0.7cm, font=\footnotesize\bfseries\sffamily}]
+  \node[st, fill=netgreen!20] (est) at (0,0) {ESTABLISHED};
+  \node[st] (fw1) at (-4,-1.8) {FIN WAIT 1};
+  \node[st] (fw2) at (-4,-3.8) {FIN WAIT 2};
+  \node[st] (closing) at (-0.6,-3.8) {CLOSING};
+  \node[st] (tw) at (-4,-5.8) {TIME WAIT};
+  \node[st] (cw) at (4,-1.8) {CLOSE WAIT};
+  \node[st] (la) at (4,-3.8) {LAST ACK};
+  \node[st, fill=lphy] (closed) at (0,-7.4) {CLOSED};
+  \draw[-{Stealth}, thick] (est) -- node[above, sloped, align=center] {\texttt{close()}\\invia FIN} (fw1);
+  \draw[-{Stealth}, thick] (fw1) -- node[left, align=right] {ricevuto ACK} (fw2);
+  \draw[-{Stealth}, thick] (fw1) -- node[above, sloped, align=center] {ricevuto FIN\\invia ACK} (closing);
+  \draw[-{Stealth}, thick] (fw2) -- node[left, align=right] {ricevuto FIN\\invia ACK} (tw);
+  \draw[-{Stealth}, thick] (closing) -- node[right, align=left] {ricevuto ACK} (tw);
+  \draw[-{Stealth}, thick] (tw) -- node[below left, align=right] {scade il timeout} (closed);
+  \draw[-{Stealth}, thick] (est) -- node[above, sloped, align=center] {ricevuto FIN\\invia ACK} (cw);
+  \draw[-{Stealth}, thick] (cw) -- node[right, align=left] {\texttt{close()}\\invia FIN} (la);
+  \draw[-{Stealth}, thick] (la) -- node[below right, align=left] {ricevuto ACK} (closed);
+  \node[text=netred, font=\footnotesize\bfseries\sffamily] at (-4,-0.8) {chi chiude per primo};
+  \node[text=netblue, font=\footnotesize\bfseries\sffamily] at (4,-0.8) {chi chiude per secondo};
+\end{tikzpicture}
+\caption{Diagramma degli stati semplificato per il rilascio della connessione. Chi chiude per primo scende a sinistra;
+         chi risponde scende a destra, e resta in CLOSE WAIT finché la sua applicazione non chiude. CLOSING corrisponde al
+         caso raro in cui i due lati inviano il FIN contemporaneamente e nessuno dei due è secondo.}
+\end{figure}
+
+\warning{Il descriptor che nessuno ha chiuso}{
+    La \texttt{recv} del server restituisce 0 e ci si dimentica di chiudere il descriptor. Che cosa si rompe? All'inizio
+    \textbf{niente}. La connessione resta in CLOSE WAIT per sempre: il FIN del peer è stato confermato, ma il nostro non
+    parte mai.
+    \begin{itemize}
+        \item Anche il peer resta in attesa. Il rilascio non finisce su nessuno dei due lati, e nessuno dei due programmi
+              viene avvisato.
+        \item Qualche migliaio di client dopo il server ha finito i descriptor e smette di accettare: il guasto compare
+              lontano dalla sua causa.
+        \item \texttt{ss -tn state close-wait} elenca esattamente quelle connessioni. Una colonna di CLOSE WAIT è
+              \textbf{sempre un bug del programma}, mai della rete.
+    \end{itemize}
+}
+
+\subsection{TIME WAIT}
+
+\begin{itemize}
+    \item Chi chiude per primo non passa subito a CLOSED: aspetta, di solito da trenta secondi a due minuti.
+    \item \textbf{Primo motivo}: se la sua ultima conferma si perde, il peer rimanderà il suo FIN, e qualcuno deve essere lì
+          a rispondere.
+    \item \textbf{Secondo motivo}: segmenti di questa connessione possono essere ancora in rete, e i suoi quattro numeri
+          potrebbero essere assegnati a una connessione nuova.
+    \item L'attesa è circa il doppio del tempo massimo per cui un segmento può sopravvivere, così tutto ciò che appartiene
+          alla vecchia connessione è morto prima.
+    \item È il prezzo di chiudere per primi, e lo paga chi chiude per primo, che non è sempre il client.
+\end{itemize}
+
+\warning{Address already in use}{
+    Si interrompe il server, lo si riavvia, e \texttt{bind} fallisce. Non c'è nient'altro in esecuzione. Perché?
+    Perché interromperlo lo ha reso \textbf{l'estremo che ha chiuso per primo}. Le sue connessioni sono in TIME WAIT,
+    ancora legate alla porta locale, e \texttt{bind} non prende una porta che una connessione viva sta usando.
+    \begin{itemize}
+        \item \texttt{SO\_REUSEADDR}, la riga scritta in ogni server fin dal primo, dice di fare \texttt{bind} lo stesso.
+        \item È sicuro: la vecchia connessione conserva i suoi quattro numeri, e nessun suo segmento può essere consegnato al
+              nuovo socket.
+        \item Quando chiude prima il client, che è il caso abituale, il server non entra mai in TIME WAIT e il problema non
+              compare.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Come TCP si salva dalla perdita di pacchetti}
+% ══════════════════════════════════════════════════════════════
+
+Poiché il three-way handshake non è perfetto, TCP si affida ai \textbf{timer} per chiudere comunque le
+connessioni o per ripetere le richieste. Alcuni esempi durante il rilascio:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[yscale=0.72, every node/.style={font=\scriptsize\sffamily}]
+  \begin{scope}
+    \node[font=\footnotesize\bfseries\sffamily] at (1.6,1.1) {(a) si perde l'ACK finale};
+    \timeline{c}{0}{Client}{7}
+    \timeline{s}{3.2}{Server}{7}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {FIN} (3.2,-1.0);
+    \draw[msg, netgreen] (3.2,-1.2) -- node[above, sloped] {ACK + FIN} (0,-1.9);
+    \draw[msglost] (0,-2.1) -- (1.7,-2.5); \node[text=netred] at (2.1,-2.2) {ACK perso};
+    \draw[netorange, thick] (3.45,-1.2) -- (3.45,-3.6); \node[text=netorange, rotate=90] at (3.7,-2.4) {timeout};
+    \draw[msg] (3.2,-3.6) -- node[above, sloped] {FIN (di nuovo)} (0,-4.3);
+    \draw[msg, netgreen] (0,-4.5) -- node[above, sloped] {ACK} (3.2,-5.2);
+    \node at (1.6,-6.2) {chiusa su entrambi i lati};
+  \end{scope}
+  \begin{scope}[xshift=5.6cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (1.6,1.1) {(b) si perde il FIN del server};
+    \timeline{c}{0}{Client}{7}
+    \timeline{s}{3.2}{Server}{7}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {FIN} (3.2,-1.0);
+    \draw[msglost] (3.2,-1.2) -- (1.5,-1.6); \node[text=netred] at (1.1,-1.3) {perso};
+    \draw[netorange, thick] (-0.25,-0.3) -- (-0.25,-2.6); \node[text=netorange, rotate=90] at (-0.5,-1.45) {timeout};
+    \draw[msg] (0,-2.6) -- node[above, sloped] {FIN (rinviato)} (3.2,-3.3);
+    \draw[msg, netgreen] (3.2,-3.5) -- node[above, sloped] {ACK + FIN} (0,-4.2);
+    \draw[msg, netgreen] (0,-4.4) -- node[above, sloped] {ACK} (3.2,-5.1);
+    \node at (1.6,-6.2) {chiusa su entrambi i lati};
+  \end{scope}
+  \begin{scope}[xshift=11.2cm]
+    \node[font=\footnotesize\bfseries\sffamily] at (1.6,1.1) {(c) perdite ripetute};
+    \timeline{c}{0}{Client}{7}
+    \timeline{s}{3.2}{Server}{7}
+    \draw[msg] (0,-0.3) -- node[above, sloped] {FIN} (3.2,-1.0);
+    \draw[msglost] (3.2,-1.2) -- (1.5,-1.6);
+    \draw[msg] (0,-2.4) -- node[above, sloped] {FIN} (3.2,-3.1);
+    \draw[msglost] (3.2,-3.3) -- (1.5,-3.7);
+    \node[text width=2.8cm, align=center] at (1.6,-5.0) {dopo $N$ timeout ciascun lato chiude comunque};
+    \node[text=netred] at (0,-6.5) {chiusa}; \node[text=netred] at (3.2,-6.5) {chiusa};
+  \end{scope}
+\end{tikzpicture}
+\caption{Timer e ritrasmissioni permettono di chiudere la connessione anche quando si perdono segmenti; dopo un certo numero di tentativi falliti la connessione viene chiusa d'ufficio.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Si perde l'ultima conferma}: il client la invia e si considera chiuso; il server resta ad aspettarla. Il suo
+          timer scade e rimanda il FIN (a cui risponde il client in TIME WAIT), oppure, finiti i tentativi, rilascia comunque
+          la connessione. Non si danneggia niente: entrambi finiscono chiusi, solo non nello stesso istante, e nessuno dei
+          due lo saprà mai. È il dubbio dei due eserciti, e qui costa un ritardo da una parte.
+    \item \textbf{Si perde la risposta al FIN}: il client non ha saputo ancora niente. Il suo timer scade e rimanda il FIN,
+          esattamente come ritrasmetterebbe un segmento di dati; il server risponde con lo stesso segmento di prima. La
+          ritrasmissione alla chiusura non è un meccanismo nuovo: un timer, e una copia tenuta finché non è confermata.
+    \item \textbf{Le perdite continuano}: dopo un numero limitato di tentativi il client smette e chiude da solo, e il timer
+          del server chiude il suo lato. La connessione finisce senza che nessuno dei due abbia confermato niente all'altro,
+          che è proprio il punto di partenza dei due eserciti. Nessun protocollo lo elimina: ciò che aggiunge TCP è un timer,
+          un limite ai tentativi, e le risorse rilasciate in ogni caso.
+\end{itemize}
+
+\warning{RST: chiudere senza chiedere}{
+    Un FIN termina una connessione in ordine. Un \textbf{RST} (\emph{reset}) la termina \textbf{ora}, e ciò che era ancora nei
+    buffer viene scartato.
+    \begin{itemize}
+        \item Viene inviato ogni volta che arriva un segmento per una connessione che non esiste: nessuno in ascolto su
+              quella porta, o un peer che si è riavviato. Nel caso di UDP, invece, a una porta chiusa si risponde con un
+              messaggio ICMP ``port unreachable'' (lo vedremo con traceroute).
+        \item Una macchina che va in crash non invia niente. Il suo peer tiene una connessione che all'altro capo non esiste
+              più, e lo scopre solo quando scrive.
+        \item Allora torna l'RST, e il programma lo apprende come \texttt{ECONNRESET} su una lettura, oppure
+              \texttt{EPIPE} e \texttt{SIGPIPE} su una scrittura.
+        \item La sonda d'inattività del kernel parte dopo circa due ore: per questo un programma che deve accorgersi di un
+              peer morto invia un proprio \emph{heartbeat}.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{In laboratorio: una connessione vista da vicino}
+% ══════════════════════════════════════════════════════════════
+
+Una macchina, due finestre. \texttt{nc} dà un estremo TCP senza scrivere un programma: in ascolto da una parte, in
+connessione dall'altra.
+
+\begin{lstlisting}[language=bash, title={Due terminali, una connessione}]
+$ nc -l 5001                         # server: in ascolto sulla porta 5001
+Maradona
+sfogliatella
+
+$ ss -tln 'sport = :5001'            # qualcuno ascolta?
+$ nc localhost 5001                  # client: connettersi e scrivere
+Maradona
+sfogliatella
+\end{lstlisting}
+
+Ciò che si scrive sul client compare sul server. Nell'altro verso viaggia solo una conferma, un segmento senza alcun
+dato. Per catturare il traffico in Wireshark si usa il filtro \texttt{tcp \&\& tcp.port==5001 \&\& ip}:
+\begin{itemize}
+    \item tre clausole, una per livello della domanda: il protocollo di trasporto, la porta, il protocollo di rete sotto;
+    \item quella centrale basterebbe da sola, perché nient'altro sulla macchina usa la 5001: le altre due rendono esplicita
+          l'intenzione;
+    \item tutto avviene su \texttt{127.0.0.1}: i due estremi sono lo stesso host, e nemmeno un pacchetto raggiunge un cavo.
+          L'interfaccia su cui catturare è quindi quella di \textbf{loopback}; puntando lo sniffer su quella reale non si
+          vede niente.
+\end{itemize}
+
+\begin{lstlisting}[language=bash, title={Che cosa mostra la cattura}]
+$ tshark -i lo -f "tcp port 5001"
+ 1  0.000000 41230 -> 5001  [SYN]       Seq=0  Win=65495 Len=0
+ 2  0.000018  5001 -> 41230 [SYN, ACK]  Seq=0  Ack=1     Len=0
+ 3  0.000027 41230 -> 5001  [ACK]       Seq=1  Ack=1     Len=0
+ 4  6.213004 41230 -> 5001  [PSH, ACK]  Seq=1  Ack=1     Len=9
+ 5  6.213021  5001 -> 41230 [ACK]       Seq=1  Ack=10    Len=0
+ 6  9.402771 41230 -> 5001  [PSH, ACK]  Seq=10 Ack=1     Len=13
+ 7  9.402788  5001 -> 41230 [ACK]       Seq=1  Ack=23    Len=0
+ 8 19.884113 41230 -> 5001  [FIN, ACK]  Seq=23 Ack=1     Len=0
+\end{lstlisting}
+
+\begin{itemize}
+    \item Tre segmenti prima che si prema un tasto: l'handshake.
+    \item Poi un segmento per ogni riga scritta, di nove e tredici byte (c'è dentro il carattere di a capo), ciascuno con una
+          conferma pura che torna indietro: \texttt{Ack=10} è $1 + 9$, \texttt{Ack=23} è $10 + 13$.
+    \item L'ultima riga è il Ctrl-C, che chiude e fa partire il FIN.
+    \item I numeri di sequenza partono da 0 perché Wireshark e \texttt{tshark} mostrano numeri \textbf{relativi}: sottraggono
+          l'ISN casuale per renderli leggibili. Quelli veri sono nel dettaglio del pacchetto.
+\end{itemize}
+
+\begin{lstlisting}[language=bash, title={La stessa connessione, con un file}]
+$ nc -l 12338 > real2.doc            # server: scrive quanto arriva
+$ nc 127.0.0.1 12338 < real.doc      # client: invia un file
+^C
+\end{lstlisting}
+
+\begin{itemize}
+    \item Le due ridirezioni fanno tutto: \texttt{nc} invia il proprio standard input e stampa ciò che riceve. La copia
+          avviene su TCP.
+    \item Ciò che viaggia è un flusso di byte senza struttura: niente sul filo dice dove finisce il file.
+    \item \texttt{nc} non si ferma quando l'input finisce, quindi il trasferimento si chiude a mano, ed è il Ctrl-C a inviare
+          il FIN. Qui il FIN è il segnale di fine file: un protocollo che deve inviare due file su una connessione deve dirlo
+          da sé (è la delimitazione per chiusura della parte sulla programmazione).
+\end{itemize}
+
+\Needspace{20\baselineskip}
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Accordarsi su un canale inaffidabile con certezza è impossibile (\textbf{problema dei due eserciti}): il
+          three-way handshake è imperfetto ma adeguato.
+    \item \textbf{Apertura}: SYN (Seq = client\_isn), SYNACK (Seq = server\_isn, Ack = client\_isn+1), ACK (Ack =
+          server\_isn+1, può contenere dati). Numeri iniziali casuali.
+    \item Stati di apertura: CLOSED, LISTEN / SYN SENT, SYN RECEIVED, ESTABLISHED.
+    \item \textbf{Chiusura}: FIN, ACK, FIN, ACK (ACK e FIN possono essere uniti); stati FIN WAIT 1/2, CLOSE WAIT,
+          LAST ACK, CLOSING, TIME WAIT, CLOSED.
+    \item \texttt{listen} crea due code (mezze aperte e completate); \texttt{accept} non partecipa all'handshake. I SYN cookie
+          difendono dal SYN flood senza tenere stato.
+    \item Un FIN chiude una direzione; lo 0 di \texttt{recv} è il FIN del peer. Un CLOSE WAIT che non finisce è un bug
+          nostro; TIME WAIT protegge l'ultima conferma e i quattro numeri, ed è il motivo di \texttt{SO\_REUSEADDR}.
+    \item I \textbf{timer} risolvono le perdite residue; RST rifiuta o interrompe le connessioni.
+    \item Resta aperto: la finestra di ricezione nell'header, e che cosa fa un mittente quando il limite non è il ricevente
+          ma la rete.
+\end{itemize}
+}

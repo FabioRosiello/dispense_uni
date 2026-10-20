@@ -4,6 +4,12 @@
 \section{Il protocollo IP}
 % ══════════════════════════════════════════════════════════════
 
+Avevamo lasciato la forwarding table sistemata: una riga è un prefisso, e quando più righe corrispondono vince la più
+lunga. Non abbiamo detto \textbf{da dove vengono i prefissi}, cioè chi decide che quattro miliardi di indirizzi siano
+raggruppati così. Niente nell'hardware lo impone: gli indirizzi potrebbero essere distribuiti uno alla volta, nell'ordine
+in cui si accendono le macchine. Ma allora nessun router potrebbe tenere una tabella: tutto l'edificio poggia sul fatto
+che gli indirizzi vengono assegnati \textbf{a blocchi}.
+
 Ricapitolando: il livello di rete deve consegnare i datagrammi \textbf{da host a host}, incapsulando e
 decapsulando i segmenti, identificando gli host con un \textbf{indirizzo} e inoltrando i messaggi verso la
 destinazione; nella rete i \textbf{router}, con le loro porte, la switching fabric e il processore di controllo che
@@ -20,6 +26,11 @@ crea le tabelle, inoltrano i datagrammi ai nodi adiacenti.
     processo con cui si assegnano gli indirizzi IP ai dispositivi. È cruciale ed è molto complesso su Internet, dove
     ci sono miliardi di host da indirizzare.
 }
+
+IPv4 trasporta ancora quasi tutto il traffico; IPv6 è stato progettato per sostituirlo, e ci arriveremo quando finiranno gli
+indirizzi. Il servizio è il best effort già descritto: ciò che IP aggiunge è una cosa sola, \textbf{i nomi degli estremi},
+e da quella dipende ogni altra funzione del livello. È difficile per una ragione banale: lo schema deve nominare miliardi di
+interfacce e restare cercabile in nanosecondi.
 
 % ══════════════════════════════════════════════════════════════
 \section{Gli indirizzi IPv4}
@@ -45,7 +56,10 @@ dell'indirizzo è scritto in decimale e separato dagli altri da un punto.
 
 \begin{itemize}
     \item Ogni dispositivo sull'Internet globale deve avere (in qualche modo) un indirizzo IP \textbf{univoco}.
-    \item Poiché un indirizzo è lungo 32 bit, ci sono in tutto $2^{32}$ indirizzi possibili, circa \textbf{4 miliardi}.
+    \item Poiché un indirizzo è lungo 32 bit, ci sono in tutto $2^{32}$ indirizzi possibili, circa \textbf{4 miliardi}: un
+          numero che nel 1981 sembrava inesauribile.
+    \item La forma puntata è una comodità per noi. Il protocollo non la usa mai: ogni operazione sugli indirizzi è
+          un'operazione sui bit.
 \end{itemize}
 
 \subsection{L'indirizzo appartiene all'interfaccia}
@@ -59,7 +73,9 @@ collegamento verso la rete, mentre un router ne ha molti.
     IP}. Tecnicamente, quindi, un indirizzo IP è associato all'\textbf{interfaccia}, non all'host o al router che la contiene.
 }
 
-Un router con tre interfacce ha tre indirizzi IP; un portatile con scheda cablata e Wi-Fi può averne due.
+Un router con tre interfacce ha tre indirizzi IP, e non devono assomigliarsi; un portatile con scheda cablata e Wi-Fi
+può averne due. Sembra pedanteria finché non si contano le subnet di una topologia reale, dove è proprio ciò che fa tornare
+il conto.
 
 % ══════════════════════════════════════════════════════════════
 \section{Il subnetting}
@@ -161,6 +177,10 @@ Una subnet mask identifica un \textbf{prefisso}: gli 1 devono quindi essere tutt
     Poiché gli 1 sono contigui, ogni byte di una maschera può valere solo: 0, 128, 192, 224, 240, 248, 252, 254, 255.
 }
 
+La contiguità è ciò che rende il blocco un \textbf{intervallo}: fissati i primi $x$ bit, quelli liberi vanno da tutti zeri
+a tutti uni. Con un buco nella maschera gli indirizzi che corrispondono sarebbero sparsi nello spazio, e nessun confronto
+dei bit iniziali li troverebbe mai.
+
 \subsection{Verificare se due host sono nella stessa subnet}
 
 Per capire se due host sono nella stessa subnet basta controllare se i loro \textbf{prefissi} sono uguali, cioè se
@@ -194,8 +214,10 @@ primo bit.
 \end{itemize}
 \end{esempio}
 
-Host di subnet diverse possono comunque comunicare, ma gli amministratori di rete possono decidere di trattare
-diversamente i messaggi che entrano o escono da una subnet (per esempio bloccandoli o filtrandoli).
+Le cifre decimali non sono una guida: nel terzo caso il primo byte è uguale, eppure 32 e 64 differiscono già nei tre
+bit coperti dalla maschera /11. Host di subnet diverse possono comunque comunicare, attraverso un router, ed è lì che gli
+amministratori di rete possono decidere di trattare diversamente i messaggi che entrano o escono da una subnet (per esempio
+bloccandoli o filtrandoli).
 
 % ══════════════════════════════════════════════════════════════
 \section{Router e subnet}
@@ -235,10 +257,15 @@ collegamento punto-punto e una per il collegamento broadcast verso una coppia di
     \item \texttt{223.1.1.0/24} (R1--host), \texttt{223.1.2.0/24} (R2--host), \texttt{223.1.3.0/24} (R3--host);
     \item \texttt{223.1.9.0/24} (R1--R2), \texttt{223.1.8.0/24} (R2--R3), \texttt{223.1.7.0/24} (R3--R1).
 \end{itemize}
-Per contare le subnet si ``staccano'' le interfacce da host e router: ogni isola di rete che resta è una subnet, e anche un
-collegamento punto-punto tra due router è una subnet. Le organizzazioni medio-grandi (aziende, università) hanno tipicamente
-molte subnet interconnesse.
+Sei subnet, non tre: è per questo che i blocchi finiscono prima di quanto suggerisca il numero degli host. Le
+organizzazioni medio-grandi (aziende, università) hanno tipicamente molte subnet interconnesse.
 \end{esempio}
+
+\dfn{Subnet}{
+    Si staccano tutte le interfacce dai loro host e router: ogni \textbf{isola} che resta è una subnet. Una subnet non è un
+    cavo e non è un dispositivo: è ciò che è raggiungibile \textbf{senza attraversare un router}, e anche un collegamento
+    punto-punto fra due router è una subnet, con due interfacce e nessun host.
+}
 
 \begin{figure}[H]
 \centering
@@ -254,16 +281,38 @@ molte subnet interconnesse.
 \caption{La configurazione tipica di un host di casa: indirizzo, maschera e gateway predefinito.}
 \end{figure}
 
-\subsection{ifconfig e ip}
+Anche il router di casa ha \textbf{due} interfacce, quindi due indirizzi, uno in ciascuna delle due subnet che unisce: uno
+interno (\texttt{192.168.1.1}, nella subnet della casa) e uno esterno, nella subnet del fornitore. \texttt{192.168.0.0/16}
+è riservato all'uso privato e \textbf{non} è globalmente unico: gli stessi indirizzi sono in milioni di case. Come un solo
+indirizzo pubblico serva tutti i dispositivi dietro di lui è compito della traduzione degli indirizzi (NAT), che vedremo a
+breve.
 
-Su Linux si può controllare il proprio indirizzo con \texttt{ifconfig} (\emph{interface configuration}; l'equivalente su
-Windows è \texttt{ipconfig}), che elenca tutte le interfacce di rete della macchina con la loro configurazione
-(indirizzi, maschere, \dots). Il comando moderno è \texttt{ip}.
+\subsection{Leggere la propria configurazione}
 
-\begin{lstlisting}[language=bash]
-$ ifconfig          # configurazione di tutte le interfacce
-$ ip addr           # lo stesso, con il comando moderno
+\begin{lstlisting}[language=bash, title={ip addr: le interfacce e la loro configurazione}]
+$ ip -4 addr show eth0
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP
+    inet 217.149.127.10/26 brd 217.149.127.63 scope global eth0
+       valid_lft forever preferred_lft forever
 \end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{ip addr show} elenca le interfacce con la loro configurazione; il vecchio comando era \texttt{ifconfig},
+          l'equivalente su Windows è \texttt{ipconfig}.
+    \item La parte interessante è il prefisso: \texttt{/26} sono 26 uni, cioè la maschera \texttt{255.255.255.192}, quindi
+          restano 6 bit. La subnet è \texttt{217.149.127.0/26}, da \texttt{.0} a \texttt{.63}: sessantaquattro indirizzi e
+          non di più.
+    \item \texttt{brd 217.149.127.63} è l'indirizzo di broadcast, cioè l'ultimo del blocco: dei 64 indirizzi del /26 se ne
+          possono assegnare \textbf{62}.
+    \item \texttt{mtu 1500} è il payload più grande, in frame fino a 1518 byte: servirà fra poco.
+\end{itemize}
+
+\info{I due indirizzi di ogni blocco che non sono nostri}{
+    L'indirizzo più basso del blocco (bit di host tutti a zero) nomina la subnet stessa e non viene mai dato a
+    un'interfaccia; il più alto (bit di host tutti a uno) è il \textbf{broadcast}, consegnato a ogni interfaccia della
+    subnet. Più il blocco è piccolo, più pesano. \texttt{255.255.255.255} è invece il \textbf{broadcast limitato}: ogni
+    interfaccia della mia stessa subnet, e i router non lo inoltrano.
+}
 
 % ══════════════════════════════════════════════════════════════
 \section{L'indirizzamento su Internet}
@@ -298,8 +347,11 @@ C & a.b.c.d/24 & 192--223 & 200.10.10.X & 256 (254 host) \\
 \end{table}
 
 \begin{esempio}{Lo spreco del classful}
+Fino agli anni Novanta il confine poteva cadere solo a 8, 16 o 24 bit: uno, due o tre byte interi, e niente in mezzo.
 Un'organizzazione che ha bisogno di 300 indirizzi non può usare una classe C (troppo piccola): riceve una classe B, per
-esempio \texttt{241.115.0.0/16}, con tutti i suoi 65\,536 indirizzi. Ne usa 300, e ne \textbf{spreca oltre 65\,000}.
+esempio \texttt{241.115.0.0/16}, con tutti i suoi 65\,536 indirizzi. Ne usa 300, e ne \textbf{spreca oltre 65\,000} che
+nessun altro potrà mai usare. Lo spazio delle classi B si è svuotato in fretta: la distanza fra ciò di cui
+un'organizzazione ha bisogno e ciò che le si può dare era strutturale.
 \end{esempio}
 
 \subsection{Indirizzamento classless (CIDR)}
@@ -319,10 +371,19 @@ Servono 300 indirizzi: bastano 9 bit di host ($2^9 = 512 \geq 300$), quindi un p
 riceve per esempio \texttt{241.115.2.0/23}: 512 indirizzi, con soli 212 sprecati (invece di oltre 65\,000).
 \end{esempio}
 
-\warning{Blocchi che si sovrappongono}{
-    I blocchi possono sovrapporsi: in questo caso è la \textbf{lunghezza del prefisso} a distinguerli. Per esempio
-    \texttt{10.10.10.15/16} \textbf{non} è nello stesso blocco di \texttt{10.10.10.14/24}: il primo appartiene a
-    \texttt{10.10.0.0/16}, il secondo a \texttt{10.10.10.0/24}.
+Niente altro cambia: la maschera è ancora uni seguiti da zeri, il blocco è ancora un intervallo; è sparito solo il vincolo
+su $x$. E i blocchi vengono assegnati in modo \textbf{contiguo}, il che conta più degli indirizzi risparmiati.
+
+\warning{Lo stesso indirizzo sta in più blocchi}{
+    A quale blocco appartiene \texttt{10.10.10.15}? A \texttt{10.10.0.0/16}, a \texttt{10.10.10.0/24} e a
+    \texttt{10.10.10.0/28}, tutti insieme. Un indirizzo da solo non nomina un blocco: la \textbf{lunghezza del prefisso} è la
+    metà mancante dell'affermazione.
+    \begin{itemize}
+        \item I blocchi sono \textbf{annidati}, uno dentro l'altro, non affiancati; e un prefisso più corto significa un
+              blocco più grande.
+        \item Quindi un router può benissimo trovare due righe che corrispondono, e sa già che cosa fare: tiene il prefisso
+              più lungo.
+    \end{itemize}
 }
 
 \subsection{Subnet interne a un blocco}
@@ -341,7 +402,8 @@ esempio, si può dividere in:
   \draw[decorate, decoration={brace, amplitude=5pt}] (s.north west) -- (s.north east) node[midway, above=6pt, font=\footnotesize\sffamily] {subnet};
   \draw[decorate, decoration={brace, amplitude=5pt}] (h.north west) -- (h.north east) node[midway, above=6pt, font=\footnotesize\sffamily] {host};
 \end{tikzpicture}
-\caption{Un blocco /16 diviso internamente in subnet /24.}
+\caption{Un blocco /16 diviso internamente in subnet /24. Dentro il campus i router usano tutti e 24 i bit; fuori ne
+         bastano 16, perché i bit sotto il prefisso appartengono all'organizzazione e i router esterni non li guardano mai.}
 \end{figure}
 
 \begin{esempio}{Dividere un blocco in sottoblocchi uguali}
@@ -431,9 +493,14 @@ Per ottenere un blocco di indirizzi per le subnet di un'organizzazione ci sono d
           esempio l'ISP può avere il blocco \texttt{200.23.16.0/20} e dividerlo in sottoblocchi di dimensione variabile
           secondo le proprie politiche.
     \item \textbf{Rivolgersi all'ICANN} (\emph{Internet Corporation for Assigned Names and Numbers}), l'autorità globale no-profit
-          responsabile dello spazio degli indirizzi IP (assegna i blocchi agli ISP, tramite registri regionali). L'ICANN gestisce
-          anche i root server DNS, assegna i nomi di dominio e risolve le controversie sui nomi.
+          responsabile dello spazio degli indirizzi IP, che delega a cinque \textbf{registri regionali}: RIPE per l'Europa,
+          poi ARIN, APNIC, LACNIC e AFRINIC. L'ICANN gestisce anche i root server DNS, assegna i nomi di dominio e risolve le
+          controversie sui nomi: entrambi gli spazi di nomi che Internet usa rispondono a una sola autorità.
 \end{enumerate}
+
+La prima strada è il modo in cui il raggruppamento avviene in pratica. Resta l'ultimo passo: dare i singoli indirizzi
+alle interfacce dentro il blocco. Quelli dei router si configurano a mano; quelli degli host li distribuisce
+automaticamente un protocollo apposito (DHCP), con il resto dei meccanismi \emph{plug-and-play}.
 
 % ══════════════════════════════════════════════════════════════
 \section{Il datagramma IPv4}
@@ -468,8 +535,8 @@ Il pacchetto del livello di rete di Internet si chiama \textbf{datagramma} (come
     \item \textbf{Versione} (4 bit): la versione di IP (4 o 6); il formato dipende dalla versione.
     \item \textbf{Lunghezza dell'header} (4 bit): la dimensione dell'header, non fissa per via delle opzioni; serve a sapere
           dove iniziano i dati. Senza opzioni l'header è di \textbf{20 byte}.
-    \item \textbf{Tipo di servizio} (TOS, 8 bit): proprietà specifiche del datagramma (per esempio tempo reale o no),
-          definite dagli amministratori dei router.
+    \item \textbf{Tipo di servizio} (TOS, 8 bit): classi di traffico (per esempio tempo reale o no), definite dagli
+          amministratori dei router; due di questi bit portano la notifica esplicita di congestione (ECN) già vista.
     \item \textbf{Lunghezza del datagramma} (16 bit): lunghezza in byte di header + dati. I datagrammi raramente superano
           i 1500 byte, sui 65\,535 possibili.
     \item \textbf{Identificatore} (16 bit): numero progressivo che identifica il datagramma (usato nella frammentazione).
@@ -477,7 +544,8 @@ Il pacchetto del livello di rete di Internet si chiama \textbf{datagramma} (come
     \item \textbf{Time-to-live} (TTL, 8 bit): impedisce che i datagrammi circolino per sempre. Ogni router che elabora il
           datagramma lo \textbf{decrementa di 1}; se arriva a 0, il router \textbf{scarta} il datagramma.
     \item \textbf{Protocollo superiore} (8 bit): il protocollo di trasporto a cui consegnare i dati (per esempio \textbf{6} per
-          TCP, \textbf{17} per UDP; l'elenco completo è sul sito della IANA).
+          TCP, \textbf{17} per UDP; l'elenco completo è sul sito della IANA). È la colla fra rete e trasporto, come il numero
+          di porta lo è fra trasporto e applicazione.
     \item \textbf{Checksum dell'header} (16 bit): complemento a 1 della somma a 16 bit dell'header. I router lo controllano e di
           solito scartano i datagrammi errati. Va \textbf{ricalcolato a ogni router}, perché TTL e opzioni possono cambiare.
     \item \textbf{Indirizzi IP sorgente e destinazione} (32 + 32 bit).
@@ -491,6 +559,14 @@ Il pacchetto del livello di rete di Internet si chiama \textbf{datagramma} (come
     livello applicativo. Per messaggi piccoli l'overhead è significativo.
 }
 
+\warning{Due checksum sugli stessi byte}{
+    Perché un segmento TCP viaggia sotto due checksum? Perché coprono cose \textbf{diverse}: IP controlla solo il proprio
+    header, TCP e UDP l'intero segmento, payload compreso. Un indirizzo di destinazione corrotto lo prende il primo; un bit
+    girato nei dati no, e serve il secondo. E i due livelli non sono saldati: IP trasporta cose che non sono TCP, e TCP
+    potrebbe in principio girare su qualcos'altro. Nessuno dei due livelli può assumere che il lavoro lo faccia l'altro: è la
+    forma generale dell'argomento end-to-end.
+}
+
 % ══════════════════════════════════════════════════════════════
 \section{La frammentazione IPv4}
 % ══════════════════════════════════════════════════════════════
@@ -501,8 +577,9 @@ esempio, portano al massimo 1500 byte di dati).
 
 \dfn{MTU}{
     I datagrammi IP vengono incapsulati in frame di collegamento per essere trasportati da un nodo all'altro. La
-    quantità massima di dati che un frame può trasportare è la \textbf{Maximum Transmission Unit} (MTU). A livello di
-    collegamento la lunghezza del frame è limitata dai vincoli della trasmissione fisica.
+    quantità massima di dati che un frame può trasportare è la \textbf{Maximum Transmission Unit} (MTU): 1500 byte per
+    Ethernet, 2272 per 802.11. I limiti vengono dall'hardware, dai campi degli header, e dal desiderio che un singolo
+    pacchetto non occupi il canale troppo a lungo.
 }
 
 \begin{figure}[H]
@@ -556,6 +633,35 @@ Il terzo frammento è lungo $1020 + 20 = 1040$ byte in tutto. La somma dei dati 
     \end{itemize}
 }
 
+\warning{Un frammento perso perde il datagramma}{
+    Partono tre frammenti, uno viene scartato lungo la strada. Che cosa arriva? \textbf{Niente}. I due arrivati non possono
+    essere consegnati in alto, perché il trasporto si aspetta un segmento intero, e vengono buttati allo scadere del timer di
+    riassemblaggio.
+    \begin{itemize}
+        \item L'uno per cento di frammenti persi diventa circa il tre per cento di datagrammi persi, e il mittente ritrasmette
+              tutto, che viene frammentato di nuovo, sullo stesso collegamento, con le stesse probabilità.
+        \item Si aggiungono un header per pezzo e il lavoro imposto al ricevente.
+    \end{itemize}
+    La frammentazione è quindi un meccanismo che funziona e che si preferirebbe non usare mai.
+}
+
+\subsection{Non frammentare: la scoperta dell'MTU di percorso}
+
+\begin{itemize}
+    \item I mittenti moderni evitano la frammentazione invece di affidarvisi, e l'header ha un bit apposta: \textbf{DF},
+          \emph{don't fragment}.
+    \item Con DF acceso, un router che non può inoltrare il datagramma lo scarta e restituisce un errore alla sorgente,
+          indicando l'MTU che avrebbe potuto accettare.
+    \item La sorgente riduce i pacchetti e riprova; un collegamento più stretto più avanti fa partire un altro errore, e si
+          riduce di nuovo.
+    \item L'\key{MTU di percorso} (\emph{path MTU}) è la più piccola MTU lungo il percorso: costa alcune andate e ritorno
+          prima che arrivi qualsiasi dato, e cambia quando cambia la rotta.
+    \item IPv6 ha eliminato del tutto la frammentazione nei router: un datagramma troppo grande viene scartato e la sorgente
+          viene avvisata. Quei messaggi di errore sono un protocollo a sé di questo livello (ICMP), che leggeremo quando
+          arriveremo alla diagnosi di una rete.
+\end{itemize}
+
+\Needspace{20\baselineskip}
 % ══════════════════════════════════════════════════════════════
 \section{Riepilogo}
 % ══════════════════════════════════════════════════════════════
@@ -569,6 +675,7 @@ Il terzo frammento è lungo $1020 + 20 = 1040$ byte in tutto. La somma dei dati 
     \item Dal \textbf{classful} (A, B, C, sprechi) al \textbf{CIDR} (a.b.c.d/x qualsiasi); \textbf{aggregazione} dei prefissi con
           longest prefix matching per le eccezioni.
     \item Header IPv4: 20 byte + opzioni; campi chiave TTL, protocollo, checksum, indirizzi, identificatore/flag/offset.
-    \item \textbf{Frammentazione}: se il datagramma supera l'MTU, i router lo dividono; gli host lo riassemblano.
+    \item \textbf{Frammentazione}: se il datagramma supera l'MTU, i router lo dividono; gli host lo riassemblano. Un frammento
+          perso perde tutto il datagramma, quindi oggi la si evita con DF e la scoperta dell'MTU di percorso.
 \end{itemize}
 }

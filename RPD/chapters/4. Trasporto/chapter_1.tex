@@ -23,12 +23,16 @@
 }
 
 Il livello di trasporto trasforma i messaggi applicativi in uno o più pacchetti di trasporto, detti
-\textbf{segmenti} (o \textbf{datagrammi}, termine usato soprattutto per UDP):
+\textbf{segmenti}. Il Kurose usa questo nome per entrambi i protocolli; le RFC parlano di \textbf{datagrammi} per UDP,
+e così faremo anche noi:
 
 \begin{itemize}
     \item se i messaggi vengono spezzati in pezzi più piccoli, a ciascun pezzo viene aggiunto un
           \textbf{header di trasporto};
-    \item i segmenti vengono passati uno alla volta al livello di rete per essere trasmessi.
+    \item i segmenti vengono passati uno alla volta al livello di rete, che incapsula ciascuno in un datagramma IP e fa un
+          tentativo \emph{best effort} di consegnarlo;
+    \item i router lavorano sui campi del datagramma IP: ciò che ha aggiunto il trasporto \textbf{non spetta a loro}
+          leggerlo.
 \end{itemize}
 
 \begin{figure}[H]
@@ -46,6 +50,7 @@ Il livello di trasporto trasforma i messaggi applicativi in uno o più pacchetti
 \caption{Il trasporto spezza il messaggio in segmenti, ciascuno con il proprio header.}
 \end{figure}
 
+\Needspace{18\baselineskip}
 \subsection{Trasporto e rete: processi contro host}
 
 \info{L'analogia delle due case}{
@@ -113,7 +118,8 @@ un download, la navigazione), e un processo può essere collegato a più process
 contemporaneamente (un proxy, un mail server). Per gestire tutto questo si usano i \textbf{socket}:
 invece di consegnare il messaggio direttamente a un processo, lo si consegna a un socket, un punto di
 accesso da cui il processo lo preleva. Così il numero dei processi è in parte svincolato dal numero delle
-connessioni.
+connessioni: il server concorrente della parte sulla programmazione teneva \textbf{un socket per ogni client connesso},
+e un solo processo con dieci socket parla con dieci peer.
 
 Poiché sull'host ricevente ci sono molti socket, servono:
 
@@ -167,8 +173,18 @@ esistono anche in altri livelli.
 
 \dfn{Porta}{
     Gli identificatori dei socket si chiamano \textbf{porta sorgente} e \textbf{porta di destinazione}
-    (o semplicemente \textbf{porte}). Una porta è un numero a \textbf{16 bit}, da 0 a 65535.
+    (o semplicemente \textbf{porte}). Una porta è un numero a \textbf{16 bit}, da 0 a 65535, e ogni header di trasporto
+    ne porta due nei suoi primi quattro byte.
 }
+
+\begin{itemize}
+    \item La porta di \textbf{destinazione} è la chiave del demultiplexing: è ciò che legge l'host ricevente per scegliere
+          il socket.
+    \item La porta \textbf{sorgente} è l'indirizzo a cui andrà la risposta: il mittente annuncia dove bussare per
+          rispondergli.
+    \item Una porta appartiene a un \textbf{socket}, non a un processo: un processo può averne molte, e un socket di
+          ascolto conserva la propria mentre i figli lavorano.
+\end{itemize}
 
 \begin{itemize}
     \item Le porte da \textbf{0 a 1023} sono le \textbf{porte ben note} (\emph{well-known ports}): riservate ai
@@ -214,8 +230,27 @@ $ sudo nmap -sV [indirizzo]          # prova a identificare i servizi in ascolto
 $ sudo nmap --top-ports N [indirizzo]  # solo le N porte piu' usate
 \end{lstlisting}
 
-Lo stato di una porta può essere \emph{open} o \emph{closed}, \emph{filtered} o \emph{unfiltered} (cioè
-impossibile da sondare).
+\begin{lstlisting}[language=bash, title={Quali porte sono aperte}]
+$ nmap --top-ports 6 scanme.nmap.org
+Nmap scan report for scanme.nmap.org (45.33.32.156)
+PORT    STATE    SERVICE
+21/tcp  filtered ftp
+22/tcp  open     ssh
+23/tcp  filtered telnet
+25/tcp  filtered smtp
+80/tcp  open     http
+110/tcp closed   pop3
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{open}: qualcosa ha fatto \texttt{bind} sulla porta ed è in ascolto.
+    \item \texttt{closed}: l'host ha risposto, e lì non c'è nessuno.
+    \item \texttt{filtered}: non è tornata alcuna risposta, perché un firewall ha inghiottito la sonda; lo stato è
+          \textbf{sconosciuto}.
+    \item \texttt{nmap -sV} va oltre e chiede alla porta che servizio sia, che è anche la prima mossa di chi cerca un modo
+          per entrare.
+\end{itemize}
+\texttt{scanme.nmap.org} è un host messo a disposizione dagli autori di nmap proprio per queste prove.
 
 \warning{Solo sulle proprie macchine}{
     Scansionare le porte di host altrui senza autorizzazione è considerato un comportamento ostile (è il
@@ -227,29 +262,35 @@ impossibile da sondare).
 \section{Multiplexing e demultiplexing in azione}
 % ══════════════════════════════════════════════════════════════
 
-Un processo sull'host A, con porta 19157, vuole mandare un messaggio a un processo con porta 46428
-sull'host B.
+Un processo client sull'host A, con porta 46428, vuole mandare un messaggio a un processo server sull'host B, in
+ascolto sulla porta 19157.
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
   \node (A) at (0,0) {\icon[1cm]{pc}}; \node[below=-2pt of A, font=\footnotesize\bfseries\sffamily] {Host A};
   \node (B) at (10,0) {\icon[1.1cm]{laptop}}; \node[below=-2pt of B, font=\footnotesize\bfseries\sffamily] {Host B};
-  \node[field, fill=ltra!60, minimum width=2.4cm, align=left, text width=2.2cm] (s1) at (5,1.1) {sorg: 19157\\dest: 46428\\messaggio};
-  \node[field, fill=lnet!60, minimum width=2.4cm, align=left, text width=2.2cm] (s2) at (5,-1.1) {sorg: 46428\\dest: 19157\\risposta};
+  \node[field, fill=ltra!60, minimum width=2.4cm, align=left, text width=2.2cm] (s1) at (5,1.1) {sorg: 46428\\dest: 19157\\richiesta};
+  \node[field, fill=lnet!60, minimum width=2.4cm, align=left, text width=2.2cm] (s2) at (5,-1.1) {sorg: 19157\\dest: 46428\\risposta};
   \draw[msg, very thick, netblue] (A) -- (s1) -- (B);
   \draw[msg, very thick, netgreen] (B) -- (s2) -- (A);
 \end{tikzpicture}
-\caption{Nella risposta le porte si scambiano: la porta sorgente del segmento di andata diventa la porta di destinazione del segmento di ritorno.}
+\caption{Nella risposta le porte si scambiano: la porta sorgente del segmento di andata diventa la porta di destinazione del segmento di ritorno. È l'unico indirizzo di ritorno che il client abbia mai inviato.}
 \end{figure}
 
 \begin{itemize}
-    \item \textbf{Multiplexing}: il trasporto di A crea un segmento con i dati, la porta sorgente (19157) e la
-          porta di destinazione (46428), e lo passa al livello di rete, che lo incapsula in un datagramma IP e fa
+    \item \textbf{Multiplexing}: il trasporto di A crea un segmento con i dati, la porta sorgente (46428) e la
+          porta di destinazione (19157), e lo passa al livello di rete, che lo incapsula in un datagramma IP e fa
           del suo meglio (\emph{best effort}) per consegnarlo a B.
     \item \textbf{Demultiplexing}: se il segmento arriva a B, il trasporto di B lo decapsula ed esamina la porta di
-          destinazione per consegnarlo al socket giusto.
+          destinazione (19157) per consegnarlo al socket giusto.
 \end{itemize}
+
+\info{Che cosa compilava recvfrom}{
+    È questo che \texttt{recvfrom} riempiva per noi: l'indirizzo del client che il server di eco passava tale e quale a
+    \texttt{sendto} è l'indirizzo e la porta che il client non ha mai dovuto comunicare, perché viaggiavano
+    nell'header.
+}
 
 \subsection{In UDP}
 
@@ -268,6 +309,27 @@ sull'host B.
     finiscono nello \textbf{stesso socket}: lo stesso socket può rispondere a molti client diversi.
 }
 
+\begin{itemize}
+    \item È per questo che il server di eco UDP serviva tutti con un solo socket, senza mai accettare niente.
+    \item E un client che sparisce non rompe nulla: non c'era alcuno stato su di lui da rompere.
+    \item Il prezzo è che il socket non sa dire chi sta parlando, a meno che \texttt{recvfrom} non consegni ogni volta il
+          mittente.
+\end{itemize}
+
+\warning{Nessuno ascolta su quella porta}{
+    Il client invia un datagramma alla porta 9999 di un host dove nessuno ha fatto \texttt{bind} su di essa. Che cosa
+    torna indietro? \textbf{Niente dal livello di trasporto}: non ha un socket a cui consegnare, quindi scarta il datagramma
+    e chiede al livello di rete di segnalare il fallimento.
+    \begin{itemize}
+        \item La segnalazione è un messaggio \textbf{ICMP}, inviato dall'host e non da un processo: lo leggeremo al livello di
+              rete.
+        \item Se il socket del client era connesso (\texttt{connect} su UDP), il kernel abbina la segnalazione e la chiamata
+              successiva fallisce con \texttt{ECONNREFUSED}.
+        \item Se non lo era, non c'è nessuno a cui dare l'errore, e \texttt{recvfrom} semplicemente aspetta: il timeout non
+              era un dettaglio, era l'unico modo di accorgersene.
+    \end{itemize}
+}
+
 \subsection{In TCP}
 
 \begin{itemize}
@@ -277,8 +339,8 @@ sull'host B.
           porta di destinazione 19157 e un bit speciale dell'header acceso (\textbf{SYN = 1}).
     \item Il server riceve la richiesta, trova il processo in attesa sulla porta 19157, e \texttt{accept()} crea un
           \textbf{nuovo socket}, riempiendo la struttura del client con porte e indirizzi del segmento arrivato.
-    \item Tutti i segmenti successivi con \textbf{quella} porta sorgente, \textbf{quell'}indirizzo sorgente,
-          \textbf{quella} porta di destinazione e \textbf{quell'}indirizzo di destinazione vengono consegnati al
+    \item Tutti i segmenti successivi con \textbf{la stessa} porta sorgente, \textbf{lo stesso} indirizzo
+          sorgente, \textbf{la stessa} porta di destinazione e \textbf{lo stesso} indirizzo di destinazione vengono consegnati al
           nuovo socket.
 \end{itemize}
 
@@ -286,6 +348,38 @@ sull'host B.
     Un socket TCP è identificato da \textbf{quattro} elementi: \textbf{indirizzo IP sorgente},
     \textbf{porta sorgente}, \textbf{indirizzo IP di destinazione}, \textbf{porta di destinazione}.
 }
+
+La richiesta di connessione viene smistata \textbf{sulla sola porta di destinazione}, perché la connessione che chiede
+non esiste ancora; la porta effimera del client viaggia nel campo sorgente, ed è così che il server la impara.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    pr/.style={draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, minimum width=1.4cm, minimum height=0.55cm},
+    pt/.style={draw=black!60, fill=ltra!60, minimum width=1.0cm, minimum height=0.45cm, font=\scriptsize\ttfamily}]
+  \node[draw=black!40, rounded corners, minimum width=3.6cm, minimum height=2.4cm] at (0.4,0) {};
+  \node[font=\footnotesize\bfseries\sffamily] at (0.4,1.5) {host client \texttt{10.0.0.5}};
+  \node[pr] (c1) at (0,0.5)  {client};
+  \node[pr] (c2) at (0,-0.5) {client};
+  \node[pt] (p1) at (1.6,0.5)  {47122};
+  \node[pt] (p2) at (1.6,-0.5) {47123};
+  \draw (c1) -- (p1); \draw (c2) -- (p2);
+  \node[draw=black!40, rounded corners, minimum width=3.0cm, minimum height=2.4cm] at (8.6,0) {};
+  \node[font=\footnotesize\bfseries\sffamily] at (8.6,1.5) {host server \texttt{143.225.5.3}};
+  \node[pt] (s) at (7.7,0) {80};
+  \node[pr] (sv) at (9.2,0) {server};
+  \draw (s) -- (sv);
+  \draw[msg, netblue] (p1.east) -- (s.west);
+  \draw[msg, netgreen!60!black] (p2.east) -- (s.west);
+  \node[text=black!60] at (4.5,1.0) {porte scelte dal kernel};
+  \node[text=black!60] at (7.7,-0.6) {porta scelta dal programmatore};
+  \node[font=\scriptsize\ttfamily, align=center] at (4.5,-1.7)
+    {10.0.0.5:47122 $\to$ 143.225.5.3:80\\10.0.0.5:47123 $\to$ 143.225.5.3:80};
+\end{tikzpicture}
+\caption{Due connessioni, una sola porta del server: sono i quattro numeri insieme a distinguerle. \texttt{accept} crea il
+         secondo socket e il trasporto registra i quattro valori letti nel segmento arrivato; ogni segmento successivo con
+         gli stessi quattro valori va a quel socket, ed è per questo che quello di ascolto può continuare ad ascoltare.}
+\end{figure}
 
 Grazie all'handshake iniziale, la connessione TCP ``lega'' i processi ai due lati: il socket ha una sola
 sorgente e una sola destinazione, e se uno dei due lati si interrompe il socket viene chiuso da entrambe le
@@ -477,12 +571,132 @@ nessun errore rilevato.
     \emph{pseudo-header}).
 }
 
-\warning{Rilevare non è correggere}{
-    Il checksum \textbf{rileva} alcuni errori ma non li \textbf{corregge}, e non li rileva tutti: se due bit si
-    invertono in modo che le somme si compensino, l'errore passa inosservato. Cosa fare di un segmento
-    danneggiato UDP non lo dice: di solito lo scarta, oppure lo passa all'applicazione con un avviso.
+\warning{Che cosa il checksum non vede}{
+    Due parole da 16 bit del segmento arrivano una al posto dell'altra. Il checksum se ne accorge? \textbf{No}. La somma non
+    dipende dall'ordine, quindi è la stessa, e il controllo passa su un segmento sbagliato.
+    \begin{itemize}
+        \item Non nota nemmeno due errori che si compensano: una parola troppo grande esattamente quanto un'altra è troppo
+              piccola.
+        \item È un test economico che coglie il caso comune, non una garanzia che i bit siano giusti. Dove gli errori sono
+              attesi invece che eccezionali (su un cavo, nell'aria) serve un controllo più forte, che costruiremo al livello
+              di collegamento.
+        \item E il checksum \textbf{rileva} ma non \textbf{corregge}: cosa fare di un datagramma danneggiato UDP non lo dice;
+              di solito lo scarta, oppure lo passa all'applicazione con un avviso.
+    \end{itemize}
 }
 
+% ══════════════════════════════════════════════════════════════
+\section{Sotto il trasporto: ritardi, code e perdite}
+% ══════════════════════════════════════════════════════════════
+
+UDP consegna ciò che la rete gli porta, e la rete non porta tutto. Per capire che cosa dovrà recuperare il trasporto
+affidabile bisogna guardare che cosa succede a un pacchetto in ogni nodo che attraversa.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (A) at (0,0) {\icon[1.1cm]{router}};
+  \node[below=0pt of A] {router A};
+  \node (B) at (10,0) {\icon[1.1cm]{router}};
+  \node[below=0pt of B] {router B};
+  \draw[thick] (1.0,0.3) -- (3.0,0.3); \draw[thick] (1.0,-0.3) -- (3.0,-0.3); \draw[thick] (3.0,0.3) -- (3.0,-0.3);
+  \foreach \x in {1.9,2.35} \fill[netblue!55] (\x,-0.2) rectangle (\x+0.38,0.2);
+  \fill[netorange!70] (2.75,-0.2) rectangle (2.95,0.2);
+  \draw[wired] (3.0,0) -- (B.west);
+  \fill[netorange!70] (5.2,-0.12) rectangle (6.0,0.12);
+  \node[align=center, text=netred] at (-0.5,1.25) {\textbf{elaborazione}\\header, uscita,\\controllo};
+  \node[align=center, text=netblue] at (2.2,1.25) {\textbf{accodamento}\\attesa dietro\\agli altri};
+  \node[align=center] at (4.1,1.0) {\textbf{trasmissione}\\$L/R$};
+  \node[align=center] at (7.6,1.0) {\textbf{propagazione}\\$d/s$};
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (-0.6,-1.0) -- node[below=4pt, align=center]{dentro il nodo} (3.0,-1.0);
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (3.0,-1.0) -- node[below=4pt, align=center]{sul collegamento} (9.4,-1.0);
+\end{tikzpicture}
+\caption{I quattro ritardi di ogni nodo. I primi due avvengono dentro il nodo, gli ultimi due sul collegamento; solo
+         l'accodamento cambia da un pacchetto all'altro.}
+\end{figure}
+
+\dfn{Ritardo nodale}{
+    Il ritardo che un pacchetto subisce in un nodo è la somma di quattro termini:
+    \[ d_{\text{nodo}} = d_{\text{elab}} + d_{\text{coda}} + d_{\text{trasm}} + d_{\text{prop}} \]
+    \begin{itemize}
+        \item \textbf{elaborazione}: leggere l'header, scegliere il collegamento di uscita, controllare i bit; pochi
+              microsecondi su un router moderno;
+        \item \textbf{accodamento}: aspettare dietro a ciò che è già in coda per quel collegamento;
+        \item \textbf{trasmissione}: spingere $L$ bit in un collegamento di rate $R$, cioè $L/R$, il termine già noto,
+              ora uno dei quattro;
+        \item \textbf{propagazione}: percorrere la distanza $d$ alla velocità $s$ del mezzo, poco meno di quella della
+              luce, cioè $d/s$.
+    \end{itemize}
+}
+
+\subsection{Trasmissione non è propagazione}
+
+\begin{itemize}
+    \item La trasmissione dipende dal pacchetto e dal rate, e per nulla da quanto è lontano l'altro capo.
+    \item La propagazione dipende dalla distanza, e per nulla dal pacchetto o dal rate.
+    \item Fra due router di un campus la propagazione è di un paio di microsecondi. Attraverso un satellite
+          geostazionario è di centinaia di millisecondi, e domina tutto il resto.
+\end{itemize}
+
+\info{L'analogia del casello}{
+    Dieci auto escono da un casello, una ogni dodici secondi: servono due minuti per farle passare tutte (è la
+    \textbf{trasmissione}), e un'ora per percorrere i cento chilometri fino al casello successivo (è la
+    \textbf{propagazione}). Con un casello più veloce i due minuti si accorciano, ma l'ora resta un'ora. E se la strada fosse
+    cortissima, le prime auto arriverebbero mentre le ultime sono ancora in fila: allo stesso modo, i primi bit di un
+    pacchetto possono già arrivare mentre gli ultimi aspettano di partire.
+}
+
+\begin{esempio}{Quale dei due conta}
+Un pacchetto di 1500 byte ($L = 12\,000$ bit) su un collegamento da $R = 100$ Mb/s lungo $d = 1000$ km, con
+$s = 2 \cdot 10^8$ m/s:
+\[ d_{\text{trasm}} = \frac{12\,000}{10^8} = 120\ \mu\text{s} \qquad
+   d_{\text{prop}} = \frac{10^6}{2\cdot 10^8} = 5\ \text{ms} \]
+Su questa distanza la propagazione è quaranta volte la trasmissione: un collegamento più veloce non avvicina i due capi.
+\end{esempio}
+
+\subsection{Intensità di traffico, e da dove vengono le perdite}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \draw[-{Stealth[length=2mm]}, thick] (0,0) -- (5.8,0) node[right]{$La/R$};
+  \draw[-{Stealth[length=2mm]}, thick] (0,0) -- (0,3.6) node[above]{ritardo medio di accodamento};
+  \draw[dashed, black!50] (5,0) -- (5,3.4);
+  \node[below] at (5,0) {1};
+  \node[below] at (0,0) {0};
+  \draw[very thick, netblue, domain=0:0.925, samples=60, smooth] plot ({5*\x}, {0.25*\x/(1-\x)});
+  \node[align=left, text=netred, anchor=west] at (5.2,2.3) {il ritardo non ci arriva mai:\\prima si riempie la coda,\\e i pacchetti vengono scartati};
+\end{tikzpicture}
+\caption{Il ritardo medio di accodamento al crescere dell'intensità di traffico: resta piccolo finché il rapporto è basso, e
+         sale ripidamente avvicinandosi a 1.}
+\end{figure}
+
+\dfn{Intensità di traffico}{
+    Se arrivano in media $a$ pacchetti al secondo, ciascuno di $L$ bit, su un collegamento che ne smaltisce $R$ bit al
+    secondo, l'\textbf{intensità di traffico} è il rapporto $La/R$.
+}
+
+\begin{itemize}
+    \item Sopra 1 la coda cresce senza limite. La regola dell'ingegneria del traffico è restarne sotto.
+    \item Sotto 1 il ritardo dipende da quanto sono raggruppati gli arrivi, e sale ripidamente man mano che il rapporto si
+          avvicina a 1.
+    \item E una coda reale è \textbf{finita}: un pacchetto che arriva a coda piena viene scartato, in silenzio. È lì che
+          erano finiti i messaggi che la chat su UDP non ha mai ricevuto.
+\end{itemize}
+
+\subsection{Ritardo da un capo all'altro e throughput}
+
+\begin{itemize}
+    \item I ritardi dei nodi si sommano: su $N$ collegamenti, senza traffico, $N\,(d_{\text{elab}} + d_{\text{trasm}} +
+          d_{\text{prop}})$, e sopra a questo gli accodamenti.
+    \item Il \textbf{throughput}, come definito nella prima parte, è $F$ bit ricevuti in $T$ secondi. Da un capo all'altro
+          è il rate del collegamento più lento, il \textbf{collo di bottiglia}, e aggiungere capacità altrove non cambia
+          niente.
+    \item Né il ritardo né il throughput sono garantiti da qualcosa: non da IP, non da UDP, e non da TCP. Le applicazioni
+          che ne hanno bisogno sono costruite per farne a meno, ed è l'unico motivo per cui funzionano.
+\end{itemize}
+
+\Needspace{20\baselineskip}
 % ══════════════════════════════════════════════════════════════
 \section{Riepilogo}
 % ══════════════════════════════════════════════════════════════
@@ -496,6 +710,9 @@ nessun errore rilevato.
     \item Socket UDP: identificato da (IP dest, porta dest). Socket TCP: dalla \textbf{quaterna} completa.
     \item \textbf{UDP}: senza connessione, header di 8 byte (porte, lunghezza, checksum), nessuna garanzia; usato da
           DNS, SNMP, applicazioni multimediali.
-    \item Il \textbf{checksum} è il complemento a 1 della somma a 16 bit con wraparound.
+    \item Il \textbf{checksum} è il complemento a 1 della somma a 16 bit con wraparound: rileva e non corregge, e non vede
+          errori che si compensano o parole scambiate.
+    \item Sotto, ogni nodo aggiunge elaborazione, accodamento, trasmissione e propagazione; le code introducono ritardo e,
+          quando si riempiono, perdite. Renderle affidabili è il prossimo problema.
 \end{itemize}
 }

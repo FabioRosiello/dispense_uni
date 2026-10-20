@@ -1,0 +1,826 @@
+\chapter{Server concorrenti: processi e thread}
+
+Abbiamo un server che funziona e che non si può usare: serve un client, e tutti gli altri aspettano che quello se ne vada.
+\begin{itemize}
+    \item Nel frattempo abbiamo smontato i tre meccanismi che lo risolvono: un \textbf{secondo processo}, un \textbf{secondo
+          thread}, e un \textbf{mutex} per rendere sicura la condivisione.
+    \item Nessuno dei tre ha mai toccato un socket: la \texttt{fork} stampava una riga due volte, i thread incrementavano un
+          contatore.
+    \item Ora entrano nel ciclo di \texttt{accept}, e lo stesso servizio si scrive due volte: una con i processi, una con i
+          thread.
+    \item Le due versioni differiscono in una cosa sola, che poi decide tutto il resto: se il codice che serve un client
+          \textbf{può vedere gli altri}.
+\end{itemize}
+
+\subsection{Che cosa rende concorrente un server}
+
+\begin{itemize}
+    \item Il kernel accetta già le connessioni mentre siamo occupati: restano nella \textbf{coda di listen}. Quello che non
+          può fare è servirle.
+    \item La coda quindi compra \textbf{spazio, non tempo}. Un client che ci sta dentro aspetta esattamente quanto prima, e
+          quando la coda è piena il successivo viene rifiutato.
+    \item E il server, quasi sempre, non sta calcolando: un server di chat passa la vita bloccato in \texttt{read}.
+\end{itemize}
+
+\dfn{Server concorrente}{
+    Un server è \textbf{concorrente} quando il tempo che un client passa a pensare non diventa l'attesa di un altro: il
+    secondo viene servito mentre il primo tace.
+}
+
+Ci sono tre modi di arrivarci: \textbf{un processo per client}, \textbf{un thread per client}, e \textbf{un solo flusso di
+controllo che osserva molte connessioni}. In quest'ordine: i primi due in questo capitolo, il terzo nel prossimo.
+
+% ══════════════════════════════════════════════════════════════
+\section{Un processo per client}
+% ══════════════════════════════════════════════════════════════
+
+Nel meccanismo non c'è nulla di nuovo: dopo \texttt{accept} il server fa \texttt{fork}, e il figlio eredita
+\textbf{entrambi} i socket, quello di ascolto e quello connesso. È la figura dei descriptor ereditati del capitolo sui
+processi: ciascuno dei due chiude quello che non usa, e ogni oggetto vive finché non se ne va il suo ultimo descriptor.
+Cambia solo ciò che va preparato \textbf{prima} del ciclo.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il server concorrente: che cosa cambia prima del ciclo}]
+static void reap(int sig) {                 /* installato una volta, prima di ogni fork */
+    int saved = errno;
+    while (waitpid(-1, NULL, WNOHANG) > 0)
+        ;                                   /* tutti i figli che hanno finito */
+    errno = saved;
+}
+
+int main(int argc, char *argv[]) {
+    struct sigaction sa;
+    int listen_fd = listening_socket(argc > 1 ? argv[1] : "5000");
+
+    sa.sa_handler = reap;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGCHLD, &sa, NULL);          /* altrimenti i figli si accumulano come zombie */
+    signal(SIGPIPE, SIG_IGN);               /* un client che se ne va non deve ucciderci */
+\end{lstlisting}
+
+Due righe, ed entrambe riguardano \textbf{qualcun altro che finisce}: un figlio che è morto, e un client che ha chiuso
+mentre gli stavamo scrivendo.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il ciclo di accept che fa fork}]
+    for (;;) {
+        int fd = accept(listen_fd, NULL, NULL);
+        if (fd < 0) {
+            if (errno == EINTR) continue;   /* e' morto un figlio mentre aspettavamo */
+            perror("accept"); continue;
+        }
+        pid_t pid = fork();
+        if (pid < 0) { perror("fork"); close(fd); continue; }   /* si rifiuta solo questo */
+
+        if (pid == 0) {                     /* il figlio: solo questa connessione */
+            close(listen_fd);
+            serve(fd);
+            close(fd);
+            _exit(0);                       /* non exit(): i buffer non sono suoi */
+        }
+        close(fd);                          /* il genitore torna subito in accept */
+    }
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item L'\texttt{EINTR} è una conseguenza diretta dell'handler: il \texttt{SIGCHLD} arriva mentre il genitore è
+          bloccato in \texttt{accept}, e la chiamata ritorna con $-1$. Non è un errore: si ricomincia.
+    \item Una \texttt{fork} che fallisce (troppi processi, poca memoria) rifiuta \textbf{questo} client, non ferma il
+          server.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il figlio: il servizio non è cambiato}]
+static unsigned long served = 0;            /* quanti messaggi abbiamo inoltrato */
+
+static void serve(int fd) {                 /* un'intera conversazione */
+    char buf[256], head[32];
+    ssize_t n;
+    while ((n = read(fd, buf, sizeof buf)) > 0) {
+        int h = snprintf(head, sizeof head, "[%lu] ", ++served);
+        if (write(fd, head, h) != h) break;
+        if (write(fd, buf, n) != n) break;  /* quello che e' arrivato: non ancora una riga */
+    }
+    if (n < 0) perror("read");
+}
+\end{lstlisting}
+
+La concorrenza sta \textbf{tutta nel ciclo}, non nel servizio: questa funzione è quella del server sequenziale, intatta.
+Teniamo d'occhio \texttt{served}.
+
+\subsection{Venti client insieme}
+
+\begin{lstlisting}[language=bash, title={Venti client, venti figli}]
+$ ./chatd 5000 &
+$ for i in $(seq 1 20); do sleep 60 | nc 127.0.0.1 5000 & done
+$ ps --ppid $(pgrep -o chatd) -o pid,stat,cmd | head -4
+    PID STAT CMD
+   7413 S    ./chatd 5000       <- un figlio per ogni client connesso
+   7414 S    ./chatd 5000
+   7415 S    ./chatd 5000
+$ ss -Htn state established '( sport = :5000 )' | wc -l
+20
+\end{lstlisting}
+
+\texttt{pgrep -o} sceglie il processo più vecchio con quel nome, cioè il genitore; \texttt{--ppid} elenca i suoi figli.
+Venti client, venti figli, e ciascuno servito. Allora scriviamo una riga in uno di loro: chi la vede?
+
+\warning{Nessuno, tranne chi l'ha mandata}{
+    Il client 1 invia una riga, e altri diciannove sono connessi. Che cosa vedono? \textbf{Niente, mai}. La riga è stata letta
+    da un figlio, e quel figlio non ha alcun descriptor verso le altre connessioni: il genitore le ha chiuse una per una, e i
+    fratelli sono stati creati prima che la sua esistesse.
+    \begin{itemize}
+        \item Per lo stesso motivo \texttt{served} è inutile: ogni client si sente dire che il suo è il messaggio numero
+              uno, perché ogni figlio ha ricevuto la propria copia al momento della \texttt{fork}.
+        \item Abbiamo costruito venti server di eco indipendenti che per caso condividono una porta: va benissimo per un
+              server web, è inutile per una chat.
+    \end{itemize}
+}
+
+Gli spazi di indirizzi separati sono esattamente ciò che abbiamo chiesto. Se i processi devono parlarsi,
+\textbf{deve portarlo il kernel}.
+
+% ══════════════════════════════════════════════════════════════
+\section{Far parlare i processi}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    pr/.style={draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, minimum width=1.9cm, minimum height=0.7cm},
+    a/.style={-{Stealth[length=1.8mm]}, thick},
+    aa/.style={{Stealth[length=1.8mm]}-{Stealth[length=1.8mm]}, thick}]
+  \node[font=\small\bfseries\sffamily] at (0,1.5) {scambio di messaggi};
+  \node[pr] (a1) at (-1.5,0.6) {processo A};
+  \node[pr] (b1) at (1.5,0.6)  {processo B};
+  \node[draw=black!50, fill=black!5, rounded corners=2pt, minimum width=5.0cm, minimum height=0.6cm] (k1) at (0,-0.9)
+    {kernel: il buffer della pipe o del socket};
+  \draw[a] (a1.south) -- node[left]{\texttt{write}} (a1.south |- k1.north);
+  \draw[a] (b1.south |- k1.north) -- node[right]{\texttt{read}} (b1.south);
+  \node[text=black!60] at (0,-1.6) {una chiamata di sistema per ogni scambio};
+  \node[font=\small\bfseries\sffamily] at (7.2,1.5) {memoria condivisa};
+  \node[pr] (a2) at (5.7,0.6) {processo A};
+  \node[pr] (b2) at (8.7,0.6) {processo B};
+  \node[draw=netgreen!70!black, fill=netgreen!10, rounded corners=2pt, minimum width=5.0cm, minimum height=0.6cm] (m) at
+    (7.2,-0.9) {una pagina mappata da entrambi};
+  \draw[aa] (a2.south) -- node[left]{load, store} (a2.south |- m.north);
+  \draw[aa] (b2.south) -- node[right]{load, store} (b2.south |- m.north);
+  \node[text=black!60] at (7.2,-1.6) {il kernel interviene una volta, poi coordinarsi tocca a noi};
+\end{tikzpicture}
+\caption{I due modi in cui due processi si parlano. A sinistra ogni dato passa per il kernel, che ne garantisce anche
+         l'ordine; a destra il kernel prepara la pagina e poi si fa da parte.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Scambio di messaggi}: ogni scambio è una chiamata di sistema, il kernel tiene i dati, e l'ordine di arrivo
+          è una sua garanzia.
+    \item \textbf{Memoria condivisa}: il kernel viene interpellato una volta sola, poi i due processi leggono e scrivono
+          memoria ordinaria, e il coordinamento è \textbf{interamente loro}.
+    \item La seconda è più veloce, e ci riporta a \texttt{count++}: la corsa critica è la stessa che hanno i thread.
+\end{itemize}
+
+\subsection{La pipe}
+
+\dfn{Pipe}{
+    \texttt{pipe(fd)} restituisce \textbf{due descriptor su un unico buffer del kernel}: \texttt{fd[0]} per leggere e
+    \texttt{fd[1]} per scrivere. Dopo una \texttt{fork} entrambi i processi li hanno entrambi.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    fd/.style={draw=black!70, fill=white, minimum width=1.6cm, minimum height=0.45cm, font=\scriptsize\ttfamily},
+    fdx/.style={fd, dashed, draw=netred, text=netred},
+    a/.style={-{Stealth[length=1.8mm]}, thick},
+    ax/.style={a, dashed, netred}]
+  \node[font=\small\bfseries\sffamily, anchor=east] at (-4.2,1.3) {genitore};
+  \node[font=\small\bfseries\sffamily, anchor=east] at (-4.2,-1.3) {figlio};
+  \node[fd]  (g1) at (-3,1.3)  {fd[1]};
+  \node[fdx] (g0) at (3,1.3)   {fd[0]};
+  \node[fdx] (f1) at (-3,-1.3) {fd[1]};
+  \node[fd]  (f0) at (3,-1.3)  {fd[0]};
+  \node[draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, minimum width=3.4cm, minimum height=0.7cm] (p) at (0,0)
+    {buffer nel kernel};
+  \draw[-{Stealth[length=2mm]}, netblue, thick] (-1.3,-0.22) -- (1.3,-0.22);
+  \draw[a]  (g1.south) |- ([yshift=1.5mm]p.west);
+  \draw[ax] (f1.north) |- ([yshift=-1.5mm]p.west);
+  \draw[ax] ([yshift=1.5mm]p.east) -| (g0.south);
+  \draw[a]  ([yshift=-1.5mm]p.east) -| (f0.north);
+  \node[text=black!60, anchor=south] at (-3,1.6) {lato di scrittura};
+  \node[text=black!60, anchor=south] at (3,1.6) {lato di lettura};
+\end{tikzpicture}
+\caption{Una pipe dopo la fork, quando il genitore scrive e il figlio legge. In rosso tratteggiato i due descriptor da
+         chiudere: ciascun processo rinuncia al lato che non usa.}
+\end{figure}
+
+È \textbf{a senso unico} ed è \textbf{fra parenti}: l'unico modo di entrarci è ereditare un descriptor che esiste già.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Chiudere i lati che non si usano}]
+int fd[2];
+pipe(fd);                             /* controllo d'errore omesso */
+if (fork() == 0) {
+    close(fd[1]);                     /* chi legge rinuncia al lato di scrittura */
+    n = read(fd[0], buf, sizeof buf);
+    write(STDOUT_FILENO, buf, n);
+    _exit(0);
+}
+close(fd[0]);                         /* chi scrive rinuncia al lato di lettura */
+write(fd[1], "hello\n", 6);
+close(fd[1]);                         /* ora, e solo ora, il figlio vede la fine del file */
+\end{lstlisting}
+
+\warning{La read che non restituisce mai zero}{
+    Il genitore scrive una riga, chiude \texttt{fd[1]} e aspetta. Il figlio cicla sulla \texttt{read} e stampa. Non finisce
+    mai. Perché? Perché il figlio \textbf{non ha chiuso il proprio} \texttt{fd[1]}. Un lato di scrittura è ancora aperto (il
+    suo), quindi la pipe non arriva mai alla fine del file, la \texttt{read} si blocca, e il genitore aspetta un figlio che
+    aspetta se stesso.
+    \begin{itemize}
+        \item La fine del file su una pipe significa \textbf{nessuno scrittore rimasto}, e il conto include la copia del
+              lettore stesso.
+        \item È la stessa regola del socket connesso: l'oggetto muore quando se ne va il suo ultimo descriptor, chiunque lo
+              tenga.
+        \item Il caso speculare è rumoroso invece che silenzioso: chi scrive in una pipe il cui lettore se n'è andato riceve
+              \texttt{SIGPIPE}.
+    \end{itemize}
+}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l l}
+\toprule
+ & \textbf{L'altro lato è aperto} & \textbf{L'altro lato è chiuso} \\
+\midrule
+\texttt{read}, dati disponibili  & restituisce quel che c'è & restituisce quel che c'è \\
+\texttt{read}, pipe vuota        & si blocca                & restituisce 0 \\
+\texttt{write}, c'è posto        & copia e ritorna          & \texttt{SIGPIPE}, \texttt{EPIPE} \\
+\texttt{write}, buffer pieno     & si blocca                & \texttt{SIGPIPE}, \texttt{EPIPE} \\
+\bottomrule
+\end{tabular}
+\caption{Leggere e scrivere una pipe. Un lettore vede la fine solo quando i dati sono finiti \emph{e} non resta nessuno
+         scrittore.}
+\end{table}
+
+\begin{itemize}
+    \item Una \texttt{write} fino a \texttt{PIPE\_BUF} byte (4096 su Linux) è \textbf{atomica}: più scrittori non possono
+          mescolarsi al suo interno.
+    \item È la soglia dell'atomicità, non la dimensione della pipe: il buffer contiene 64 KB, e chi scrive si blocca quando
+          è pieno.
+\end{itemize}
+
+\subsection{I figli che riferiscono al genitore}
+
+Con le pipe la chat multiprocesso si può fare: ogni figlio passa al genitore le righe che legge, e il genitore le
+ridistribuisce.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    ch/.style={draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, align=center, minimum width=2.6cm,
+               minimum height=0.7cm},
+    a/.style={-{Stealth[length=1.8mm]}, thick},
+    ax/.style={-{Stealth[length=1.8mm]}, thick, dashed, black!55}]
+  \node[ch] (A) at (0,1.2)  {figlio A\\\texttt{fd 4} $\to$ client 1};
+  \node[ch] (B) at (0,0)    {figlio B\\\texttt{fd 4} $\to$ client 2};
+  \node[ch] (C) at (0,-1.2) {figlio C\\\texttt{fd 4} $\to$ client 3};
+  \node[draw=netgreen!70!black, fill=netgreen!8, rounded corners=2pt, align=center, minimum height=1.0cm] (P) at (4.2,0)
+    {\textbf{una pipe}\\molti scrittori\\un solo lettore};
+  \node[draw=netred!70!black, fill=netred!6, rounded corners=2pt, align=center, minimum height=1.0cm] (G) at (8.0,0)
+    {\textbf{genitore}\\legge, poi invia\\a tutti gli altri};
+  \draw[a] (A.east) -- (P.west);
+  \draw[a] (B.east) -- (P.west);
+  \draw[a] (C.east) -- (P.west);
+  \draw[a] (P.east) -- (G.west);
+  \draw[ax] (G.south) -- (8.0,-2.3) -- (-1.9,-2.3) |- (A.west);
+  \draw[ax] (-1.9,0) -- (B.west);
+  \draw[ax] (-1.9,-1.2) -- (C.west);
+  \node[text=black!60, fill=white] at (3.0,-2.3) {e indietro: un'altra pipe per ogni figlio};
+\end{tikzpicture}
+\caption{Ogni riga attraversa il kernel due volte ed è copiata una volta per destinatario, e il genitore deve stare in un
+         ciclo tutto suo. Con i thread la stessa cosa è un \texttt{for} su un array.}
+\end{figure}
+
+Una pipe verso l'alto basta, perché le scritture sotto \texttt{PIPE\_BUF} non si mescolano; il ritorno verso il basso è la
+metà costosa. E il genitore, che deve leggere dalla pipe e insieme accettare nuove connessioni, si trova già con il problema
+del prossimo capitolo: aspettare su più descriptor alla volta.
+
+\subsection{dup e dup2}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Due prototipi}]
+int dup(int oldfd);
+int dup2(int oldfd, int newfd);
+\end{lstlisting}
+
+\begin{itemize}
+    \item Entrambe creano un \textbf{secondo descriptor sullo stesso oggetto}: stesso offset, stessa connessione, un unico
+          contatore di riferimenti.
+    \item \texttt{dup} prende il numero libero più basso; \texttt{dup2} prende il numero che indichiamo, chiudendolo prima se
+          era aperto.
+    \item Ed è proprio questo il punto: si può scegliere di atterrare su \textbf{0 o 1}.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    fd/.style={draw=black!70, fill=white, minimum width=1.5cm, minimum height=0.42cm, font=\scriptsize\ttfamily},
+    fdc/.style={fd, draw=black!30, text=black!40, fill=black!4},
+    ob/.style={draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, minimum width=2.3cm, minimum height=0.6cm},
+    a/.style={-{Stealth[length=1.6mm]}, thick}]
+  \node[font=\small\bfseries\sffamily] at (0,1.15) {prima};
+  \node[fd]  (p0) at (0,0.6)  {0};
+  \node[fd]  (p1) at (0,0.15) {1};
+  \node[fd]  (p2) at (0,-0.3) {2};
+  \node[fdc] (p3) at (0,-0.75) {3 chiuso};
+  \node[fd]  (p4) at (0,-1.2) {4};
+  \node[ob] (T) at (3.6,0.3) {terminale};
+  \node[ob, draw=netgreen!70!black, fill=netgreen!8] (K) at (3.6,-1.0) {connessione};
+  \draw[a] (p0.east) -- (T.west);
+  \draw[a] (p1.east) -- (T.west);
+  \draw[a] (p2.east) -- (T.west);
+  \draw[a] (p4.east) -- (K.west);
+  \node[font=\small\bfseries\sffamily] at (7.2,1.15) {dopo \texttt{dup2} e \texttt{close(fd)}};
+  \node[fd]  (d0) at (7.2,0.6)  {0};
+  \node[fd]  (d1) at (7.2,0.15) {1};
+  \node[fd]  (d2) at (7.2,-0.3) {2};
+  \node[fdc] (d3) at (7.2,-0.75) {3 chiuso};
+  \node[fdc] (d4) at (7.2,-1.2) {4 chiuso};
+  \draw[a] (d0.west) -- (K.east);
+  \draw[a] (d1.west) -- (K.east);
+  \draw[a] (d2.west) -- (T.east);
+\end{tikzpicture}
+\caption{La tabella dei descriptor del figlio. Dopo i due \texttt{dup2} lo standard input e lo standard output sono la
+         connessione; lo standard error resta sul terminale del server, dove finiscono i messaggi diagnostici.}
+\end{figure}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Un programma che non sa di essere in rete}]
+if (fork() == 0) {
+    close(listen_fd);
+    dup2(fd, STDIN_FILENO);               /* la connessione diventa lo standard input */
+    dup2(fd, STDOUT_FILENO);              /* ... e lo standard output */
+    if (fd > STDERR_FILENO) close(fd);    /* bastano i due duplicati */
+    execl("/usr/local/bin/quoted", "quoted", (char *) NULL);
+    perror("execl");                      /* si arriva qui solo se exec e' fallita */
+    _exit(127);
+}
+close(fd);
+\end{lstlisting}
+
+Il programma dall'altra parte di \texttt{execl} legge con \texttt{scanf}, scrive con \texttt{printf} e non scopre mai da
+dove arriva il suo input. È così che funziona un servizio avviato da \key{inetd}, ed è così che un server web esegue un
+programma \key{CGI}.
+
+\info{Il buffer di stdout dopo dup2}{
+    Su un terminale \texttt{printf} svuota il buffer a ogni \texttt{\textbackslash n}; su un socket no, perché lo
+    standard output non è più un terminale e la libreria C passa al buffer pieno. Il programma che risponde una riga e poi
+    aspetta la successiva deve chiamare \texttt{fflush(stdout)}, oppure \texttt{setvbuf(stdout, NULL, \_IOLBF, 0)}
+    all'inizio: altrimenti il client non riceve nulla finché il buffer non si riempie.
+}
+
+\subsection{Parentela, un nome, un indirizzo}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    pr/.style={draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, align=center, minimum width=1.6cm,
+               minimum height=0.6cm},
+    md/.style={rounded corners=2pt, minimum width=2.6cm, minimum height=0.6cm, font=\scriptsize\ttfamily},
+    ln/.style={thick, black!60}]
+  \newcommand{\colonna}[7]{%
+    \node[font=\small\bfseries\sffamily] at (#1,1.6) {#2};
+    \node[pr] (l#1) at (#1-1.1,0.8) {#3};
+    \node[pr] (r#1) at (#1+1.1,0.8) {#4};
+    \node[md, draw=#6!70!black, fill=#6!8] (m#1) at (#1,-0.4) {#5};
+    \draw[ln] (l#1.south) -- (m#1.north west);
+    \draw[ln] (r#1.south) -- (m#1.north east);
+    \node[align=center, text=black!70] at (#1,-1.4) {#7};}
+  \colonna{0}{pipe}{genitore}{figlio}{buffer nel kernel}{netblue}
+    {Devono essere parenti:\\il descriptor si eredita,\\non si può chiedere.}
+  \colonna{5}{FIFO}{processo\\qualsiasi}{processo\\qualsiasi}{/tmp/upper}{netgreen}
+    {Devono condividere un nome\\nel file system: una sola\\macchina, concordato prima.}
+  \colonna{10}{socket}{host A}{host B}{143.225.5.3:5000}{netred}
+    {Devono condividere un indirizzo\\e una porta, e nient'altro:\\nemmeno la macchina.}
+\end{tikzpicture}
+\caption{Tre modi in cui due processi si trovano, e a ogni passo devono avere meno cose in comune.}
+\end{figure}
+
+È la stessa forma cliente-servente tre volte: uno aspetta in un posto convenuto, l'altro ci va. Cambia solo che cosa
+rende il posto raggiungibile.
+
+\subsection{Una FIFO: server e client}
+
+\dfn{FIFO}{
+    Una \textbf{FIFO} (o \emph{named pipe}) è una pipe con un \textbf{nome nel file system}. Si crea con \texttt{mkfifo},
+    si apre con \texttt{open} come un file qualsiasi, e da lì in poi si comporta esattamente come una pipe.
+}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Un server FIFO e il suo client}]
+/* server: crea il nome, poi aspetta su di esso */
+mkfifo("/tmp/upper", 0666);                 /* se esiste gia' non e' un errore per noi */
+int fd = open("/tmp/upper", O_RDONLY);      /* si blocca finche' uno scrittore non apre */
+while ((n = read(fd, buf, sizeof buf - 1)) > 0) {
+    buf[n] = '\0';
+    for (int i = 0; i < n; i++) buf[i] = toupper((unsigned char) buf[i]);
+    printf("%s\n", buf);
+}
+
+/* client: gli basta lo stesso nome */
+int fd = open("/tmp/upper", O_WRONLY);      /* si blocca finche' un lettore non apre */
+write(fd, argv[1], strlen(argv[1]));
+close(fd);
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash, title={Il nome nel file system}]
+$ ./upper &
+$ ls -l /tmp/upper
+prw-r--r-- 1 utente utente 0 ott 19 10:02 /tmp/upper      <- p: una pipe con nome
+$ ./shout ciao
+CIAO
+\end{lstlisting}
+
+Due programmi, uno che aspetta e uno che chiede, e nessuna rete: il nome nel file system fa ciò che più avanti faranno un
+indirizzo e una porta, e solo \texttt{unlink} lo toglie di mezzo.
+\begin{itemize}
+    \item Le due \texttt{open} si aspettano a vicenda: è il primo esempio di \textbf{appuntamento} fra due processi senza
+          parentela.
+    \item Al primo client che chiude, la \texttt{read} del server restituisce 0 e il server finisce. Per servirne altri lo
+          si riapre in un ciclo, oppure lo si apre anche in scrittura (\texttt{O\_RDWR}): con uno scrittore sempre presente,
+          la fine del file non arriva mai.
+\end{itemize}
+
+\subsection{Memoria condivisa attraverso una fork}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Un contatore che tutti i figli vedono}]
+unsigned long *served = mmap(NULL, sizeof *served,
+                             PROT_READ | PROT_WRITE,
+                             MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+if (served == MAP_FAILED) { perror("mmap"); exit(EXIT_FAILURE); }
+*served = 0;
+
+/* ogni figlio creato da qui in poi vede questo stesso contatore */
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{MAP\_ANONYMOUS} significa nessun file dietro: una pagina di memoria che i figli ereditano
+          \textbf{condivisa} invece di copiarla.
+    \item \texttt{MAP\_PRIVATE} al suo posto restituisce esattamente ciò che la \texttt{fork} dava già: una copia ciascuno.
+    \item E \texttt{++*served} da due processi è la corsa critica che già conosciamo. Un mutex lì deve \textbf{vivere in
+          questa pagina} ed essere creato con \texttt{PTHREAD\_PROCESS\_SHARED}.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il mutex nella pagina condivisa}]
+struct shared { pthread_mutex_t m; unsigned long served; };
+
+struct shared *sh = mmap(NULL, sizeof *sh, PROT_READ | PROT_WRITE,
+                         MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+pthread_mutexattr_t a;
+pthread_mutexattr_init(&a);
+pthread_mutexattr_setpshared(&a, PTHREAD_PROCESS_SHARED);
+pthread_mutex_init(&sh->m, &a);           /* prima di ogni fork */
+sh->served = 0;
+
+/* in un figlio */
+pthread_mutex_lock(&sh->m);
+unsigned long me = ++sh->served;
+pthread_mutex_unlock(&sh->m);
+\end{lstlisting}
+
+Un problema che con i thread non c'era: un figlio può \textbf{morire con il lock in mano}, e allora nessuno lo riaprirà
+più. Un mutex creato anche con \texttt{PTHREAD\_MUTEX\_ROBUST} lo segnala al successivo che lo prende, con
+\texttt{EOWNERDEAD}, invece di bloccarlo per sempre.
+
+% ══════════════════════════════════════════════════════════════
+\section{Un thread per client}
+% ══════════════════════════════════════════════════════════════
+
+Stesso server, stesse chiamate, \textbf{un solo spazio di indirizzi}: i descriptor stanno in un'unica tabella e lo stato
+della chat è una variabile.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    th/.style={draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, align=center, minimum width=2.5cm,
+               minimum height=1.2cm}]
+  \node[draw=black!60, thick, rounded corners, minimum width=10.2cm, minimum height=4.6cm] at (0,-0.35) {};
+  \node[font=\small\bfseries\sffamily] at (0,1.55) {un processo, un solo spazio di indirizzi};
+  \node[th] at (-3.4,0.5) {\textbf{thread 1}\\stack proprio\\\texttt{fd 4} client A};
+  \node[th] at (0,0.5)    {\textbf{thread 2}\\stack proprio\\\texttt{fd 5} client B};
+  \node[th] at (3.4,0.5)  {\textbf{thread 3}\\stack proprio\\\texttt{fd 6} client C};
+  \node[draw=netgreen!70!black, fill=netgreen!10, rounded corners=2pt, align=center, minimum width=9.4cm,
+        minimum height=0.9cm] at (0,-1.0)
+    {\textbf{condiviso}: lo stato della chat, chi è connesso e che cosa inviargli\\una copia sola, raggiunta leggendo una
+     variabile};
+  \node[draw=netred!70!black, fill=netred!6, rounded corners=2pt, minimum width=9.4cm, minimum height=0.6cm] at (0,-2.1)
+    {\textbf{thread principale}: \texttt{accept} su \texttt{fd 3}, un nuovo thread per ogni connessione accettata};
+\end{tikzpicture}
+\caption{Il server di chat con un thread per client. Ogni thread vede tutti i descriptor, quindi può scrivere a tutti i
+         client: è ciò che mancava alla versione con i processi.}
+\end{figure}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il ciclo di accept che avvia un thread}]
+int main(int argc, char *argv[]) {
+    int listen_fd = listening_socket(argc > 1 ? argv[1] : "5000");
+    signal(SIGPIPE, SIG_IGN);
+    for (int i = 0; i < MAXC; i++) clients[i] = -1;
+
+    for (;;) {
+        int *fd = malloc(sizeof *fd);              /* l'argomento tutto suo del thread */
+        if (fd == NULL) { sleep(1); continue; }
+        *fd = accept(listen_fd, NULL, NULL);
+        if (*fd < 0) { if (errno != EINTR) perror("accept"); free(fd); continue; }
+
+        pthread_t tid;
+        int err = pthread_create(&tid, NULL, worker, fd);
+        if (err) { fprintf(stderr, "pthread_create: %s\n", strerror(err));
+                   close(*fd); free(fd); continue; }
+        pthread_detach(tid);                       /* nessuno lo aspettera' mai */
+    }
+}
+\end{lstlisting}
+
+\subsection{Lo stato che i thread condividono}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={La lista dei client e il suo mutex}]
+#define MAXC 64
+static int clients[MAXC];                   /* socket connessi, -1 = posto libero */
+static pthread_mutex_t roster = PTHREAD_MUTEX_INITIALIZER;
+
+static int add_client(int fd) {
+    int slot = -1;
+    pthread_mutex_lock(&roster);
+    for (int i = 0; i < MAXC; i++)
+        if (clients[i] == -1) { clients[i] = fd; slot = i; break; }
+    pthread_mutex_unlock(&roster);
+    return slot;                            /* -1: la chat e' piena, si rifiuta */
+}
+
+static void del_client(int slot) {
+    pthread_mutex_lock(&roster); clients[slot] = -1; pthread_mutex_unlock(&roster);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il worker: registrarsi, servire, cancellarsi}]
+static void *worker(void *arg) {
+    int fd = *(int *) arg;
+    free(arg);                              /* l'argomento era nostro: finito */
+
+    int slot = add_client(fd);
+    if (slot < 0) { write(fd, "chat is full\n", 13); close(fd); return NULL; }
+
+    char buf[256];
+    ssize_t n;
+    while ((n = read(fd, buf, sizeof buf)) > 0)
+        broadcast(slot, buf, n);            /* a tutti tranne me */
+
+    del_client(slot);
+    close(fd);
+    return NULL;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Inviare a tutti gli altri}]
+static void broadcast(int from, const char *msg, size_t len) {
+    pthread_mutex_lock(&roster);
+    for (int i = 0; i < MAXC; i++)
+        if (clients[i] != -1 && i != from)
+            write(clients[i], msg, len);    /* EPIPE: se ne accorgera' il thread di quel client */
+    pthread_mutex_unlock(&roster);
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item Questa è \textbf{tutta la differenza} dalla versione multiprocesso: un \texttt{for} su una variabile che ogni
+          thread può vedere.
+    \item Il mutex non è facoltativo: un altro thread potrebbe aggiungersi a \texttt{clients} mentre questo ciclo la legge.
+    \item Ed è tenuto \textbf{durante una write}, che è proprio l'unica cosa che avevamo detto di non fare mai.
+\end{itemize}
+
+\warning{Il client lento che congela la chat}{
+    Un client smette di leggere: la sua finestra si riempie, e si riempie anche il buffer del suo socket. Che cosa succede
+    agli altri diciannove? La \texttt{write} verso quel client \textbf{si blocca}, con il mutex \texttt{roster} in mano.
+    Ogni altro thread si ferma al suo \texttt{broadcast} successivo: un solo client silenzioso ha fermato l'intera chat.
+}
+
+Rilasciare il lock prima di scrivere non lo risolve: fra la copia della lista e la \texttt{write} quel posto può essere
+chiuso, e il suo numero di descriptor riusato da un nuovo client.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c l l l}
+\toprule
+\textbf{Passo} & \textbf{Thread A (broadcast)} & \textbf{Thread B} & \textbf{Thread principale} \\
+\midrule
+1 & copia la lista: posto 3 = \texttt{fd 7} & & \\
+  & rilascia il lock & & \\
+2 & & il client 3 se ne va: & \\
+  & & \texttt{del\_client(3)}, \texttt{close(7)} & \\
+3 & & & \texttt{accept} restituisce di nuovo 7 \\
+4 & \texttt{write(7, ...)}: al nuovo arrivato & & \\
+\bottomrule
+\end{tabular}
+\caption{Perché non basta copiare la lista e scrivere senza lock. Il kernel riassegna sempre il descriptor libero più
+         basso, quindi il riuso non è un caso raro: la riga va alla connessione sbagliata, di rado e mai mentre si guarda.}
+\end{table}
+
+Nessuna delle due strade è la risposta. Un server vero \textbf{non si blocca mai in un worker}: ogni client ha una
+\key{coda in uscita}, e qualcuno la svuota quando il socket è pronto. È l'argomento del prossimo capitolo.
+
+% ══════════════════════════════════════════════════════════════
+\section{Processi o thread, per un server}
+% ══════════════════════════════════════════════════════════════
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l l}
+\toprule
+ & \textbf{Un processo per client} & \textbf{Un thread per client} \\
+\midrule
+stato condiviso             & deve portarlo il kernel          & una variabile \\
+il crash di un client       & uccide il suo figlio             & uccide il server \\
+un descriptor dimenticato   & se ne va con il figlio           & resta per sempre \\
+costo di avvio              & uno spazio di indirizzi          & uno stack \\
+\texttt{close} su un socket & chiude solo quella copia         & lo chiude per tutti \\
+debugging                   & un flusso, molti processi        & un processo, molti flussi \\
+\bottomrule
+\end{tabular}
+\caption{I processi pagano per essere isolati; i thread pagano per condividere. Una chat vuole condividere, un server che
+         esegue codice non fidato vuole l'isolamento.}
+\end{table}
+
+\Needspace{16\baselineskip}
+\warning{Un worker dereferenzia un puntatore nullo}{
+    Un bug nel codice che serve un client: quanto costa? \textbf{Con i processi}: muore la connessione di quel client, il
+    genitore raccoglie un figlio terminato da un segnale, e diciannove conversazioni continuano. \textbf{Con i thread}: il
+    processo riceve \texttt{SIGSEGV}, e ogni connessione muore con lui.
+    \begin{itemize}
+        \item La stessa asimmetria vale per un buffer perso, uno heap corrotto, un descriptor che nessuno chiude: con i
+              processi tutto finisce a \texttt{\_exit}.
+        \item È per questo che la scelta si fa ancora in entrambi i modi: Apache offre un modello a processi e uno a thread,
+              e quello a processi si sceglie quando il codice non è fidato.
+    \end{itemize}
+}
+
+\subsection{Quanto costa «uno per client»}
+
+\begin{itemize}
+    \item Entrambe le versioni pagano \textbf{per connessione}, al momento della connessione: uno spazio di indirizzi o uno
+          stack, creati e distrutti per un client che magari dice una parola.
+    \item Entrambe mantengono quel costo finché il client resta, che parli o no; e un client di chat tace quasi sempre.
+    \item Diecimila connessioni inattive significano diecimila stack e diecimila oggetti del kernel, per non fare nulla.
+    \item E una raffica di connessioni brevi passa più tempo a creare e distruggere che a servire.
+\end{itemize}
+
+Entrambi i limiti indicano la stessa direzione: smettere di creare \textbf{un flusso di controllo per client}. Ne serve uno
+che osserva molte connessioni e si accorge di quali sono pronte, più un insieme fisso di worker tenuti occupati da una
+coda.
+
+% ══════════════════════════════════════════════════════════════
+\section{Esercizi}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Una pipeline fatta a mano}
+Scrivere un programma che esegua l'equivalente di \texttt{ls | wc -l} usando soltanto \texttt{pipe}, \texttt{fork},
+\texttt{dup2}, \texttt{execlp} e \texttt{wait}. Poi togliere dal genitore la \texttt{close(fd[1])}: che cosa succede, e
+perché?
+
+\svolgimento
+Due figli, uno per programma: il primo mette il lato di scrittura sul proprio standard output, il secondo il lato di
+lettura sul proprio standard input. Poi ciascuno chiude \textbf{entrambi} gli originali, perché i duplicati bastano.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={pipeline.c}]
+int fd[2];
+if (pipe(fd) < 0) { perror("pipe"); exit(EXIT_FAILURE); }
+
+if (fork() == 0) {                      /* primo figlio: ls */
+    dup2(fd[1], STDOUT_FILENO);
+    close(fd[0]); close(fd[1]);
+    execlp("ls", "ls", (char *) NULL);
+    perror("execlp"); _exit(127);
+}
+if (fork() == 0) {                      /* secondo figlio: wc -l */
+    dup2(fd[0], STDIN_FILENO);
+    close(fd[0]); close(fd[1]);
+    execlp("wc", "wc", "-l", (char *) NULL);
+    perror("execlp"); _exit(127);
+}
+close(fd[0]); close(fd[1]);             /* il genitore non usa la pipe */
+while (wait(NULL) > 0)
+    ;
+\end{lstlisting}
+
+Senza la \texttt{close(fd[1])} nel genitore, \texttt{ls} stampa, esce, e \texttt{wc} \textbf{non termina mai}: un lato di
+scrittura è ancora aperto (quello del genitore), quindi la sua \texttt{read} non restituisce mai 0. E il genitore, fermo
+in \texttt{wait}, aspetta un figlio che aspetta lui. È il caso del riquadro sulla \texttt{read} che non restituisce mai
+zero, con tre processi invece di due. La shell fa esattamente queste chiamate per ogni \texttt{|}.
+\end{esercizio}
+
+\begin{esercizio}{Iterazione 2: una chat multiprocesso}
+Si riparte dal server sequenziale: corretto, e inutilizzabile appena si connette un secondo client, quello lasciato ad
+aspettare in \texttt{ss -tn}.
+\begin{itemize}
+    \item \textbf{Che cosa cambia}: solo il ciclo di \texttt{accept}. La \texttt{fork} dopo \texttt{accept}, le due
+          \texttt{close}, \texttt{\_exit} nel figlio, e un handler di \texttt{SIGCHLD} installato prima del primo client.
+    \item \textbf{Che cosa no}: \texttt{serve()} resta intatta. Se ci si ritrova a modificarla, si sta risolvendo il
+          problema sbagliato.
+\end{itemize}
+Connettere venti client e poi ucciderne uno. Dimostrare entrambe le cose: venti figli, e nessuno zombie. E che cosa dice
+il contatore al ventesimo client?
+
+\svolgimento
+Il \texttt{main} è quello del capitolo: \texttt{reap} installato con \texttt{sigaction}, \texttt{SIGPIPE} ignorato, e il
+ciclo con la \texttt{fork}. La prova si fa da un secondo terminale:
+
+\begin{lstlisting}[language=bash, title={Venti figli, nessuno zombie}]
+$ ./chatd 5000 &
+$ for i in $(seq 1 20); do sleep 60 | nc 127.0.0.1 5000 & done
+$ ps --ppid $(pgrep -o chatd) --no-headers | wc -l
+20
+$ kill %2                                   <- termina uno dei client
+$ ps --ppid $(pgrep -o chatd) --no-headers | wc -l
+19
+$ ps --ppid $(pgrep -o chatd) -o stat --no-headers | grep -c Z
+0
+\end{lstlisting}
+
+Quando il client muore, la \texttt{read} del suo figlio restituisce 0, il figlio esce, e il \texttt{SIGCHLD} lo fa
+raccogliere subito dal genitore: i figli scendono a diciannove e nessuno resta \texttt{Z}. Togliendo la
+\texttt{sigaction}, lo stesso comando mostrerebbe un \texttt{Z} per ogni client che se n'è andato.
+
+Il ventesimo client si sente rispondere \texttt{1:} alla sua prima riga, come tutti gli altri. Nell'iterazione 1 il
+contatore era locale a \texttt{serve}; ma anche spostandolo in una globale non cambierebbe nulla, perché ogni figlio ne
+riceve una copia al momento della \texttt{fork}. Per un contatore comune servirebbe la pagina \texttt{mmap} con il suo
+mutex.
+\end{esercizio}
+
+\begin{esercizio}{Iterazione 3: la stessa chat con i thread}
+Si riparte dall'iterazione 2, che serve tutti e non avvisa nessuno: una riga scritta da un client arriva solo al figlio che
+l'ha letta.
+\begin{itemize}
+    \item \textbf{Che cosa cambia}: \texttt{pthread\_create} e \texttt{pthread\_detach} nel ciclo, una \texttt{malloc} per
+          connessione per l'argomento, e il worker del capitolo.
+    \item \textbf{Che cosa è nuovo}: la lista dei client e il suo mutex, perché una riga di un client arrivi a tutti gli
+          altri. È la prima versione che è davvero una chat.
+\end{itemize}
+Poi misurare la memoria per client connesso, con 50 client, in entrambe le versioni. Quale costa di più per client, e quale
+si sceglierebbe comunque se \texttt{serve()} eseguisse codice scritto da altri?
+
+\svolgimento
+Il worker del capitolo inoltra quello che \texttt{read} restituisce, che non è ancora una riga. Si recupera il buffer di
+riga dell'iterazione 1, e \texttt{broadcast} parte solo a riga completa:
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={chatd.c: il worker inoltra righe intere}]
+static void *worker(void *arg) {
+    int fd = *(int *) arg;
+    free(arg);
+    int slot = add_client(fd);
+    if (slot < 0) { write(fd, "chat is full\n", 13); close(fd); return NULL; }
+
+    char buf[512], line[512];
+    size_t len = 0;
+    ssize_t n;
+    while ((n = read(fd, buf, sizeof buf)) > 0)
+        for (ssize_t i = 0; i < n; i++) {
+            if (len < sizeof line - 1) line[len++] = buf[i];
+            if (buf[i] == '\n') { broadcast(slot, line, len); len = 0; }
+        }
+    del_client(slot);
+    close(fd);
+    return NULL;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash, title={La misura}]
+$ for i in $(seq 1 50); do sleep 300 | nc 127.0.0.1 5000 & done
+$ ps -o pid,nlwp,rss,cmd -p $(pgrep -o chatd)           <- iterazione 3: un processo, 51 thread
+$ ps -o rss= --ppid $(pgrep -o chatd) | paste -sd+ | bc  <- iterazione 2: somma dei 50 figli
+\end{lstlisting}
+
+Con i thread la memoria residente cresce di poco per client: ogni stack riserva 8 MB di spazio virtuale, ma diventano
+memoria vera solo le poche pagine che il thread tocca. Con i processi ogni figlio ha la propria tabella delle pagine, le
+proprie strutture nel kernel e le proprie pagine di stack e di dati; il codice e le librerie restano condivise, ed è per
+questo che \textbf{sommare l'RSS dei figli sovrastima}: conta le pagine condivise una volta per figlio. La misura onesta è
+il PSS, in \texttt{/proc/PID/smaps\_rollup}, che divide ogni pagina condivisa fra chi la usa. Anche così, il processo costa
+più del thread.
+
+Ma se \texttt{serve()} eseguisse codice di altri si sceglierebbero comunque i \textbf{processi}: un bug in quel codice
+ucciderebbe un figlio solo, invece dell'intero server.
+\end{esercizio}
+
+\Needspace{20\baselineskip}
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Un \textbf{server concorrente} è lo stesso servizio in un ciclo diverso: \texttt{fork} o \texttt{pthread\_create}
+          subito dopo \texttt{accept}, e il genitore o il thread principale di nuovo in \texttt{accept}.
+    \item Con i processi il prezzo si paga subito: i figli non si vedono, quindi ogni cosa condivisa attraversa il kernel
+          (una pipe, o una pagina di \texttt{mmap} con un lock dentro).
+    \item Una \textbf{pipe} unisce parenti, una \textbf{FIFO} chiunque abbia il nome, un \textbf{socket} chiunque abbia
+          l'indirizzo: la stessa forma cliente-servente tre volte.
+    \item \texttt{dup2} mette una connessione sui descriptor 0 e 1, e un programma che non sa nulla di reti diventa un
+          servizio di rete.
+    \item Con i thread la condivisione è gratuita e la sicurezza no: la lista dei client vuole un mutex, e tenerlo durante
+          una \texttt{write} consegna l'intera chat al client più lento.
+    \item Isolamento contro condivisione, e un costo che nessuno dei due evita: \textbf{un flusso di controllo per
+          connessione}.
+\end{itemize}
+}

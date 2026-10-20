@@ -1,0 +1,636 @@
+\chapter{Indirizzi, ordine dei byte e struttura di client e server}
+
+Nel capitolo precedente client e server funzionavano, ma tre cose nel loro codice erano state date senza spiegazione:
+\begin{itemize}
+    \item \texttt{5000}: chi può scegliere una porta, e quali sono libere?
+    \item \texttt{htons}: perché un numero va convertito prima di entrare in una struttura?
+    \item \texttt{127.0.0.1}: e come si scrive un client per una macchina di cui conosciamo solo il \textbf{nome}?
+\end{itemize}
+Qui rispondiamo a tutte e tre, e alla fine scriviamo un client che esce dall'aula: una richiesta HTTP composta a mano
+contro un vero server web.
+
+% ══════════════════════════════════════════════════════════════
+\section{La forma dei due programmi}
+% ══════════════════════════════════════════════════════════════
+
+Le chiamate sono quelle che già conosciamo; quello che lo schema aggiunge sono i \textbf{due cicli} del server.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    st/.style={draw, rounded corners=2pt, fill=#1, minimum width=2.3cm, minimum height=0.55cm, align=center,
+               font=\scriptsize\ttfamily},
+    a/.style={-{Stealth[length=2mm]}, thick, black!70}]
+  % server
+  \node[font=\small\bfseries\sffamily] at (0,0.75) {Server};
+  \node[st=lapp!40] (s1) at (0,0)    {socket()};
+  \node[st=lapp!40] (s2) at (0,-0.8) {bind()};
+  \node[st=lapp!40] (s3) at (0,-1.6) {listen()};
+  \node[st=netred!15] (s4) at (0,-2.4) {accept()};
+  \node[st=ltra!40] (s5) at (0,-3.2) {read()};
+  \node[st=ltra!40] (s6) at (0,-4.0) {write()};
+  \node[st=lnet!40] (s7) at (0,-4.8) {close()};
+  \foreach \a/\b in {s1/s2, s2/s3, s3/s4, s4/s5, s5/s6, s6/s7} \draw[a] (\a) -- (\b);
+  % ciclo interno: la conversazione
+  \draw[a, netgreen!70!black] (s6.east) -- ++(0.5,0) |- (s5.east);
+  \node[anchor=west, text=netgreen!70!black, align=left] at (1.8,-3.6) {finché il client\\ha qualcosa da dire};
+  % ciclo esterno: la vita del server
+  \draw[a, netred] (s7.west) -- ++(-0.6,0) |- (s4.west);
+  \node[anchor=east, text=netred, align=right] at (-1.8,-3.6) {il prossimo\\client};
+  % client
+  \node[font=\small\bfseries\sffamily] at (7,0.75) {Client};
+  \node[st=lapp!40] (c1) at (7,0)    {socket()};
+  \node[st=netred!15] (c2) at (7,-2.4) {connect()};
+  \node[st=ltra!40] (c3) at (7,-3.2) {write()};
+  \node[st=ltra!40] (c4) at (7,-4.0) {read()};
+  \node[st=lnet!40] (c5) at (7,-4.8) {close()};
+  \foreach \a/\b in {c1/c2, c2/c3, c3/c4, c4/c5} \draw[a] (\a) -- (\b);
+  \draw[a, netgreen!70!black] (c4.east) -- ++(0.5,0) |- (c3.east);
+  % scambi
+  \draw[msg, netred, dashed] (c2.west) -- node[above, text=netred]{connessione} (s4.east);
+  \draw[msg, netblue] (c3.west) -- node[above, text=netblue]{richiesta} (s5.east);
+  \draw[msg, netgreen!70!black] (s6.east) ++(0.5,0) -- node[below, text=netgreen!70!black]{risposta} (c4.west);
+\end{tikzpicture}
+\caption{Il ciclo interno è una \textbf{conversazione}: leggere e rispondere finché il client ha qualcosa da dire. Quello
+         esterno è la \textbf{vita del server}: dopo \texttt{close}, di nuovo ad \texttt{accept} per il prossimo client.}
+\end{figure}
+
+Tutto quello che manca sta negli \textbf{argomenti} di queste chiamate: gli indirizzi.
+
+% ══════════════════════════════════════════════════════════════
+\section{Un indirizzo è un IP e una porta}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Estremo di una comunicazione}{
+    Un estremo (\emph{endpoint}) di una comunicazione è identificato da un \textbf{indirizzo IP} di 32 bit, che sceglie
+    l'host, e da un \textbf{numero di porta} di 16 bit, che sceglie un programma su quell'host.
+}
+
+\begin{itemize}
+    \item L'indirizzo porta i byte fino alla macchina; senza la porta il kernel non saprebbe a chi consegnarli.
+    \item Per questo uno stesso host può far girare insieme un server web, un server di posta e il nostro server di chat.
+    \item Sedici bit vogliono dire da 0 a 65535, e il numero viene scritto nell'header di ogni pacchetto.
+    \item I due numeri insieme sono tutto ciò che prendono \texttt{bind} e \texttt{connect}: non si negozia nient'altro.
+\end{itemize}
+
+\subsection{Quali porte si possono usare}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l l}
+\toprule
+\textbf{Intervallo} & \textbf{Nome} & \textbf{Chi le usa} \\
+\midrule
+0--1023       & \emph{well known}  & server dei servizi standard; solo \texttt{root} \\
+1024--49151   & \emph{registered}  & assegnate su richiesta alle applicazioni \\
+49152--65535  & \emph{dynamic}     & distribuite dal kernel, mai assegnate \\
+\bottomrule
+\end{tabular}
+\caption{I tre intervalli dei numeri di porta.}
+\end{table}
+
+\begin{itemize}
+    \item L'unico confine che conta per noi è \textbf{1024}: sotto quel numero il nostro server non parte, a meno di essere
+          \texttt{root}.
+    \item Linux distribuisce le sue porte \textbf{effimere} (quelle dei client) fra \textbf{32768 e 60999}: non è
+          l'intervallo \emph{dynamic} della tabella, ed è un parametro configurabile.
+    \item Porte \emph{well known} già incontrate: 22 \texttt{ssh}, 25 \texttt{smtp}, 53 \texttt{dns}, 80 \texttt{http},
+          443 \texttt{https}.
+    \item Per i nostri server si sceglie un numero sopra 1024, e ci si aspetta l'errore \emph{address already in use} se un
+          vicino ha scelto lo stesso.
+\end{itemize}
+
+\subsection{Una connessione sono quattro numeri, non due}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    port/.style={draw, fill=ltra!50, rounded corners=2pt, minimum width=1.1cm, font=\scriptsize\ttfamily}]
+  \node[draw=netblue, thick, rounded corners, minimum width=3.4cm, minimum height=2.4cm] (ch) at (0,0) {};
+  \node[anchor=north] at (ch.north) {host client \texttt{10.0.0.5}};
+  \node (pc) at (-0.8,-0.15) {\icon[0.7cm]{pc}};
+  \node[port] (p1) at (0.85,0.35)  {47122};
+  \node[port] (p2) at (0.85,-0.55) {47123};
+  \node[draw=netblue, thick, rounded corners, minimum width=3.4cm, minimum height=2.4cm] (sh) at (8,0) {};
+  \node[anchor=north] at (sh.north) {host server \texttt{143.225.5.3}};
+  \node (sv) at (8.8,-0.15) {\icon[0.7cm]{server}};
+  \node[port, fill=netred!15] (p80) at (7.2,-0.1) {80};
+  \draw[msg, netgreen!70!black] (p1.east) -- (p80.west);
+  \draw[msg, netblue] (p2.east) -- (p80.west);
+  \node[text=black!60] at (0.85,-1.45) {porte scelte dal kernel};
+  \node[text=black!60] at (7.2,-1.45) {porta scelta dal programmatore};
+  \node[font=\scriptsize\ttfamily, align=center] at (4,-2.2)
+    {10.0.0.5:47122 $\rightarrow$ 143.225.5.3:80\\10.0.0.5:47123 $\rightarrow$ 143.225.5.3:80};
+\end{tikzpicture}
+\caption{Due connessioni, una sola porta del server: sono i \textbf{quattro numeri} insieme a distinguerle.}
+\end{figure}
+
+Il client non sceglie mai la propria porta e non dice mai il proprio indirizzo: li riempie il kernel. Il server li
+scopre dalla connessione, ed è per questo che \texttt{accept} può dirci chi ha chiamato.
+
+\begin{lstlisting}[language=bash, title={I quattro numeri visti con ss}]
+$ ss -ltn                         # socket TCP in ascolto, in forma numerica
+State   Recv-Q  Send-Q   Local Address:Port   Peer Address:Port
+LISTEN  0       16       0.0.0.0:5000         0.0.0.0:*
+
+$ ss -tn                          # due client, stessa porta del server
+ESTAB   0       0        127.0.0.1:5000       127.0.0.1:47122
+ESTAB   0       0        127.0.0.1:5000       127.0.0.1:47123
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{0.0.0.0:5000} è il socket di ascolto: non ha un peer, perché non trasporta mai dati.
+    \item Le due righe \texttt{ESTAB} differiscono solo nell'ultimo numero, e basta.
+    \item \texttt{netstat -tan} stampa la stessa cosa: è il comando più vecchio che si trova nei libri.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{L'ordine dei byte}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Lo stesso numero, due disposizioni in memoria}
+
+L'intero 513 occupa quattro byte, e le due famiglie di processori li scrivono in ordine opposto.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c >{\ttfamily}c >{\ttfamily}c}
+\toprule
+\textbf{Indirizzo} & \normalfont\textbf{Big endian} & \normalfont\textbf{Little endian} \\
+\midrule
+0 & 00000000 & 00000001 \\
+1 & 00000000 & 00000010 \\
+2 & 00000010 & 00000000 \\
+3 & 00000001 & 00000000 \\
+\bottomrule
+\end{tabular}
+\caption{$513 = 2 \cdot 256 + 1$: nel big endian il byte più significativo viene per primo, nel little endian l'ultimo.}
+\end{table}
+
+\begin{itemize}
+    \item \textbf{Big endian} mette per primo il byte più significativo; \textbf{little endian} il meno significativo.
+          Nessuno dei due è sbagliato.
+    \item La nostra macchina è quasi certamente little endian; i protocolli di Internet sono \textbf{big endian}.
+    \item Quindi la conversione non è facoltativa, e non è qualcosa che il compilatore possa fare al posto nostro.
+\end{itemize}
+
+\subsection{L'ordine di rete e quattro funzioni}
+
+\dfn{Network byte order}{
+    L'ordine dei byte usato negli header dei protocolli di Internet è il \textbf{big endian}, detto per questo
+    \emph{network byte order}. Ogni numero che finisce in un header va scritto in quest'ordine.
+}
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <arpa/inet.h>
+
+uint16_t htons(uint16_t v);   /* host    -> network, 16 bit: una porta */
+uint32_t htonl(uint32_t v);   /* host    -> network, 32 bit: un IPv4   */
+uint16_t ntohs(uint16_t v);   /* network -> host,    16 bit            */
+uint32_t ntohl(uint32_t v);   /* network -> host,    32 bit            */
+\end{lstlisting}
+
+\begin{itemize}
+    \item I nomi si leggono: \texttt{h} \emph{host}, \texttt{n} \emph{network}, \texttt{s} \emph{short} (16 bit),
+          \texttt{l} \emph{long} (32 bit).
+    \item Su una macchina big endian non fanno nulla, ed è proprio questo il punto: lo stesso sorgente si compila e funziona
+          ovunque.
+    \item Si converte quando il valore \textbf{entra} nella struttura e si riconverte quando ne \textbf{esce}. Mai due volte.
+\end{itemize}
+
+\warning{Che cosa costa un htons dimenticato}{
+    Il server fa \texttt{bind} sulla porta 5000 \textbf{senza} \texttt{htons}; il client si connette a
+    \texttt{htons(5000)}. Non si incontrano: $5000 = \texttt{0x1388}$, e letto al contrario diventa
+    $\texttt{0x8813} = 34835$. Il server è in ascolto su una porta che nessuno ha chiesto, e il client riceve
+    \emph{connection refused}: l'errore sembra un problema di rete, e non lo è.
+
+    Peggio ancora il caso simmetrico: se entrambi i lati dimenticano la conversione, sbagliano allo stesso modo e
+    \textbf{tutto funziona}. Continuerà a funzionare finché uno dei due non girerà su una macchina big endian, o finché non
+    si controlla con \texttt{ss}.
+}
+
+\subsection{Quali campi viaggiano davvero}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[field, minimum width=1.6cm, fill=lphy!40] (f) at (0,0) {\texttt{sin\_family}\\2 B};
+  \node[field, minimum width=1.6cm, fill=netred!15, right=0pt of f] (p) {\texttt{sin\_port}\\2 B};
+  \node[field, minimum width=3.2cm, fill=netred!15, right=0pt of p] (a) {\texttt{sin\_addr}\\4 B};
+  \node[field, minimum width=5.6cm, fill=lphy!40, right=0pt of a] (z) {\texttt{sin\_zero}\\8 B di riempimento};
+  \draw[decorate, decoration={brace, amplitude=5pt}] (f.north west) -- (z.north east)
+    node[midway, above=6pt] {16 byte in tutto};
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (p.south west) -- (a.south east)
+    node[midway, below=6pt, align=center, text=netred] {ordine di rete\\copiati negli header dei pacchetti};
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (z.south west) -- (z.south east)
+    node[midway, below=6pt, align=center, text=black!60] {locali al processo\\la rete non li vede mai};
+\end{tikzpicture}
+\caption{La struttura \texttt{sockaddr\_in}: si converte ciò che finisce in un header, si lascia stare ciò che il kernel
+         legge localmente.}
+\end{figure}
+
+È tutta la regola: si converte quello che viene \textbf{copiato in un header}, si lascia com'è quello che il kernel legge
+\textbf{localmente}. \texttt{sin\_family} non si converte mai, e \texttt{sin\_zero} esiste soltanto per arrivare a sedici
+byte.
+
+\subsection{Anche i nostri dati}
+
+L'ordine dei byte non è una proprietà degli indirizzi: è una proprietà di \textbf{ogni numero che mettiamo sul filo}.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Inviare e ricevere un intero di 32 bit}]
+uint32_t v = htonl(12345);              /* mittente: converte, poi invia */
+write(fd, &v, sizeof v);
+
+uint32_t net;                           /* destinatario: tutti e quattro i byte */
+size_t got = 0;
+while (got < sizeof net) {
+    ssize_t n = read(fd, (char *) &net + got, sizeof net - got);
+    if (n <= 0) { /* il peer se n'e' andato, o errore */ break; }
+    got += (size_t) n;
+}
+uint32_t back = ntohl(net);
+\end{lstlisting}
+
+Il ciclo serve perché quattro byte possono arrivare in due pezzi: è la \emph{short read} del capitolo precedente.
+
+% ══════════════════════════════════════════════════════════════
+\section{Riempire gli indirizzi}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Da una stringa puntata a quattro byte}
+
+\begin{lstlisting}[language={[POSIX]C}]
+struct sockaddr_in a;
+char txt[INET_ADDRSTRLEN];
+
+if (inet_pton(AF_INET, "143.225.5.3", &a.sin_addr) != 1) {     /* 1 = ok */
+    fprintf(stderr, "indirizzo non valido\n"); exit(EXIT_FAILURE);
+}
+inet_ntop(AF_INET, &a.sin_addr, txt, sizeof txt);               /* e ritorno */
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{inet\_pton} scrive direttamente in \texttt{sin\_addr}, già in ordine di rete: niente \texttt{htonl} dopo.
+    \item Restituisce 1 se va tutto bene, 0 se la stringa è malformata, $-1$ se la famiglia non è supportata.
+    \item \texttt{inet\_ntop} fa il percorso inverso e vuole un buffer da noi. Le vecchie \texttt{inet\_addr} e
+          \texttt{inet\_ntoa} sono da evitare.
+\end{itemize}
+
+\subsection{L'indirizzo del server e quello del client}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={La stessa struttura, due significati}]
+struct sockaddr_in me;                        /* server: il proprio indirizzo */
+memset(&me, 0, sizeof me);
+me.sin_family      = AF_INET;
+me.sin_port        = htons(5000);             /* scelta da noi */
+me.sin_addr.s_addr = htonl(INADDR_ANY);       /* qualunque interfaccia locale */
+bind(fd, (struct sockaddr *) &me, sizeof me);
+
+struct sockaddr_in srv;                       /* client: l'altro */
+memset(&srv, 0, sizeof srv);
+srv.sin_family = AF_INET;
+srv.sin_port   = htons(5000);                 /* deve coincidere con quella del server */
+inet_pton(AF_INET, "143.225.5.3", &srv.sin_addr);
+connect(fd, (struct sockaddr *) &srv, sizeof srv);   /* nessuna bind */
+\end{lstlisting}
+
+Stessa struttura, significato opposto: \textbf{\texttt{bind} dice dove sono io, \texttt{connect} dice dove sei tu}.
+
+\warning{INADDR\_ANY o una sola interfaccia?}{
+    Il nostro server funziona con \texttt{nc} sulla nostra macchina ed è irraggiungibile dal portatile accanto. Perché? Perché
+    è stato legato a \texttt{127.0.0.1}. Quell'indirizzo esiste su ogni macchina e non esce da nessuna: i pacchetti che
+    arrivano da fuori entrano da un'altra interfaccia, e lì nessuno è in ascolto.
+    \begin{itemize}
+        \item Un host ha più indirizzi (loopback, cavo, wireless), e \texttt{bind} ci lega a \textbf{uno} di essi.
+        \item \texttt{INADDR\_ANY}, stampato come \texttt{0.0.0.0}, significa \textbf{tutte} le interfacce di questa
+              macchina, presenti e future.
+        \item È la scelta normale per un server; l'eccezione voluta è un servizio che non deve essere raggiungibile da fuori.
+    \end{itemize}
+}
+
+\subsection{Riavviare il server: le opzioni dei socket}
+
+\begin{lstlisting}[language={[POSIX]C}]
+int yes = 1;
+setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
+
+struct timeval tv = { .tv_sec = 5, .tv_usec = 0 };
+setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+\end{lstlisting}
+
+\begin{itemize}
+    \item Le opzioni stanno su \textbf{livelli}: \texttt{SOL\_SOCKET} qui, \texttt{IPPROTO\_TCP} e \texttt{IPPROTO\_IP} più in
+          basso.
+    \item \texttt{SO\_REUSEADDR} permette a \texttt{bind} di prendere una porta che l'esecuzione precedente ha chiuso ma che il
+          kernel sta ancora tenendo occupata. Quell'attesa è il rilascio ordinato della vecchia connessione: vedremo che cosa
+          protegge quando apriremo TCP.
+    \item \texttt{SO\_RCVTIMEO} fa sì che una \texttt{read} bloccante rinunci dopo cinque secondi, restituendo $-1$ con
+          \texttt{errno} impostato.
+\end{itemize}
+
+\subsection{Lo stesso codice su IPv6}
+
+\begin{lstlisting}[language={[POSIX]C}]
+struct sockaddr_in6 me6;                     /* dentro, un indirizzo di 16 byte */
+memset(&me6, 0, sizeof me6);
+me6.sin6_family = AF_INET6;
+me6.sin6_port   = htons(5000);               /* htons, esattamente come prima */
+me6.sin6_addr   = in6addr_any;               /* il jolly, scritto :: */
+bind(fd6, (struct sockaddr *) &me6, sizeof me6);
+\end{lstlisting}
+
+Struttura diversa, famiglia diversa, \textbf{stesse sei chiamate}: l'API è stata progettata perché cambi solo questo. Il
+socket va creato con \texttt{AF\_INET6}, e il cast a \texttt{struct sockaddr *} è il motivo per cui quel tipo generico
+esiste. Scrivere a mano entrambe le versioni è noioso ed evitabile: è l'argomento della prossima sezione.
+
+% ══════════════════════════════════════════════════════════════
+\section{Dal nome all'indirizzo}
+% ══════════════════════════════════════════════════════════════
+
+Tutto quello visto finora voleva \textbf{numeri}, e su Internet gli host si conoscono per \textbf{nome}.
+\begin{itemize}
+    \item L'API dei socket non può aiutarci: sta al livello di trasporto, e i nomi sono un servizio del livello applicativo.
+    \item Quindi, prima di connettersi, si fa un altro scambio sulla rete (una \textbf{query DNS}) e se ne usa la risposta
+          come indirizzo.
+    \item Il nostro client è dunque \textbf{client due volte}: prima del resolver, poi del server che volevamo davvero.
+\end{itemize}
+
+\subsection{getaddrinfo: da un nome a indirizzi pronti}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Risolvere nome e servizio insieme}]
+struct addrinfo hints, *res;
+memset(&hints, 0, sizeof hints);
+hints.ai_family   = AF_UNSPEC;       /* IPv4 o IPv6, quello che c'e' */
+hints.ai_socktype = SOCK_STREAM;     /* TCP: niente risposte per datagrammi */
+
+int rc = getaddrinfo("www.unina.it", "80", &hints, &res);
+if (rc != 0) {
+    fprintf(stderr, "%s\n", gai_strerror(rc)); exit(EXIT_FAILURE);
+}
+\end{lstlisting}
+
+\begin{itemize}
+    \item Risolve insieme il \textbf{nome} e il \textbf{servizio}: \texttt{"80"} si potrebbe scrivere \texttt{"http"}.
+    \item Restituisce 0 oppure un \textbf{codice d'errore suo}, che si stampa con \texttt{gai\_strerror}: non
+          \texttt{errno}, non \texttt{perror}.
+    \item Per un server si passa \texttt{NULL} come nome e \texttt{hints.ai\_flags = AI\_PASSIVE}, e si ottiene il jolly.
+    \item Il codice più vecchio chiama \texttt{gethostbyname}: solo IPv4, non rientrante, fuori dallo standard. Bisogna saperla
+          riconoscere, non scriverla.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    rec/.style={draw=netblue, fill=netblue!6, rounded corners=2pt, inner sep=3pt, align=left, font=\scriptsize\ttfamily},
+    sa/.style={draw=netgreen!70!black, fill=netgreen!8, rounded corners=2pt, align=center, font=\scriptsize\ttfamily,
+               minimum width=2.6cm},
+    a/.style={-{Stealth[length=2mm]}, thick}]
+  \node[font=\small\ttfamily] (res) at (-1.4,0.3) {res};
+  \node[rec] (n1) at (1.5,0)
+    {ai\_family\ \ \ AF\_INET6\\ai\_socktype SOCK\_STREAM\\ai\_protocol IPPROTO\_TCP\\ai\_addr\ \ \ \ \ $\bullet$\\ai\_next\ \ \ \ \ $\bullet$};
+  \node[rec] (n2) at (1.5,-2.5)
+    {ai\_family\ \ \ AF\_INET\\ai\_socktype SOCK\_STREAM\\ai\_protocol IPPROTO\_TCP\\ai\_addr\ \ \ \ \ $\bullet$\\ai\_next\ \ \ \ \ NULL};
+  \node[sa] (s1) at (5.6,-0.15) {sockaddr\_in6\\{}[2001:db8::1]:80};
+  \node[sa] (s2) at (5.6,-2.65) {sockaddr\_in\\143.225.5.3:80};
+  \draw[a] (res) -- (n1.west |- res);
+  \draw[a] (n1.south) -- node[right, font=\scriptsize\ttfamily]{ai\_next} (n2.north);
+  \draw[a, netgreen!70!black] ([yshift=-0.12cm]n1.east) -- (s1.west);
+  \draw[a, netgreen!70!black] ([yshift=-0.12cm]n2.east) -- (s2.west);
+  \node[anchor=west, text=black!60, align=left] at (7.1,-0.15) {pronto per\\\texttt{socket()} e \texttt{connect()}};
+  \node[anchor=west, text=black!60, align=left] at (7.1,-2.65) {niente \texttt{htons},\\niente \texttt{inet\_pton}};
+\end{tikzpicture}
+\caption{\texttt{getaddrinfo} restituisce una \textbf{lista}, un nodo per ogni modo di raggiungere quel nome. I primi tre
+         campi sono i tre argomenti di \texttt{socket}, e \texttt{ai\_addr} va bene così com'è per \texttt{connect}.}
+\end{figure}
+
+\subsection{Provare la lista finché uno funziona}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={connect\_any: il ciclo da scrivere una volta e tenere}]
+int fd = -1;
+for (struct addrinfo *p = res; p != NULL; p = p->ai_next) {
+    fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+    if (fd < 0) continue;                                    /* famiglia non disponibile */
+    if (connect(fd, p->ai_addr, p->ai_addrlen) == 0) break;  /* fatto */
+    close(fd);
+    fd = -1;
+}
+freeaddrinfo(res);                                           /* la lista e' allocata con malloc */
+if (fd < 0) { fprintf(stderr, "impossibile connettersi\n"); exit(EXIT_FAILURE); }
+\end{lstlisting}
+
+Questo ciclo è uguale in ogni client, ed è ciò che fa funzionare un programma su IPv4 e su IPv6 \textbf{senza sapere quale
+dei due ha ottenuto}.
+
+\warning{Un nome, più indirizzi}{
+    Il nostro client funziona per una settimana e poi smette, senza che sia cambiata una riga. Che cosa è cambiato? Il nome
+    si è risolto in un \textbf{indirizzo diverso}. Un sito molto frequentato risponde con più indirizzi, in un ordine che
+    cambia a ogni query, e quello che avevamo memorizzato è ora una macchina in sostituzione. È il bilanciamento del
+    carico visto nel capitolo sul DNS. Quindi: si risolve \textbf{al momento di connettersi}, non una volta all'avvio, e
+    non si dà per scontato che il primo indirizzo risponda. Il ciclo qui sopra è esattamente questa disciplina: provare,
+    fallire, passare al successivo.
+}
+
+\subsection{Le stesse ricerche dalla shell}
+
+\begin{lstlisting}[language=bash]
+$ getent hosts www.unina.it      # cio' che restituirebbe getaddrinfo
+143.225.5.3     www.unina.it
+$ dig +short www.unina.it        # chiede direttamente al DNS
+143.225.5.3
+$ ip addr show                   # quali indirizzi ha questo host
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{getent} passa per lo stesso resolver usato dal nostro programma, quindi vede anche \texttt{/etc/hosts}.
+    \item \texttt{dig} parla con il name server: per questo i due possono essere in disaccordo, ed è una differenza che prima
+          o poi ci farà perdere tempo.
+    \item Il vecchio nome di \texttt{ip} è \texttt{ifconfig}: lo si trova nei libri, e molti sistemi non lo installano più.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{HTTP scritto a mano}
+% ══════════════════════════════════════════════════════════════
+
+\begin{lstlisting}[language=bash, title={Una richiesta HEAD digitata con nc}]
+$ nc -C www.unina.it 80
+HEAD /chi-siamo/cenni-storici HTTP/1.1          <- scritto da noi
+Host: www.unina.it
+Connection: close
+                                                <- riga vuota: richiesta finita
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+Connection: close
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{nc} apre un socket e vi copia il terminale: è un client generico per qualunque protocollo testuale
+          (\texttt{-C} manda le righe terminate da \texttt{\textbackslash r\textbackslash n}).
+    \item Il server non lo distingue da un browser, perché sul filo non c'è nient'altro da distinguere.
+    \item \texttt{telnet host porta} fa la stessa cosa ed è la versione che si trova nel materiale più vecchio.
+\end{itemize}
+
+Ora scriviamo la stessa richiesta in un programma. Servono esattamente tre cose, e le abbiamo appena digitate tutte e tre:
+il \textbf{nome dell'host}, che diventa un indirizzo; la \textbf{porta}, 80 per un server web; il \textbf{percorso}
+dell'oggetto voluto. Nient'altro: il browser aggiunge comodità, non protocollo.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={head.c: risolvere, connettersi, chiedere, leggere}]
+struct addrinfo hints, *res;
+memset(&hints, 0, sizeof hints);
+hints.ai_family   = AF_UNSPEC;
+hints.ai_socktype = SOCK_STREAM;
+
+int rc = getaddrinfo("www.unina.it", "http", &hints, &res);
+if (rc != 0) { fprintf(stderr, "%s\n", gai_strerror(rc)); exit(EXIT_FAILURE); }
+
+int fd = connect_any(res);       /* il ciclo della sezione precedente */
+freeaddrinfo(res);
+if (fd < 0) { fprintf(stderr, "impossibile connettersi\n"); exit(EXIT_FAILURE); }
+
+const char *req = "HEAD /chi-siamo/cenni-storici HTTP/1.1\r\n"
+                  "Host: www.unina.it\r\n"
+                  "Connection: close\r\n\r\n";      /* la riga vuota la chiude */
+
+if (write(fd, req, strlen(req)) < 0) { perror("write"); exit(EXIT_FAILURE); }
+
+char buf[4096];
+ssize_t n;
+while ((n = read(fd, buf, sizeof buf)) > 0)         /* finche' il server chiude */
+    fwrite(buf, 1, (size_t) n, stdout);
+close(fd);
+\end{lstlisting}
+
+Nessun indirizzo copiato a mano e nessun byte convertito: tutta la prima metà del capitolo ora sta dentro
+\texttt{getaddrinfo}. \texttt{HEAD} chiede soltanto gli header; ogni riga finisce con \texttt{\textbackslash r\textbackslash n},
+e la riga vuota dice al server che la richiesta è completa.
+
+\subsection{Quello che abbiamo scritto è un payload}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[field, minimum width=2.0cm, minimum height=1.3cm, fill=ltra!60] (h) at (0,0) {header\\porte, seq};
+  \node[field, minimum width=5.8cm, minimum height=1.3cm, fill=lapp!40, right=0pt of h, align=left, font=\scriptsize\ttfamily]
+    (p) {HEAD /chi-siamo/cenni-storici HTTP/1.1\\Host: www.unina.it\\\ldots};
+  \node[right=0.3cm of p, text=black!60, align=left] {\ldots altri byte\\dello stesso flusso};
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (h.south west) -- (h.south east)
+    node[midway, below=6pt, align=center] {scritto\\dal kernel};
+  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (p.south west) -- (p.south east)
+    node[midway, below=6pt, align=center] {messaggio applicativo:\\i byte che abbiamo scritto noi};
+  \draw[decorate, decoration={brace, amplitude=5pt}] (h.north west) -- (p.north east)
+    node[midway, above=6pt] {segmento TCP: il messaggio di trasporto};
+\end{tikzpicture}
+\caption{Il livello di trasporto trasporta quei byte \textbf{senza leggerli}: per lui il payload è trasparente.}
+\end{figure}
+
+Abbiamo costruito un messaggio applicativo con \texttt{strlen} e \texttt{write}, e il livello di trasporto lo ha portato
+senza guardarci dentro. Scrivere la richiesta a mano è ciò che rende concreta la parola \emph{payload} incontrata parlando
+di incapsulamento.
+
+\warning{Una read non è la risposta}{
+    Togliendo il ciclo e stampando ciò che restituisce una sola \texttt{read}, si ottiene un \textbf{prefisso} della risposta,
+    di lunghezza imprevedibile: quello che era arrivato fino a quel momento. La risposta è un flusso, e la sua fine non è un
+    evento di cui il programma viene avvisato.
+    \begin{itemize}
+        \item Il ciclo sopra si ferma sullo 0, e solo perché \texttt{Connection: close} fa chiudere il server alla fine.
+        \item Senza quell'header la connessione resta aperta, il ciclo non finisce, e il programma resta appeso dopo aver
+              stampato tutto.
+        \item Per questo HTTP dice quanto è lungo il corpo: \texttt{Content-Length}, oppure \emph{chunk} che annunciano
+              ciascuno la propria dimensione.
+        \item Ogni protocollo deve rispondere a questa domanda, e anche il nostro dovrà farlo.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Esercizi}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Una somma sulla rete}
+Modificare client e server del capitolo precedente perché il client invii \textbf{due numeri} e il server risponda con la
+loro \textbf{somma}, in un ciclo finché non lo si interrompe. I numeri viaggiano in binario, come interi di 32 bit.
+
+\svolgimento
+Ogni numero va convertito con \texttt{htonl} prima di partire e con \texttt{ntohl} all'arrivo, e va letto per intero: la
+funzione \texttt{read\_full} è il ciclo di questo capitolo, che si ferma solo con tutti i byte o con la chiusura del peer.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Lato server: la conversazione}]
+static int read_full(int fd, void *buf, size_t n) {   /* 1 = ok, 0 = peer chiuso */
+    size_t got = 0;
+    while (got < n) {
+        ssize_t r = read(fd, (char *) buf + got, n - got);
+        if (r <= 0) return 0;
+        got += (size_t) r;
+    }
+    return 1;
+}
+
+static void serve(int fd) {
+    uint32_t in[2];
+    while (read_full(fd, in, sizeof in)) {            /* 8 byte: due numeri */
+        uint32_t sum = htonl(ntohl(in[0]) + ntohl(in[1]));
+        if (write(fd, &sum, sizeof sum) != sizeof sum) break;
+    }
+}
+\end{lstlisting}
+
+Il client fa l'inverso: legge due numeri da tastiera, scrive \texttt{htonl(a)} e \texttt{htonl(b)} con una sola
+\texttt{write} di 8 byte, legge 4 byte con \texttt{read\_full} e stampa \texttt{ntohl} del risultato. Dimenticando le
+conversioni su entrambi i lati il programma funziona lo stesso fra due macchine little endian: è il caso simmetrico
+dell'avvertimento sull'\texttt{htons}.
+\end{esercizio}
+
+\begin{esercizio}{Progetto: la chat sa dove connettersi}
+La chat dell'iterazione 1 ha \texttt{127.0.0.1} e \texttt{5000} scritti nel sorgente. Fare in modo che il client prenda
+\textbf{host e porta} da \texttt{argv} e risolva l'host con \texttt{getaddrinfo}, e che il server prenda la propria porta
+allo stesso modo. Provare con il server su una macchina e il client su un'altra. Con le due macchine collegate, che
+aspetto hanno i quattro numeri in \texttt{ss -tn} da ciascun lato?
+
+\svolgimento
+Il client passa \texttt{argv[1]} e \texttt{argv[2]} a \texttt{getaddrinfo} e usa \texttt{connect\_any}; il server chiede
+l'indirizzo passivo, così resta su \texttt{INADDR\_ANY} e risponde sull'interfaccia che l'altra macchina riesce a
+raggiungere.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={chatd.c: il socket di ascolto su una porta data}]
+int listening_socket(const char *port) {
+    struct addrinfo hints = {0}, *res;
+    hints.ai_family   = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags    = AI_PASSIVE;                /* NULL + AI_PASSIVE = il jolly */
+    int rc = getaddrinfo(NULL, port, &hints, &res);
+    if (rc != 0) { fprintf(stderr, "%s\n", gai_strerror(rc)); exit(EXIT_FAILURE); }
+
+    int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    int yes = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes);
+    if (bind(fd, res->ai_addr, res->ai_addrlen) < 0) { perror("bind"); exit(EXIT_FAILURE); }
+    freeaddrinfo(res);
+    if (listen(fd, 16) < 0) { perror("listen"); exit(EXIT_FAILURE); }
+    return fd;
+}
+\end{lstlisting}
+
+Da qui in avanti ogni versione del progetto si avvia così: \texttt{./chatd 5000} e \texttt{./chat host 5000}. In
+\texttt{ss -tn} le due righe sono \textbf{speculari}: sul server l'indirizzo locale è quello della sua scheda con la porta
+5000 e il peer è il client con una porta effimera; sul client gli stessi quattro numeri compaiono con locale e peer
+scambiati.
+\end{esercizio}
+
+\Needspace{20\baselineskip}
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Un estremo è un \textbf{indirizzo e una porta}; una connessione sono \textbf{quattro numeri}, ed è così che due
+          client restano distinti.
+    \item Le porte sotto 1024 non sono nostre; quella del client la sceglie il kernel da un intervallo effimero.
+    \item I numeri che finiscono negli header vanno in \textbf{ordine di rete}: \texttt{htons} per le porte,
+          \texttt{htonl} per gli indirizzi, e lo stesso per i nostri dati.
+    \item \texttt{bind} dice dove sono io, \texttt{connect} dove sei tu; \texttt{INADDR\_ANY} significa tutte le interfacce
+          dell'host.
+    \item \texttt{getaddrinfo} trasforma un nome e un servizio in una \textbf{lista} di indirizzi pronti, IPv4 e IPv6 allo
+          stesso modo; si prova la lista finché un indirizzo risponde.
+    \item Un messaggio applicativo viaggia come \textbf{payload} di un messaggio di trasporto, e nessuno strato inferiore lo
+          legge.
+\end{itemize}
+}

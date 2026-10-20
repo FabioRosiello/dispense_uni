@@ -1,0 +1,615 @@
+\chapter{Anonimato e privatezza su Internet}
+
+Abbiamo chiuso il capitolo precedente con uno sniffer sulla porta 443: un nome leggibile, e tutto il resto Application Data. Ma a
+chiunque sul percorso restano leggibili gli \textbf{indirizzi}, il \textbf{nome del server}, le \textbf{dimensioni} e i \textbf{tempi}.
+Uno sniffer impara quindi chi parla con chi, e quando, anche quando non legge nulla di ciò che si dicono. TLS nasconde \emph{che cosa}
+si dice; in questo capitolo vediamo se qualcosa può nascondere \emph{a chi} lo si dice. Il percorso: da chi ci si nasconde; che cosa
+lascia trapelare ogni livello; gli strumenti; ciò che nessuno strumento può risolvere.
+
+% ══════════════════════════════════════════════════════════════
+\section{Anonimi rispetto a chi}
+% ══════════════════════════════════════════════════════════════
+
+Alice vuole leggere il sito di un attivista politico. Non vuole che:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Alice non vuole che} & \textbf{HTTP} & \textbf{HTTPS} \\
+\midrule
+il sito conosca il suo indirizzo IP & esposto & esposto \\
+il suo ISP sappia quale sito visita & esposto & esposto \\
+il suo ISP legga ciò che scambia & esposto & \textbf{nascosto} \\
+\bottomrule
+\end{tabular}
+\caption{Tre cose che Alice vuole nascondere.}
+\end{table}
+
+Il suo indirizzo sorgente è in ogni datagramma che invia, e l'indirizzo del sito pure. TLS risolve una sola delle tre righe; alla fine
+del capitolo la tabella avrà due colonne in più.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (a) at (0,0) {\icon[0.8cm]{laptop}}; \node[below=-1pt of a, font=\footnotesize\bfseries\sffamily] {Alice};
+  \node[netcloud, minimum width=1.9cm, minimum height=1cm] (l) at (2.9,0) {rete locale};
+  \node[netcloud, minimum width=1.6cm, minimum height=1cm] (i) at (5.9,0) {ISP};
+  \node[netcloud, minimum width=2.2cm, minimum height=1cm] (t) at (9.1,0) {reti di transito};
+  \node (s) at (12.3,0) {\icon[0.45cm]{server}}; \node[below=-1pt of s, font=\footnotesize\bfseries\sffamily] {il sito};
+  \draw[wired] (a) -- (l); \draw[wired] (l) -- (i); \draw[wired] (i) -- (t); \draw[wired] (t) -- (s);
+  \node[draw, fill=llink!50, rounded corners] (r) at (5.9,1.5) {resolver};
+  \draw[wired, dashed] (i) -- (r);
+  \node[anchor=west, text width=3.6cm] at (6.6,1.5) {ogni nome che si cerca, dal proprio indirizzo};
+  \node[text width=1.8cm, align=center, text=netred] at (0,-1.25) {invia tutto};
+  \node[text width=2.4cm, align=center, text=netred] at (2.9,-1.25) {MAC, indirizzo, ogni frame inviato};
+  \node[text width=2.4cm, align=center, text=netred] at (5.9,-1.25) {indirizzo, ogni destinazione, ogni nome};
+  \node[text width=2.4cm, align=center, text=netred] at (9.1,-1.25) {entrambi gli indirizzi, dimensioni e tempi};
+  \node[text width=2.2cm, align=center, text=netred] at (12.3,-1.25) {il vostro indirizzo, tutto ciò che chiedete};
+  \draw[netorange, thick, {Stealth}-{Stealth}] (0.3,-2.0) -- node[below, text=netorange] {un osservatore di entrambi gli estremi: confronta ciò che entra con ciò che esce} (12.1,-2.0);
+\end{tikzpicture}
+\caption{Ogni osservatore sta in un punto diverso e vede una parte diversa; il più pericoloso vede entrambi gli estremi.}
+\end{figure}
+
+Non esiste essere anonimi \emph{in generale}: solo anonimi \textbf{rispetto a qualcuno}.
+
+\subsection{Leggere e bloccare sono minacce diverse}
+
+\begin{itemize}
+    \item Un \textbf{osservatore} vuole leggere o collegare: chi siete, con chi parlate, che cosa dite.
+    \item Un \textbf{censore} non vuole né l'una né l'altra cosa: vuole fermare la conversazione, e gli basta riconoscerla.
+          \begin{itemize}
+            \item \textbf{Per indirizzo}: scarta ogni pacchetto verso un elenco di indirizzi IP (il filtro di pacchetti per cui abbiamo
+                  scritto regole).
+            \item \textbf{Per nome}: risponde alle query DNS con bugie, o resetta le connessioni la cui SNI è in un elenco.
+            \item \textbf{Per forma}: l'ispezione profonda dei pacchetti riconosce un protocollo anche quando non ne legge un byte.
+          \end{itemize}
+\end{itemize}
+
+Nascondere chi si è non ferma un censore; nascondere che aspetto ha il traffico potrebbe farlo.
+
+\subsection{Quattro cose diverse}
+
+\dfn{Quattro proprietà}{
+    \begin{itemize}
+      \item \textbf{Confidenzialità}: nessuno, a parte i due estremi, può leggere il contenuto.
+      \item \textbf{Anonimato}: non si può essere identificati all'interno di un insieme di soggetti, l'\textbf{insieme di anonimato}
+            (\emph{anonymity set}).
+      \item \textbf{Pseudonimato}: si agisce sotto un identificatore che non è il proprio nome, ma che è \textbf{sempre lo stesso}.
+      \item \textbf{Non collegabilità} (\emph{unlinkability}): nessuno può dire se due messaggi, o due visite, vengono dallo stesso
+            soggetto.
+    \end{itemize}
+    Sono indipendenti: uno pseudonimo è collegabile per costruzione, è a questo che serve. La confidenzialità non dice nulla sulle altre
+    tre, ed è l'unica che TLS fornisce.
+}
+
+\warning{Lo pseudonimo che un tribunale ha smascherato}{
+    Un \emph{remailer} riceve la vostra posta, toglie il vostro indirizzo e la ripubblica sotto uno pseudonimo. Chi può scoprire che
+    eravate voi? Chi possiede la sua tabella da pseudonimi a indirizzi, e chi può costringere il gestore a consegnarla: negli anni '90 un
+    tribunale fece esattamente questo. Lo pseudonimato è anonimato solo finché la corrispondenza resta segreta (un remailer di
+    ``tipo 1''). I remailer \emph{cypherpunk} non tenevano né tabelle né log: un server sequestrato non aveva nulla da dare. Gli utenti
+    ne concatenavano tre, ogni messaggio cifrato per il successivo: incontreremo di nuovo questa forma.
+}
+
+\warning{Un lucchetto e un login}{
+    Accedete a un sito in HTTPS. Quale delle quattro proprietà avete? Solo la confidenzialità, e solo rispetto al percorso. Il sito ha il
+    vostro nome, e il vostro ISP sa quale sito è. TLS autentica il server; il vostro login autentica voi: insieme sono l'\textbf{opposto}
+    dell'anonimato. Scambiare la cifratura per anonimato è l'errore più comune sulla privatezza in Internet.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Che cosa lascia trapelare ogni livello}
+% ══════════════════════════════════════════════════════════════
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{*{5}{>{\raggedright\arraybackslash}p{2.95cm}}}
+\toprule
+ & \textbf{collegamento} & \textbf{IP} & \textbf{TCP} & \textbf{TLS} \\
+\midrule
+primo pacchetto & MAC sorg., MAC dest. & \texttt{192.168.1.23} $\rightarrow$\newline \texttt{143.225.161.30} & \texttt{51734} $\rightarrow$ \texttt{443} &
+Client Hello, SNI = \texttt{www.unina.it} \\
+record successivo & header di collegamento & header IP & header TCP & tipo e lunghezza del record; il resto cifrato \\
+\midrule
+chi lo legge & la LAN, l'access point & ogni router, il sito & NAT, firewall & chiunque sul percorso \\
+\bottomrule
+\end{tabular}
+\caption{Una richiesta HTTPS, letta dall'esterno: richiesta, cookie e pagina li legge solo il server; dimensione e tempo li vede chiunque.}
+\end{table}
+
+TLS cifra il \textbf{proprio} payload. Ogni header sotto di esso viaggia esattamente come è stato scritto, e anche la parte cifrata dice
+la propria lunghezza e il momento in cui è stata inviata.
+
+\dfn{Un header è scritto per essere letto}{
+    Sotto il proprio livello un payload è opaco; un header è l'opposto: esiste per essere letto lungo la strada. Lo switch deve leggere
+    l'indirizzo MAC, ogni router l'indirizzo IP, il NAT le porte, il resolver il nome. Un livello può quindi cifrare solo ciò che gli sta
+    \textbf{sopra}; il suo header resta in chiaro per i suoi dispositivi. TLS sta sopra TCP: dalle porte in giù tutto è in chiaro, e deve
+    esserlo. Ogni livello lascia trapelare esattamente ciò che gli serve per consegnare; scendendo nella pila, la perdita cambia
+    proprietario.
+}
+
+\subsection{Che cosa si dice all'applicazione}
+
+\begin{itemize}
+    \item In cima spesso si dice chi si è: un account, un login, un indirizzo di consegna, un numero di telefono. Nessun livello sotto può
+          annullarlo: il miglior anonimato di rete finisce alla pagina di login.
+    \item Senza login c'è il \textbf{cookie}: un numero che il server vi ha dato e che rimandate con ogni richiesta. Quel numero è uno
+          pseudonimo: collega tutte le vostre visite senza bisogno del vostro nome. Come abbiamo visto con i cookie: date il vostro nome una
+          volta, e l'intera cronologia ne acquista uno.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \foreach \y/\t in {1.3/un giornale, 0/un negozio, -1.3/una clinica} {
+    \node[draw, fill=cloudbg, rounded corners, minimum width=2.2cm, minimum height=0.7cm] at (0,\y) {\t};
+    \node[draw, fill=netorange!25, minimum width=2.4cm, minimum height=0.5cm, font=\scriptsize\ttfamily] at (3.2,\y) {tracker.example};
+    \draw[msg, netred] (4.5,\y) -- node[above, font=\scriptsize\ttfamily] {Cookie: id=1678} (7.6,0);
+  }
+  \node[draw, fill=netorange!40, rounded corners, minimum height=0.8cm, font=\scriptsize\ttfamily] (tr) at (8.8,0) {tracker.example};
+  \node[anchor=west, text width=2.6cm, text=netred] at (10.2,0) {un numero, tre siti: una cronologia};
+\end{tikzpicture}
+\caption{Cookie di terze parti: un solo identificatore attraverso molti siti.}
+\end{figure}
+
+Una pagina incorpora un'immagine o uno script di un altro dominio, e quel dominio imposta un cookie suo. Lo stesso cookie torna da ogni
+sito che lo incorpora, insieme al sito su cui eravate. I browser oggi isolano questi cookie per sito, o li bloccano, in misura diversa.
+
+\warning{Niente cookie, e ancora riconosciuti}{
+    Cancellate ogni cookie e tornate. Il sito può ancora distinguervi da tutti gli altri? Spesso sì: user agent, dimensione dello schermo,
+    font, fuso orario, lingua, il modo in cui la scheda grafica disegna un'immagine di prova: insieme sono quasi unici, un'\textbf{impronta}
+    (\emph{fingerprint}). Viene inviata senza chiedere, non richiede nulla di memorizzato sulla vostra macchina, e cancellare i dati non la
+    azzera. Cambiare valori in modo che nessun altro abbia è un segno a sé stante: la difesa è l'\textbf{uniformità}, ogni utente che
+    riporta gli stessi valori. Tor Browser fa esattamente questo.
+}
+
+\subsection{Ogni nome, prima di ogni connessione}
+
+Prima di una connessione c'è una query, in chiaro su UDP porta 53, con il nome che state per visitare. Attraversa la rete locale e
+l'ISP, e raggiunge il resolver: per default, quello che vi ha dato il DHCP, cioè quello dell'ISP. Il resolver vede ogni nome che cercate,
+dal vostro indirizzo, con l'ora, e può conservarli. DoT e DoH nascondono la query al percorso, non al resolver: deve rispondere, e quindi
+legge.
+
+\warning{DNS cifrato: chi legge ora i nomi}{
+    Passate a DoH verso un grande resolver pubblico. Chi sa quali nomi cercate? Il resolver pubblico, tutti. Il vostro ISP non vede più le
+    query, e un attimo dopo vede la SNI e l'indirizzo della connessione che segue. Cifrare un canale \textbf{non elimina} l'osservatore
+    all'altro capo: lo \textbf{sposta}. Avete scambiato un resolver che non avevate scelto con uno che avete scelto, e ora dovete fidarvi di
+    quello. Teniamolo a mente: è lo schema di ogni strumento di questo capitolo.
+}
+
+\subsection{Che cosa lascia in chiaro TLS}
+
+\begin{itemize}
+    \item \textbf{Il nome}: la SNI nel Client Hello. ECH la cifra, con una chiave che il sito pubblica nel DNS.
+    \item \textbf{L'indirizzo} di destinazione, in ogni datagramma: TLS sta sopra IP e non può toccarlo.
+    \item \textbf{La porta}, che di solito dice l'applicazione: 443 il Web, 853 il DNS su TLS, 993 la posta.
+    \item \textbf{Dimensioni e tempi}: una pagina è una sequenza di oggetti di lunghezze note, e la sua forma sopravvive alla cifratura.
+          Associare forme cifrate a pagine note è il \textbf{website fingerprinting}: funziona, meno bene, perfino attraverso Tor.
+\end{itemize}
+
+\info{Un nome nascosto ha bisogno di una folla di nomi}{
+    Con ECH il nome è cifrato e resta solo l'indirizzo. Quando l'indirizzo tradisce comunque il sito? Quando il sito ha un indirizzo suo.
+    Dietro una grande CDN migliaia di nomi condividono gli stessi indirizzi, e l'indirizzo dice solo quale CDN. ECH nasconde un nome solo
+    \textbf{tra gli altri nomi} dietro la stessa facciata, e cambia anche l'aritmetica di un censore: bloccare un sito significa bloccarli
+    tutti. Entrambe le idee, nascondersi in una folla ed essere costosi da bloccare, tornano con Tor.
+}
+
+\subsection{L'indirizzo IP}
+
+Perché non scrivere semplicemente un indirizzo sorgente falso? Perché è anche l'\textbf{indirizzo di ritorno}: la risposta va a chi
+possiede quello falsificato, e la connessione non si completa mai. Falsificare funziona solo quando non si vuole risposta (gli attacchi
+per riflessione); TCP ha bisogno del SYN-ACK, e ogni richiesta si aspetta un contenuto in cambio. Per nascondere l'indirizzo di ritorno
+serve qualcuno che riceva la risposta al posto vostro e ve la passi: un \textbf{proxy}.
+
+\begin{itemize}
+    \item Un indirizzo rimanda a un \textbf{contratto}: l'ISP l'ha assegnato e sa quale abbonato lo aveva in quale momento. Un tribunale può
+          chiederlo.
+    \item I blocchi di indirizzi sono registrati per regione: un indirizzo pubblico vi localizza, all'incirca, per chiunque.
+    \item \textbf{NAT}: tutta la casa esce con un indirizzo, e siete nascosti tra i familiari, non nel mondo. Lo spazio di indirizzi
+          condiviso del provider vi nasconde tra i suoi clienti, e il provider tiene la tabella.
+    \item \textbf{IPv6}: un indirizzo globale per dispositivo, e nessuna folla; gli host scelgono indirizzi temporanei e continuano a
+          cambiarli.
+\end{itemize}
+
+\subsection{L'indirizzo MAC e la radio}
+
+\begin{itemize}
+    \item L'indirizzo MAC non lascia mai la LAN: ogni router scarta il frame e ne costruisce uno nuovo, quindi il sito non lo vede mai. Lo
+          vedono però tutti sulla vostra LAN, e chi gestisce l'access point: il bar, l'albergo, il campus.
+    \item Un MAC fisso riconosce lo stesso dispositivo in ogni rete a cui si unisce: da qui gli indirizzi locali casuali che abbiamo
+          incontrato. Molti sistemi tengono un indirizzo casuale per rete, così che quella rete vi riconosca quando tornate. E la richiesta
+          DHCP porta spesso il nome della macchina, come l'ha impostato il proprietario.
+    \item Laggiù la perdita è fisica, non un header: per essere ricevuti bisogna irradiare. La potenza cala con la distanza, quindi
+          ricevitori che confrontano intensità e direzione localizzano un trasmettitore. La rete cellulare deve conoscere la vostra cella
+          per consegnare una chiamata; un telefono che cerca reti Wi-Fi note si annuncia a ogni access point a portata. Nessuna cifratura
+          nasconde che una trasmissione è avvenuta, da dove e quando.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{2cm}p{3.3cm}p{3.6cm}p{4.2cm}}
+\toprule
+ & \textbf{Che cosa trapela} & \textbf{Chi lo vede} & \textbf{Che cosa lo riduce} \\
+\midrule
+Applicazione & login, cookie, impronta & il sito, le terze parti incorporate & niente login, cookie isolati, uniformità \\
+DNS & ogni nome & il percorso, il resolver & DoT, DoH: resta il resolver \\
+TLS, TCP & nome, porta, dimensioni, tempi & chiunque sul percorso & ECH, in una folla \\
+Rete & entrambi gli indirizzi & router, il sito, i registri dell'ISP & un proxy: l'indirizzo di qualcun altro \\
+Collegamento & MAC, nome della macchina & la LAN, l'access point & un MAC casuale per rete \\
+Fisico & che si trasmette, e da dove & chiunque a portata & solo il silenzio \\
+\bottomrule
+\end{tabular}
+\caption{Chi vede che cosa, scendendo nella pila.}
+\end{table}
+
+Ogni rimedio \textbf{sposta} un osservatore, o ne restringe la vista. Nessuno lo elimina.
+
+% ══════════════════════════════════════════════════════════════
+\section{Gli strumenti}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Un hop: il proxy anonimizzante e la VPN}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (a) at (0,0) {\icon[0.8cm]{laptop}}; \node[below=-1pt of a] {Alice};
+  \node[netcloud, minimum width=1.5cm, minimum height=0.9cm] (i) at (3.4,0) {ISP};
+  \node[draw, fill=netorange!30, rounded corners, minimum height=0.8cm, align=center] (p) at (7,0) {proxy\\o VPN};
+  \node (s) at (10.6,0) {\icon[0.45cm]{server}}; \node[below=-1pt of s] {il sito};
+  \draw[line width=3pt, netgreen!60!black] (a) -- (i); \draw[line width=3pt, netgreen!60!black] (i) -- (p);
+  \node[above=7pt, text=netgreen!50!black] at (3.4,0.35) {tunnel cifrato};
+  \draw[msg] (p) -- node[above] {la richiesta} (s);
+  \node[text=netred, align=center] at (3.4,-1.1) {Alice e il proxy;\\dimensioni, tempi};
+  \node[text=netred, align=center] at (7,-1.1) {Alice, il sito, e il contenuto\\se non c'è TLS};
+  \node[text=netred, align=center] at (10.6,-1.1) {l'indirizzo\\del proxy};
+\end{tikzpicture}
+\caption{Il proxy anonimizzante: che cosa vede ciascuno.}
+\end{figure}
+
+Alice apre TLS verso un proxy, che fa la richiesta per lei: è il proxy istituzionale, usato al contrario. Una \textbf{VPN} lo fa per tutto
+il traffico: ogni datagramma incapsulato, cifrato, dentro un altro, un \textbf{tunnel}. In entrambi i casi il proxy è un \textbf{man in
+the middle che avete scelto}: vede ciò che vedeva l'ISP, e di più.
+
+\warning{Il root server che rispondeva troppo bene}{
+    Dietro una certa VPN un root server ha restituito un indirizzo che non poteva avere. Chi ha risposto? Il fornitore della VPN, a nome del
+    root server: sta sul percorso di tutto ciò che inviate, e può rispondere come chiunque. Avete sostituito l'ISP con un osservatore che
+    vede le stesse cose e ha anche il vostro account e il vostro pagamento. ``Nessun log'' è una promessa sul suo comportamento, non un
+    meccanismo che potete verificare. Funziona contro la rete locale e l'ISP; è inutile contro il fornitore stesso. Una VPN aziendale è
+    un'altra cosa: esiste per farvi entrare, non per nascondervi.
+}
+
+\subsection{Tor: un circuito di tre relay}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (a) at (0,0) {\icon[0.8cm]{laptop}}; \node[below=-1pt of a] {Alice};
+  \foreach \x/\n/\k/\c in {3/guard/G/netblue, 6/middle/M/netgreen!60!black, 9/exit/E/netorange} {
+    \node[draw=\c, very thick, fill=white, circle, minimum size=1cm] (\k) at (\x,0) {\n};
+    \node[below=2pt of \k, text=\c] {chiave \k};
+  }
+  \node (s) at (12,0) {\icon[0.45cm]{server}}; \node[below=-1pt of s] {il sito};
+  \draw[wired] (a) -- (G); \draw[wired] (G) -- (M); \draw[wired] (M) -- (E); \draw[wired] (E) -- (s);
+  \node[text width=2.7cm, align=center] at (3,1.2) {conosce Alice e il middle};
+  \node[text width=2.7cm, align=center] at (6,1.2) {conosce il guard e l'exit};
+  \node[text width=2.7cm, align=center] at (9,1.2) {conosce il middle e il sito};
+  \node[text width=2cm, align=center] at (12,1.2) {vede l'exit};
+  \begin{scope}[yshift=-1.75cm]
+    \node[draw=netblue, very thick, fill=netblue!10, minimum width=1.9cm, minimum height=0.95cm] at (1.5,0) {};
+    \foreach \x in {1.5,4.5} \node[draw=netgreen!60!black, very thick, fill=netgreen!10, minimum width=1.45cm, minimum height=0.7cm] at (\x,0) {};
+    \foreach \x in {1.5,4.5,7.5} \node[draw=netorange, very thick, fill=netorange!15, minimum width=1cm, minimum height=0.45cm, font=\scriptsize\ttfamily] at (\x,0) {GET};
+    \node[font=\scriptsize\ttfamily] at (10.5,0) {GET};
+    \node[text=black!60] at (10.5,-0.45) {in chiaro, se non c'è TLS};
+    \node[text=black!70] at (6,-0.9) {ogni relay toglie lo strato della propria chiave, e inoltra il resto};
+  \end{scope}
+\end{tikzpicture}
+\caption{Un circuito Tor: tre strati di cifratura, uno per relay.}
+\end{figure}
+
+\begin{itemize}
+    \item Il client sceglie tre relay gestiti da volontari, e concorda una chiave con ciascuno di essi con \textbf{Diffie-Hellman}.
+    \item Avvolge la richiesta in tre strati: ogni relay toglie il proprio e inoltra il resto. È l'incapsulamento, con una chiave per strato
+          (da qui il nome \emph{onion routing}).
+\end{itemize}
+
+\dfn{Perché tre relay}{
+    \begin{itemize}
+      \item \textbf{Uno}: il relay conosce entrambi gli estremi; è il proxy, a cui si affida tutto.
+      \item \textbf{Due}: nessuno dei due conosce entrambi gli estremi, ma l'exit conosce l'ingresso: è esattamente il nodo da sorvegliare.
+      \item \textbf{Tre}: l'exit conosce solo un middle, e il middle non conosce nessuno dei due estremi.
+    \end{itemize}
+    Tre non ferma un guard e un exit che collaborano: confrontano i tempi.
+}
+
+\subsubsection*{Tor, visto dallo stesso sniffer}
+
+\begin{lstlisting}[language=bash]
+$ sudo tshark -i enp3s0 -Y tls      # poi si avvia tor, e: torsocks curl -sI https://www.unina.it
+  3 0.0402 192.168.1.23 -> 198.51.100.23 TLSv1.3 571 Client Hello (SNI=www.k3fq7zn2tb.com)
+  5 0.1296 198.51.100.23 -> 192.168.1.23 TLSv1.3 1514 Server Hello, Change Cipher Spec, App...
+  9 0.2615 192.168.1.23 -> 198.51.100.23 TLSv1.3 602 Application Data
+ 11 0.3907 198.51.100.23 -> 192.168.1.23 TLSv1.3 602 Application Data
+ 14 0.5213 192.168.1.23 -> 198.51.100.23 TLSv1.3 602 Application Data
+ 17 0.6698 198.51.100.23 -> 192.168.1.23 TLSv1.3 1204 Application Data
+\end{lstlisting}
+
+\begin{itemize}
+    \item Ogni pacchetto va a un solo indirizzo, il guard. \texttt{www.unina.it} non c'è da nessuna parte: la SNI è un nome inventato da Tor.
+    \item Record di poche lunghezze sempre uguali: Tor porta i dati in unità di dimensione fissa (\emph{cell}), quindi le dimensioni dicono
+          molto meno.
+    \item Che cosa impara ancora l'ISP: che usate Tor, quando, e quanto. L'elenco dei relay è pubblico.
+\end{itemize}
+
+\warning{L'exit legge ciò che porta}{
+    Tra Tor e il sito non c'è TLS. Che cosa vede l'exit? Ciò che vedrebbe una rete dal lato del sito: la richiesta, la risposta, qualsiasi
+    password vi sia dentro, ma non chi siete, a meno che il contenuto non lo dica. Gli exit sono gestiti da volontari, e alcuni sono stati
+    sorpresi a riscrivere l'HTTP in chiaro di passaggio. Con TLS sopra, l'exit vede il nome e l'indirizzo, e nient'altro: ciò che vede il
+    vostro ISP senza Tor. \textbf{Tor nasconde chi; TLS nasconde che cosa.} Servono entrambi.
+}
+
+\warning{Traffico attraverso Tor, nomi attraverso l'ISP}{
+    Un'applicazione manda le proprie connessioni attraverso Tor ma risolve i nomi da sola. Che cosa vede l'ISP? Ogni nome, in chiaro, poco
+    prima di ogni connessione: il traffico è nascosto, l'elenco delle destinazioni no. Tor risolve i nomi all'exit: il client gli consegna
+    il nome, mai un indirizzo che ha cercato. E Tor porta solo TCP: ciò che un'applicazione invia su UDP passa di lato, dal vostro
+    indirizzo. Una \textbf{fuga} (\emph{leak}) è qualsiasi cosa esca per un'altra strada: Tor protegge ciò che porta, e nient'altro.
+}
+
+\subsection{Un server che nessuno può localizzare}
+
+Finora il client si nasconde e il server è pubblico. Un \textbf{onion service} nasconde anche il server.
+
+\begin{itemize}
+    \item Il server mantiene circuiti verso alcuni relay, i suoi \textbf{punti di introduzione}, e li pubblica firmati.
+    \item Client e server costruiscono ciascuno un circuito verso un \textbf{relay di rendezvous}, che li unisce: sei relay, e nessun exit.
+          Nessun exit significa che nessun relay tiene mai il traffico in chiaro.
+    \item Il nome \texttt{.onion} codifica la chiave pubblica del server: nessun DNS da interrogare, nessuna CA di cui fidarsi.
+    \item \emph{Deep} e \emph{dark}: il deep Web è ciò che i motori di ricerca non indicizzano; il dark Web, ciò che raggiungono solo reti
+          come questa.
+\end{itemize}
+
+\subsection{Contro il censore: bridge e trasporti}
+
+\begin{itemize}
+    \item Per scegliere tre relay un client deve conoscerli tutti: l'elenco dei relay è pubblico per progetto. Un censore lo copia e scarta
+          ogni pacchetto verso quegli indirizzi.
+    \item Un \textbf{bridge} è un relay d'ingresso che non è nell'elenco, distribuito pochi alla volta. Anche il censore può chiedere bridge
+          e bloccare quelli che ottiene: la distribuzione è una gara. Un bridge nasconde \emph{dove} ci si collega, non che aspetto ha la
+          connessione.
+    \item L'ispezione profonda riconosce l'handshake di Tor, quindi un \textbf{pluggable transport} lo fa sembrare byte casuali. Ma quasi
+          tutto il resto oggi è TLS, e byte che non somigliano a niente spiccano: è la rilevazione per anomalie degli IDS. Meglio somigliare a
+          qualcosa di comune, una connessione HTTPS o una videochiamata, o nascondersi dietro una CDN troppo costosa da bloccare.
+          Steganografia applicata al traffico, e una corsa agli armamenti: ogni travestimento viene studiato finché non viene riconosciuto.
+\end{itemize}
+
+\subsection{I2P: il garlic routing}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{p{3.2cm}p{6cm}p{6cm}}
+\toprule
+ & \textbf{Tor} & \textbf{I2P} \\
+\midrule
+Chi inoltra & relay volontari; la maggior parte degli utenti si collega soltanto & ogni partecipante inoltra per gli altri \\
+Percorsi & un circuito, nei due sensi & tunnel separati a senso unico, in uscita e in entrata \\
+Che cosa porta uno strato & un messaggio & più messaggi insieme: un ``aglio'' (\emph{garlic}) \\
+Pensato per & raggiungere l'Internet ordinaria & servizi interni alla rete \\
+\bottomrule
+\end{tabular}
+\caption{Tor e I2P.}
+\end{table}
+
+La stessa idea, cifratura a strati su relay scelti dal client, con scommesse diverse su chi inoltra. Tunnel separati significano che la
+strada di andata e quella di ritorno attraversano relay diversi.
+
+\subsection{Proteggere la macchina, non il percorso}
+
+Tutto ciò che precede protegge il percorso. Un problema diverso è ciò che la macchina stessa conserva e lascia uscire.
+
+\begin{itemize}
+    \item \textbf{Tails}: un sistema avviato da una chiavetta USB, che manda tutto attraverso Tor e dimentica tutto allo spegnimento.
+    \item \textbf{Qubes}: ogni attività nella propria macchina virtuale; un compartimento violato non vede gli altri.
+    \item \textbf{GrapheneOS}: un Android irrobustito: permessi più severi, app tenute separate, meno da attaccare.
+    \item \textbf{Whonix}: due macchine; la workstation raggiunge la rete solo attraverso un gateway che esegue Tor. È di nuovo
+          l'application gateway: un malware all'interno non può far trapelare il vostro indirizzo, perché non ha una rotta.
+\end{itemize}
+
+\subsection{Aggirare l'infrastruttura: le reti mesh radio}
+
+Ogni strumento visto finora attraversa l'infrastruttura. Dove uno Stato la blocca, la si aggira.
+
+\begin{minipage}{0.48\linewidth}
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, n/.style={draw, circle, fill=white, minimum size=0.5cm, inner sep=0pt}]
+  \fill[netblue!8] (0,0) circle (1.6cm); \node[text=netblue] at (-0.9,-1.25) {raggio di A};
+  \node[n] (A) at (0,0) {A}; \node[n] (B) at (1.3,0.9) {B}; \node[n] (C) at (1.2,-0.9) {C};
+  \node[n] (D) at (2.6,0) {D}; \node[n] (E) at (3.9,0.9) {E}; \node[n] (F) at (3.9,-0.9) {F}; \node[n] (G) at (5.2,0) {G};
+  \foreach \u/\v in {A/B, A/C, B/D, C/D, D/E, D/F, E/G, F/G} \draw[netgreen!60!black, thick] (\u) -- (\v);
+  \foreach \n/\h in {B/3, D/2, E/1, G/0} \node[text=netred, above right=-2pt of \n] {\h};
+  \node[text width=2.6cm, align=center] at (2.6,-1.75) {niente ISP, niente router: ogni nodo inoltra};
+  \node[text=netred] at (2.6,1.45) {D legge: da A a G};
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}{0.5\linewidth}
+\begin{itemize}
+    \item \textbf{LoRa}: un livello fisico, \emph{chirp} a spettro allargato nelle bande ISM sotto il GHz: chilometri a bassa potenza.
+    \item \textbf{LoRaWAN}: una stella sopra di esso, con dispositivi, gateway e un server: di nuovo infrastruttura.
+    \item \textbf{Meshtastic}: una mesh; ogni nodo ritrasmette ciò che sente, con un limite di hop, come il TTL.
+    \item Il peer-to-peer lo faceva un livello più su: niente da bloccare, e ogni peer vedeva gli indirizzi degli altri.
+\end{itemize}
+\end{minipage}
+
+\warning{Che cosa costa una mesh, e che cosa espone}{
+    \begin{itemize}
+      \item \textbf{Banda}: un canale stretto e un segnale debole; per Shannon, da centinaia a migliaia di bit al secondo, qualche centinaio
+            di byte per messaggio.
+      \item \textbf{Tempo d'aria}: le bande libere limitano quanto si trasmette, in Europa circa l'1\% del tempo nella maggior parte della
+            banda.
+      \item \textbf{Inondazione}: ogni messaggio raggiunge ogni nodo, quindi tutta la mesh condivide un'unica capacità, che non cresce con
+            essa.
+      \item \textbf{Header}: ogni relay deve leggere mittente, destinazione e conteggio degli hop: chi parla con chi è pubblico a portata
+            di radio. Il contenuto è cifrato con una chiave condivisa dal canale (quella predefinita è pubblica), e i radioamatori non
+            possono cifrare.
+      \item E irradia: utile dove uno Stato blocca; un faro dove dà la caccia ai trasmettitori.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{Ciò che nessuno strumento risolve}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Se tre relay sono buoni, perché non dieci?}
+
+Perché l'attacco più forte ignora il centro. Chi osserva il traffico che entra al guard e quello che esce all'exit confronta i due,
+qualunque sia il numero di relay in mezzo. Ogni relay in più aggiunge latenza, e un'altra probabilità di trovarne uno lento o ostile, e
+non toglie nulla a quell'attacco: tre comprano ciò che i relay possono comprare.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node[anchor=east, align=right] at (-0.2,0.25) {in entrata,\\al guard};
+  \node[anchor=east, align=right] at (-0.2,-1.25) {in uscita,\\all'exit};
+  \draw[-{Stealth}] (0,0) -- (11,0) node[right] {tempo}; \draw[-{Stealth}] (0,-1.5) -- (11,-1.5) node[right] {tempo};
+  \foreach \x/\w in {0.5/0.6, 1.4/0.3, 3.2/1.1, 5.3/0.4, 6.0/0.4, 8.1/0.9} {
+    \fill[netblue!60] (\x,0) rectangle ++(\w,0.5);
+    \fill[netblue!60] (\x+1.2,-1.5) rectangle ++(\w,0.5);
+  }
+  \draw[{Stealth}-{Stealth}, netred] (0.5,-0.25) -- node[below, text=netred] {$d$} (1.7,-0.25);
+  \node[text=netred] at (5.5,-2.0) {un osservatore di entrambi i collegamenti: le stesse raffiche e gli stessi silenzi, $d$ dopo};
+\end{tikzpicture}
+\caption{La correlazione temporale: la cifratura cambia i byte, non quando si muovono né quanti sono.}
+\end{figure}
+
+Raffiche e silenzi attraversano il circuito intatti. Rompere la corrispondenza significa trattenere, riempire e riordinare il traffico,
+come facevano i remailer: le \textbf{mix network}. Costa secondi o ore. Tor ha scelto la bassa latenza, perché il Web funzioni, e per
+questo può essere correlato.
+
+\begin{itemize}
+    \item Chi può vedere entrambi gli estremi? Un ISP nazionale, quando utente e sito sono nello stesso Paese; un sistema autonomo che sta
+          su entrambi i percorsi (e quali lo fanno lo decide BGP, non voi); chi gestisce molti relay, e viene scelto a volte sia come
+          guard sia come exit.
+    \item Da qui il \textbf{guard}: un client tiene lo stesso ingresso per mesi. Scegliere ogni volta da capo rende certo, prima o poi,
+          uno ostile.
+    \item Tor non ha mai affermato il contrario: fin dal primo progetto, non protegge da un osservatore di entrambi gli estremi.
+\end{itemize}
+
+\subsection{Contenuti cifrati, conversazioni visibili}
+
+\begin{itemize}
+    \item Signal e Matrix cifrano i messaggi \textbf{da un estremo all'altro}: il server conserva ciò che non può leggere. Ma li consegna,
+          quindi vede chi si collega, quando, quanto spesso, quanto, e di solito a chi.
+    \item Signal è costruito per conservare il meno possibile, e per nascondere perfino il mittente al proprio server. La rete aggiunge la
+          sua parte: il vostro indirizzo raggiunge il server con ogni messaggio.
+    \item Parlare con Alice mette Bob nella lista: gli Stati repressivi capiscono la chiusura transitiva. Per molta sorveglianza
+          \textbf{chi parla con chi} basta, ed è molto più economico da conservare del contenuto (i \textbf{metadati}).
+    \item \textbf{Centralizzato}: un unico operatore vede i metadati di tutti. \textbf{Federato}: come la posta, ogni utente su un server, e
+          i server parlano tra loro (Matrix è federato). Il vostro server tiene i vostri metadati, finché non entrate in una stanza: ogni
+          server con un membro ne tiene una copia.
+\end{itemize}
+
+\warning{Tor e una carta di credito}{
+    Raggiungete un negozio attraverso Tor e pagate con la carta di credito. Quanto è stato anonimo l'acquisto? Per niente: la carta porta il
+    vostro nome. Pagate in bitcoin, e il negozio riceve un indirizzo su un registro pubblico per sempre: ogni pagamento da e verso
+    quell'indirizzo è lì, leggibile da chiunque, e un solo collegamento con una persona dà un nome all'intera storia. Il collegamento di
+    solito si fa dove le monete sono state comprate: un exchange che ha chiesto un documento. Le criptovalute sono pseudonime, come i
+    cookie: date il vostro nome una volta, e ogni pagamento passato lo acquista. Monero nasconde mittente, destinatario e importo per
+    default; Zcash quando l'utente lo sceglie.
+}
+
+\subsection{L'anonimato ha bisogno di una folla}
+
+\begin{itemize}
+    \item L'anonimato è sempre tra altri, l'insieme di anonimato. Da soli, l'unico candidato siete voi.
+    \item Tor ha bisogno di molti utenti, e diversi: se lo usassero solo i dissidenti, usarlo sarebbe una confessione.
+    \item Un server VPN tutto vostro ha un utente: tutto ciò che esce dal suo indirizzo siete voi. Una VPN commerciale ha una folla, ma il
+          fornitore ci vede attraverso.
+    \item Tor Browser rende i suoi utenti identici: la risposta all'impronta, e il motivo per non personalizzarlo.
+    \item Ogni utente che si aggiunge protegge gli altri: l'anonimato è un \textbf{bene collettivo}.
+\end{itemize}
+
+\subsection{VPN e Tor: in quale ordine}
+
+\begin{itemize}
+    \item \textbf{Prima la VPN, poi Tor}: nasconde Tor al vostro ISP (che vede solo una VPN); il fornitore impara che lo usate. Un bridge fa
+          lo stesso senza fornitore.
+    \item \textbf{Prima Tor, poi la VPN}: il sito vede sempre lo stesso indirizzo; la VPN è un exit che sa chi la paga.
+    \item Nessuno dei due è più sicuro in generale. La domanda è la prima del capitolo: \textbf{da chi?}
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Alice non vuole che} & \textbf{HTTP} & \textbf{HTTPS} & \textbf{VPN} & \textbf{Tor} \\
+\midrule
+il sito conosca il suo indirizzo IP & esposto & esposto & nascosto & nascosto \\
+il suo ISP sappia quale sito visita & esposto & esposto & nascosto & nascosto \\
+il suo ISP legga ciò che scambia & esposto & nascosto & nascosto & nascosto \\
+un'unica parte conosca entrambi gli estremi & esposto & esposto & esposto & nascosto \\
+un osservatore di entrambi gli estremi li colleghi & esposto & esposto & esposto & esposto \\
+\bottomrule
+\end{tabular}
+\caption{Dipende da chi ci si nasconde.}
+\end{table}
+
+La tabella si legge per righe: ogni riga è un avversario, e ciascuno richiede la propria risposta. Un censore non c'è: contro un censore,
+bridge, travestimenti, e dove questi falliscono, una mesh.
+
+\begin{esercizio}{Un Tor con due relay}
+Alice vuole una pagina di \texttt{activist.com} attraverso due proxy che non colludono, Proxy1 e Proxy2. Ha i loro certificati, con le
+chiavi pubbliche $K_1^+$ e $K_2^+$. Disegnare ogni risposta come un diagramma temporale.
+\begin{enumerate}[label=(\alph*)]
+    \item Un protocollo, il più semplice possibile, con cui Alice condivide una chiave di sessione $S_1$ con Proxy1.
+    \item Uno con cui condivide $S_2$ con Proxy2 senza rivelare a Proxy2 il proprio indirizzo IP.
+    \item Con $S_1$ e $S_2$ già stabilite e senza operazioni a chiave pubblica: una richiesta della pagina che nasconda l'indirizzo di Alice a
+          Proxy2 e il sito a Proxy1, fino all'arrivo della richiesta HTTP ad \texttt{activist.com}.
+    \item Per l'argomento di questo capitolo, che cosa aggiungerebbe un terzo proxy? E che cosa si perde se la chiave privata di Proxy1 viene
+          rubata l'anno prossimo?
+\end{enumerate}
+
+\svolgimento
+\begin{center}
+\begin{tikzpicture}[yscale=0.8, every node/.style={font=\scriptsize\sffamily}]
+  \timeline{al}{0}{Alice}{5.2}
+  \timeline{p1}{3.6}{Proxy1}{5.2}
+  \timeline{p2}{7.2}{Proxy2}{5.2}
+  \timeline{si}{10.4}{activist.com}{5.2}
+  \draw[msg, netblue] (0,-0.5) -- node[above] {$K_1^+(S_1)$} (3.6,-0.9);
+  \draw[msg, netgreen!60!black] (0,-1.7) -- node[above] {$S_1(\text{Proxy2}, K_2^+(S_2))$} (3.6,-2.1);
+  \draw[msg, netgreen!60!black] (3.6,-2.2) -- node[above] {$K_2^+(S_2)$} (7.2,-2.6);
+  \draw[msg, netorange] (0,-3.4) -- node[above] {$S_1(\text{Proxy2}, S_2(m))$} (3.6,-3.8);
+  \draw[msg, netorange] (3.6,-3.9) -- node[above] {$S_2(\text{activist.com}, m)$} (7.2,-4.3);
+  \draw[msg, netorange] (7.2,-4.4) -- node[above] {$m$} (10.4,-4.8);
+  \node[anchor=west] at (10.6,-4.8) {$m$ = il GET};
+\end{tikzpicture}
+\end{center}
+\begin{enumerate}[label=(\alph*)]
+    \item Alice sceglie $S_1$ e invia $K_1^+(S_1)$: solo Proxy1 può aprirlo.
+    \item Invia $S_1(\text{Proxy2}, K_2^+(S_2))$. Proxy1 toglie il proprio strato e inoltra $K_2^+(S_2)$: Proxy2 vede l'indirizzo di Proxy1,
+          non quello di Alice.
+    \item $S_1(\text{Proxy2}, S_2(\text{activist.com}, \text{GET}))$. Proxy1 impara solo Proxy2, Proxy2 solo il sito; la risposta torna
+          avvolta nel senso opposto, $S_2$ aggiunto da Proxy2 e $S_1$ da Proxy1, e Alice li toglie entrambi.
+    \item Proxy2 conosce Proxy1: è il nodo da sorvegliare. Un terzo relay lascerebbe all'exit la conoscenza di un solo middle. E con $S_1$
+          inviata sotto $K_1^+$, una chiave rubata apre ogni sessione registrata: per questo Tor usa \textbf{Diffie-Hellman} (forward
+          secrecy), come TLS 1.3.
+\end{enumerate}
+\end{esercizio}
+
+\Needspace{20\baselineskip}
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Nessuno è anonimo in generale, solo rispetto a qualcuno; e confidenzialità, anonimato, pseudonimato e non collegabilità sono
+          quattro proprietà, non una.
+    \item Ogni header è scritto per essere letto: ogni livello, fino alla radio, lascia trapelare ciò che gli serve per consegnare.
+    \item Ogni strumento \textbf{sposta} l'osservatore. Una VPN lo sostituisce; Tor lo divide su tre relay che conoscono ciascuno due vicini.
+    \item I censori bloccano invece di leggere: i bridge nascondono dove, i trasporti nascondono come, una mesh evita la rete.
+    \item Niente ferma un osservatore di entrambi gli estremi, un server che conserva i metadati, o un pagamento a proprio nome.
+    \item Abbiamo cominciato seguendo una richiesta HTTP attraverso la rete; finiamo sapendo chi può dire che era nostra.
+\end{itemize}
+}

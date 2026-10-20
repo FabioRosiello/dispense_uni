@@ -1,0 +1,715 @@
+\chapter{ICMP e la diagnosi di una rete}
+
+Avevamo lasciato il livello di rete con una promessa: un router che non riesce a consegnare un datagramma lo scarta e
+\textbf{avvisa la sorgente}. Quell'avviso non è una cortesia di IP: è un protocollo di questo livello a pieno titolo, e
+qui lo leggiamo.
+\begin{itemize}
+    \item Con lui tornano tre questioni rimaste aperte: chi dice che nessuno ascolta su una porta, che cosa legge davvero uno
+          scanner di porte, e quale messaggio indica l'MTU che sarebbe passata.
+    \item Poi i due programmi che tutti usano senza sapere che cosa inviano, \texttt{ping} e \texttt{traceroute}, e un
+          \textbf{metodo} per scoprire dove una rete è rotta.
+    \item Il metodo è il punto. I comandi sono dieci minuti; sapere quale domanda fare dopo è il resto del capitolo.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Parlare della rete, non attraverso la rete}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{ICMP}{
+    L'\textbf{Internet Control Message Protocol} (ICMP) è il protocollo con cui host e router si scambiano informazioni di
+    livello di rete \textbf{sulla rete stessa}: segnalazioni di errore (destinazione irraggiungibile, TTL scaduto) e richieste
+    di verifica (\emph{echo}).
+}
+
+\begin{itemize}
+    \item Dentro non viaggia niente di nostro: nessuna applicazione lo chiede, e nessuna applicazione ne è il mittente.
+    \item Il suo output lo leggiamo da anni: un \emph{destination network unreachable} nel browser è nato come messaggio ICMP
+          di un router che non trovava un percorso.
+    \item Esiste perché IP non promette niente e, lasciato a sé, non riferisce niente: un datagramma che muore muore in
+          silenzio.
+    \item E non tutto ciò che porta è un errore: due dei suoi messaggi sono una domanda e la sua risposta, e su quelle due si
+          regge \texttt{ping}.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    fl/.style={field, minimum height=0.7cm, align=center}]
+  \node[fl, fill=lnet, minimum width=2.6cm] (ip) at (0,0) {header IP\\protocollo = 1};
+  \node[fl, fill=netred!25, minimum width=1.0cm, right=0pt of ip] (ty) {tipo};
+  \node[fl, fill=netred!25, minimum width=1.1cm, right=0pt of ty] (co) {codice};
+  \node[fl, fill=netred!25, minimum width=1.4cm, right=0pt of co] (ck) {checksum};
+  \node[fl, fill=netred!12, minimum width=2.4cm, right=0pt of ck] (x) {altri 4 byte\\id, MTU, inutilizzati};
+  \node[fl, fill=lnet!50, minimum width=2.2cm, right=0pt of x] (q) {header IP\\del colpevole};
+  \node[fl, fill=ltra!60, minimum width=1.6cm, right=0pt of q] (e) {primi\\8 byte};
+  \draw[decorate, decoration={brace, amplitude=4pt}] ([yshift=2pt]ty.north west) -- node[above=5pt]{messaggio ICMP: il payload di un datagramma IP qualsiasi} ([yshift=2pt]e.north east);
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] ([yshift=-2pt]ty.south west) -- node[below=5pt, align=center]{gli stessi tre campi\\in ogni messaggio} ([yshift=-2pt]ck.south east);
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] ([yshift=-2pt]q.south west) -- node[below=5pt, align=center]{l'header di trasporto: le porte\\che dicono quale flusso è morto} ([yshift=-2pt]e.south east);
+  \node[anchor=west, text=black!60, align=left] at (ip.west |- 0,-1.35) {6 è TCP, 17 è UDP,\\1 è questo};
+\end{tikzpicture}
+\caption{Un messaggio di errore ICMP dentro un datagramma IP. Il ricevente smista sul numero di protocollo esattamente come
+         farebbe per un segmento; non ci sono porte, perché sopra non c'è niente da indirizzare: il messaggio è per la
+         macchina, non per un processo.}
+\end{figure}
+
+\subsection{L'errore torna con la sua causa allegata}
+
+\begin{itemize}
+    \item Ogni messaggio comincia allo stesso modo: un tipo, un codice dentro quel tipo, un checksum, e quattro byte il cui uso
+          dipende dal tipo.
+    \item Poi qualcosa di insolito: una \textbf{copia dell'header del datagramma che l'ha causato}, più i suoi primi
+          \textbf{8 byte}.
+    \item Perché otto: perché sono i byte dell'header di trasporto che portano i due numeri di porta (oppure, per un echo,
+          l'identificatore e il numero di sequenza).
+    \item Un host può avere centinaia di conversazioni aperte. Senza quegli otto byte saprebbe che qualcosa è fallito, e
+          nient'altro.
+\end{itemize}
+Un errore ICMP quindi si può \textbf{leggere}: dice che cosa è andato storto, e a quale dei nostri pacchetti.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ccl}
+\toprule
+\textbf{Tipo} & \textbf{Codice} & \textbf{Significato} \\
+\midrule
+0  & 0  & echo reply (risposta a ping) \\
+3  & 0  & destinazione irraggiungibile: rete \\
+3  & 1  & destinazione irraggiungibile: host \\
+3  & 2  & destinazione irraggiungibile: protocollo \\
+3  & 3  & destinazione irraggiungibile: \textbf{porta} \\
+3  & 4  & frammentazione necessaria ma vietata (DF) \\
+3  & 13 & comunicazione vietata dall'amministratore \\
+4  & 0  & source quench (controllo di congestione, in disuso) \\
+8  & 0  & echo request (richiesta di ping) \\
+9  & 0  & annuncio di un router \\
+10 & 0  & scoperta dei router \\
+11 & 0  & \textbf{TTL scaduto} (Wireshark: \emph{time-to-live exceeded}) \\
+12 & 0  & header IP errato \\
+\bottomrule
+\end{tabular}
+\caption{I tipi di messaggi ICMP. Quattro bastano per tutto il capitolo: 8 e 0 sono ping, 11 e 3/3 sono traceroute.}
+\end{table}
+
+\subsection{Quando non si invia alcun messaggio}
+
+\begin{itemize}
+    \item Un errore ICMP non causa mai un altro errore ICMP: altrimenti un datagramma malformato potrebbe far litigare due
+          router per sempre.
+    \item Non si invia niente per un datagramma diretto a un indirizzo di broadcast o multicast: un pacchetto sbagliato, mille
+          risposte.
+    \item Per un datagramma frammentato riceve un messaggio solo il primo frammento, l'unico che porta gli otto byte che vale
+          la pena citare.
+    \item I router limitano il ritmo di ciò che generano, quindi gli errori sono la prima cosa scartata proprio quando sono
+          più numerosi. E un firewall può togliere il resto per scelta.
+\end{itemize}
+
+\warning{Un messaggio mancante non significa niente}{
+    Ogni altra cosa in questo capitolo dipende da questa frase. Che un errore non sia arrivato non dice che il pacchetto sia
+    passato: può non essere mai stato generato, essere stato limitato, o filtrato.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{ping}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{ping}{
+    \textbf{ping} invia a un host messaggi ICMP \textbf{echo request} (tipo 8), il cui unico contenuto sono alcuni byte a
+    scelta; la destinazione rimanda un \textbf{echo reply} (tipo 0) con quegli stessi byte copiati invariati. È tutto il
+    test. Per ogni coppia ping mostra l'\textbf{RTT}, e alla fine le statistiche sulle perdite.
+}
+
+\begin{itemize}
+    \item E la destinazione risponde \textbf{da sola}: il server di echo è dentro il sistema operativo, non è un processo,
+          non c'è niente da installare né niente in ascolto.
+    \item Per questo risponde anche una macchina che non esegue alcun servizio, ed è per questo che una risposta dimostra molto
+          meno di quanto si pensi: un datagramma ha raggiunto quell'indirizzo, e lì qualcosa era disposto a rispondere.
+\end{itemize}
+
+\begin{lstlisting}[language=bash, title={Leggere un ping}]
+$ ping iana.org
+PING iana.org (192.0.43.8) 56(84) bytes of data.
+64 bytes from 192.0.43.8: icmp_seq=1 ttl=51 time=98.2 ms
+64 bytes from 192.0.43.8: icmp_seq=2 ttl=51 time=98.0 ms
+64 bytes from 192.0.43.8: icmp_seq=3 ttl=51 time=99.4 ms
+
+--- iana.org ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss
+rtt min/avg/max/mdev = 98.0/98.5/99.4/0.60 ms
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{56(84)}: 56 byte scelti da noi, più 8 di header ICMP e 20 di header IP. Non si aggiunge altro: non c'è un
+          header di trasporto.
+    \item \texttt{ttl=51} è ciò che restava all'arrivo, non ciò che è stato inviato: era partito da 64, quindi la risposta ha
+          attraversato circa tredici router.
+    \item \texttt{icmp\_seq} conta le sonde, e un buco nella numerazione è l'unico modo in cui una perdita diventa visibile.
+\end{itemize}
+
+\subsection{Un'applicazione senza livello di trasporto}
+
+ping è un programma come gli altri. Quale protocollo di trasporto usa? \textbf{Nessuno}. Costruisce da sé il messaggio
+ICMP e lo consegna direttamente a IP; la risposta torna nello stesso modo. ICMP in entrambe le direzioni: in un ping non c'è
+alcun segmento, alcuna porta, alcuna connessione.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={I due modi di aprire un socket ICMP}]
+int fd = socket(AF_INET, SOCK_RAW,   IPPROTO_ICMP);   /* il modo classico */
+int fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMP);   /* senza privilegi, su Linux */
+\end{lstlisting}
+
+Un \textbf{raw socket} richiede privilegi, ed è per questo che ping veniva installato \emph{setuid}; oggi Linux offre la
+seconda forma agli utenti normali.
+
+\info{L'identificatore che fa il lavoro della porta}{
+    Due ping girano insieme, verso due host diversi. Entrambe le risposte arrivano come ICMP, senza alcuna porta. Come trova
+    ciascuna il proprio programma? La richiesta porta un \textbf{identificatore} e un \textbf{numero di sequenza} in quei
+    quattro byte, e la risposta li ricopia entrambi: l'identificatore dice quale ping, il numero di sequenza quale sonda. La
+    chiave che smista il traffico esiste, solo che sta dentro il messaggio invece che in un header proprio; ed è anche ciò che
+    permette a ping di abbinare ogni risposta alla richiesta che ha cronometrato. Un protocollo senza porte ha comunque
+    bisogno di demultiplexing: qualcuno lo paga sempre.
+}
+
+\warning{Un silenzio non è una risposta}{
+    Si fa ping a un host e non torna niente. È spento? \textbf{Non ne segue nulla}. La richiesta può essere stata scartata,
+    la risposta può essere stata scartata, l'host può essere configurato per non rispondere, e un firewall lungo la strada
+    può inghiottire l'una o l'altra direzione.
+    \begin{itemize}
+        \item Molte reti filtrano ICMP per scelta, quindi nessuna risposta è il comportamento normale di macchine perfettamente
+              sane.
+        \item Il contrario è peggio: un host che risponde può avere tutti i servizi morti. L'echo lo risponde il kernel, e non
+              dimostra niente di ciò che sta sopra.
+    \end{itemize}
+    Va letto come un bit: una risposta significa che il percorso funziona in entrambe le direzioni, adesso. L'assenza significa
+    che non si è imparato niente, che è anch'esso un risultato.
+}
+
+\subsection{Dove va il tempo}
+
+\begin{lstlisting}[language=bash, title={Vicino e lontano}]
+$ ping -c3 192.168.1.1                # il gateway, a un salto
+rtt min/avg/max/mdev = 0.9/2.4/5.1/1.7 ms
+
+$ ping -c3 iana.org                   # un altro continente
+rtt min/avg/max/mdev = 98.0/98.5/99.4/0.60 ms
+\end{lstlisting}
+
+\begin{itemize}
+    \item L'RTT è la somma dei quattro ritardi già noti (elaborazione, accodamento, trasmissione, propagazione) su ogni salto
+          di entrambe le direzioni.
+    \item Lontano, il minimo è quasi pura \textbf{propagazione}: un pavimento fissato dalla distanza, che nessun
+          aggiornamento abbasserà.
+    \item Vicino, il minimo è trascurabile e tutto ciò che si vede è \textbf{accodamento}: stesso comando, grandezza del tutto
+          diversa.
+    \item Per questo \texttt{mdev} conta più della media: 100 ms stabili sono un percorso lungo, 20 ms instabili sono un
+          percorso congestionato.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{traceroute}
+% ══════════════════════════════════════════════════════════════
+
+Il campo si chiama \emph{time to live}, e niente in lui misura il tempo: ogni router lo decrementa di uno. A zero il
+datagramma viene scartato, e il router che l'ha scartato rimanda \textbf{TTL scaduto}, tipo 11. Quel messaggio porta il
+nome del suo mittente: un datagramma che muore è un datagramma che riferisce \textbf{dove} è morto. Il campo era stato messo
+lì per fermare i cicli di instradamento; si è rivelato uno strumento di misura, e \textbf{traceroute} è tutta l'idea:
+uccidere di proposito i propri pacchetti, un salto più in là ogni volta.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (h) at (0,0) {\icon[1cm]{laptop}}; \node[below=-2pt of h, align=center] {host\\\texttt{100.75.5.21}};
+  \node (r1) at (3.2,0) {\icon[0.9cm]{router}}; \node[below=0pt of r1] {salto 1};
+  \node (r2) at (6.4,0) {\icon[0.9cm]{router}}; \node[below=0pt of r2] {salto 2};
+  \node (r3) at (9.6,0) {\icon[0.9cm]{router}}; \node[below=0pt of r3] {salto 3};
+  \node (d) at (12.8,0) {\icon[0.6cm]{server}}; \node[below=-2pt of d, align=center] {\texttt{italia.it}\\\texttt{151.101.195.10}};
+  \foreach \a/\b in {h/r1, r1/r2, r2/r3, r3/d} \draw[wired] (\a) -- (\b);
+  \draw[msg, netblue] (0.6,0.8) -- node[above] {TTL=1} (3.0,0.8);
+  \draw[msg, netred, dashed] (3.0,1.1) -- node[above] {TTL scaduto (11/0): sono il salto 1} (0.6,1.1);
+  \draw[msg, netblue] (0.6,1.7) -- node[above, pos=0.15] {TTL=2} (6.2,1.7);
+  \draw[msg, netred, dashed] (6.2,2.0) -- node[above, pos=0.55] {TTL scaduto: sono il salto 2} (0.6,2.0);
+  \draw[msg, netblue] (0.6,2.6) -- node[above, pos=0.1] {TTL=3} (9.4,2.6);
+  \draw[msg, netred, dashed] (9.4,2.9) -- node[above, pos=0.5] {TTL scaduto: sono il salto 3} (0.6,2.9);
+  \draw[msg, netblue] (0.6,-1.3) -- node[below, pos=0.12] {TTL=4} (12.6,-1.3);
+  \draw[msg, netgreen!60!black, dashed] (12.6,-1.7) -- node[below, pos=0.55] {porta irraggiungibile (3/3): nessuno lo scarta, la porta è chiusa; stop} (0.6,-1.7);
+\end{tikzpicture}
+\caption{Una sonda per salto. Ogni sonda è un normale datagramma diretto alla destinazione finale: cambia solo il TTL, e solo
+         di uno. La sorgente cronometra ciascuna, quindi ogni riga dell'output è un indirizzo e un tempo di andata e ritorno
+         per quel salto; tre sonde per TTL, quindi tre tempi per riga.}
+\end{figure}
+
+\subsection{Come sa di essere arrivato}
+
+\begin{itemize}
+    \item Prima o poi il TTL è abbastanza grande e la sonda raggiunge la destinazione, che non ha ragione di scartarla.
+    \item Per questo le sonde sono costruite \textbf{per essere rifiutate}: ciascuna porta un segmento UDP diretto a una porta
+          molto alta dove nessuno ascolta (Linux parte da 33434 e conta in su).
+    \item La destinazione risponde \emph{port unreachable}, tipo 3 codice 3, e quel messaggio è il segnale di smettere.
+    \item Due messaggi, due mittenti: i router dicono \emph{TTL scaduto}, la destinazione dice \emph{porta irraggiungibile}.
+          Il primo disegna il percorso, il secondo lo chiude. La porta improbabile non è un trucco giocato alla destinazione: è
+          l'unico modo di rendere l'arrivo distinguibile dal transito.
+\end{itemize}
+
+\begin{lstlisting}[language=bash, title={Leggere un traceroute}]
+$ traceroute italia.it
+traceroute to italia.it (151.101.195.10), 30 hops max, 60 byte packets
+ 1 _gateway (100.75.0.1) 1.785 ms 1.726 ms 2.633 ms
+ 2 ru-unina-l2-rl1-na01.na01.garr.net (193.206.130.9) 3.907 ms 3.869 ms 3.831 ms
+ 3 212.189.220.46 31.333 ms 212.189.220.218 4.657 ms 212.189.220.46 11.247 ms
+ 4 212.189.220.41 17.597 ms 18.875 ms 212.189.220.43 9.881 ms
+ 5 rs1-bo01-re1-rm02.rm02.garr.net (185.191.181.78) 27.630 ms 27.593 ms 27.556 ms
+ 6 * * *
+\end{lstlisting}
+
+\begin{itemize}
+    \item Il salto 1 è il proprio gateway; il salto 2 nomina già la rete che si sta attraversando (GARR, la rete della ricerca
+          italiana). I nomi valgono più degli indirizzi.
+    \item Il salto 3 risponde da due indirizzi diversi: le tre sonde non hanno preso lo stesso percorso. È
+          \textbf{bilanciamento del carico}, non un errore, e lo stesso salto mostra 31 ms e poi 4 ms.
+    \item I tempi non sono monotoni lungo la colonna, perché ciascuno è una misura nuova con il proprio accodamento.
+\end{itemize}
+
+\warning{Gli asterischi}{
+    La traccia arriva fino al salto 30 senza mai arrivare. I pacchetti sono arrivati? \textbf{Molto probabilmente sì}. La
+    destinazione sta dietro un filtro che scarta le sonde in silenzio, quindi il \emph{port unreachable} che fermerebbe il
+    comando non arriva mai, e il comando continua a contare fino al limite.
+    \begin{itemize}
+        \item Un asterisco è nessuna risposta entro il timeout: un filtro, un limite di ritmo, o un router che semplicemente non
+              genera ICMP.
+        \item Asterischi in mezzo, con risposte dopo, dicono solo che quel salto resta zitto: il percorso è intatto.
+        \item Né la direzione inversa deve coincidere: ciò che si misura è un'andata e ritorno, e la strada del ritorno può non
+              essere quella dell'andata.
+        \item Un traduttore di indirizzi a un confine è un altro motivo per cui una traccia smette di essere informativa.
+    \end{itemize}
+}
+
+\subsection{Due varianti della stessa idea}
+
+\begin{itemize}
+    \item \textbf{Sonde UDP}: il default su Linux, quello appena descritto; la traccia finisce su un \emph{port unreachable}.
+    \item \textbf{Sonde echo}: \texttt{traceroute -I}, ed è ciò che fa \texttt{tracert} su Windows: echo request con TTL
+          crescente, e la traccia finisce su un echo reply.
+    \item Il meccanismo è identico: cambiano solo la sonda e la condizione di arresto, e i router in mezzo rispondono allo
+          stesso modo.
+    \item Conta perché le due vengono filtrate in modo diverso: un percorso che inghiotte UDP verso porte strane può rispondere
+          all'echo, e uno che blocca tutto ICMP non risponde a nessuna delle due. Quando una traccia sembra sbagliata, lanciare
+          l'altra variante è il secondo parere più economico che ci sia.
+\end{itemize}
+
+\info{Quale processo riceve la risposta?}{
+    Il messaggio del router è indirizzato al nostro host e non porta porte. Quale dei nostri programmi lo riceve?
+    \textbf{Nessuno}, per la via ordinaria. traceroute legge ICMP da un raw socket, oppure chiede al kernel di riferire gli
+    errori sul socket con cui ha inviato la sonda, e riconosce la propria sonda dagli \textbf{otto byte citati}, che sono le
+    porte che ha scelto. È lì che la regola della citazione si guadagna il posto: senza, una risposta non potrebbe essere
+    abbinata a una sonda. Quindi traceroute invia UDP e comunque non usa alcun servizio di trasporto: il segmento è un
+    contenitore scelto perché nessuno ascolti. Due programmi, la stessa forma: entrambi vivono al livello di rete e prendono in
+    prestito l'API dei socket per arrivarci.
+}
+
+\subsection{Il nome risolto prima della prima sonda}
+
+\begin{lstlisting}[language=bash, title={Il primo pacchetto della cattura, in Wireshark}]
+Domain Name System (query)
+  Flags: 0x0100 Standard query
+    .... ...1 .... .... = Recursion desired: Do query recursively
+  Queries
+    italia.it: type AAAA, class IN
+\end{lstlisting}
+
+\begin{itemize}
+    \item Il primo pacchetto di una cattura non è una sonda: è una query DNS, perché al comando si è dato un nome. È acceso
+          \emph{recursion desired}: l'host chiede al resolver di fare tutto il lavoro e restituire una risposta.
+    \item E succede di nuovo al contrario, una volta per salto, per trasformare ogni indirizzo in un nome: è per questo che
+          \texttt{traceroute -n} è più veloce.
+    \item Quindi una traccia rotta può essere un servizio dei nomi rotto, e la cattura distingue i due casi nei primi due
+          pacchetti.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{traceroute e la frammentazione IP}
+% ══════════════════════════════════════════════════════════════
+
+Con il traceroute di Linux si può indicare, come secondo argomento, la \textbf{lunghezza totale} del pacchetto sonda (non
+il payload; il default è 60 byte):
+
+\begin{lstlisting}[language=bash]
+$ traceroute italia.it          # pacchetti piccoli (dimensione di default)
+$ traceroute italia.it 3000     # pacchetti da 3000 byte: verranno frammentati
+\end{lstlisting}
+
+La dimensione comprende la parte dati più gli header UDP e IP che la incapsulano (20 byte di header IP, 8 di header UDP,
+il resto è payload). Se supera l'MTU del percorso la sonda viene \textbf{frammentata}. La dimensione riguarda le sonde, non i
+messaggi ICMP ricevuti, che contengono solo una parte del pacchetto che ha generato l'errore.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l c c c c}
+\toprule
+ & \textbf{Dati} & \textbf{Nel campo} & \textbf{Wireshark stampa} & \textbf{MF} \\
+\midrule
+frammento 1 & 1480 & 0   & 0    & 1 \\
+frammento 2 & 1480 & 185 & 1480 & 1 \\
+frammento 3 & 20   & 370 & 2960 & 0 \\
+\bottomrule
+\end{tabular}
+\caption{Una sonda da 3000 byte su un collegamento Ethernet. L'header conta l'offset in unità di 8 byte; Wireshark lo
+         moltiplica per 8 prima di stamparlo. La sua stessa visualizzazione dei bit lo conferma: \texttt{0 0000 1011 1001} è
+         185, etichettato 1480. Tutti e tre hanno lo stesso identificatore e lo stesso TTL: la frammentazione avviene sotto la
+         sonda e non la disturba.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Destinazione irraggiungibile, e chi lo dice}
+% ══════════════════════════════════════════════════════════════
+
+\begin{table}[H]
+\centering
+\begin{tabular}{c l l}
+\toprule
+\textbf{Codice} & \textbf{Significa} & \textbf{Inviato da} \\
+\midrule
+0  & nessuna rotta verso quella rete                 & un router lungo la strada \\
+1  & la rete c'è, l'host no                          & l'ultimo router \\
+2  & nessuno gestisce quel numero di protocollo      & la destinazione \\
+3  & nessuno ha fatto \texttt{bind} su quella porta  & la destinazione \\
+4  & troppo grande, e la frammentazione è vietata    & un router lungo la strada \\
+13 & vietato dall'amministratore                     & un firewall \\
+\bottomrule
+\end{tabular}
+\caption{I codici del tipo 3. La colonna utile è quella del mittente: i codici 0, 1 e 4 vengono dal mezzo del percorso, 2 e 3
+         dimostrano che si è arrivati. Il codice 3 è quello che incontrano i nostri programmi, ed è quello che chiude una
+         traccia.}
+\end{table}
+
+\warning{Frammentazione necessaria, e il buco nero}{
+    Il datagramma è troppo grande per il collegamento successivo e porta \emph{don't fragment}. Il router lo scarta e
+    avvisa, e l'avviso viene filtrato sulla via del ritorno. Che cosa vede il mittente? \textbf{Niente}. Ritrasmette per
+    sempre lo stesso datagramma troppo grande. L'handshake è riuscito, i messaggi piccoli passano, quelli grandi
+    spariscono, e la connessione si blocca a metà di un trasferimento.
+    \begin{itemize}
+        \item Il tipo 3 codice 4 porta, nei suoi quattro byte liberi, l'MTU che sarebbe passata: la scoperta dell'MTU di
+              percorso è costruita su quel numero.
+        \item Bloccare tutto ICMP rompe quindi un meccanismo da cui TCP dipende, e il sintomo indica ovunque tranne che il
+              firewall. Nasconde ben poco (un host si trova in altri modi) e costa esattamente i messaggi che servono quando
+              qualcosa si rompe.
+    \end{itemize}
+}
+
+\subsection{I messaggi caduti in disuso}
+
+\begin{itemize}
+    \item \textbf{Source quench}: controllo di congestione via ICMP, un router che chiede a un host di rallentare. Non si usa
+          più: quel compito è passato al livello di trasporto, e ai due bit ECN nell'header IP.
+    \item \textbf{Redirect}: un router che dice a un host che ha scelto il primo salto sbagliato. Oggi di solito si ignora,
+          perché uno falsificato dirotta il traffico.
+    \item \textbf{Scoperta dei router}: un host che chiede chi sono i router. Sopravvive, ma l'indirizzo arriva di solito per
+          un'altra via (DHCP).
+    \item La versione nuova del protocollo (ICMPv6) riorganizza tutto questo e aggiunge \emph{packet too big}, che lì non è
+          facoltativo: i router non frammentano più, quindi il messaggio è l'unico modo di scoprirlo.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Una scala di domande}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    rung/.style={draw=netblue!60!black, fill=netblue!8, rounded corners=2pt, minimum width=7.2cm, minimum height=0.5cm,
+                 anchor=west, align=left, text width=6.9cm}]
+  \foreach \y/\q/\c in {
+      0/{l'interfaccia è accesa?}/{ip link},
+      1/{ho un indirizzo e un gateway?}/{ip addr, ip route},
+      2/{il gateway risponde?}/{ping 192.168.1.1},
+      3/{un indirizzo esterno risponde?}/{ping 8.8.8.8},
+      4/{e se no, dove si ferma?}/{traceroute 8.8.8.8},
+      5/{un nome diventa un indirizzo?}/{dig unina.it},
+      6/{la porta è aperta, e il servizio parla?}/{nmap -p 80, nc host 80}} {
+    \node[rung] at (0,\y*0.62) {\q};
+    \node[anchor=west, font=\scriptsize\ttfamily] at (7.4,\y*0.62) {\c};
+  }
+  \draw[-{Stealth[length=2.5mm]}, very thick, primary] (-0.4,0) -- node[left, rotate=90, anchor=south, align=center]{ogni risposta rende utile\\la domanda successiva} (-0.4,3.9);
+  \node[text=netred, align=left, anchor=west] at (0,-0.75) {il primo gradino che fallisce è quello da riparare: tutto ciò che sta sopra non è stato misurato};
+\end{tikzpicture}
+\caption{Una scala di domande per diagnosticare una rete, dal basso verso l'alto.}
+\end{figure}
+
+\begin{itemize}
+    \item Si comincia dal basso anche quando si è sicuri: le due domande più economiche sono quelle che falliscono più spesso.
+    \item Ciò che ICMP aggiunge è che ai gradini di mezzo si possa rispondere: senza, tutto ciò che sta fra noi e il servizio è
+          un unico silenzio indiviso.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l l l}
+\toprule
+\normalfont\textbf{Comando} & \textbf{A quale domanda risponde} & \textbf{Dove guarda} \\
+\midrule
+ip link, ip addr & sono connesso, e chi sono                  & questa macchina \\
+ip route         & dove va per primo il mio traffico          & questa macchina \\
+ping             & un datagramma arriva e torna?              & il percorso \\
+traceroute       & fin dove arriva prima di fermarsi          & il percorso \\
+dig              & il nome diventa un indirizzo?              & il servizio dei nomi \\
+ss -tn           & ci sono i socket che mi aspetto?           & questa macchina \\
+nmap             & chi è acceso, quali porte rispondono       & l'altro capo \\
+nc               & il servizio parla davvero?                 & l'altro capo \\
+tcpdump          & che cosa ha lasciato davvero la macchina   & ogni livello \\
+\bottomrule
+\end{tabular}
+\caption{La cassetta degli attrezzi. Nessuno risponde a una domanda che quello sopra ha lasciato aperta: è l'ordine lo
+         strumento, i comandi sono solo comandi.}
+\end{table}
+
+\subsection{Chi c'è su questa rete}
+
+\begin{lstlisting}[language=bash, title={nmap -sn: chi esiste, senza toccare le porte}]
+$ sudo nmap -sn 192.168.1.0/24
+Nmap scan report for _gateway (192.168.1.1)
+Host is up (0.0024s latency).
+MAC Address: 10:BD:18:E5:74:80 (Cisco Systems)
+Nmap scan report for 192.168.1.17
+Host is up (0.0031s latency).
+Nmap done: 256 IP addresses (4 hosts up) scanned in 2.35 seconds
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{-sn} chiede chi esiste e si ferma lì: nessuna porta viene sondata.
+    \item Sulla propria subnet gli indirizzi MAC tradiscono il metodo: non sta facendo ping a nessuno, sta chiedendo al livello
+          di collegamento chi possiede ogni indirizzo (ARP). Nient'altro potrebbe restituire un MAC.
+    \item Fuori dalla subnet quell'opzione non c'è più, e la scansione ripiega su echo request più una sonda a una o due porte
+          comuni. Lo stesso comando risponde a una domanda diversa da dentro e da fuori una rete.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l l}
+\toprule
+\textbf{Risultato} & \textbf{Che cosa torna} & \textbf{Chi l'ha inviato} \\
+\midrule
+\emph{open}     & SYNACK                   & il servizio stesso \\
+\emph{closed}   & RST                      & il TCP remoto: l'host è acceso \\
+\emph{filtered} & niente, oppure ICMP 3/13 & qualcosa lungo la strada \\
+\bottomrule
+\end{tabular}
+\caption{Aperta, chiusa, filtrata, e chi lo dice. La terza riga è dove compare questo livello: un firewall può essere
+         educato e dire \emph{administratively prohibited}, o non dire niente.}
+\end{table}
+
+Su UDP non c'è RST: una porta chiusa risponde \emph{port unreachable}, una filtrata non risponde niente, quindi lo scanner deve
+aspettare un timeout per distinguerle. E il limite di ritmo sugli errori ICMP rende una scansione UDP lenta di proposito: è il
+protocollo che si difende.
+
+% ══════════════════════════════════════════════════════════════
+\section{DNS, VPN e spoofing: un caso di studio}
+% ══════════════════════════════════════════════════════════════
+
+Durante un'esercitazione si è provato a interrogare direttamente un root server, collegati attraverso una
+\textbf{VPN} (una rete privata virtuale che cifra tutto il traffico verso un server remoto).
+
+\begin{lstlisting}[language=bash, title={Ciò che una cattura non può vedere}]
+$ dig +norecurse @<un root server> iana.org A        # chiedere direttamente alla radice
+;; flags: qr; QUERY: 1, ANSWER: 0, AUTHORITY: 6, ADDITIONAL: 13
+org.        172800 IN NS a0.org.afilias-nst.info.     <- atteso: un rinvio, nessun indirizzo
+
+$ dig +norecurse @<un root server> iana.org A        # stesso comando, dietro una VPN
+iana.org.      340 IN A     192.0.43.8               <- una risposta che non poteva dare
+\end{lstlisting}
+
+Qualcosa non torna. Un root server \textbf{non} ha un indirizzo per quel nome: dovrebbe restituire i server della zona
+\texttt{org}. Dietro un certo fornitore di VPN, ha restituito l'indirizzo.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \node (h) at (0,0) {\icon[1cm]{laptop}}; \node[below=-2pt of h] {host};
+  \node (v) at (5,0) {\icon[0.7cm]{server}}; \node[below=-2pt of v, align=center] {server VPN};
+  \node (dns) at (10,1.3) {\icon[0.6cm]{server}}; \node[right=0pt of dns, align=left] {DNS del provider};
+  \node (root) at (10,-1.3) {\icon[0.6cm]{server}}; \node[right=0pt of root] {c.root-servers.net};
+  \draw[very thick, netorange] (h) -- node[above] {tunnel cifrato} node[below] {Wireshark vede solo byte cifrati} (v);
+  \draw[msg, netblue] (v) -- node[above, sloped] {risolve il nome} (dns);
+  \draw[msg, dashed, black!40] (v) -- node[below, sloped] {la query non arriva mai qui} (root);
+  \draw[msg, netred, very thick] (4.6,0.6) to[bend right=25] node[above] {risposta ``falsificata'' come se venisse dal root server} (0.5,0.6);
+\end{tikzpicture}
+\caption{Il server VPN intercetta la query DNS, la risolve da sé e risponde fingendo di essere il server interrogato.}
+\end{figure}
+
+\begin{itemize}
+    \item Wireshark non ha mostrato niente: il traffico verso la VPN è cifrato, e la cattura non aveva pacchetti da mostrare.
+    \item La spiegazione è che il server VPN ha risolto il nome da sé e ha restituito la risposta come se venisse dal server
+          interrogato, facendo \textbf{spoofing} dei datagrammi UDP/IP. Con un altro fornitore il rinvio è tornato come atteso.
+    \item Lo strumento non ha mentito: ha riferito ciò che è arrivato. Ciò che non può riferire è chi l'ha inviato davvero;
+          ma l'header sì: un root server \textbf{non accende mai \texttt{ra}} (e in un rinvio nemmeno \texttt{aa}). Non serve una
+          VPN per vederlo: molte connessioni domestiche intercettano sempre la porta 53.
+\end{itemize}
+
+\info{La lezione}{
+    Il campo ``indirizzo sorgente'' di un datagramma IP \textbf{non è una prova} di chi l'abbia davvero inviato: chi controlla un
+    punto del percorso può falsificarlo. È esattamente il problema dell'\textbf{IP spoofing} che affronteremo nella parte sulla
+    sicurezza, e il motivo per cui servono meccanismi di autenticazione.
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{La nostra chat vista da un livello più in basso}
+% ══════════════════════════════════════════════════════════════
+
+\begin{lstlisting}[language=bash]
+$ ./chatd 5000 &
+$ sudo tcpdump -i lo -n -X 'port 5000'       # oppure il filtro ip.addr==... in Wireshark
+\end{lstlisting}
+
+\begin{itemize}
+    \item Tutto ciò che la chat invia è un segmento dentro un datagramma: protocollo 6 per la versione connessa, 17 per quella
+          su datagrammi.
+    \item Su loopback il TTL parte a 64 e arriva a 64: nessuno l'ha instradato. Attraverso il laboratorio arriva a 63, e quello
+          che manca è il router.
+    \item Nel payload si legge la nostra delimitazione: quattro byte di lunghezza, uno di tipo, poi il corpo. È il primo header
+          del corso scritto da noi. Niente di ciò che sta sotto sa che cosa significano quei cinque byte: il formato è un
+          accordo fra i nostri due programmi e nessun altro.
+\end{itemize}
+
+\warning{Il messaggio che la chat riceve già}{
+    Si avvia il client su datagrammi senza alcun server: nessuno ha fatto \texttt{bind} sulla porta 5000. Che cosa succede sul
+    filo? L'host a cui si è scritto risponde \emph{port unreachable}, tipo 3 codice 3: proprio il messaggio che chiude un
+    traceroute. Se il programma lo viene mai a sapere dipende da una chiamata: senza \texttt{connect} il kernel non sa quale
+    socket riguardi il messaggio, e lo butta; il client va in timeout e ritrasmette per sempre.
+}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Con connect, l'ICMP diventa un errno}]
+connect(fd, (struct sockaddr *) &srv, sizeof srv);   /* registra il peer */
+sendto(fd, msg, len, 0, NULL, 0);                    /* ritorna bene: e' partito */
+
+ssize_t n = recv(fd, buf, sizeof buf, 0);
+if (n < 0 && errno == ECONNREFUSED)
+    ;                                                /* l'ICMP e' tornato, ed e' stato tenuto */
+\end{lstlisting}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l l l}
+\toprule
+\normalfont\textbf{errno} & \textbf{Che cosa è arrivato} & \textbf{Che cosa se ne deduce} \\
+\midrule
+ECONNREFUSED \normalfont(TCP) & un RST              & host acceso, niente su quella porta \\
+ECONNREFUSED \normalfont(UDP) & ICMP 3/3            & host acceso, nessuno in ascolto lì \\
+EHOSTUNREACH                  & ICMP 3/1            & un router non è riuscito a consegnare \\
+ENETUNREACH                   & ICMP 3/0            & nessuna rotta verso quella rete \\
+EACCES                        & ICMP 3/13           & un firewall l'ha rifiutato, e l'ha detto \\
+ETIMEDOUT                     & niente del tutto    & non si è imparato niente \\
+\bottomrule
+\end{tabular}
+\caption{Che cosa dice \texttt{connect}, e chi gliel'ha detto. Quattro dei sei sono un messaggio ICMP tradotto in un intero:
+         il livello di rete che riferisce attraverso una chiamata dei socket. Il primo è un segmento TCP, e solo l'ultimo è
+         niente; ed è proprio l'ultimo che viene riferito come «il server è giù», che è l'unico a non dire nulla del genere.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Esercizi}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Catturare un traceroute}
+Si avvia la cattura, si lancia \texttt{traceroute italia.it} e lo si lascia finire. Filtro di visualizzazione:
+\texttt{ip.src==<mio indirizzo> \&\& ip.dst==<il server> \&\& udp}. Si seleziona la prima sonda e si apre la sezione
+\emph{Internet Protocol}.
+\begin{enumerate}[label=(\alph*)]
+    \item Qual è l'indirizzo dell'host, e che cosa c'è nel campo TTL di questa prima sonda?
+    \item Quale protocollo superiore dichiara l'header, e con quale numero?
+    \item Quanti byte di header IP ci sono, e quanti di payload? Dire come si è ricavato il secondo: non è un campo.
+    \item Questo datagramma è stato frammentato? Indicare i campi guardati, e che cosa avrebbero detto se lo fosse stato.
+\end{enumerate}
+Poi si guarda l'intera sequenza di sonde, e ciò che è tornato con \texttt{ip.dst==<mio indirizzo> \&\& icmp}.
+\begin{enumerate}[label=(\alph*), resume]
+    \item Fra le sonde, quali campi dell'header restano costanti e quali cambiano? Per ciascuno costante, perché deve
+          esserlo?
+    \item Descrivere l'andamento del campo \emph{Identification} delle sonde.
+    \item Nei datagrammi inviati dai router, quale protocollo superiore è dichiarato?
+    \item I loro valori di \emph{Identification} sono legati a quelli delle sonde? Dovrebbero esserlo?
+    \item I TTL dei messaggi che tornano sono simili fra loro? Da dove è partito ciascuno?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Il campo \emph{Source} è l'indirizzo dell'host (sulla rete di ateneo per esempio \texttt{100.75.5.21}); il TTL
+          della prima sonda vale \textbf{1}.
+    \item \textbf{17}, UDP: le sonde sono segmenti UDP verso porte alte.
+    \item Il campo \emph{Header Length} vale 5 parole da 32 bit, cioè \textbf{20 byte}; il payload si ottiene come
+          \emph{Total Length} meno l'header: con le sonde di default da 60 byte, \textbf{40 byte} (8 di header UDP e 32 di dati).
+    \item No: \emph{More Fragments} vale 0 e \emph{Fragment Offset} vale 0. In un frammento uno dei due sarebbe diverso da
+          zero (MF a 1 in tutti tranne l'ultimo, offset diverso da 0 in tutti tranne il primo).
+    \item Restano costanti versione, lunghezza dell'header, protocollo e i due indirizzi: la sonda deve andare sempre alla stessa
+          destinazione e la risposta tornare allo stesso host, e il tipo di sonda non cambia. Cambiano il \textbf{TTL} (cresce
+          di uno ogni tre sonde), l'\textbf{identificatore} e quindi il \textbf{checksum dell'header}, ricalcolato perché TTL e
+          identificatore cambiano; nel segmento UDP cambia anche la porta di destinazione.
+    \item Cresce di uno a ogni sonda: è il contatore dell'host che numera i propri datagrammi.
+    \item \textbf{1}, ICMP.
+    \item No, e non devono esserlo: ogni router numera i datagrammi che genera con il proprio contatore. Il legame con la
+          sonda sta altrove, negli otto byte citati.
+    \item No: ogni router parte dal TTL iniziale del proprio sistema (spesso 255, oppure 64), e il valore che arriva è quello
+          iniziale meno i salti del ritorno; i router più lontani arrivano con valori più bassi.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Tremila byte, sulla propria macchina}
+Si ripete con \texttt{traceroute italia.it 3000} e il filtro \texttt{ip.src==<mio indirizzo> \&\& ip.dst==<il server>}.
+\begin{enumerate}[label=(\alph*)]
+    \item Trovare il primo frammento della prima sonda. In quanti datagrammi si sono trasformati i 3000 byte?
+    \item Quali campi dell'header dicono che si tratta di un frammento?
+    \item Come si distingue un primo frammento da quelli successivi, e l'ultimo da quelli precedenti?
+    \item Quanti byte porta ciascuno, header compreso? Verificare che tornino.
+    \item Confrontare i bit del campo offset con il numero che Wireshark stampa accanto. Quale dei due sta nel datagramma?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item In \textbf{tre}: l'MTU Ethernet è 1500 byte.
+    \item Il flag \emph{More Fragments} e il campo \emph{Fragment Offset}.
+    \item Il primo ha offset 0 e MF $= 1$; quelli in mezzo offset $> 0$ e MF $= 1$; l'ultimo offset $> 0$ e MF $= 0$.
+    \item 1500, 1500 e 40 byte. Tolti i tre header da 20 byte restano $1480 + 1480 + 20 = 2980$ byte, cioè i 3000 della sonda
+          meno il suo header originale.
+    \item Nel datagramma c'è il numero in unità di 8 byte: per il secondo frammento \texttt{0 0000 1011 1001} $= 185$.
+          Wireshark stampa $185 \times 8 = 1480$, la posizione in byte.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{E il ping}
+Si cattura \texttt{ping -c5 iana.org} con il solo filtro \texttt{icmp}.
+\begin{enumerate}[label=(\alph*)]
+    \item Individuare gli echo request inviati e le risposte corrispondenti. Quali indirizzi sono sorgente e destinazione in
+          ciascuna direzione?
+    \item In un echo request: qual è il TTL nell'header IP, il tipo nell'header ICMP, l'identificatore e il numero di sequenza?
+    \item Misurare il tempo fra una richiesta e la sua risposta, e confrontarlo con quello stampato da ping per quel numero di
+          sequenza.
+    \item Ripetere verso un host che non risponde. Che cosa contiene la cattura, e che cosa permette di concludere?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Le richieste vanno dal proprio indirizzo a \texttt{192.0.43.8}; le risposte fanno il percorso inverso.
+    \item TTL 64 (il default di Linux), tipo \textbf{8}; l'identificatore è lo stesso in tutte e cinque le richieste (identifica
+          questo ping), il numero di sequenza va da 1 a 5. Le risposte, di tipo 0, ricopiano entrambi.
+    \item I due tempi coincidono quasi esattamente: ping misura lo stesso intervallo, dal lato dell'applicazione, con in più il
+          poco che serve a passare dal kernel.
+    \item Solo echo request, nessuna risposta. Non si può concludere che l'host sia spento: è il «silenzio che non è una
+          risposta» del capitolo.
+\end{enumerate}
+\end{esercizio}
+
+\Needspace{20\baselineskip}
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item \textbf{ICMP} è il modo in cui host e router parlano della rete: sta sopra IP, viaggia dentro IP (protocollo 1), e non
+          ha porte.
+    \item Un messaggio porta un tipo, un codice, e l'header più i primi otto byte del datagramma che l'ha causato: un errore
+          nomina la propria causa.
+    \item \textbf{ping} sono i tipi 8 e 0, e risponde a una sola domanda: un datagramma ha raggiunto quell'indirizzo e qualcosa
+          ha risposto.
+    \item \textbf{traceroute} uccide di proposito le proprie sonde: TTL scaduto (11) da ogni router, porta irraggiungibile (3/3)
+          dalla destinazione, che è come sa di doversi fermare.
+    \item Un silenzio non è una risposta: gli errori sono limitati, filtrati, e in diversi casi mai generati. Bloccare tutto
+          ICMP rompe la scoperta dell'MTU di percorso.
+    \item La diagnosi è un ordine di domande, dal basso verso l'alto. Prossimo argomento: come un host ottiene il proprio
+          indirizzo, e che cosa succede quando un'intera rete si nasconde dietro uno solo.
+\end{itemize}
+}

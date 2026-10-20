@@ -1,0 +1,588 @@
+\chapter{I thread}
+
+Il server sa già tenere più client insieme: una \texttt{fork} per connessione, un figlio ciascuno. Ma quando un client
+scrive una riga, come arriva agli altri due? \textbf{Non arriva}. Alla \texttt{fork} ogni figlio ha ricevuto una copia
+privata della memoria, quindi non esiste «la lista dei client connessi».
+\begin{itemize}
+    \item Si potrebbe mandare la riga da un processo all'altro, ma sarebbe un secondo programma, con un suo protocollo, che
+          non abbiamo scritto.
+    \item Ogni connessione costa inoltre uno spazio di indirizzamento, le sue tabelle delle pagine e una nuova voce nelle
+          tabelle dello scheduler.
+    \item Quello che vogliamo è un altro \textbf{flusso di controllo dentro lo stesso processo}, che condivida tutto per
+          impostazione predefinita.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Un processo, più flussi di controllo}
+% ══════════════════════════════════════════════════════════════
+
+\dfn{Thread}{
+    Un \textbf{thread} è un flusso di controllo dentro un processo: ha il proprio stack e i propri registri, e tutto il resto
+    in comune con gli altri thread dello stesso processo.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    sh/.style={draw=netblue!70!black, fill=netblue!8, minimum width=7.8cm, minimum height=0.5cm, align=center},
+    th/.style={draw=netgreen!70!black, fill=netgreen!10, rounded corners=2pt, minimum width=2.3cm, align=center}]
+  \node[draw=black!60, thick, rounded corners, minimum width=8.6cm, minimum height=5.6cm] (p) at (0,-0.25) {};
+  \node[anchor=north west, font=\small\bfseries\sffamily] at (p.north west) {\ processo};
+  \node[sh] at (0,1.65) {codice};
+  \node[sh] at (0,1.1)  {dati globali};
+  \node[sh] at (0,0.55) {heap};
+  \node[sh] at (0,0.0)  {tabella dei descriptor: socket e file};
+  \foreach \x/\n in {-2.75/1, 0/2, 2.75/3} {
+    \node[th] at (\x,-1.1) {registri\\program counter};
+    \node[th] at (\x,-1.9) {stack};
+    \draw[-{Stealth[length=2mm]}, thick, netred] (\x+1.3,-0.6) -- (\x+1.3,-2.3);
+    \node[text=netred] at (\x,-2.55) {thread \n};
+  }
+\end{tikzpicture}
+\caption{Il processo non è più ciò che gira: è il \textbf{contenitore}. Lo scheduler esegue un thread, e fino a oggi ogni
+         processo ne aveva uno solo.}
+\end{figure}
+
+\subsection{Che cosa è privato e che cosa è condiviso}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l}
+\toprule
+\textbf{Privato di ogni thread} & \textbf{Condiviso da tutti i thread del processo} \\
+\midrule
+thread id, registri, program counter & il codice, e ogni variabile globale \\
+il suo stack, quindi le sue variabili locali & lo heap: tutto ciò che ha restituito \texttt{malloc} \\
+la maschera dei segnali & la tabella dei descriptor: socket e file \\
+\texttt{errno} & la disposizione di ogni segnale (gli handler) \\
+la priorità di scheduling & pid, ppid, directory di lavoro, credenziali \\
+\bottomrule
+\end{tabular}
+\caption{La colonna di sinistra è corta di proposito: un thread possiede lo stato di \textbf{una computazione}, nient'altro.}
+\end{table}
+
+In particolare, un descriptor aperto da un thread è \texttt{fd 4} \textbf{per tutti}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    th/.style={draw=netgreen!70!black, fill=netgreen!10, rounded corners=2pt, minimum width=2.4cm, align=center}]
+  \node[draw=black!60, thick, rounded corners, minimum width=9.2cm, minimum height=4.0cm] (p) at (0,0) {};
+  \node[anchor=north, font=\small\bfseries\sffamily] at (p.north) {un processo, uno spazio di indirizzamento};
+  \foreach \x/\n/\f/\c in {-3/1/4/A, 0/2/5/B, 3/3/6/C}
+    \node[th] at (\x,0.75) {\textbf{thread \n}\\stack proprio\\\texttt{fd \f} client \c};
+  \node[draw=netblue!70!black, fill=netblue!8, rounded corners=2pt, minimum width=8.4cm, align=center] at (0,-0.55)
+    {\textbf{condiviso}: lo stato della chat, chi è connesso, che cosa inviargli\\una sola copia, raggiunta leggendo una variabile};
+  \node[draw=netred, fill=netred!8, rounded corners=2pt, minimum width=8.4cm, align=center] at (0,-1.45)
+    {\textbf{thread principale}: \texttt{accept} sul \texttt{fd 3}, un thread nuovo per ogni connessione accettata};
+\end{tikzpicture}
+\caption{Una sola tabella dei descriptor, quindi una sola \texttt{close} chiude una connessione; e lo stato della chat è
+         una \textbf{variabile}, non un messaggio che qualcuno deve inviare.}
+\end{figure}
+
+\subsection{Che cosa compra la condivisione, e che cosa costa}
+
+\begin{itemize}
+    \item \textbf{Niente comunicazione fra processi}: la lista dei client connessi è una variabile; un thread la scrive, gli
+          altri la leggono, e niente viene trasmesso.
+    \item \textbf{Più economico}: creare un thread non copia alcuno spazio di indirizzamento, e passare da un thread all'altro
+          non cambia le tabelle delle pagine.
+    \item \textbf{Blocco indipendente}: un thread fermo in \texttt{read} blocca solo se stesso, purché il kernel sappia che
+          esiste.
+    \item \textbf{Il prezzo}: niente li separa. Un thread che corrompe una struttura condivisa la corrompe per tutti.
+    \item E un thread che dereferenzia un puntatore nullo porta giù l'intero server, client compresi; un processo figlio
+          portava giù soltanto se stesso.
+\end{itemize}
+
+Un server con \texttt{fork} è isolato per costruzione; uno con i thread no, ed è di questo che parla la seconda metà del
+capitolo.
+
+\subsection{Concorrenza non è parallelismo}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    t/.style={draw=black!50, minimum height=0.4cm, anchor=west, inner sep=0pt, fill=#1}]
+  \node[anchor=west, font=\small\bfseries\sffamily] at (-2.6,0.8) {Concorrenza: un core};
+  \node[anchor=east] at (-0.2,0) {core};
+  \foreach \x/\c in {0/netblue!40, 1.0/netgreen!40, 2.0/netorange!40, 3.0/netblue!40, 4.0/netgreen!40, 5.0/netorange!40}
+    \node[t=\c, minimum width=1.0cm] at (\x,0) {};
+  \node[anchor=west, font=\small\bfseries\sffamily] at (-2.6,-0.8) {Parallelismo: tre core};
+  \foreach \y/\c/\n in {-1.5/netblue!40/1, -2.0/netgreen!40/2, -2.5/netorange!40/3} {
+    \node[anchor=east] at (-0.2,\y) {core \n};
+    \node[t=\c, minimum width=6.0cm] at (0,\y) {};
+  }
+  \draw[-{Stealth[length=2mm]}, black!60] (0,-3.0) -- (6.4,-3.0) node[right] {tempo};
+\end{tikzpicture}
+\caption{\textbf{Concorrenza}: più compiti in corso insieme, alternati. \textbf{Parallelismo}: più compiti eseguiti nello
+         stesso istante.}
+\end{figure}
+
+A un server serve la prima: i suoi thread passano la vita ad \textbf{aspettare la rete}, non a calcolare. La seconda è un
+regalo che l'hardware può fare.
+
+% ══════════════════════════════════════════════════════════════
+\section{Dove sono conosciuti i thread}
+% ══════════════════════════════════════════════════════════════
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily},
+    ut/.style={draw=netgreen!70!black, fill=netgreen!12, circle, minimum size=0.5cm, inner sep=0pt},
+    kt/.style={draw=netblue!70!black, fill=netblue!15, circle, minimum size=0.5cm, inner sep=0pt}]
+  % livello utente
+  \begin{scope}
+    \node[font=\small\bfseries\sffamily] at (1.5,2.3) {Thread a livello utente};
+    \draw[black!50, dashed] (-0.6,0.6) -- (3.6,0.6);
+    \node[anchor=west, text=black!60] at (3.6,1.2) {spazio utente};
+    \node[anchor=west, text=black!60] at (3.6,0.0) {kernel};
+    \foreach \x in {0.5,1.5,2.5} \node[ut] at (\x,1.5) {};
+    \node[draw, rounded corners=2pt, fill=lapp!40] (lib) at (1.5,0.95) {libreria dei thread};
+    \node[kt] (k) at (1.5,0.0) {};
+    \draw (lib) -- (k);
+    \node[text=netred, align=center] at (1.5,-0.7) {il kernel vede\\una sola cosa eseguibile};
+  \end{scope}
+  % livello kernel
+  \begin{scope}[xshift=6.6cm]
+    \node[font=\small\bfseries\sffamily] at (1.5,2.3) {Thread a livello kernel};
+    \draw[black!50, dashed] (-0.6,0.6) -- (3.6,0.6);
+    \foreach \x in {0.5,1.5,2.5} { \node[ut] at (\x,1.5) {}; \node[kt] at (\x,0.0) {}; \draw (\x,1.25) -- (\x,0.25); }
+    \node[draw, rounded corners=2pt, fill=lnet!40] at (1.5,-0.55) {tabella dei thread del kernel};
+    \node[text=netgreen!60!black, align=center] at (1.5,-1.15) {ognuno schedulato\\e bloccato a sé};
+  \end{scope}
+\end{tikzpicture}
+\caption{A sinistra la libreria fa tutto nello spazio utente: cambiare thread è una chiamata di funzione, ma il kernel vede
+         una sola cosa eseguibile. A destra il kernel ha una propria tabella: schedula ogni thread e blocca ciascuno
+         separatamente.}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Molti a uno}: tutti i thread utente su un solo thread del kernel. Cambiare è economico, ma una chiamata
+          bloccante li ferma tutti, e due core non vengono mai usati.
+    \item \textbf{Uno a uno}: un thread del kernel per ogni thread utente: blocco vero, parallelismo vero, e un oggetto del
+          kernel per ciascuno. È \textbf{Linux}, e quindi il nostro caso.
+    \item \textbf{Molti a molti}: $m$ thread utente schedulati su $n$ thread del kernel. È la risposta generale, abbastanza
+          complicata da far tornare indietro i sistemi che l'avevano provata.
+\end{itemize}
+Nel nostro server ogni thread viene quindi bloccato e schedulato per conto suo, e ogni thread è un oggetto del kernel: per
+questo non se ne possono avere un milione.
+
+% ══════════════════════════════════════════════════════════════
+\section{Creare un thread}
+% ══════════════════════════════════════════════════════════════
+
+\begin{lstlisting}[language={[POSIX]C}]
+#include <pthread.h>
+
+int pthread_create(pthread_t *tid, const pthread_attr_t *attr,
+                   void *(*start_routine)(void *), void *arg);
+\end{lstlisting}
+
+\begin{itemize}
+    \item \texttt{tid}: un \textbf{output}, l'identità del nuovo thread, di tipo opaco \texttt{pthread\_t}. Un thread chiede
+          la propria con \texttt{pthread\_self()}.
+    \item \texttt{attr}: gli attributi, o \texttt{NULL} per quelli predefiniti, che vanno bene finché non serve un thread
+          \emph{detached}.
+    \item \texttt{start\_routine}: dove comincia il nuovo thread. Non prosegue da qui: \textbf{chiama} quella funzione.
+    \item \texttt{arg}: l'unico argomento che quella funzione riceve.
+\end{itemize}
+Si compila con \texttt{gcc -pthread}: collega la libreria e imposta i flag che gli header si aspettano.
+
+\warning{Gli errori non passano per errno}{
+    Tutte le chiamate viste finora restituivano $-1$ e impostavano \texttt{errno}. Le funzioni \texttt{pthread}
+    \textbf{restituiscono il codice d'errore} e lasciano stare \texttt{errno}: si stampa con \texttt{strerror(err)}, non
+    con \texttt{perror}, che stamperebbe l'ultimo fallimento non correlato. Il motivo è storico (una globale sarebbe
+    ambigua con i thread) e oggi \texttt{errno} è in effetti per thread. \texttt{pthread\_create} fallisce davvero:
+    \texttt{EAGAIN} quando il sistema non concede un altro thread, e un server deve sopravvivere.
+}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers]
+int err = pthread_create(&tid, NULL, worker, arg);
+if (err != 0)
+    fprintf(stderr, "pthread_create: %s\n", strerror(err));   /* non perror */
+\end{lstlisting}
+
+\subsection{La funzione di partenza e il suo unico argomento}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Un argomento solo: una struct per passarne di piu'}]
+struct job { int fd; unsigned long n; };     /* cio' che serve a un thread */
+
+static void *worker(void *arg) {
+    struct job *j = arg;                     /* il void * torna com'era partito */
+    serve(j->fd, j->n);
+    close(j->fd);
+    free(j);                                 /* e' di questo thread, quindi lo libera lui */
+    return NULL;                             /* come pthread_exit(NULL) */
+}
+
+struct job *j = malloc(sizeof *j);
+j->fd = fd; j->n = ++served;
+pthread_create(&tid, NULL, worker, j);       /* un puntatore, e qualunque cosa dietro */
+\end{lstlisting}
+
+Più di un valore vuol dire una struttura, e quella struttura deve \textbf{esistere ancora} quando il thread la legge.
+
+\begin{warningbox}{{L'argomento non dev'essere una variabile riusata}}
+\begin{lstlisting}[language={[POSIX]C}]
+for (;;) {
+    int fd = accept(listen_fd, NULL, NULL);
+    pthread_create(&tid, NULL, worker, &fd);    /* una sola variabile, per tutti */
+}
+\end{lstlisting}
+Due client si connettono a un millisecondo di distanza: quale descriptor serve ciascun thread? Quello che c'è in
+\texttt{fd} \textbf{quando guarda}. La seconda \texttt{accept} può averlo già sovrascritto: due thread sulla stessa
+connessione, e una connessione che nessuno serve. Si dà a ogni thread \textbf{un oggetto suo}: una \texttt{malloc} per
+connessione, liberata dal thread che la riceve. Nei test funziona, perché nei test i client arrivano uno alla volta.
+\end{warningbox}
+
+\subsection{Due thread e un main}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={hello.c}]
+static void *say(void *arg) {
+    printf("%s: tid %lu\n", (char *) arg, (unsigned long) pthread_self());
+    return NULL;
+}
+
+int main(void) {
+    pthread_t t1, t2;
+    pthread_create(&t1, NULL, say, "first");
+    pthread_create(&t2, NULL, say, "second");
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+    return 0;
+}
+\end{lstlisting}
+
+Nulla dice quale dei due stampi per primo, ed eseguirlo due volte può dare risposte diverse. \texttt{pthread\_t} è
+opaco: stamparlo è una comodità di questo sistema, non una cosa portabile.
+
+\warning{Quando main ritorna, muoiono tutti}{
+    Togliendo le due \texttt{join}, che cosa stampa il programma? Spesso \textbf{niente}. Il \texttt{return} da
+    \texttt{main} è una \texttt{exit}, e \texttt{exit} termina il processo, compresi i thread che stavano per stampare.
+    \begin{itemize}
+        \item \texttt{exit} chiamata da \textbf{qualunque} thread termina tutti i thread: non esiste una sua versione che
+              termini solo il chiamante.
+        \item O si aspettano con \texttt{join} i thread avviati, oppure, se \texttt{main} non ha altro da fare, lo si chiude con
+              \texttt{pthread\_exit(NULL)}: il processo vive allora fino alla fine del suo ultimo thread.
+        \item Una \texttt{sleep} in \texttt{main} non è un modo di aspettare un thread: è una scommessa su quanto dura il
+              lavoro.
+    \end{itemize}
+}
+
+% ══════════════════════════════════════════════════════════════
+\section{La fine di un thread}
+% ══════════════════════════════════════════════════════════════
+
+\begin{itemize}
+    \item \textbf{return} dalla funzione di partenza: il valore restituito è il valore di uscita del thread, ed è il modo
+          normale.
+    \item \textbf{\texttt{pthread\_exit(valore)}}: la stessa cosa da qualunque punto, anche da una funzione chiamata dieci
+          livelli più in basso.
+    \item \textbf{Cancellato}: un altro thread ne ha chiesto la terminazione; il valore di uscita è allora
+          \texttt{PTHREAD\_CANCELED}.
+    \item \textbf{Non sono modi di finire un thread}: \texttt{exit}, \texttt{\_exit}, o un segnale la cui azione è
+          terminare: quelli chiudono l'intero processo.
+\end{itemize}
+In qualunque modo finisca, il valore lasciato deve \textbf{sopravvivere al thread}: il suo stack non lo fa.
+
+\subsection{pthread\_join}
+
+\begin{lstlisting}[language={[POSIX]C}]
+int pthread_join(pthread_t tid, void **retval);
+
+void *status;
+pthread_join(tid, &status);      /* blocca finche' quel thread termina */
+pthread_join(tid, NULL);         /* il valore di uscita non ci interessa */
+\end{lstlisting}
+
+\begin{itemize}
+    \item Aspetta \textbf{un thread con un nome}: non esiste \texttt{pthread\_join(-1)}, un «chiunque finisca per primo»
+          come con \texttt{wait}.
+    \item Se quel thread è già terminato ritorna subito, esattamente come aspettare un figlio già zombie.
+    \item Ed è l'analogia da tenere: un thread terminato e non aspettato occupa ancora le sue risorse.
+\end{itemize}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il valore deve sopravvivere al thread}]
+static void *local(void *arg) {
+    struct pair p = { 1, 2 };            /* sullo stack di questo thread */
+    return &p;                           /* che fra un attimo non c'e' piu' */
+}
+static void *heap(void *arg) {
+    struct pair *p = malloc(sizeof *p);
+    p->a = 5; p->b = 6;
+    return p;                            /* chi fa la join lo legge, poi lo libera */
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash]
+thread 1: a=1 b=2
+master  : a=1075156600 b=1077281896      <- lo stack nel frattempo riusato
+thread 3: a=5 b=6
+master  : a=5 b=6
+\end{lstlisting}
+
+Una globale o lo heap; mai lo stack. Il compilatore non lo impedisce, e la prima esecuzione spesso stampa i numeri giusti.
+
+\subsection{Thread detached}
+
+Un thread che nessuno aspetterà mai dovrebbe dirlo, e allora rilascia tutto nel momento in cui termina.
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers]
+pthread_detach(tid);                     /* da un altro thread, oppure... */
+pthread_detach(pthread_self());          /* ...dal thread stesso, per prima cosa */
+
+pthread_attr_t attr;                     /* oppure deciso alla creazione */
+pthread_attr_init(&attr);
+pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+pthread_create(&tid, &attr, worker, j);
+pthread_attr_destroy(&attr);
+\end{lstlisting}
+
+\begin{itemize}
+    \item Per default i thread sono \emph{joinable}: un server che se ne dimentica perde, per ogni client servito, la
+          contabilità di un thread.
+    \item \emph{Detached} è in pratica irreversibile: da lì in poi \texttt{pthread\_join} su quel thread è un errore, e il suo
+          valore di uscita è perso.
+\end{itemize}
+
+% ══════════════════════════════════════════════════════════════
+\section{Un thread per connessione}
+% ══════════════════════════════════════════════════════════════
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={Il ciclo di accept, in sintesi}]
+for (;;) {
+    int *fd = malloc(sizeof *fd);          /* uno per connessione, liberato dal thread */
+    *fd = accept(listen_fd, NULL, NULL);
+    if (*fd < 0) { perror("accept"); free(fd); continue; }
+
+    pthread_t tid;
+    int err = pthread_create(&tid, NULL, worker, fd);
+    if (err != 0) {                        /* finiti i thread: si rifiuta questo client */
+        fprintf(stderr, "pthread_create: %s\n", strerror(err));
+        close(*fd); free(fd); continue;
+    }
+    pthread_detach(tid);                   /* nessuno la aspettera' mai */
+}
+\end{lstlisting}
+
+Si noti che cosa manca: \textbf{nessuna \texttt{close}} nel thread che accetta. Il descriptor è uno solo, non due, quindi
+chi lo chiude chiude la connessione.
+
+\begin{lstlisting}[language=bash, title={I thread visti da fuori}]
+$ gcc -pthread -o chatd chatd.c
+$ ./chatd 5000 &
+$ ps -o pid,lwp,nlwp,stat,comm -L -p $(pgrep chatd)
+  PID   LWP NLWP STAT COMMAND
+ 5310  5310    4 Sl   chatd       <- il thread principale, in accept
+ 5310  5311    4 Sl   chatd
+ 5310  5312    4 Sl   chatd       <- uno per client connesso
+ 5310  5313    4 Sl   chatd
+\end{lstlisting}
+
+Un pid, quattro LWP (\emph{lightweight process}): il kernel li schedula uno per uno, e \texttt{top -H} li mostra consumare
+CPU separatamente. \texttt{kill} invece si rivolge ancora al processo, perché un segnale si manda a un pid.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{>{\ttfamily}l >{\ttfamily}l l}
+\toprule
+\normalfont\textbf{Processi} & \normalfont\textbf{Thread} & \textbf{E la differenza} \\
+\midrule
+fork    & pthread\_create & il figlio riparte da qui, il thread parte in una funzione \\
+exit    & pthread\_exit   & \texttt{exit} in un thread termina il processo \\
+waitpid & pthread\_join   & niente «uno qualsiasi»: si nomina il thread \\
+kill    & pthread\_kill   & la disposizione è una per processo \\
+getpid  & pthread\_self   & l'id è opaco, solo confrontabile \\
+\normalfont zombie & \normalfont un thread mai aspettato & stessa perdita, stessa cura \\
+\bottomrule
+\end{tabular}
+\caption{Processi e thread, fianco a fianco. I nomi si corrispondono, ed è una buona mappa, salvo che i processi sono isolati
+         e i thread no.}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════
+\section{Il prezzo della condivisione}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Il contatore che perde gli incrementi}
+
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={bump.c}]
+static int count = 0;                    /* una variabile, tutti i thread */
+
+static void *bump(void *arg) {
+    for (int i = 0; i < 100000; i++)
+        count++;
+    return NULL;
+}
+/* main: ne crea otto, li aspetta tutti e otto, stampa count */
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash]
+$ ./bump ; ./bump ; ./bump
+count = 431027      <- atteso 800000
+count = 800000      <- a volte giusto: ancora peggio
+count = 512663
+\end{lstlisting}
+
+Nessun thread sbaglia e nessuna riga di C è sbagliata. E non è una questione di due core: su un core solo gli stessi
+incrementi si perdono, perché un thread può essere interrotto \textbf{nel mezzo} di un incremento.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{l l c}
+\toprule
+\textbf{Thread A} & \textbf{Thread B} & \texttt{count} \\
+\midrule
+load $\rightarrow$ 7 &                      & 7 \\
+                     & load $\rightarrow$ 7 & 7 \\
+add, store 8         &                      & 8 \\
+                     & add, store 8         & 8 \\
+\bottomrule
+\end{tabular}
+\caption{\texttt{count++} è un carattere solo ma tre operazioni macchina: load, add, store. Due incrementi, uno perso.}
+\end{table}
+
+Ogni volta che due thread possono toccare la stessa variabile e almeno uno la scrive, il risultato dipende dai tempi: è
+una \key{race condition}, e serve un modo per vietare quella sovrapposizione. È l'argomento del prossimo capitolo.
+
+\subsection{Non tutte le funzioni possono essere chiamate da due thread}
+
+Le nostre globali non sono l'unico stato condiviso: alcune funzioni di libreria tengono il proprio, in un buffer statico
+che non si vede.
+\begin{itemize}
+    \item \texttt{strtok} ricorda dove si era fermata: due thread che analizzano due righe si calpestano la posizione.
+    \item \texttt{gethostbyname}, \texttt{ctime}, \texttt{inet\_ntoa} restituiscono un puntatore a \textbf{un solo} buffer,
+          sovrascritto dal chiamante successivo.
+    \item Alcune hanno un gemello \textbf{rientrante} che prende il buffer da noi: \texttt{strtok\_r}, \texttt{rand\_r}. Si
+          preferiscono loro, e si preferisce \texttt{getaddrinfo}, progettata così fin dall'inizio.
+    \item \texttt{errno} non è fra queste: è per thread, quindi il fallimento di un altro non compare mai nel nostro.
+\end{itemize}
+La pagina del manuale dice \emph{MT-Safe} oppure no, e vale la pena guardarla prima di mettere una funzione dentro un worker.
+
+\subsection{Thread e segnali}
+
+\begin{itemize}
+    \item La \textbf{disposizione} è una per processo: una \texttt{sigaction}, e vale per tutti i thread. Non esiste un
+          handler per thread.
+    \item La \textbf{maschera} è una per thread: ciascuno decide che cosa bloccare, con \texttt{pthread\_sigmask}.
+    \item Un segnale inviato al processo viene consegnato a \textbf{un} thread qualsiasi che non lo blocchi, e non si può
+          sapere quale.
+    \item \texttt{pthread\_kill(tid, sig)} nomina un thread; ma se la disposizione è terminare, muore comunque tutto il
+          processo.
+\end{itemize}
+Per questo un server con i thread di solito blocca i segnali ovunque e lascia che sia un thread solo ad aspettarli; e
+ignora \texttt{SIGPIPE} con \texttt{signal(SIGPIPE, SIG\_IGN)}, così la scrittura su una connessione chiusa restituisce
+\texttt{EPIPE} invece di uccidere il server.
+
+\warning{Un thread chiama fork}{
+    Uno di otto thread chiama \texttt{fork}: quanti thread ha il figlio? \textbf{Uno}, quello che l'ha chiamata. Gli altri
+    sette non esistono lì, ma tutto quello che avevano fatto alla memoria sì.
+    \begin{itemize}
+        \item Quello che avevano in mano resta com'era: una struttura aggiornata a metà resta a metà, e un lock resta chiuso
+              per sempre, perché il suo proprietario non c'è a rilasciarlo.
+        \item Il figlio di un processo con più thread può quindi fare solo le cose sicure: in pratica, una \texttt{exec},
+              subito.
+        \item \texttt{exec} non ne risente: sostituisce il programma, e il nuovo parte con il solo thread che l'ha chiamata.
+    \end{itemize}
+}
+
+\subsection{Cancellare un thread, e perché un server lo fa di rado}
+
+\begin{lstlisting}[language={[POSIX]C}]
+pthread_cancel(tid);              /* chiede la terminazione; non aspetta */
+pthread_join(tid, &status);       /* status == PTHREAD_CANCELED */
+\end{lstlisting}
+
+\begin{itemize}
+    \item Per default la cancellazione è \emph{differita}: ha effetto a un \textbf{punto di cancellazione} (\texttt{read},
+          \texttt{write}, \texttt{accept}, \texttt{sleep}), quindi un thread occupato a calcolare non se ne accorge per un
+          po'.
+    \item Il thread si ferma dove si trova: il suo buffer, il suo descriptor e qualunque cosa avesse bloccato restano com'erano.
+    \item Per questo un server \textbf{chiede} invece di ordinare: un flag \texttt{volatile sig\_atomic\_t} controllato dai
+          worker fra una richiesta e l'altra, oppure semplicemente chiude il descriptor e lascia che la loro \texttt{read}
+          ritorni.
+\end{itemize}
+
+\subsection{Quanto costa un thread, e quanti se ne possono avere}
+
+\begin{itemize}
+    \item Crearne uno costa all'incirca \textbf{un ordine di grandezza meno} di una \texttt{fork}: nessuno spazio di
+          indirizzamento da duplicare, nessuna tabella delle pagine da copiare.
+    \item Passare fra due thread dello stesso processo non cambia lo spazio di indirizzamento, quindi le cache e il TLB
+          sopravvivono.
+    \item Ma ogni thread riserva uno stack: su Linux 8 MB di spazio di indirizzamento per default, e se ne può chiedere
+          meno alla creazione.
+    \item E ognuno è un oggetto del kernel con il suo stack del kernel: migliaia sono normali, centinaia di migliaia no.
+\end{itemize}
+Un thread per client va bene per una chat con un'aula collegata, non per diecimila connessioni: lì subentrano un
+\textbf{insieme fisso di worker} e un thread che osserva \textbf{molte connessioni insieme}.
+
+% ══════════════════════════════════════════════════════════════
+\section{Esercizi}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Contatori e thread}
+Scrivere due programmi brevi.
+\begin{enumerate}[label=(\alph*)]
+    \item Prendere $n$ dalla riga di comando, creare $n$ thread che dormono ciascuno un numero casuale di secondi, poi
+          incrementano un contatore globale e lo stampano; aspettarli tutti.
+    \item Lo stesso, senza \texttt{sleep}, con ogni thread che incrementa 100\,000 volte.
+\end{enumerate}
+Eseguire ciascuno venti volte e contare le risposte. Ci sono race condition nel primo programma? E perché il secondo le
+mostra mentre il primo le nasconde?
+
+\svolgimento
+\begin{lstlisting}[language={[POSIX]C}, style=wnumbers, title={threads.c: la versione (a)}]
+static int counter = 0;
+
+static void *work(void *arg) {
+    unsigned seed = (unsigned) (uintptr_t) arg;   /* un seme diverso per thread */
+    sleep(rand_r(&seed) % 3 + 1);
+    counter++;                                    /* la stessa race del capitolo */
+    printf("counter = %d\n", counter);
+    return NULL;
+}
+
+int main(int argc, char *argv[]) {
+    int n = atoi(argv[1]);
+    pthread_t *t = malloc(n * sizeof *t);
+    for (int i = 0; i < n; i++)
+        pthread_create(&t[i], NULL, work, (void *) (uintptr_t) (i + 1));
+    for (int i = 0; i < n; i++)
+        pthread_join(t[i], NULL);
+    free(t);
+    return 0;
+}
+\end{lstlisting}
+La versione (b) toglie la \texttt{sleep} e mette \texttt{counter++} in un ciclo di 100\,000 iterazioni, stampando
+solo alla fine in \texttt{main}. Si usa \texttt{rand\_r} e non \texttt{rand}, che tiene il proprio stato in una globale.
+
+Sì, la race c'è \textbf{anche} nel primo: \texttt{counter++} non è indivisibile, e due thread che si svegliano insieme
+possono perdere un incremento. Ma i thread si svegliano a secondi di distanza, e ognuno esegue un solo incremento, che
+dura nanosecondi: la probabilità che due di essi si sovrappongano proprio in quelle tre istruzioni è minima, quindi il
+risultato è quasi sempre giusto. Nel secondo otto thread eseguono centinaia di migliaia di incrementi negli stessi
+millisecondi, e le sovrapposizioni diventano inevitabili. La race non dipende da quanto spesso si vede: un programma
+che «funziona sempre» nei test può averla.
+\end{esercizio}
+
+\Needspace{20\baselineskip}
+% ══════════════════════════════════════════════════════════════
+\section{Riepilogo}
+% ══════════════════════════════════════════════════════════════
+
+\riepilogo{
+\begin{itemize}
+    \item Un thread possiede il proprio stack, i propri registri e la propria maschera dei segnali; tutto il resto (globali,
+          heap, descriptor) appartiene al processo.
+    \item Quindi i thread condividono lo stato \textbf{leggendo una variabile}, che è proprio ciò che un server di chat con i
+          processi non poteva fare.
+    \item \texttt{pthread\_create} prende una funzione e un argomento, e quell'argomento deve appartenere al thread a cui viene
+          dato.
+    \item Le chiamate \texttt{pthread} restituiscono un codice d'errore, non $-1$; e un thread terminato va aspettato con
+          \texttt{join} o reso \emph{detached}, altrimenti perde risorse.
+    \item \texttt{exit} e il ritorno di \texttt{main} terminano tutti i thread; solo \texttt{pthread\_exit} e
+          \texttt{return} ne terminano uno.
+    \item E il prezzo della condivisione è \texttt{count++}: codice corretto, risultato sbagliato, ogni volta che due thread
+          scrivono la stessa cosa.
+\end{itemize}
+}

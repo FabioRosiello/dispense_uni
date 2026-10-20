@@ -15,6 +15,13 @@
 \section{Dal trasporto alla rete}
 % ══════════════════════════════════════════════════════════════
 
+Per tre capitoli i mittenti hanno reagito a qualcosa che non potevano vedere: un timeout, tre conferme duplicate, una
+finestra che si chiude, tutto in risposta a una perdita. E la perdita stessa era una curva, il ritardo di accodamento che
+sale quando l'intensità di traffico si avvicina a uno, e poi pacchetti scartati. Nessuno ha mai aperto il nodo dove questo
+succede: ora lo apriamo. Sotto il trasporto non ci sono più processi; questo livello sposta datagrammi da host a host, e
+un suo pezzo gira in ogni router del percorso. Le domande sono due: come fa un datagramma che arriva da un collegamento a
+uscire da quello giusto, e chi decide quale pacchetto parte per primo.
+
 Il compito del livello di rete è permettere a host remoti di comunicare:
 
 \begin{itemize}
@@ -24,8 +31,11 @@ Il compito del livello di rete è permettere a host remoti di comunicare:
           consegnarli al livello di trasporto.
 \end{itemize}
 
+Fra i due non vale niente di ciò che abbiamo studiato finora: nessuna connessione, nessuna conferma, nessuna finestra.
 A questo livello lavorano alcuni dei protocolli più importanti delle reti (IP, DHCP, NAT, ICMP, i protocolli di
-routing) e dispositivi speciali: i \textbf{router}.
+routing) e i dispositivi che fanno di una rete una rete: i \textbf{router}. Il trasporto gira solo ai bordi; questo
+livello gira \textbf{ovunque}, nei due host e in ogni router in mezzo, ed è per questo l'unico punto in cui tutta Internet
+deve essere d'accordo.
 
 \begin{figure}[H]
 \centering
@@ -101,8 +111,12 @@ In realtà, \textbf{nessuno} di questi servizi è offerto in generale dalle reti
     né che arrivi, né che arrivi in ordine, né ritardi massimi, né banda minima.
 }
 
-Nonostante la sua semplicità, il modello best effort, insieme a una buona disponibilità di banda, si è
-dimostrato \textbf{adeguato}: Netflix, le videochiamate, le conferenze in tempo reale funzionano tutte così.
+Suona come un eufemismo per «nessun servizio»: una rete che non consegnasse niente soddisferebbe la definizione. Altre
+architetture facevano di più: \textbf{ATM} garantiva consegna in ordine, ritardo limitato e banda minima, e Internet non
+le ha seguite. Nonostante la sua semplicità, il modello best effort, insieme a una buona disponibilità di banda e ad
+applicazioni che si adattano, si è dimostrato \textbf{adeguato}: Netflix, le videochiamate, le conferenze in tempo reale
+funzionano tutte così. E tutto ciò che di affidabile abbiamo scritto finora è costruito sopra di esso, dai due estremi,
+partendo da niente.
 
 % ══════════════════════════════════════════════════════════════
 \section{I router nella rete}
@@ -194,9 +208,11 @@ Una distinzione importante è quella tra:
     \end{itemize}
 }
 
-Nel data plane c'è la \textbf{forwarding table} (tabella di inoltro): una tabella che associa gli indirizzi di
-destinazione ai collegamenti di uscita. Il router inoltra un pacchetto esaminando uno o più campi del suo
-header; il valore trovato nella tabella indica l'interfaccia su cui inoltrarlo.
+Due funzioni su scale di tempo distanti un miliardo di volte: è per questo che hanno nomi separati. Fra le due sta una
+sola struttura dati, la \textbf{forwarding table} (tabella di inoltro): il control plane la scrive, il data plane la legge
+una volta per pacchetto. Associa gli indirizzi di destinazione ai collegamenti di uscita: il router inoltra un pacchetto
+esaminando uno o più campi del suo header, e il valore trovato nella tabella indica l'interfaccia su cui inoltrarlo.
+Conseguenza: un router inoltra \textbf{senza conoscere il percorso}; sa solo quale dei suoi collegamenti viene dopo.
 
 \warning{La tabella non contiene i singoli indirizzi}{
     Una forwarding table \textbf{non} elenca gli indirizzi dei singoli host (sarebbero miliardi): associa alle porte
@@ -247,7 +263,8 @@ determinato raccogliendo informazioni da router diversi. Lo si fa con una o più
 \info{Software-Defined Networking}{
     L'approccio centralizzato è alla base del \textbf{Software-Defined Networking} (SDN): la rete è ``definita dal
     software'' perché il controller che calcola le tabelle e dialoga con i router è un software centralizzato,
-    talvolta anche open source.
+    talvolta anche open source. Si noti che cosa non cambia: il data plane delle due figure è identico, cambia solo
+    l'autore della tabella.
 }
 
 % ══════════════════════════════════════════════════════════════
@@ -279,19 +296,33 @@ determinato raccogliendo informazioni da router diversi. Lo si fa con una o più
 \end{figure}
 
 \begin{itemize}
-    \item \textbf{Porte di ingresso} (da non confondere con le porte del trasporto): sono le interfacce fisiche
-          collegate ai collegamenti in ingresso. Il loro compito è:
+    \item \textbf{Porte di ingresso} (da non confondere con le porte del trasporto, i numeri a 16 bit: queste sono
+          interfacce fisiche) collegate ai collegamenti in ingresso. Il loro compito è:
     \begin{itemize}
+      \item terminare il collegamento fisico e fare il lavoro di livello di collegamento necessario a parlare con l'altro
+            capo;
       \item consultare la forwarding table (\emph{lookup}) e preparare la switching fabric verso la porta di uscita scelta;
-      \item inoltrare al processore di routing i pacchetti di controllo (per esempio quelli con le informazioni di routing).
+      \item inoltrare al processore di routing i pacchetti di controllo (per esempio quelli con le informazioni di routing);
+      \item controllare versione, checksum e \emph{time-to-live} del datagramma, riscrivere gli ultimi due, e aggiornare i
+            contatori di gestione.
     \end{itemize}
-    Il numero di porte va da decine a centinaia (l'edge router Juniper MX2020 supporta fino a 960 porte Ethernet da 10 Gb/s).
+    Il numero di porte va da decine a centinaia: il Juniper MX2020 arriva a 800 porte da 100 Gb/s in un solo chassis.
+    È la scala a distinguere un router di casa da uno di dorsale, non la funzione.
     \item \textbf{Switching fabric} (matrice di commutazione): collega le porte di ingresso a quelle di uscita.
     \item \textbf{Porte di uscita}: conservano i pacchetti ricevuti dalla switching fabric e li trasmettono sul
           collegamento in uscita. Le porte possono essere bidirezionali (ingresso e uscita accoppiati).
     \item \textbf{Processore di routing}: esegue i protocolli di routing, mantiene informazioni sullo stato dei
           collegamenti e calcola e aggiorna la forwarding table.
 \end{itemize}
+
+\info{Perché il lookup non può essere software}{
+    Un collegamento in ingresso da 100 Gb/s e un datagramma da 64 byte: la porta ha \textbf{5,12 ns} prima che possa
+    arrivare il successivo. Le schede di linea portano più porte insieme, e allora tutta la catena deve girare $N$ volte
+    più in fretta. Nessun software ci si avvicina: porte di ingresso, porte di uscita e fabric sono hardware, progettato dal
+    costruttore o comprato come silicio. Il processore di routing sta all'altro capo della scala, su millisecondi e secondi,
+    e può essere una normale CPU con normale codice. È la forma di tutto il livello: la parte veloce è stupida e ripetitiva,
+    quella intelligente è lenta e rara.
+}
 
 % ══════════════════════════════════════════════════════════════
 \section{Il forwarding e la longest prefix matching}
@@ -314,6 +345,18 @@ Quando un pacchetto arriva su una porta di ingresso si esegue un \textbf{lookup}
 \textbf{copia} della forwarding table, ricevuta dal processore di routing su un bus dedicato (per esempio PCI), per
 evitare il collo di bottiglia di interrogare il processore per ogni pacchetto. Più indirizzi possono essere
 associati alla stessa porta.
+
+\warning{Una riga per indirizzo è fuori discussione}{
+    Che cosa c'è di sbagliato nell'elencare semplicemente gli indirizzi? Una riga per ogni destinazione possibile sono
+    $2^{32}$ righe, più di quattro miliardi, in ogni router, da cercare in nanosecondi; e andrebbero riscritte ogni volta
+    che un host compare o sparisce da qualche parte. Quindi una riga non nomina un indirizzo: nomina un \textbf{gruppo di
+    indirizzi che condividono i primi bit}, una subnet.
+}
+
+Ogni riga fissa i primi bit e lascia liberi gli altri: la parte fissa nomina il gruppo, quella libera un host al suo
+interno. La prima riga della tabella seguente fissa 21 bit; gli 11 liberi danno $2^{11} = 2048$ indirizzi, da tutti zeri
+a tutti uni. Una riga è quindi un \textbf{intervallo}, e quattro righe sostituiscono quattro miliardi. L'ultima,
+\emph{altrimenti}, è il \textbf{default}: ciò che non corrisponde a niente deve comunque uscire da qualche parte.
 
 \begin{table}[H]
 \centering
@@ -364,15 +407,38 @@ Con la tabella precedente:
 \end{itemize}
 \end{esempio}
 
-\info{Perché è utile}{
-    La regola del prefisso più lungo permette di assegnare un \textbf{sotto-spazio} di un blocco di indirizzi a una porta
-    di uscita diversa, \textbf{senza ambiguità}: la riga più generica copre il blocco, quella più specifica ``ritaglia''
-    un'eccezione. Lo useremo con l'aggregazione degli indirizzi.
+Il confronto avviene solo sui bit del prefisso e si ferma dove il prefisso finisce; i bit che avanzano dicono quale host
+dentro il gruppo, e al router non servono. È il senso di tutta l'organizzazione: un router in un altro continente ha bisogno
+di conoscere il gruppo, mai la macchina.
+
+\begin{esempio}{Ritagliare un blocco da un blocco}
+Due righe di una forwarding table:
+\begin{center}
+\begin{tabular}{l l c}
+\toprule
+\textbf{Prefisso} & \textbf{Lunghezza} & \textbf{Porta} \\
+\midrule
+\texttt{11001000 00010111 00011000} \texttt{********} & 24 bit & 1 (verso l'Europa) \\
+\texttt{11001000 00010111 00011000 01}\texttt{******} & 26 bit & 2 (verso le Americhe) \\
+\bottomrule
+\end{tabular}
+\end{center}
+Arriva un pacchetto per \texttt{11001000 00010111 00011000 01001101}: corrisponde a entrambe, e la corrispondenza a 26 bit
+è la più lunga, quindi vince la porta 2. Le due righe descrivono lo stesso blocco da 24 bit; la seconda ne prende un
+quarto (due bit in più) e lo manda altrove. Senza la regola le due righe si contraddirebbero; con la regola dicono
+«tutto questo blocco di là, \textbf{tranne} questo pezzo». È così che si sposta un cliente senza rinumerare nessuno.
+\end{esempio}
+
+\info{Il lookup in nanosecondi}{
+    Come problema è semplice: trovare la riga corrispondente più lunga. A velocità di gigabit va risolto in nanosecondi,
+    quindi non solo in hardware, ma con qualcosa di meglio di una scansione lineare. Il vincolo che plasma il progetto è il
+    tempo di accesso alla memoria: DRAM integrata nel chip, SRAM più veloce come cache davanti. Oppure la \textbf{TCAM}
+    (\emph{ternary content-addressable memory}): si presentano i 32 bit alla memoria e restituisce la riga in tempo
+    praticamente costante; i dispositivi grandi ne contengono dell'ordine di un milione.
 }
 
-Il lookup è di solito eseguito \textbf{in hardware}, per essere il più veloce possibile (nanosecondi per le
-trasmissioni a gigabit), con memorie dedicate e algoritmi di ricerca avanzati. Determinata la porta di uscita, il
-pacchetto entra nella switching fabric; se altre porte stanno usando la fabric, può dover attendere in coda.
+Determinata la porta di uscita, il pacchetto entra nella switching fabric; se altre porte stanno usando la fabric, può
+dover attendere in coda.
 
 \subsection{Match-plus-action}
 
@@ -384,6 +450,8 @@ chiama \textbf{match-plus-action} ed è eseguita in molti dispositivi di rete:
     \item \textbf{firewall}: l'azione è filtrare, cioè bloccare, certi pacchetti in arrivo;
     \item \textbf{NAT} (\emph{Network Address Translator}): l'azione è riscrivere indirizzo e porta di certi pacchetti prima di inoltrarli.
 \end{itemize}
+Tre dispositivi che il corso incontra separatamente, a fare una sola cosa in tre costumi: vale la pena riconoscerli quando
+compaiono.
 
 % ══════════════════════════════════════════════════════════════
 \section{La switching fabric}
@@ -420,15 +488,24 @@ chiama \textbf{match-plus-action} ed è eseguita in molti dispositivi di rete:
 \end{figure}
 
 \begin{enumerate}
-    \item \textbf{Commutazione tramite memoria}: le porte sono trattate come dispositivi di I/O che scrivono i pacchetti in
-          memoria; il processore di routing li copia sulla porta di uscita indicata dalla tabella. È un po' lenta (serve
-          accedere alla memoria) ed era comune nei primi router, che erano normali computer.
+    \item \textbf{Commutazione tramite memoria}: le porte sono trattate come dispositivi di I/O; un pacchetto in arrivo
+          interrompe il processore, viene copiato in memoria, cercato nella tabella e copiato nel buffer della porta di
+          uscita. Il pacchetto attraversa la memoria \textbf{due volte}: se la memoria regge $B$ pacchetti al secondo, il
+          router ne inoltra meno di $B/2$. E due pacchetti non possono essere inoltrati insieme nemmeno verso porte diverse,
+          perché sul bus condiviso passa una lettura o una scrittura alla volta. Era il modo dei primi router, che erano
+          normali computer; i router moderni a memoria condivisa fanno lookup e scrittura sulla scheda di linea, non in una
+          CPU centrale.
     \item \textbf{Commutazione tramite bus}: la porta di ingresso trasferisce il pacchetto direttamente alla porta di uscita
-          su un bus condiviso, senza intervento del processore. Si serve una porta alla volta, ma spesso basta per router di
-          reti locali piccole.
-    \item \textbf{Commutazione tramite rete di interconnessione} (\emph{crossbar}): le porte sono collegate da una rete con
-          punti di incrocio che possono essere aperti o chiusi per dirigere i pacchetti. Più pacchetti possono essere
-          inoltrati \textbf{in parallelo}: è il metodo di molti router moderni.
+          su un bus condiviso, senza intervento del processore. Gli antepone un'etichetta interna che nomina la porta di
+          uscita: tutte le porte vedono il pacchetto, solo quella nominata lo tiene, e toglie l'etichetta. Un pacchetto alla
+          volta sul bus: la velocità di commutazione del router è quella del bus. Spesso basta (un noto router aziendale di
+          questo tipo commuta su un bus da 32 Gb/s): semplice, economico, e con un tetto rigido.
+    \item \textbf{Commutazione tramite rete di interconnessione} (\emph{crossbar}): $2N$ bus collegano $N$ ingressi a $N$
+          uscite, con un punto di incrocio a ogni intersezione che si apre e si chiude. Per portare un pacchetto da A a Y il
+          controllore chiude l'incrocio AY, e solo il bus Y lo raccoglie; così A$\to$Y e B$\to$X avvengono
+          \textbf{insieme}, cosa che le altre due non possono fare. È \textbf{non bloccante}: un pacchetto non viene mai
+          fermato sulla strada verso una porta di uscita che nessun altro sta usando. Ma due pacchetti per la stessa porta
+          si contendono ancora, e uno aspetta in ingresso.
 \end{enumerate}
 
 % ══════════════════════════════════════════════════════════════
@@ -454,10 +531,58 @@ porta di uscita. Detta $R_{switch}$ la velocità della switching fabric:
 \end{itemize}
 \end{esempio}
 
+Letti insieme, i tre casi dicono che nessuna scelta di fabric elimina l'accodamento: decide solo \textbf{dove} avviene.
+
 \warning{Head-of-the-line blocking}{
-    Quando si accodano pacchetti in ingresso può capitare che un pacchetto resti bloccato perché quello \textbf{davanti
-    a lui} nella stessa coda aspetta una porta di uscita occupata, anche se la sua porta di uscita sarebbe libera. È il
-    \emph{blocco in testa alla coda} (HOL blocking), uno dei motivi per cui le code in ingresso vanno evitate.
+    La fabric è non bloccante. Perché allora un pacchetto si ferma? Perché una coda di ingresso è servita \textbf{in
+    ordine}: il pacchetto in testa aspetta una porta di uscita occupata, e tutto ciò che sta dietro aspetta con lui,
+    compreso un pacchetto la cui porta sarebbe libera. È il \emph{blocco in testa alla coda} (HOL blocking): da solo fa
+    crescere la coda di ingresso senza limite già quando il ritmo di arrivo raggiunge circa il \textbf{58\%} della capacità
+    della linea. È uno dei motivi per cui le code in ingresso vanno evitate.
+}
+
+\subsection{Quando non c'è più posto}
+
+\begin{itemize}
+    \item Anche con una fabric $N$ volte più veloce delle linee, $N$ pacchetti possono raggiungere una porta di uscita nel
+          tempo che serve a inviarne uno: le code in uscita si formano comunque.
+    \item Quando la memoria è finita le scelte sono due: scartare il pacchetto che arriva (\textbf{drop-tail}), o fare
+          posto togliendo pacchetti già in coda. Un pacchetto lascia la coda solo quando è stato trasmesso per intero: fino ad
+          allora occupa il suo buffer.
+    \item Può anche convenire scartare, o \textbf{marcare}, prima che il buffer sia pieno, come avvertimento al mittente: sono
+          le politiche di \key{gestione attiva della coda} (AQM), di cui la più nota è \textbf{RED}. E marcare invece di
+          scartare è proprio ciò a cui servivano i due bit ECN nell'header: è questa la macchina che li accende.
+\end{itemize}
+
+\subsection{Quanto buffer basta}
+
+\begin{itemize}
+    \item La regola pratica per anni: buffer $=$ RTT medio $\times$ capacità del collegamento. Un collegamento da 10 Gb/s con
+          250 ms vuole 2,5 Gbit di buffer.
+    \item Quella cifra viene dall'analisi di pochi flussi TCP. Con $N$ flussi numerosi e indipendenti il requisito scende a
+          $\text{RTT} \cdot C / \sqrt{N}$: nel nucleo, dove migliaia di flussi condividono un collegamento, è una riduzione
+          enorme.
+    \item E di più non è meglio: un buffer più grande assorbe raffiche più grandi e allunga il ritardo di accodamento di tutto
+          ciò che contiene. Dieci volte il buffer per evitare perdite può significare dieci volte il ritardo da un capo
+          all'altro, e un'andata e ritorno più lunga rende ogni mittente su quel percorso più lento a reagire.
+\end{itemize}
+
+\begin{esempio}{La coda che non si svuota mai}
+Un router di casa impiega 20 ms a inviare un pacchetto, l'andata e ritorno è di 200 ms, e a $t = 0$ una raffica di 25
+pacchetti arriva in coda; c'è un solo flusso, nessun altro traffico.
+\begin{itemize}
+    \item A $t = 200$ ms arriva la prima conferma, proprio mentre parte il ventunesimo pacchetto, e libera un nuovo pacchetto
+          nella coda.
+    \item A $t = 220$ ms arriva la successiva, e un altro pacchetto entra in coda: uno dentro per ognuno fuori, finché dura il
+          trasferimento.
+    \item La coda si assesta a cinque pacchetti e ci resta. Il tubo è pieno, il throughput è esattamente giusto, e il ritardo è
+          costante, grande, e causato soltanto dal buffer: $5 \times 20 = 100$ ms in più a ogni andata e ritorno.
+\end{itemize}
+\end{esempio}
+
+\dfn{Bufferbloat}{
+    Il \textbf{bufferbloat} è il ritardo permanente causato da buffer troppo grandi che restano pieni. Nessuno si comporta
+    male: il mittente fa ciò per cui è stato progettato, e a essere sbagliato è il buffer.
 }
 
 % ══════════════════════════════════════════════════════════════
@@ -512,6 +637,9 @@ pacchetti in coda al collegamento di uscita va quindi \textbf{schedulato}. I tre
 \caption{Tre politiche di schedulazione della coda di uscita.}
 \end{figure}
 
+In ogni caso un pacchetto viene tolto solo quando è stato trasmesso per intero: la scelta si fa alla fine di ogni
+trasmissione, non di continuo.
+
 \subsection{FIFO (First-Come-First-Served)}
 
 \begin{itemize}
@@ -519,7 +647,9 @@ pacchetti in coda al collegamento di uscita va quindi \textbf{schedulato}. I tre
     \item Se non c'è spazio sufficiente, serve una politica di scarto: la più comune è scartare il pacchetto appena arrivato
           (\textbf{drop-tail}); in approcci più sofisticati si possono rimuovere anche pacchetti già in coda per fare posto ai nuovi.
     \item Un pacchetto viene tolto dalla coda solo quando è stato \textbf{completamente trasmesso}.
-    \item I pacchetti vengono trasmessi nello stesso ordine in cui sono arrivati.
+    \item I pacchetti vengono trasmessi nello stesso ordine in cui sono arrivati: nessun pacchetto può essere favorito, e
+          nessuno ritardato a vantaggio di un altro. È il default proprio per questo: non c'è niente da configurare e niente
+          da sbagliare.
 \end{itemize}
 
 \subsection{Priority queuing}
@@ -530,17 +660,61 @@ pacchetti in coda al collegamento di uscita va quindi \textbf{schedulato}. I tre
           tempo reale, \dots) abbiano priorità sul traffico degli utenti o non in tempo reale.
     \item Ogni classe ha la propria coda: si trasmettono per primi i pacchetti della classe \textbf{più prioritaria non vuota};
           dentro una stessa classe si procede in FIFO.
+    \item È \textbf{non preemptive}: una trasmissione già cominciata non viene mai interrotta, e un pacchetto ad alta
+          priorità che arriva a metà aspetta comunque che finisca.
 \end{itemize}
 
 \subsection{Round-robin queuing}
 
 \begin{itemize}
     \item I pacchetti sono ancora divisi in classi, ma le classi vengono \textbf{alternate} invece che scelte per priorità.
+    \item È \textbf{work-conserving}: non lascia mai il collegamento inattivo, e una classe con la coda vuota viene saltata
+          subito.
     \item Un'implementazione comune è il \textbf{Weighted Fair Queuing} (WFQ): i pacchetti vengono classificati e accodati
-          nella propria area di attesa, e a ogni classe è associato un \textbf{peso} che determina con quale frequenza viene
-          servita rispetto alle altre.
+          nella propria area di attesa, e a ogni classe $i$ è associato un \textbf{peso} $w_i$. Una classe con pacchetti da
+          inviare riceve una quota $w_i / \sum_j w_j$ del servizio, quindi su un collegamento di rate $R$ ha garantito almeno
+          \[ R \cdot \frac{w_i}{\sum_j w_j} \]
+          qualunque cosa facciano le altre; la priorità stretta, invece, alla classe bassa non garantisce niente.
 \end{itemize}
 
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.62cm, every node/.style={font=\scriptsize\sffamily},
+    pk/.style={draw=black!60, minimum height=0.45cm, minimum width=1.24cm, anchor=west, font=\scriptsize\bfseries\sffamily},
+    hi/.style={pk, fill=netblue!25}, lo/.style={pk, fill=netorange!30}]
+  \node[anchor=east] at (-0.4,0) {arrivi};
+  \foreach \t/\n in {0/1, 0.5/2, 1/3, 1.5/4, 10/5} {
+    \draw[-{Stealth[length=1.5mm]}, thick] (\t,0.45) -- (\t,0.05);
+    \node[above] at (\t,0.45) {\n};
+  }
+  \node[anchor=east, align=right] at (-0.4,-0.9) {FIFO};
+  \foreach \t/\n in {0/1, 2/2, 4/3, 6/4, 10/5} \node[pk, fill=black!8] at (\t,-0.9) {\n};
+  \node[anchor=east, align=right] at (-0.4,-1.8) {priorità\\\tiny alta 1 3 4, bassa 2 5};
+  \node[hi] at (0,-1.8) {1}; \node[hi] at (2,-1.8) {3}; \node[hi] at (4,-1.8) {4}; \node[lo] at (6,-1.8) {2}; \node[lo] at (10,-1.8) {5};
+  \node[anchor=east, align=right] at (-0.4,-2.7) {round robin\\\tiny classe 1: 1 2 4, classe 2: 3 5};
+  \node[hi] at (0,-2.7) {1}; \node[lo] at (2,-2.7) {3}; \node[hi] at (4,-2.7) {2}; \node[hi] at (6,-2.7) {4}; \node[lo] at (10,-2.7) {5};
+  \foreach \r in {-0.9,-1.8,-2.7} \node[text=black!50] at (9,\r) {inattivo};
+  \draw[-{Stealth[length=2mm]}] (0,-3.3) -- (13,-3.3) node[right]{tempo};
+  \foreach \t in {0,2,...,12} { \draw (\t,-3.25) -- (\t,-3.35); \node[below] at (\t,-3.35) {\t}; }
+\end{tikzpicture}
+\caption{Stessi arrivi, tre ordini di partenza (ogni trasmissione dura 2 unità). Con la priorità 3 e 4 superano 2, che era
+         arrivato prima di entrambi e parte ultimo dei quattro. Con il round robin 3 parte presto perché alla sua classe
+         spettava un turno, mentre 4 non supera 2, che è della stessa classe. Il collegamento resta inattivo prima del 5 in
+         tutti e tre: uno scheduler decide un ordine, non crea mai capacità.}
+\end{figure}
+
+\info{Chi decide che cos'è una classe}{
+    Il meccanismo è neutro. Che cosa conta come classe lo decide chi gestisce la rete, su qualsiasi campo dell'header: una
+    porta ben nota (la gestione prima della posta), o un indirizzo sorgente (il traffico di un'azienda che ha pagato prima
+    di quello di una che non l'ha fatto). Lo stesso match-plus-action può anche bloccare il traffico di una certa azienda,
+    o di un certo paese. I limiti qui sono quindi \textbf{legali} più che tecnici, e cambiano da paese a paese: è il tema
+    della \key{neutralità della rete}. Le regole statunitensi del 2015 vietavano blocco, rallentamento e priorità a
+    pagamento, e nel 2017 sono state sostituite da obblighi di trasparenza; nell'Unione Europea il regolamento 2015/2120
+    vieta blocchi e rallentamenti discriminatori. La questione torna, dal lato del denaro, quando ci si chiede perché due
+    reti accettino di trasportare l'una il traffico dell'altra.
+}
+
+\Needspace{20\baselineskip}
 % ══════════════════════════════════════════════════════════════
 \section{Riepilogo}
 % ══════════════════════════════════════════════════════════════
@@ -552,6 +726,10 @@ pacchetti in coda al collegamento di uscita va quindi \textbf{schedulato}. I tre
           plane, software, secondi); il control plane può essere distribuito o centralizzato (SDN).
     \item Un router ha porte di ingresso, switching fabric (memoria, bus, crossbar), porte di uscita e processore di routing.
     \item La forwarding table associa \textbf{prefissi} a interfacce; vince il \textbf{prefisso più lungo}.
-    \item Le code possono formarsi in ingresso e in uscita; la schedulazione può essere FIFO, a priorità o round-robin (WFQ).
+    \item Le code si formano dovunque un rate incontra un rate più lento, in ingresso, in uscita o in entrambi: è lì che
+          nasce la perdita che i mittenti deducono. Buffer troppo grandi non la eliminano, la trasformano in ritardo
+          (bufferbloat).
+    \item La schedulazione può essere FIFO, a priorità (non preemptive) o round-robin (WFQ, con una quota garantita per
+          classe). Resta da vedere da dove vengono gli indirizzi dentro quei prefissi.
 \end{itemize}
 }
