@@ -1,655 +1,757 @@
-\chapter{Esercizi sul livello di rete}
+\chapter{Esercitazione E4: collegamento, fisico, sicurezza e anonimato}
+\titolobreve{Esercitazione E4}
 
-% Stili per i grafi di questo capitolo
-\tikzset{
-  enode/.style={circle, draw=netblue!80!black, thick, fill=cloudbg, minimum size=0.75cm, font=\small\bfseries\sffamily},
-  eedge/.style={thick, black!70},
-  ecost/.style={font=\scriptsize\sffamily, fill=white, inner sep=1pt},
-}
-\newcommand{\grafoesercizio}[1]{%
-  \node[enode] (u) at (0,0) {u};
-  \node[enode] (v) at (1.8,1.4) {v};
-  \node[enode] (w) at (4.2,1.4) {w};
-  \node[enode] (x) at (1.8,-1.4) {x};
-  \node[enode] (y) at (4.2,-1.4) {y};
-  \node[enode] (z) at (6,0) {z};
-  \draw[eedge] (u) -- node[ecost] {2} (v);
-  \draw[eedge] (u) -- node[ecost] {1} (x);
-  \draw[eedge] (u) -- node[ecost, pos=0.35] {5} (w);
-  \draw[eedge] (v) -- node[ecost] {3} (w);
-  \draw[eedge] (v) -- node[ecost] {2} (x);
-  \draw[eedge] (x) -- node[ecost, pos=0.35] {3} (w);
-  \draw[eedge] (x) -- node[ecost] {1} (y);
-  \draw[eedge] (w) -- node[ecost] {1} (y);
-  \draw[eedge] (w) -- node[ecost] {5} (z);
-  \draw[eedge] (y) -- node[ecost] {2} (z);
-  #1
+L'ultimo pacchetto: livello di collegamento e fisico, sicurezza e anonimato, e alla fine l'intera pila insieme, osservata sulla chat che
+avete scritto. L'esercizio $n$ di questo capitolo è l'\textbf{E4.$n$} delle slide. Quasi tutti sono su carta; tre chiedono di catturare
+sulla propria macchina, gli ultimi due di eseguire la propria chat. Dove un esercizio dà un codice, una chiave o una tabella, dà tutto ciò
+che serve.
+
+\info{Strumenti}{
+    Wireshark sull'interfaccia che si usa davvero (il loopback non mostra né Ethernet né ARP né DHCP), e da terminale \texttt{ip},
+    \texttt{ping}, \texttt{curl}, \texttt{nmcli}, \texttt{resolvectl}: \texttt{sudo apt install iproute2 iputils-ping curl}. I comandi con
+    \texttt{sudo} cambiano lo stato della macchina: si eseguono dove si è autorizzati. Gli E4.29 ed E4.30 richiedono due macchine sulla
+    stessa LAN (una macchina virtuale in modalità bridge conta come seconda macchina).
 }
 
 % ══════════════════════════════════════════════════════════════
-\section{Subnet mask e appartenenza alle subnet}
+\section{Framing ed errori}
 % ══════════════════════════════════════════════════════════════
 
-\begin{esercizio}{Maschere valide e non valide}
-Quali delle seguenti sono subnet mask valide? Per quelle valide indicare la lunghezza del prefisso.
-\begin{center}
-\texttt{255.255.255.192} \quad \texttt{255.255.254.0} \quad \texttt{255.255.0.255} \quad \texttt{255.128.255.0} \quad
-\texttt{255.255.255.252} \quad \texttt{255.254.0.0}
-\end{center}
-\end{esercizio}
-
-\svolgimento
-Una maschera identifica un \textbf{prefisso}: tutti gli 1 devono essere \textbf{contigui e a sinistra}, seguiti solo da 0.
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{lll}
-\toprule
-\textbf{Maschera} & \textbf{Binario} & \textbf{Verdetto} \\
-\midrule
-255.255.255.192 & \texttt{11111111 11111111 11111111 11000000} & valida, /26 \\
-255.255.254.0 & \texttt{11111111 11111111 11111110 00000000} & valida, /23 \\
-255.255.0.255 & \texttt{11111111 11111111 \textcolor{netred}{00000000 11111111}} & \textbf{non valida}: 1 dopo gli 0 \\
-255.128.255.0 & \texttt{11111111 1\textcolor{netred}{0000000 11111111} 00000000} & \textbf{non valida}: 0 in mezzo agli 1 \\
-255.255.255.252 & \texttt{11111111 11111111 11111111 11111100} & valida, /30 \\
-255.254.0.0 & \texttt{11111111 11111110 00000000 00000000} & valida, /15 \\
-\bottomrule
-\end{tabular}
-\caption{Verifica delle maschere.}
-\end{table}
-
-\info{Il trucco veloce}{
-    In una maschera valida il byte ``di transizione'' può valere solo $256 - 2^k$, cioè
-    \texttt{0, 128, 192, 224, 240, 248, 252, 254, 255}; tutti i byte prima devono essere 255 e tutti quelli dopo 0.
-}
-
-\begin{esercizio}{Stessa subnet o no?}
-Per ciascuna coppia dire se i due indirizzi appartengono alla stessa subnet.
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{clll}
-\toprule
-& \textbf{Indirizzo 1} & \textbf{Indirizzo 2} & \textbf{Maschera} \\
-\midrule
-(a) & 192.168.10.130 & 192.168.10.100 & 255.255.255.128 \\
-(b) & 172.20.33.5 & 172.20.40.9 & 255.255.240.0 \\
-(c) & 10.1.1.1 & 10.2.1.1 & 255.255.0.0 \quad e poi 255.0.0.0 \\
-(d) & 200.100.50.77 & 200.100.50.94 & 255.255.255.224 \\
-(e) & 200.100.50.95 & 200.100.50.97 & 255.255.255.224 \\
-\bottomrule
-\end{tabular}
-\end{table}
-\end{esercizio}
-
-\svolgimento
-Si fa l'AND bit a bit di ciascun indirizzo con la maschera e si confrontano i risultati; basta guardare il byte in cui la
-maschera ``finisce''.
+\begin{esercizio}{Byte stuffing}
+I frame sono delimitati da un byte FLAG, ed ESC protegge un FLAG o un ESC nel payload, come nel corso.
 \begin{enumerate}[label=(\alph*)]
-    \item /25: conta il primo bit dell'ultimo byte. $130 = \texttt{\textcolor{netred}{1}0000010}$, $100 = \texttt{\textcolor{netblue}{0}1100100}$:
-          \textbf{subnet diverse} (192.168.10.128/25 e 192.168.10.0/25).
-    \item /20: contano i primi 4 bit del terzo byte. $33 = \texttt{\textcolor{netblue}{0010}0001}$, $40 = \texttt{\textcolor{netblue}{0010}1000}$:
-          \textbf{stessa subnet} (172.20.32.0/20).
-    \item Con /16 i secondi byte sono diversi (1 e 2): \textbf{subnet diverse}. Con /8 conta solo il primo byte (10): \textbf{stessa subnet}.
-          La stessa coppia di indirizzi può stare o no nella stessa subnet: dipende dalla maschera.
-    \item /27: contano i primi 3 bit dell'ultimo byte. $77 = \texttt{\textcolor{netblue}{010}01101}$, $94 = \texttt{\textcolor{netblue}{010}11110}$:
-          \textbf{stessa subnet} (200.100.50.64/27).
-    \item $95 = \texttt{\textcolor{netblue}{010}11111}$, $97 = \texttt{\textcolor{netred}{011}00001}$: \textbf{subnet diverse}. Sono numericamente
-          vicinissimi, ma 95 è il broadcast di .64/27 e 97 è un host di .96/27.
+    \item Applicare lo stuffing al payload \texttt{A FLAG B ESC C ESC FLAG D}.
+    \item Tra due flag il ricevente trova \texttt{A ESC ESC B ESC FLAG C ESC ESC ESC FLAG D}. Che payload consegna?
+    \item Un errore su un bit trasforma uno degli ESC di (b) in un FLAG. Che cosa perde il ricevente, e da dove ricomincia?
 \end{enumerate}
 
-\begin{esercizio}{Rete, broadcast e host}
-Per ciascun indirizzo calcolare indirizzo di rete, indirizzo di broadcast, numero di host utilizzabili e intervallo degli host:
-(a) \texttt{172.16.45.14/20}; (b) \texttt{200.100.50.77/27}; (c) \texttt{10.0.0.1/30}.
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item \texttt{FLAG A ESC FLAG B ESC ESC C ESC ESC ESC FLAG D FLAG}.
+    \item \texttt{A ESC B FLAG C ESC FLAG D}: si toglie il primo ESC di ogni coppia e si prende alla lettera il byte che segue.
+    \item Il FLAG spurio chiude il frame a metà: il pezzo prima e il pezzo dopo (letto come un frame nuovo, fino al FLAG vero) falliscono
+          entrambi il CRC e vengono scartati. Si perde questo frame, e il ricevente si risincronizza al FLAG che lo chiudeva: il frame
+          successivo arriva intatto.
+\end{enumerate}
 \end{esercizio}
 
-\svolgimento
-Rete: bit di host tutti a 0; broadcast: bit di host tutti a 1; host utilizzabili: $2^{32-n} - 2$.
+\begin{esercizio}{Bit stuffing}
+Il flag è \texttt{01111110}.
 \begin{enumerate}[label=(\alph*)]
-    \item /20: restano 12 bit di host, 4 dei quali nel terzo byte. $45 = \texttt{0010\,1101}$:
-          \begin{itemize}
-            \item rete: \texttt{0010\,0000} $= 32$ $\Rightarrow$ \textbf{172.16.32.0};
-            \item broadcast: \texttt{0010\,1111}.\texttt{11111111} $\Rightarrow$ \textbf{172.16.47.255};
-            \item host: $2^{12} - 2 = 4094$, da 172.16.32.1 a 172.16.47.254.
-          \end{itemize}
-    \item /27: 5 bit di host nell'ultimo byte. $77 = \texttt{010\,01101}$: rete \texttt{010\,00000} $= 64$, broadcast
-          \texttt{010\,11111} $= 95$. Rete \textbf{200.100.50.64}, broadcast \textbf{200.100.50.95}, $2^5 - 2 = 30$ host
-          (da .65 a .94).
-    \item /30: 2 bit di host. Rete \textbf{10.0.0.0}, broadcast \textbf{10.0.0.3}, $2^2 - 2 = 2$ host (.1 e .2). È la dimensione
-          tipica di un collegamento \textbf{punto-punto tra due router}: servono esattamente due indirizzi.
+    \item Applicare lo stuffing ai dati \texttt{0111111011111100111110}.
+    \item Il ricevente riceve \texttt{0111111010111110101111101111001111110}. Trovare il frame e fare il destuffing del payload.
+    \item Perché basta uno 0 dopo cinque 1 a mantenere il flag unico?
+    \item Che cosa deve concludere il ricevente se vede sette 1 di seguito?
 \end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item \texttt{011111\textcolor{netred}{0}1011111\textcolor{netred}{0}10011111\textcolor{netred}{0}0}.
+    \item Il flag sta ai bit 0--7 e 29--36; il payload è \texttt{101111101011111011110}. Togliendo gli 0 che seguono cinque 1 (due) resta
+          \texttt{1011111101111111110}.
+    \item Dopo lo stuffing nei dati non possono mai comparire sei 1 di seguito, e il flag ne contiene sei: la sequenza è riservata ai
+          delimitatori.
+    \item Che c'è un errore: sette 1 non possono essere né dati né flag. Il frame si scarta (in HDLC è la sequenza di \emph{abort}).
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Parità bidimensionale}
+L'informazione in un pacchetto è \texttt{1110 0110 1001 0101}, con parità pari. Dare i bit di parità di uno schema bidimensionale, con un
+campo di controllo il più corto possibile.
+
+\svolgimento
+Con 16 bit la disposizione $4 \times 4$ minimizza $i + j + 1$ (9 bit, contro gli 11 di una $2 \times 8$). Righe \texttt{1110},
+\texttt{0110}, \texttt{1001}, \texttt{0101}: parità di riga \texttt{1 0 0 0}; parità di colonna \texttt{0 1 0 0}; bit d'angolo 1.
+\end{esercizio}
+
+\begin{esercizio}{CRC}
+Il generatore è $G = \texttt{10011}$.
+\begin{enumerate}[label=(\alph*)]
+    \item Per $D = \texttt{1010101010}$ trovare i bit CRC $R$. Scrivere $G(x)$ e $D(x)$ come polinomi, e verificare che $M(x) = x^r D(x) -
+          R(x)$ sia divisibile per $G(x)$.
+    \item Trovare $R$ per $D = \texttt{1000100101}$, \texttt{0101101010} e \texttt{0110100011}.
+    \item Con $G = \texttt{1001}$, ogni errore su un singolo bit dà un resto non nullo? Ogni numero dispari di errori? Perché?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item $G(x) = x^4 + x + 1$, $D(x) = x^9 + x^7 + x^5 + x^3 + x$. Dividendo \texttt{10101010100000} per \texttt{10011} il resto è
+          $R = \texttt{0100}$, cioè $R(x) = x^2$. Si trasmette \texttt{1010101010\,0100}, e dividendolo di nuovo per $G$ il resto è 0: è
+          $M(x) = x^4 D(x) + R(x)$, divisibile per costruzione.
+    \item \texttt{1000}, \texttt{1111}, \texttt{1110}.
+    \item $G(x) = x^3 + 1 = (x + 1)(x^2 + x + 1)$. Ha due termini, quindi non divide mai un $E(x) = x^i$: ogni errore singolo dà resto non
+          nullo. Ha il fattore $x + 1$, quindi rileva ogni numero dispari di errori ($E(1) = 1$ per un numero dispari di termini, mentre ogni
+          multiplo di $x + 1$ vale 0 in 1).
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Distanza di Hamming}
+\begin{enumerate}[label=(\alph*)]
+    \item Un codice ha quattro parole: \texttt{0000000000}, \texttt{0000011111}, \texttt{1111100000}, \texttt{1111111111}. Qual è la sua
+          distanza di Hamming? Quanti errori rileva sempre, e quanti ne corregge? Si riceve \texttt{0100011101}: quale parola è stata
+          inviata, assumendo il minor numero di errori?
+    \item Rispondere alle stesse domande per il codice \texttt{00000}, \texttt{01011}, \texttt{10101}, \texttt{11110}, e decodificare
+          \texttt{11011}, \texttt{11101} e \texttt{01110}.
+    \item Un codice deve correggere ogni errore singolo e rilevare ogni errore doppio. Qual è la minima distanza di Hamming che può avere?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Distanza 5: rileva 4 errori, ne corregge 2. \texttt{0100011101} è a distanza 2 da \texttt{0000011111} e almeno 5 dalle altre:
+          è stata inviata \texttt{0000011111}.
+    \item Le distanze tra le parole sono 3, 3, 4, 4, 3, 3: distanza 3, rileva 2 errori e ne corregge 1. \texttt{11011} $\rightarrow$
+          \texttt{01011} (distanza 1), \texttt{11101} $\rightarrow$ \texttt{10101}, \texttt{01110} $\rightarrow$ \texttt{11110}.
+    \item Per correggere $t$ errori e rilevarne $s > t$ serve $d \geq t + s + 1$: con $t = 1$ e $s = 2$, distanza \textbf{4} (le parole
+          ricevute con due errori restano a metà strada, e non vengono ``corrette'' verso la parola sbagliata).
+\end{enumerate}
+\end{esercizio}
 
 % ══════════════════════════════════════════════════════════════
-\section{CIDR e longest prefix matching}
+\section{Accesso multiplo}
 % ══════════════════════════════════════════════════════════════
 
-\begin{esercizio}{Una tavola di routing CIDR (prova d'esame)}
-Un router che implementa CIDR ha la tavola seguente.
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-\textbf{Subnet} & \textbf{Next hop} \\
-\midrule
-147.142.168.0/21 & L1 \\
-147.142.172.0/23 & L2 \\
-default & R0 \\
-\bottomrule
-\end{tabular}
-\end{center}
-Arrivano due pacchetti con destinazione 147.142.203.165 e 147.142.173.85. Descrivere come sono gestiti e inoltrati.
-(In binario: $147 = \texttt{10010011}$, $142 = \texttt{10001110}$, $168 = \texttt{10101000}$, $172 = \texttt{10101100}$,
-$173 = \texttt{10101101}$, $203 = \texttt{11001011}$, $165 = \texttt{10100101}$, $85 = \texttt{01010101}$.)
-\end{esercizio}
-
-\svolgimento
-I primi due byte (147.142) coincidono ovunque: tutto si decide sul terzo byte.
-
-\begin{lstlisting}[autogobble=false]
-L1  147.142.168.0/21   10010011 10001110 10101|000 00000000    21 bit di prefisso
-L2  147.142.172.0/23   10010011 10001110 1010110|0 00000000    23 bit di prefisso
-
-P1  147.142.203.165    10010011 10001110 11001011 10100101
-                                          ^ gia' il secondo bit del terzo byte differisce
-P2  147.142.173.85     10010011 10001110 10101101 01010101
-                                         10101    = L1  (21 bit uguali)
-                                         1010110  = L2  (23 bit uguali)
-\end{lstlisting}
-
-\begin{itemize}
-    \item \textbf{147.142.203.165}: il terzo byte \texttt{11001011} differisce da quello di L1 (\texttt{10101000}) già al secondo bit,
-          quindi non c'è corrispondenza con L1 e, a maggior ragione, con L2 (prefisso più lungo). Il pacchetto va al next hop
-          di \textbf{default}, \textbf{R0}.
-    \item \textbf{147.142.173.85}: i primi 21 bit coincidono con L1 \emph{e} i primi 23 con L2. Ci sono due corrispondenze: per la
-          \textbf{longest prefix matching} vince quella più specifica, e il pacchetto va su \textbf{L2}.
-\end{itemize}
-
-\begin{esercizio}{Perché i router lavorano con le subnet}
-Spiegare perché i grandi router, per esempio quelli degli ISP, usano CIDR e ragionano su intere subnet (come
-\texttt{189.103.176.0/20}) invece che su singoli indirizzi IP.
-\end{esercizio}
-
-\svolgimento
-\begin{enumerate}
-    \item \textbf{Dimensione delle tabelle.} Gli indirizzi IPv4 sono $2^{32} \approx 4$ miliardi: una riga per indirizzo sarebbe
-          impossibile da memorizzare. Aggregando, un ISP annuncia un solo prefisso al posto di centinaia di reti: le tabelle dei
-          router di backbone contengono qualche centinaio di migliaia di prefissi.
-    \item \textbf{Velocità.} Il forwarding avviene in hardware in nanosecondi; cercare in una tabella piccola con strutture
-          specializzate (trie, TCAM) è enormemente più rapido.
-    \item \textbf{Flessibilità senza ambiguità.} Con la longest prefix matching i blocchi possono sovrapporsi: un sottoblocco
-          (per esempio di un'organizzazione che cambia ISP) si instrada diversamente aggiungendo una sola riga più specifica, senza
-          rinumerare nulla.
-\end{enumerate}
-
-\begin{esercizio}{Lookup con prefissi annidati}
-Un router ha la tabella di inoltro seguente.
-\begin{center}
-\begin{tabular}{lc}
-\toprule
-\textbf{Prefisso} & \textbf{Interfaccia} \\
-\midrule
-10.20.0.0/16 & 0 \\
-10.20.128.0/17 & 1 \\
-10.20.192.0/18 & 2 \\
-10.20.200.0/21 & 3 \\
-default & 4 \\
-\bottomrule
-\end{tabular}
-\end{center}
+\begin{esercizio}{Quanto può rendere ALOHA}
+$N$ nodi attivi condividono un canale slotted ALOHA; in ogni slot ciascuno trasmette con probabilità $p$. L'efficienza, la frazione di slot
+che portano esattamente un frame, è $Np(1-p)^{N-1}$.
 \begin{enumerate}[label=(\alph*)]
-    \item Quali intervalli di indirizzi copre ciascuna riga?
-    \item Su quale interfaccia vengono inoltrati 10.20.5.1, 10.20.130.7, 10.20.201.33, 10.20.210.1 e 10.21.0.1?
+    \item Trovare la $p$ che la massimizza per un dato $N$.
+    \item Con quella $p$, trovare l'efficienza per $N \to \infty$. Suggerimento: $(1 - 1/N)^N \to 1/e$.
+    \item In ALOHA puro l'esponente diventa $2(N-1)$. Spiegare perché, e mostrare che l'efficienza massima è allora $1/(2e)$.
+    \item Nel corso gli stessi risultati venivano da $S = Ge^{-2G}$ e $S = Ge^{-G}$. A che cosa corrisponde $G$ in questo modello?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item La derivata $N(1-p)^{N-2}\bigl[(1-p) - (N-1)p\bigr]$ si annulla per $p^* = 1/N$.
+    \item $N \cdot \frac{1}{N}(1 - \frac{1}{N})^{N-1} = (1 - \frac{1}{N})^{N} / (1 - \frac{1}{N}) \to 1/e \approx 0{,}37$.
+    \item In ALOHA puro un frame collide con chiunque inizi nel tempo di frame precedente o durante il suo: ogni altro nodo deve tacere per
+          \textbf{due} intervalli, da cui $(1-p)^{2(N-1)}$. Massimizzando si trova $p^* = 1/(2N-1)$, e per $N \to \infty$ l'efficienza tende a
+          $\frac{1}{2}\, e^{-1} = 1/(2e) \approx 0{,}18$.
+    \item $G = Np$: il numero medio di tentativi di trasmissione per slot.
 \end{enumerate}
 \end{esercizio}
 
+\begin{esercizio}{Binary exponential backoff}
+In CSMA/CD, dopo la $n$-esima collisione sullo stesso frame un nodo sceglie $K$ a caso tra $0, 1, \dots, 2^n - 1$ e aspetta $K$ volte 512
+tempi di bit.
+\begin{enumerate}[label=(\alph*)]
+    \item Dopo la quinta collisione, qual è la probabilità che un nodo scelga $K = 4$? Quanto aspetta allora su Ethernet a 10 Mb/s?
+    \item Per $K = 100$, quanto aspetta a 100 Mb/s? E a 1 Gb/s, mantenendo i 512 tempi di bit?
+\end{enumerate}
+
 \svolgimento
-\textbf{(a)} Tutto si gioca sul terzo byte (i primi due devono essere 10.20):
+(a) $K \in \{0, \dots, 31\}$: probabilità $1/32$. Aspetta $4 \cdot 512 = 2048$ tempi di bit, cioè $204{,}8\ \mu$s a 10 Mb/s. (b) $51\,200$
+tempi di bit: $512\ \mu$s a 100 Mb/s, $51{,}2\ \mu$s a 1 Gb/s.
+\end{esercizio}
+
+\begin{esercizio}{La collisione che passa inosservata}
+A e B condividono un canale da 10 Mb/s con CSMA/CD; il ritardo di propagazione tra loro è di 325 tempi di bit. A comincia un frame, e B ne
+comincia uno prima che A abbia finito. Un frame è almeno di 512 bit più 64 di preambolo, quindi nel caso peggiore A smette di trasmettere a
+576 tempi di bit.
+\begin{enumerate}[label=(\alph*)]
+    \item Nel caso peggiore, quando arriva ad A il segnale di B? A può finire prima di rilevare B?
+    \item Esprimere $\tau$ e $2\tau$ in tempi di bit, e dire che cosa significa la risposta per la lunghezza minima del frame.
+\end{enumerate}
+
+\svolgimento
+(a) Nel caso peggiore B comincia a $t = 324$, un attimo prima che il primo bit di A lo raggiunga; il primo bit di B arriva ad A a $324 + 325
+= 649$. Poiché $649 > 576$, A finisce prima di rilevare B, e crede che il frame sia passato senza collisione. (b) $\tau = 325$, $2\tau =
+650$ tempi di bit. Il frame minimo (576) è più corto di $2\tau$: questa rete è troppo lunga per quel minimo. Serve un frame di almeno 650
+bit, o una rete più corta.
+\end{esercizio}
+
+\begin{esercizio}{Nascosti ed esposti}
+Cinque stazioni radio stanno su una linea: A a 0 m, B a 80 m, C a 160 m, D a 240 m, E a 320 m. Ognuna raggiunge le stazioni entro 100 m, e
+non oltre.
+\begin{enumerate}[label=(\alph*)]
+    \item A trasmette a B mentre anche C trasmette a B. Che cosa succede in B? Ascoltare il canale prima di trasmettere l'avrebbe evitato?
+    \item B sta trasmettendo ad A, e C vuole trasmettere a D. Che cosa fa fare a C il carrier sense? Era necessario?
+    \item Ora A trasmette a B con RTS/CTS. Chi sente l'RTS, chi sente il CTS, e chi deve tacere mentre passano i dati? C può trasmettere a D
+          nel frattempo? D può trasmettere a E?
+\end{enumerate}
+
+\svolgimento
+Ognuno sente solo i vicini a 80 m: A--B, B--C, C--D, D--E.
+\begin{enumerate}[label=(\alph*)]
+    \item I due frame collidono in B. Il carrier sense non l'avrebbe evitato: A e C distano 160 m e non si sentono (terminale nascosto).
+    \item C sente B e rimanda (terminale esposto). Non era necessario: la trasmissione di C raggiunge B e D, non A, e A riceverebbe B senza
+          disturbo.
+    \item L'RTS di A lo sente solo B. Il CTS di B lo sentono A e C: C deve tacere per tutta la durata dei dati, quindi \textbf{non} può
+          trasmettere a D (disturberebbe la ricezione in B). D non ha sentito né RTS né CTS e \textbf{può} trasmettere a E: il suo segnale
+          raggiunge C ed E, non B.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Divisione di codice, decodificata}
+Quattro stazioni hanno queste sequenze di chip; una stazione invia la propria sequenza per un 1, la sua negazione per uno 0, niente se
+tace. Il ricevente fa il prodotto scalare con la sequenza di una stazione e lo divide per 8.
 \begin{center}
 \small
-\begin{tabular}{llll}
+\begin{tabular}{l*{8}{r}}
 \toprule
-\textbf{Prefisso} & \textbf{Bit fissati del terzo byte} & \textbf{Intervallo} & \textbf{Interfaccia} \\
-\midrule
-/16 & nessuno & 10.20.0.0 -- 10.20.255.255 & 0 \\
-/17 & \texttt{1xxxxxxx} & 10.20.128.0 -- 10.20.255.255 & 1 \\
-/18 & \texttt{11xxxxxx} & 10.20.192.0 -- 10.20.255.255 & 2 \\
-/21 & \texttt{11001xxx} & 10.20.200.0 -- 10.20.207.255 & 3 \\
+A & $-1$ & $-1$ & $-1$ & $+1$ & $+1$ & $-1$ & $+1$ & $+1$ \\
+B & $-1$ & $-1$ & $+1$ & $-1$ & $+1$ & $+1$ & $+1$ & $-1$ \\
+C & $-1$ & $+1$ & $-1$ & $+1$ & $+1$ & $+1$ & $-1$ & $-1$ \\
+D & $-1$ & $+1$ & $-1$ & $-1$ & $-1$ & $-1$ & $+1$ & $-1$ \\
 \bottomrule
 \end{tabular}
 \end{center}
-I blocchi sono \textbf{annidati}: ognuno è contenuto nel precedente, e la regola del prefisso più lungo ``scava'' i sottoblocchi.
-
-\textbf{(b)}
-\begin{itemize}
-    \item \textbf{10.20.5.1}: $5 = \texttt{00000101}$, corrisponde solo al /16 $\Rightarrow$ \textbf{0}.
-    \item \textbf{10.20.130.7}: $130 = \texttt{10000010}$: /16 e /17 sì, /18 no (serve \texttt{11}) $\Rightarrow$ \textbf{1}.
-    \item \textbf{10.20.201.33}: $201 = \texttt{11001001}$: /16, /17, /18 e anche /21 (\texttt{11001}) $\Rightarrow$ il più lungo, \textbf{3}.
-    \item \textbf{10.20.210.1}: $210 = \texttt{11010010}$: /16, /17, /18 sì; /21 no (\texttt{11010} $\neq$ \texttt{11001}) $\Rightarrow$ \textbf{2}.
-    \item \textbf{10.21.0.1}: il secondo byte non è 20, nessun prefisso corrisponde $\Rightarrow$ default, \textbf{4}.
-\end{itemize}
-
-\begin{esercizio}{Aggregare le rotte}
-Un ISP serve quattro clienti con i blocchi 192.168.64.0/24, 192.168.65.0/24, 192.168.66.0/24 e 192.168.67.0/24.
 \begin{enumerate}[label=(\alph*)]
-    \item Qual è il prefisso aggregato che l'ISP può annunciare?
-    \item Il cliente 192.168.66.0/24 passa a un altro ISP portandosi il blocco. Che cosa annunciano i due ISP, e come fa un router
-          esterno a instradare correttamente?
+    \item Verificare che A e B sono ortogonali, e che A con sé stessa dà 1.
+    \item Il ricevente riceve $(-1, +1, -3, +1, -1, -3, +1, +1)$. Quali stazioni hanno trasmesso, e quale bit ha inviato ciascuna?
+    \item Che cosa arriva se C invia un 1 e D uno 0, e le altre tacciono?
 \end{enumerate}
-\end{esercizio}
-
-\svolgimento
-\textbf{(a)} I terzi byte sono $64 = \texttt{010000\,00}$, $65 = \texttt{010000\,01}$, $66 = \texttt{010000\,10}$,
-$67 = \texttt{010000\,11}$: i primi 6 bit sono comuni. Il prefisso comune è lungo $16 + 6 = 22$ bit: \textbf{192.168.64.0/22},
-che contiene esattamente i quattro blocchi.
-
-\textbf{(b)} Il primo ISP continua ad annunciare 192.168.64.0/22; il nuovo ISP annuncia \textbf{192.168.66.0/24}. Un indirizzo del
-cliente trasferito corrisponde a entrambi i prefissi, ma per la longest prefix matching vince il /24: i suoi pacchetti vanno al
-nuovo ISP, tutti gli altri del /22 al vecchio.
-
-% ══════════════════════════════════════════════════════════════
-\section{Progettare un piano di indirizzamento}
-% ══════════════════════════════════════════════════════════════
-
-\begin{esercizio}{Suddividere un blocco CIDR (VLSM)}
-A un'organizzazione è assegnato il blocco 192.168.0.0/22. Quattro reparti hanno bisogno di 250, 120, 60 e 25 host.
-\begin{enumerate}[label=(\alph*)]
-    \item Quanti indirizzi contiene il blocco?
-    \item Assegnare a ogni reparto una subnet di dimensione adeguata.
-    \item Quanti indirizzi restano liberi?
-\end{enumerate}
-\end{esercizio}
-
-\svolgimento
-\textbf{(a)} $32 - 22 = 10$ bit di host: $2^{10} = 1024$ indirizzi, da 192.168.0.0 a 192.168.3.255.
-
-\textbf{(b)} Si parte dal reparto \textbf{più grande} e si sceglie la più piccola potenza di 2 che, tolti 2 indirizzi (rete e
-broadcast), basta:
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{cclll}
-\toprule
-\textbf{Reparto} & \textbf{Host} & \textbf{Blocco} & \textbf{Subnet} & \textbf{Host utilizzabili} \\
-\midrule
-A & 250 & $2^8 = 256$ & 192.168.0.0/24 & .0.1 -- .0.254 \\
-B & 120 & $2^7 = 128$ & 192.168.1.0/25 & .1.1 -- .1.126 \\
-C & 60 & $2^6 = 64$ & 192.168.1.128/26 & .1.129 -- .1.190 \\
-D & 25 & $2^5 = 32$ & 192.168.1.192/27 & .1.193 -- .1.222 \\
-\bottomrule
-\end{tabular}
-\caption{Piano di indirizzamento a lunghezza variabile.}
-\end{table}
-
-Per A un /25 darebbe solo $128 - 2 = 126$ host: non basta, serve il /24 ($254$ host).
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[x=0.0142cm, every node/.style={font=\scriptsize\sffamily}]
-  \draw[fill=netblue!45] (0,0) rectangle (256,0.7) node[midway] {A /24};
-  \draw[fill=netgreen!45] (256,0) rectangle (384,0.7) node[midway] {B /25};
-  \draw[fill=netorange!50] (384,0) rectangle (448,0.7) node[midway] {C /26};
-  \draw[fill=netred!35] (448,0) rectangle (480,0.7) node[midway] {D};
-  \draw[fill=black!8] (480,0) rectangle (1024,0.7) node[midway] {libero: 544 indirizzi};
-  \foreach \p/\l in {0/.0.0, 256/.1.0, 384/.1.128, 480/.1.224} \node[below] at (\p,0) {\l};
-  \node[below left, inner xsep=0pt] at (1024,0) {.3.255};
-\end{tikzpicture}
-\caption{Occupazione del blocco /22.}
-\end{figure}
-
-\textbf{(c)} Usati $256 + 128 + 64 + 32 = 480$; liberi $1024 - 480 = 544$, da 192.168.1.224 a 192.168.3.255.
-
-\info{Perché si parte dal più grande}{
-    Una subnet di $2^k$ indirizzi deve iniziare a un multiplo di $2^k$. Assegnando per prime le subnet grandi si evita di
-    ``frammentare'' lo spazio con blocchi piccoli sparsi, che impedirebbero poi di trovare un intervallo allineato abbastanza grande.
-}
-
-% ══════════════════════════════════════════════════════════════
-\section{DHCP e NAT}
-% ══════════════════════════════════════════════════════════════
-
-\begin{esercizio}{I quattro messaggi del DHCP}
-Un portatile si collega a una LAN in cui il server DHCP ha indirizzo 192.168.1.1 e offre l'indirizzo 192.168.1.57. Per ciascuno
-dei quattro messaggi indicare indirizzi IP e porte UDP di sorgente e destinazione, e spiegare perché anche la \emph{request}
-viaggia in broadcast.
-\end{esercizio}
-
-\svolgimento
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{lllp{5.6cm}}
-\toprule
-\textbf{Messaggio} & \textbf{Sorgente} & \textbf{Destinazione} & \textbf{Contenuto} \\
-\midrule
-Discover & 0.0.0.0 : 68 & 255.255.255.255 : 67 & ``c'è un server DHCP?'', con un transaction ID \\
-Offer & 192.168.1.1 : 67 & 255.255.255.255 : 68 & \texttt{yiaddr} $=$ 192.168.1.57, maschera, durata del lease \\
-Request & 0.0.0.0 : 68 & 255.255.255.255 : 67 & ``accetto l'offerta di 192.168.1.1'' \\
-ACK & 192.168.1.1 : 67 & 255.255.255.255 : 68 & conferma: indirizzo, gateway, DNS, lease \\
-\bottomrule
-\end{tabular}
-\caption{Lo scambio DHCP.}
-\end{table}
-
-\begin{itemize}
-    \item Il client usa 0.0.0.0 come sorgente perché \textbf{non ha ancora un indirizzo}, e la destinazione broadcast perché non
-          sa chi sia il server.
-    \item La \emph{request} è in broadcast perché possono esserci \textbf{più server} che hanno fatto un'offerta: così tutti
-          sanno quale è stata accettata, e gli altri possono liberare l'indirizzo che avevano proposto.
-    \item Il client usa ancora 0.0.0.0 fino all'ACK: l'indirizzo è suo solo quando il server lo conferma.
-\end{itemize}
-
-\begin{esercizio}{Due host dietro lo stesso NAT}
-Un router NAT ha indirizzo WAN 138.76.29.7 e serve la LAN 10.0.0.0/24. Gli host 10.0.0.1 e 10.0.0.2 aprono entrambi, nello stesso
-momento, una connessione verso 128.119.40.186 porta 80, e \textbf{il caso vuole} che scelgano entrambi la porta sorgente 3345.
-\begin{enumerate}[label=(\alph*)]
-    \item Compilare la tabella di traduzione (il NAT assegna le porte a partire da 5001).
-    \item Scrivere sorgente e destinazione dei quattro pacchetti (andata e ritorno, lato LAN e lato WAN) per l'host 10.0.0.2.
-    \item Che cosa succede se il NAT non cambiasse la porta?
-    \item Che cosa succede a un pacchetto che arriva dall'esterno verso 138.76.29.7:6000?
-\end{enumerate}
-\end{esercizio}
-
-\svolgimento
-\textbf{(a)}
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-\textbf{Lato WAN} & \textbf{Lato LAN} \\
-\midrule
-138.76.29.7 : 5001 & 10.0.0.1 : 3345 \\
-138.76.29.7 : 5002 & 10.0.0.2 : 3345 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\textbf{(b)}
-\begin{lstlisting}[autogobble=false]
-(1) host -> NAT (LAN)       S = 10.0.0.2:3345      D = 128.119.40.186:80
-(2) NAT -> Internet (WAN)   S = 138.76.29.7:5002   D = 128.119.40.186:80     sorgente riscritta
-(3) Internet -> NAT (WAN)   S = 128.119.40.186:80  D = 138.76.29.7:5002
-(4) NAT -> host (LAN)       S = 128.119.40.186:80  D = 10.0.0.2:3345         destinazione riscritta
-\end{lstlisting}
-
-\textbf{(c)} Le due connessioni avrebbero lato WAN la stessa coppia 138.76.29.7:3345: le risposte del server sarebbero
-indistinguibili e il NAT non saprebbe a quale host consegnarle. Gli host non conoscono le porte scelte dagli altri, quindi è il
-NAT a garantire l'\textbf{unicità} lato WAN. Con 16 bit di porta può gestire oltre 60\,000 connessioni contemporanee.
-
-\textbf{(d)} Nella tabella non c'è nessuna riga con porta WAN 6000: il NAT non sa a quale host interno consegnarlo e lo
-\textbf{scarta}. Le connessioni iniziate dall'esterno richiedono meccanismi di \emph{NAT traversal}: port forwarding configurato a
-mano, UPnP, STUN/TURN, hole punching.
-
-% ══════════════════════════════════════════════════════════════
-\section{Frammentazione IP}
-% ══════════════════════════════════════════════════════════════
-
-\begin{esercizio}{Frammentare un datagramma}
-Un datagramma IP di $5000$ byte totali (20 di header, senza opzioni, e $4980$ di dati), con identificativo 777, deve
-attraversare un collegamento con MTU di 1500 byte.
-\begin{enumerate}[label=(\alph*)]
-    \item In quanti frammenti viene diviso? Per ciascuno indicare lunghezza totale, flag MF, offset e identificativo.
-    \item Ripetere con MTU di 576 byte.
-\end{enumerate}
-\end{esercizio}
-
-\svolgimento
-\textbf{(a)} Ogni frammento trasporta al più $1500 - 20 = 1480$ byte di dati. Poiché l'offset si esprime in \textbf{unità di 8
-byte}, i dati di ogni frammento tranne l'ultimo devono essere multipli di 8: $1480 / 8 = 185$, va bene.
-$\lceil 4980 / 1480 \rceil = 4$ frammenti.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{cccccc}
-\toprule
-\textbf{\#} & \textbf{Dati (byte)} & \textbf{Lunghezza totale} & \textbf{MF} & \textbf{Offset} & \textbf{ID} \\
-\midrule
-1 & 1480 & 1500 & 1 & 0 & 777 \\
-2 & 1480 & 1500 & 1 & $1480/8 = 185$ & 777 \\
-3 & 1480 & 1500 & 1 & $2960/8 = 370$ & 777 \\
-4 & 540 & 560 & 0 & $4440/8 = 555$ & 777 \\
-\bottomrule
-\end{tabular}
-\caption{Frammenti con MTU di 1500 byte ($1480 \cdot 3 + 540 = 4980$).}
-\end{table}
-
-\textbf{(b)} Con MTU 576 ci stanno $556$ byte di dati, ma 556 non è multiplo di 8: si arrotonda per difetto a $552$ ($= 69 \cdot 8$).
-$\lceil 4980 / 552 \rceil = 10$ frammenti: nove da 552 byte di dati (lunghezza totale 572, offset $0, 69, 138, \dots, 552$) e un
-ultimo da $4980 - 9 \cdot 552 = 12$ byte di dati (lunghezza totale 32, offset $4968/8 = 621$, MF $= 0$).
-
-\warning{Le tre regole della frammentazione}{
-    \begin{enumerate}
-      \item L'\textbf{identificativo} è copiato identico in tutti i frammenti.
-      \item L'\textbf{offset} è in unità di 8 byte: i dati di ogni frammento (tranne l'ultimo) devono essere multipli di 8.
-      \item Il flag \textbf{More Fragments} è 1 in tutti i frammenti tranne l'ultimo.
-    \end{enumerate}
-    Il riassemblaggio avviene solo nell'host di destinazione; se un frammento si perde, si perde l'intero datagramma.
-}
-
-% ══════════════════════════════════════════════════════════════
-\section{traceroute, ICMP e IP con Wireshark}
-% ══════════════════════════════════════════════════════════════
-
-\begin{esercizio}{Elementi di IPv4}
-Avviare la cattura e lanciare \texttt{traceroute} verso un server (per esempio \texttt{traceroute italia.it} oppure
-\texttt{traceroute 8.8.8.8}). Selezionare il primo segmento UDP inviato ed espandere la sezione \emph{Internet Protocol}.
-\begin{enumerate}
-    \item Qual è l'indirizzo IP del proprio host?
-    \item Quanto vale il TTL?
-    \item Qual è il protocollo di livello superiore?
-    \item Quanti byte ci sono nell'header IP?
-    \item Quanti byte ci sono nel payload del datagramma? Come si ricava?
-    \item Il datagramma è stato frammentato? Come si stabilisce?
-\end{enumerate}
-Poi, con il filtro \texttt{ip.src==<mio\_IP> \&\& ip.dst==<IP\_server> \&\& udp}:
-\begin{enumerate}\setcounter{enumi}{6}
-    \item Quali campi restano costanti tra i pacchetti inviati? Perché?
-    \item Che andamento ha il campo \emph{Identification}?
-\end{enumerate}
-Infine, con il filtro \texttt{ip.dst==<mio\_IP> \&\& icmp}:
-\begin{enumerate}\setcounter{enumi}{8}
-    \item Qual è il protocollo superiore nei datagrammi inviati dai router?
-    \item I valori di \emph{Identification} dei messaggi ICMP somigliano a quelli dei pacchetti UDP?
-    \item I TTL dei messaggi ICMP sono simili tra loro?
-\end{enumerate}
-\end{esercizio}
-
-\svolgimento
-\begin{enumerate}
-    \item Nel campo \emph{Source} (lo stesso mostrato da \texttt{ip addr}; da non confondere con 127.0.0.1, il loopback).
-    \item \textbf{1}: traceroute parte da TTL 1 per far scadere il pacchetto al primo router.
-    \item \textbf{UDP} (valore 17): traceroute usa datagrammi UDP come sonde.
-    \item \textbf{20 byte}: il campo \emph{Header Length} vale 5, in parole da 32 bit, cioè $5 \cdot 4 = 20$ byte (nessuna opzione).
-    \item $\text{payload} = \text{Total Length} - \text{Header Length}$. La dimensione di default dipende dalla versione di traceroute
-          (la prima riga dell'output la dichiara): con una sonda di 40 byte, come indicato nel testo dell'esercitazione, il payload è
-          $40 - 20 = 20$ byte (8 di header UDP e 12 di dati); con le versioni Linux recenti, che usano sonde di 60 byte, è
-          $60 - 20 = 40$ byte.
-    \item No: il flag \emph{More Fragments} è 0 \textbf{e} il \emph{Fragment Offset} è 0, cioè il datagramma è unico. (Spesso è
-          anche impostato \emph{Don't Fragment}.)
-    \item Restano costanti versione, lunghezza dell'header, indirizzi sorgente e destinazione, protocollo, lunghezza totale, flag
-          e offset: la sonda è sempre la stessa. Cambiano il \textbf{TTL} (cresce di 1 a ogni gruppo di sonde), l'\textbf{Identification},
-          la \textbf{porta di destinazione UDP} (cresce a ogni sonda) e di conseguenza il \textbf{checksum}.
-    \item Cresce di 1 a ogni datagramma: è il contatore che il sistema operativo usa per distinguere i datagrammi (e riassemblare
-          i frammenti).
-    \item \textbf{ICMP} (valore 1): i router rispondono con \emph{Time Exceeded} (type 11); la destinazione, alla fine, con
-          \emph{Destination Unreachable / Port Unreachable} (type 3, code 3).
-    \item No: ogni router genera i propri datagrammi con il \textbf{proprio} contatore, indipendente dal nostro.
-    \item No: ogni router invia con il proprio TTL iniziale (tipicamente 64, 128 o 255), e i messaggi arrivano dopo un numero diverso
-          di salti. $\text{TTL osservato} = \text{TTL iniziale} - \text{hop di ritorno}$: dal valore si possono stimare il sistema
-          operativo del router e la sua distanza.
-\end{enumerate}
-
-\begin{esercizio}{Frammentazione con traceroute}
-Ripetere con una sonda da 3000 byte (\texttt{traceroute 8.8.8.8 3000}) e il filtro
-\texttt{ip.src==<mio\_IP> \&\& ip.dst==<IP\_server> \&\& ip}.
-\begin{enumerate}[label=(\alph*)]
-    \item Il primo datagramma è stato frammentato?
-    \item Quali campi dell'header indicano la frammentazione?
-    \item Come si distingue il primo frammento dai successivi?
-    \item Quanti byte contiene ciascun datagramma?
-\end{enumerate}
-\end{esercizio}
 
 \svolgimento
 \begin{enumerate}[label=(\alph*)]
-    \item Sì. Con MTU di 1500 byte, un datagramma da 3000 byte (2980 di dati) diventa \textbf{tre frammenti}: 1480, 1480 e 20 byte
-          di dati.
-    \item Il flag \textbf{More Fragments} (1 $=$ ``ci sono altri frammenti dopo di me'') e il \textbf{Fragment Offset} (diverso da 0
-          $=$ ``non sono il primo''). Tutti i frammenti condividono inoltre lo stesso \textbf{Identification} (per esempio 28264).
-    \item \begin{tabular}[t]{lcc}
-            \toprule
-            \textbf{Frammento} & \textbf{Offset} & \textbf{MF} \\
-            \midrule
-            primo & 0 & 1 \\
-            intermedio & $> 0$ & 1 \\
-            ultimo & $> 0$ & 0 \\
-            \bottomrule
+    \item $A \cdot B = (1 + 1 - 1 - 1 + 1 - 1 + 1 - 1)/8 = 0$; $A \cdot A = 8/8 = 1$. (Le quattro sequenze sono a due a due ortogonali.)
+    \item Prodotti normalizzati: A $+1$, B $-1$, C $0$, D $+1$. A ha inviato 1, B ha inviato 0, C ha taciuto, D ha inviato 1.
+    \item $C - D = (0, 0, 0, +2, +2, +2, -2, 0)$.
+\end{enumerate}
+\end{esercizio}
+
+% ══════════════════════════════════════════════════════════════
+\section{Indirizzi, switch e ARP}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Indirizzi, hop per hop}
+Tre LAN sono unite da due router. La subnet 1 contiene gli host A e B e un'interfaccia del router R1; la subnet 2 gli host C e D, l'altra
+interfaccia di R1 e un'interfaccia del router R2; la subnet 3 gli host E e F e l'altra interfaccia di R2. Si usano \texttt{192.168.1.0/24},
+\texttt{192.168.2.0/24} e \texttt{192.168.3.0/24}.
+\begin{enumerate}[label=(\alph*)]
+    \item Assegnare un indirizzo IP e un indirizzo MAC a ogni interfaccia di A, dei due router e di F.
+    \item A invia un datagramma IP a F. Dare gli indirizzi MAC sorgente e destinazione del frame, e gli indirizzi IP sorgente e destinazione
+          del datagramma, (i) da A a R1, (ii) da R1 a R2, (iii) da R2 a F.
+    \item Quali query ARP servono se ogni tabella ARP parte vuota, e chi invia ciascuna?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Per esempio: A \texttt{192.168.1.10}, \texttt{00-00-00-00-00-0A}; R1 \texttt{192.168.1.1}, \texttt{00-00-00-00-01-01} e
+          \texttt{192.168.2.1}, \texttt{00-00-00-00-01-02}; R2 \texttt{192.168.2.2}, \texttt{00-00-00-00-02-01} e \texttt{192.168.3.1},
+          \texttt{00-00-00-00-02-02}; F \texttt{192.168.3.20}, \texttt{00-00-00-00-00-0F}.
+    \item \begin{tabular}[t]{llll}
+          \toprule
+           & \textbf{MAC sorg.} & \textbf{MAC dest.} & \textbf{IP} \\
+          \midrule
+          (i) & A & R1 (\texttt{01-01}) & A $\rightarrow$ F \\
+          (ii) & R1 (\texttt{01-02}) & R2 (\texttt{02-01}) & A $\rightarrow$ F \\
+          (iii) & R2 (\texttt{02-02}) & F & A $\rightarrow$ F \\
+          \bottomrule
           \end{tabular}
 
-          Solo il primo frammento contiene l'header UDP (porte, lunghezza, checksum): gli altri contengono solo dati.
-    \item Campo \emph{Total Length}: 1500 per i primi due (20 $+$ 1480), 40 per l'ultimo (20 $+$ 20), che ha offset
-          $2960$ byte (370 nel campo).
+          Gli indirizzi IP non cambiano; i MAC cambiano a ogni collegamento.
+    \item Tre: A chiede il MAC di \texttt{192.168.1.1} (il suo gateway) nella subnet 1; R1 chiede quello di \texttt{192.168.2.2} (il
+          prossimo hop) nella subnet 2; R2 chiede quello di \texttt{192.168.3.20} (F) nella subnet 3. Ogni richiesta insegna anche al
+          destinatario l'associazione di chi chiede.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Self-learning}
+Sei nodi, da A a F, sono collegati a stella a uno switch con la tabella vuota. In ordine: B invia a E, E risponde a B, A invia a B, B
+risponde ad A. Dopo ogni evento, mostrare la tabella dello switch e i collegamenti su cui il frame viene inviato, giustificando.
+
+\svolgimento
+\begin{enumerate}
+    \item B $\rightarrow$ E: lo switch impara B; E è sconosciuto, inonda verso A, C, D, E, F. Tabella: \{B\}.
+    \item E $\rightarrow$ B: impara E; B è noto, inoltra solo verso B. Tabella: \{B, E\}.
+    \item A $\rightarrow$ B: impara A; inoltra solo verso B. Tabella: \{A, B, E\}.
+    \item B $\rightarrow$ A: B è già noto (si aggiorna l'ora); inoltra solo verso A. Tabella: \{A, B, E\}.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Switch e hub}
+Uno switch centrale unisce tre switch di dipartimento, un server Web, un server di posta e un router verso Internet; ogni switch di
+dipartimento ha tre host. Ogni collegamento è da 1 Gb/s.
+\begin{enumerate}[label=(\alph*)]
+    \item Qual è il massimo throughput totale tra i nove host e i due server?
+    \item E se i tre switch di dipartimento diventano hub?
+    \item E se ogni switch diventa un hub?
 \end{enumerate}
 
-\info{traceroute e il livello di trasporto}{
-    Nella cattura tutti i frammenti hanno TTL 1 e lo stesso identificativo: ricomposti a destinazione, formerebbero il payload
-    ``artificiale'' preparato da traceroute. Pur essendo un'applicazione, traceroute non usa il trasporto nel modo consueto:
-    confeziona sonde e legge le risposte ICMP del livello di rete.
-}
+\svolgimento
+(a) 11 Gb/s: ognuno degli 11 sistemi trasmette a 1 Gb/s nello stesso momento (ogni host verso un altro host del proprio dipartimento, i due
+server tra loro), su collegamenti full-duplex senza collisioni. (b) Ogni dipartimento diventa un dominio di collisione da 1 Gb/s
+condiviso: $3 + 2 = 5$ Gb/s. (c) Un unico dominio di collisione: 1 Gb/s.
+\end{esercizio}
+
+\begin{esercizio}{VLAN}
+\begin{enumerate}[label=(\alph*)]
+    \item Quante VLAN può configurare al massimo uno switch che supporta 802.1Q? Che cosa fissa il limite?
+    \item $N$ switch, ciascuno con gli stessi $K$ gruppi VLAN, devono essere collegati. Quante porte servono senza trunking, e quante con?
+\end{enumerate}
+
+\svolgimento
+(a) 4094: il VLAN ID ha 12 bit, e i valori 0 e 4095 sono riservati. (b) Per collegare $N$ switch servono $N - 1$ collegamenti (un albero).
+Senza trunking ogni collegamento va ripetuto per ciascuna VLAN: $K(N-1)$ cavi, cioè $2K(N-1)$ porte. Con il trunking un cavo porta tutte le
+VLAN: $2(N-1)$ porte.
+\end{esercizio}
+
+\begin{esercizio}{ARP, visto da ping}
+Si cattura con filtro \texttt{arp || icmp} mentre si esegue, uno alla volta:
+\begin{lstlisting}[language=bash]
+$ ip neigh ; sudo ip neigh flush all
+$ ping -c 1 <il proprio gateway>
+$ ping -c 1 <un indirizzo della propria subnet che nessuno usa>      # poi: ip neigh
+$ ping -c 1 8.8.8.8
+\end{lstlisting}
+\begin{enumerate}[label=(\alph*)]
+    \item Per il gateway: quali frame, in che ordine? Quali campi della richiesta ARP sono ancora sconosciuti, e a chi è indirizzata?
+    \item Per l'indirizzo inutilizzato: che cosa va sul filo, quante volte? Che cosa stampa ping, quale macchina ha generato quel messaggio,
+          e che stato mostra \texttt{ip neigh}?
+    \item Per \texttt{8.8.8.8}: confrontare il MAC di destinazione della richiesta con la riga del gateway in \texttt{ip neigh}. È mai stato
+          chiesto \texttt{8.8.8.8}?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item ARP request, ARP reply, echo request, echo reply. Nella richiesta il MAC di destinazione (il \emph{target}) è sconosciuto, tutti
+          zeri, e il frame è indirizzato in broadcast a \texttt{ff:ff:ff:ff:ff:ff}; la risposta torna in unicast.
+    \item Solo richieste ARP, ripetute (tipicamente tre, una al secondo), senza risposta, e nessun echo request. ping stampa \emph{Destination
+          Host Unreachable}, generato dalla \textbf{propria} macchina (il suo kernel), e \texttt{ip neigh} mostra l'indirizzo in stato
+          \texttt{FAILED} (o \texttt{INCOMPLETE}).
+    \item Il MAC di destinazione è quello del gateway. \texttt{8.8.8.8} non viene mai chiesto ad ARP: è fuori dalla subnet, e si risolve solo
+          il prossimo hop.
+\end{enumerate}
+\end{esercizio}
 
 % ══════════════════════════════════════════════════════════════
-\section{Routing}
+\section{Livello fisico}
 % ══════════════════════════════════════════════════════════════
 
-\begin{esercizio}{Dijkstra a partire da z}
-Sul grafo in figura (lo stesso usato nel capitolo sul routing) eseguire l'algoritmo Link State a partire dal nodo
-\textbf{z}, riportare la tabella delle iterazioni, disegnare l'albero dei cammini minimi e scrivere la tabella di inoltro di z.
+\begin{esercizio}{I limiti di una linea telefonica}
+Un canale telefonico porta le frequenze da 300 a 3400 Hz, con un rapporto segnale/rumore di 30 dB.
+\begin{enumerate}[label=(\alph*)]
+    \item Qual è la sua banda in hertz? Quanto vale $S/N$ come rapporto puro?
+    \item Qual è la sua capacità di Shannon?
+    \item Che cosa permette Nyquist con 2 livelli? Con 16?
+    \item Un modem invia 2400 simboli al secondo con QAM-16. Qual è la sua velocità in bit? E con 64 punti nella costellazione?
+    \item Confrontare (b) con i 33,6 kb/s a cui i modem si sono fermati. Che cosa servirebbe per andare più veloci sulla stessa linea?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item $B = 3100$ Hz; $S/N = 10^3 = 1000$.
+    \item $C = 3100 \log_2 1001 \approx 3100 \cdot 9{,}97 \approx 30{,}9$ kb/s.
+    \item $2B \log_2 V$: 6200 b/s con 2 livelli, 24\,800 b/s con 16.
+    \item $2400 \cdot 4 = 9600$ b/s; con 64 punti $2400 \cdot 6 = 14\,400$ b/s.
+    \item 33,6 kb/s sta sopra 30,9: le linee reali avevano un $S/N$ un po' migliore di 30 dB (a 35 dB il tetto è circa 36 kb/s), ma il
+          tetto c'è comunque. Per andare più veloci servono più banda (togliere il filtro, come fa l'ADSL) o meno rumore (eliminare un tratto
+          analogico, come fanno i modem a 56k).
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Codici di linea}
+Si prendono i bit \texttt{1 0 1 1 0 0 0 1}.
+\begin{enumerate}[label=(\alph*)]
+    \item Disegnarli in NRZ; in NRZI, dove un 1 è una transizione e uno 0 nessuna; in Manchester, con un 1 come transizione dal basso
+          all'alto a metà bit e uno 0 dall'alto al basso; in AMI, dove uno 0 è zero e gli 1 si alternano, il primo positivo.
+    \item Quale dei quattro dà ancora al ricevente una transizione durante una sequenza di otto 0? E di otto 1?
+    \item In 4B/5B \texttt{0000} diventa \texttt{11110} e \texttt{0001} diventa \texttt{01001}. Codificare \texttt{0000 0001 0000}. Qual è la
+          sequenza di 0 più lunga sulla linea? Quale velocità serve sulla linea per portare 100 Mbit/s di dati?
+\end{enumerate}
+
+\svolgimento
 \begin{center}
-\begin{tikzpicture}
-  \grafoesercizio{}
+\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
+  \draw[black!20, dashed] (0.00,0.7) -- (0.00,-3.95);
+  \draw[black!20, dashed] (0.90,0.7) -- (0.90,-3.95);
+  \draw[black!20, dashed] (1.80,0.7) -- (1.80,-3.95);
+  \draw[black!20, dashed] (2.70,0.7) -- (2.70,-3.95);
+  \draw[black!20, dashed] (3.60,0.7) -- (3.60,-3.95);
+  \draw[black!20, dashed] (4.50,0.7) -- (4.50,-3.95);
+  \draw[black!20, dashed] (5.40,0.7) -- (5.40,-3.95);
+  \draw[black!20, dashed] (6.30,0.7) -- (6.30,-3.95);
+  \draw[black!20, dashed] (7.20,0.7) -- (7.20,-3.95);
+  \node[font=\scriptsize\ttfamily] at (0.45,0.6) {1};
+  \node[font=\scriptsize\ttfamily] at (1.35,0.6) {0};
+  \node[font=\scriptsize\ttfamily] at (2.25,0.6) {1};
+  \node[font=\scriptsize\ttfamily] at (3.15,0.6) {1};
+  \node[font=\scriptsize\ttfamily] at (4.05,0.6) {0};
+  \node[font=\scriptsize\ttfamily] at (4.95,0.6) {0};
+  \node[font=\scriptsize\ttfamily] at (5.85,0.6) {0};
+  \node[font=\scriptsize\ttfamily] at (6.75,0.6) {1};
+  \node[anchor=east, font=\scriptsize\bfseries\sffamily] at (-0.15,0.00) {NRZ};
+  \draw[black!25] (0,0.00) -- (7.20,0.00);
+  \draw[thick, netblue] (0.000,0.300) -- (0.450,0.300) -- (0.450,0.300) -- (0.900,0.300) -- (0.900,-0.300) -- (1.350,-0.300) -- (1.350,-0.300) -- (1.800,-0.300) -- (1.800,0.300) -- (2.250,0.300) -- (2.250,0.300) -- (2.700,0.300) -- (2.700,0.300) -- (3.150,0.300) -- (3.150,0.300) -- (3.600,0.300) -- (3.600,-0.300) -- (4.050,-0.300) -- (4.050,-0.300) -- (4.500,-0.300) -- (4.500,-0.300) -- (4.950,-0.300) -- (4.950,-0.300) -- (5.400,-0.300) -- (5.400,-0.300) -- (5.850,-0.300) -- (5.850,-0.300) -- (6.300,-0.300) -- (6.300,0.300) -- (6.750,0.300) -- (6.750,0.300) -- (7.200,0.300);
+  \node[anchor=east, font=\scriptsize\bfseries\sffamily] at (-0.15,-1.10) {NRZI};
+  \draw[black!25] (0,-1.10) -- (7.20,-1.10);
+  \draw[thick, netblue] (0.000,-0.800) -- (0.450,-0.800) -- (0.450,-0.800) -- (0.900,-0.800) -- (0.900,-0.800) -- (1.350,-0.800) -- (1.350,-0.800) -- (1.800,-0.800) -- (1.800,-1.400) -- (2.250,-1.400) -- (2.250,-1.400) -- (2.700,-1.400) -- (2.700,-0.800) -- (3.150,-0.800) -- (3.150,-0.800) -- (3.600,-0.800) -- (3.600,-0.800) -- (4.050,-0.800) -- (4.050,-0.800) -- (4.500,-0.800) -- (4.500,-0.800) -- (4.950,-0.800) -- (4.950,-0.800) -- (5.400,-0.800) -- (5.400,-0.800) -- (5.850,-0.800) -- (5.850,-0.800) -- (6.300,-0.800) -- (6.300,-1.400) -- (6.750,-1.400) -- (6.750,-1.400) -- (7.200,-1.400);
+  \node[anchor=east, font=\scriptsize\bfseries\sffamily] at (-0.15,-2.20) {Manchester};
+  \draw[black!25] (0,-2.20) -- (7.20,-2.20);
+  \draw[thick, netblue] (0.000,-2.500) -- (0.450,-2.500) -- (0.450,-1.900) -- (0.900,-1.900) -- (0.900,-1.900) -- (1.350,-1.900) -- (1.350,-2.500) -- (1.800,-2.500) -- (1.800,-2.500) -- (2.250,-2.500) -- (2.250,-1.900) -- (2.700,-1.900) -- (2.700,-2.500) -- (3.150,-2.500) -- (3.150,-1.900) -- (3.600,-1.900) -- (3.600,-1.900) -- (4.050,-1.900) -- (4.050,-2.500) -- (4.500,-2.500) -- (4.500,-1.900) -- (4.950,-1.900) -- (4.950,-2.500) -- (5.400,-2.500) -- (5.400,-1.900) -- (5.850,-1.900) -- (5.850,-2.500) -- (6.300,-2.500) -- (6.300,-2.500) -- (6.750,-2.500) -- (6.750,-1.900) -- (7.200,-1.900);
+  \node[anchor=east, font=\scriptsize\bfseries\sffamily] at (-0.15,-3.30) {AMI};
+  \draw[black!25] (0,-3.30) -- (7.20,-3.30);
+  \draw[thick, netblue] (0.000,-3.000) -- (0.450,-3.000) -- (0.450,-3.000) -- (0.900,-3.000) -- (0.900,-3.300) -- (1.350,-3.300) -- (1.350,-3.300) -- (1.800,-3.300) -- (1.800,-3.600) -- (2.250,-3.600) -- (2.250,-3.600) -- (2.700,-3.600) -- (2.700,-3.000) -- (3.150,-3.000) -- (3.150,-3.000) -- (3.600,-3.000) -- (3.600,-3.300) -- (4.050,-3.300) -- (4.050,-3.300) -- (4.500,-3.300) -- (4.500,-3.300) -- (4.950,-3.300) -- (4.950,-3.300) -- (5.400,-3.300) -- (5.400,-3.300) -- (5.850,-3.300) -- (5.850,-3.300) -- (6.300,-3.300) -- (6.300,-3.600) -- (6.750,-3.600) -- (6.750,-3.600) -- (7.200,-3.600);
+\end{tikzpicture}
+\end{center}
+\begin{enumerate}[label=(\alph*)]
+    \item[] (a) Nella figura, il livello iniziale di NRZI è basso.
+    \item[] (b) Otto 0: solo \textbf{Manchester} (una transizione in ogni bit); NRZ, NRZI e AMI restano piatti. Otto 1: Manchester, NRZI (una
+          transizione per ogni 1) e AMI (gli 1 si alternano); NRZ resta piatto.
+    \item[] (c) \texttt{11110\,01001\,11110}: la sequenza di 0 più lunga è di \textbf{2}. Servono 125 Mbaud sulla linea (5 bit di segnale ogni
+          4 di dati).
+\end{enumerate}
+\end{esercizio}
+
+% ══════════════════════════════════════════════════════════════
+\section{Sicurezza}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Quante chiavi}
+$N$ persone vogliono parlare ciascuna in privato con ciascuna delle altre $N - 1$; tutto ciò che due si dicono è visibile a tutti. Quante
+chiavi servono con la crittografia simmetrica? E con le chiavi pubbliche?
+
+\svolgimento
+Simmetrica: una chiave per coppia, $N(N-1)/2$. Pubblica: una coppia per persona, $N$ coppie ($2N$ chiavi), e le chiavi pubbliche si possono
+pubblicare.
+\end{esercizio}
+
+\begin{esercizio}{Sostituzione e trasposizione}
+Un cifrario per sostituzione associa l'alfabeto \texttt{abcdefghijklmnopqrstuvwxyz} a \texttt{QWERTYUIOPASDFGHJKLZXCVBNM}.
+\begin{enumerate}[label=(\alph*)]
+    \item Cifrare \texttt{this is an easy problem}; decifrare \texttt{ATNL DXLZ LZQN LTEKTZ}.
+    \item Con la chiave MEGABUCK, scrivere \texttt{meetmeatthestationatnoon} in righe di otto sotto la chiave, e leggere le colonne
+          nell'ordine alfabetico delle lettere della chiave. Qual è il testo cifrato?
+    \item Dato solo un testo cifrato, come si capisce quale dei due metodi l'ha prodotto?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item \texttt{ZIOL OL QF TQLN HKGWSTD}; \texttt{keys must stay secret}.
+    \item Righe \texttt{meetmeat}, \texttt{thestati}, \texttt{onatnoon}. L'ordine delle colonne è A, B, C, E, G, K, M, U, cioè le colonne 4,
+          5, 7, 2, 3, 8, 1, 6: \texttt{TSTMTNATOEHNEEATINMTOEAO}.
+    \item Dalle frequenze delle lettere: una trasposizione conserva quelle della lingua (le lettere più frequenti restano \emph{e}, \emph{t},
+          \emph{a}, \dots), una sostituzione le sposta su altre lettere.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Un cifrario a blocchi di 3 bit, con e senza CBC}
+Un cifrario a blocchi lavora su 3 bit con questa tabella:
+\begin{center}
+\small\ttfamily
+\begin{tabular}{l*{8}{c}}
+\toprule
+\textrm{Ingresso} & 000 & 001 & 010 & 011 & 100 & 101 & 110 & 111 \\
+\textrm{Uscita} & 110 & 111 & 101 & 100 & 011 & 010 & 000 & 001 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Il testo in chiaro è \texttt{100100100}.
+\begin{enumerate}[label=(\alph*)]
+    \item Senza CBC, qual è il testo cifrato?
+    \item Trudy lo intercetta. Sa che si usa un cifrario a blocchi di 3 bit senza CBC, ma non la tabella. Che cosa può concludere?
+    \item Con CBC e IV $= \texttt{111}$, qual è il testo cifrato? Che cosa deve sapere il ricevente per decifrarlo?
+\end{enumerate}
+
+\svolgimento
+(a) \texttt{011 011 011}. (b) Che i tre blocchi di testo in chiaro sono \textbf{uguali}, anche senza sapere quali: ECB rivela le ripetizioni.
+(c) $c(1) = K(\texttt{100} \oplus \texttt{111}) = K(\texttt{011}) = \texttt{100}$, $c(2) = K(\texttt{100} \oplus \texttt{100}) =
+K(\texttt{000}) = \texttt{110}$, $c(3) = K(\texttt{100} \oplus \texttt{110}) = K(\texttt{010}) = \texttt{101}$: \texttt{100 110 101}. Il
+ricevente deve conoscere la chiave (la tabella) e l'IV, che viaggia in chiaro.
+\end{esercizio}
+
+\begin{esercizio}{RSA con numeri piccoli}
+RSA con $p = 5$ e $q = 11$.
+\begin{enumerate}[label=(\alph*)]
+    \item Quanto valgono $n$ e $z$?
+    \item Perché $e = 3$ è una scelta accettabile?
+    \item Trovare un $d$ con $de \equiv 1 \pmod z$ e $d < 160$.
+    \item Cifrare $m = 8$, poi decifrare il risultato, usando $[(a \bmod n)(b \bmod n)] \bmod n = ab \bmod n$ per tenere piccoli i numeri.
+\end{enumerate}
+
+\svolgimento
+(a) $n = 55$, $z = 40$. (b) $3 < n$ e non ha fattori comuni con 40. (c) $d = 27$ ($81 \bmod 40 = 1$); vanno bene anche 67, 107, 147. (d) $c
+= 8^3 \bmod 55 = 512 \bmod 55 = 17$. Decifrando, $17^{27} \bmod 55$: $17^2 \bmod 55 = 14$, $17^4 = 14^2 \bmod 55 = 31$, $17^8 = 31^2 \bmod
+55 = 26$, $17^{16} = 26^2 \bmod 55 = 16$; poiché $27 = 16 + 8 + 2 + 1$, $16 \cdot 26 \cdot 14 \cdot 17 \bmod 55 = 8$.
+\end{esercizio}
+
+\begin{esercizio}{Diffie-Hellman con numeri piccoli}
+Diffie-Hellman con $p = 11$ e $g = 2$; Alice sceglie $S_A = 4$, Bob $S_B = 7$.
+\begin{enumerate}[label=(\alph*)]
+    \item Dimostrare che le due chiavi calcolate da Alice e Bob sono sempre uguali.
+    \item Calcolare i valori pubblici $T_A$ e $T_B$.
+    \item Calcolare la chiave condivisa.
+    \item Disegnare un diagramma temporale, una linea ciascuno per Alice, Bob e Trudy, in cui Trudy sta nel mezzo e finisce per condividere
+          una chiave con ciascuno.
+\end{enumerate}
+
+\svolgimento
+(a) $T_B^{S_A} = (g^{S_B})^{S_A} = g^{S_A S_B} = (g^{S_A})^{S_B} = T_A^{S_B} \pmod p$. (b) $T_A = 2^4 \bmod 11 = 5$, $T_B = 2^7 \bmod 11 =
+7$. (c) $7^4 \bmod 11 = 3$ e $5^7 \bmod 11 = 3$: la chiave è 3. (d) Trudy sceglie per esempio $S_T = 3$, quindi $T_T = 8$:
+\begin{center}
+\begin{tikzpicture}[yscale=0.75, every node/.style={font=\scriptsize\sffamily}]
+  \timeline{al}{0}{Alice}{3.6}
+  \timeline{tr}{4.5}{Trudy}{3.6}
+  \timeline{bo}{9}{Bob}{3.6}
+  \draw[msg, netblue] (0,-0.5) -- node[above] {$T_A = 5$} (4.5,-0.9);
+  \draw[msg, netred] (4.5,-1.0) -- node[above] {$T_T = 8$} (9,-1.4);
+  \draw[msg, netblue] (9,-1.7) -- node[above] {$T_B = 7$} (4.5,-2.1);
+  \draw[msg, netred] (4.5,-2.2) -- node[above] {$T_T = 8$} (0,-2.6);
+  \node[anchor=east, text width=2.6cm, align=right] at (-0.2,-3.1) {chiave $8^4 \bmod 11 = 4$};
+  \node[anchor=west, text width=2.6cm] at (9.2,-3.1) {chiave $8^7 \bmod 11 = 2$};
+  \node[text width=3.2cm, align=left, anchor=west, text=netred] at (4.65,-3.3) {con Alice: $5^3 \bmod 11 = 4$\\con Bob: $7^3 \bmod 11 = 2$};
 \end{tikzpicture}
 \end{center}
 \end{esercizio}
 
-\svolgimento
-Per ogni nodo si tiene $D(\cdot)$ (costo corrente) e $p(\cdot)$ (predecessore); a ogni passo entra in $N'$ il nodo con $D$ minimo.
-
-\begin{table}[H]
-\centering
-\small
-\begin{tabular}{clccccc}
-\toprule
-\textbf{Passo} & $N'$ & $D(y),p(y)$ & $D(w),p(w)$ & $D(x),p(x)$ & $D(v),p(v)$ & $D(u),p(u)$ \\
-\midrule
-0 & z & \textbf{2, z} & 5, z & $\infty$ & $\infty$ & $\infty$ \\
-1 & z, y & & \textbf{3, y} & 3, y & $\infty$ & $\infty$ \\
-2 & z, y, w & & & \textbf{3, y} & 6, w & 8, w \\
-3 & z, y, w, x & & & & 5, x & \textbf{4, x} \\
-4 & z, y, w, x, u & & & & \textbf{5, x} & \\
-5 & z, y, w, x, u, v & & & & & \\
-\bottomrule
-\end{tabular}
-\caption{Link State da z (in grassetto il nodo che entra in $N'$ al passo successivo).}
-\end{table}
-
-\begin{itemize}
-    \item \textbf{Passo 0}: i vicini di z sono y (2) e w (5).
-    \item \textbf{Passo 1}: entra y (2). $D(w) = \min\{5,\ 2 + 1\} = 3$ via y; $D(x) = 2 + 1 = 3$ via y.
-    \item \textbf{Passo 2}: w e x sono a pari merito (3); si sceglie w. $D(v) = 3 + 3 = 6$; $D(u) = 3 + 5 = 8$; $D(x) = \min\{3,\ 3+3\} = 3$ invariato.
-    \item \textbf{Passo 3}: entra x (3). $D(u) = \min\{8,\ 3 + 1\} = 4$ via x; $D(v) = \min\{6,\ 3 + 2\} = 5$ via x.
-    \item \textbf{Passo 4}: entra u (4). $D(v) = \min\{5,\ 4 + 2\} = 5$ invariato.
-    \item \textbf{Passo 5}: entra v (5). Fine.
-\end{itemize}
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}
-  \grafoesercizio{
-    \draw[pathhl, opacity=0.55] (z) -- (y) -- (w);
-    \draw[pathhl, opacity=0.55] (y) -- (x) -- (u);
-    \draw[pathhl, opacity=0.55] (x) -- (v);
-  }
-  \begin{scope}[xshift=8.2cm, every node/.style={font=\small\sffamily}]
-    \node at (1.1,1.6) {\textbf{Tabella di z}};
-    \node[anchor=west] at (0,0.9) {destinazione \quad next hop};
-    \foreach \d/\c [count=\i] in {u/4, v/5, w/3, x/3, y/2} \node[anchor=west] at (0,0.9-0.5*\i) {\hspace{1.4em}\d \hspace{4.3em} y \quad (costo \c)};
-  \end{scope}
-\end{tikzpicture}
-\caption{L'albero dei cammini minimi da z e la tabella di inoltro risultante: tutto passa per y.}
-\end{figure}
-
-I cammini si ricostruiscono all'indietro con i predecessori: per esempio $p(v) = x$, $p(x) = y$, $p(y) = z$, quindi il cammino è
-$z \rightarrow y \rightarrow x \rightarrow v$ di costo $2 + 1 + 2 = 5$.
-
-\begin{esercizio}{Verifica con l'equazione di Bellman-Ford}
-Sullo stesso grafo si sa che $d_v(z) = 5$, $d_w(z) = 3$ e $d_x(z) = 3$. Usare l'equazione di Bellman-Ford per calcolare
-$d_u(z)$ e il next hop di u verso z, e verificare che il risultato sia coerente con i cammini minimi.
-\end{esercizio}
+\begin{esercizio}{Autenticarsi nei due versi}
+Alice si autentica presso Bob così: invia \emph{sono Alice}; Bob risponde con un nonce fresco $R$; Alice restituisce $K_{A\text{-}B}(R)$,
+cifrato con la chiave che condivide con Bob; Bob lo decifra e controlla che sia $R$. Come visto nel corso, funziona.
+\begin{enumerate}[label=(\alph*)]
+    \item Ora anche Bob deve autenticarsi presso Alice, con lo stesso protocollo e la stessa chiave: invia \emph{sono Bob}, lei risponde con
+          un nonce, lui lo restituisce cifrato.
+    \item Le due esecuzioni possono intrecciarsi in qualsiasi ordine. Mostrare come Trudy, che non conosce $K_{A\text{-}B}$, può far credere a
+          Bob di essere Alice. Suggerimento: far rispondere Bob alla sua stessa domanda.
+    \item Proporre una modifica che fermi l'attacco.
+\end{enumerate}
 
 \svolgimento
-$$d_u(z) = \min_{v \in \text{vicini}(u)} \{ c(u,v) + d_v(z) \} = \min\{\underbrace{2 + 5}_{\text{via v}},\ \underbrace{5 + 3}_{\text{via w}},\ \underbrace{1 + 3}_{\text{via x}}\} = \min\{7, 8, 4\} = 4$$
-Il minimo si ottiene via \textbf{x}, che è il next hop di u verso z. È coerente con l'esercizio precedente: il cammino minimo tra u e
-z è $u \rightarrow x \rightarrow y \rightarrow z$, di costo 4 (in un grafo non orientato è lo stesso cammino, percorso al contrario).
-
-\begin{esercizio}{Distance Vector su tre nodi}
-Tre nodi con $c(x,y) = 2$, $c(y,z) = 1$, $c(x,z) = 7$ eseguono Distance Vector. Scrivere i vettori delle distanze all'avvio e
-dopo ogni scambio, fino alla convergenza.
+\begin{enumerate}[label=(\alph*)]
+    \item Bob: \emph{sono Bob}; Alice: $R'$; Bob: $K_{A\text{-}B}(R')$; Alice decifra e controlla.
+    \item Trudy invia a Bob \emph{sono Alice}, e Bob risponde con il nonce $R$. Trudy non sa calcolare $K_{A\text{-}B}(R)$. Ma quando Bob
+          comincia la propria autenticazione presso ``Alice'' (\emph{sono Bob}), Trudy risponde con lo stesso $R$ come se fosse il suo nonce;
+          Bob restituisce $K_{A\text{-}B}(R)$, e Trudy lo usa nella prima esecuzione: Bob ha risposto alla sua stessa domanda, e accetta Trudy
+          come Alice (l'attacco per riflessione).
+    \item Chiavi diverse per i due versi ($K_{A \rightarrow B} \neq K_{B \rightarrow A}$); oppure includere l'identità nella risposta cifrata,
+          $K_{A\text{-}B}(R, \text{Alice})$; oppure Bob rifiuta di rispondere a un nonce che lui stesso ha emesso ed è ancora in sospeso.
+\end{enumerate}
 \end{esercizio}
+
+\begin{esercizio}{TLS: quattro domande veloci}
+Rispondere con l'handshake e i record di TLS visti nel corso.
+\begin{enumerate}[label=(\alph*)]
+    \item Vero o falso: un record TLS ha un campo per i numeri di sequenza TLS. Dove va allora il numero di sequenza?
+    \item A che cosa servono i nonce casuali nell'handshake TLS?
+    \item Una sessione TLS usa un cifrario a blocchi con CBC. Vero o falso: il server invia l'IV al client in chiaro.
+    \item Bob apre una connessione TCP verso Trudy, che finge di essere Alice e invia a Bob il certificato di Alice. In quale passo
+          dell'handshake Bob scopre di non parlare con Alice?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Falso: il numero di sequenza non viaggia. Entrambe le parti lo contano, e lo includono nel calcolo dell'HMAC di ogni record.
+    \item A rendere unica ogni sessione: le chiavi dipendono dai due nonce, quindi una sessione registrata e ripetuta il giorno dopo produce
+          chiavi diverse, e i record ripetuti falliscono l'HMAC.
+    \item Vero in TLS 1.1 e 1.2: ogni record CBC porta in testa un IV esplicito, in chiaro (in TLS 1.0, e nel ``quasi-TLS'' del Kurose, gli
+          IV si derivano invece dal master secret).
+    \item Trudy non ha la chiave privata di Alice, quindi non sa aprire il pre-master secret che Bob ha cifrato con la chiave pubblica di
+          Alice, e non sa calcolare le chiavi: il messaggio con l'HMAC dell'handshake (\emph{Finished}) che Trudy dovrebbe inviare non torna,
+          e Bob se ne accorge lì (passo 6).
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Un handshake TLS da leggere}
+Si cattura con filtro \texttt{tls}:
+\begin{lstlisting}[language=bash]
+$ curl -s -o /dev/null --tls-max 1.2 https://www.unina.it
+$ curl -s -o /dev/null https://www.unina.it
+\end{lstlisting}
+Il primo forza TLS 1.2, il cui handshake è quello seguito nel corso; il secondo permette l'1.3, per vedere che cosa nasconde la versione
+più nuova. Il server può rispondere 403 a curl: non importa, l'handshake avviene prima che il server veda la richiesta.
+\begin{enumerate}[label=(\alph*)]
+    \item Nella cattura 1.2, elencare i messaggi dell'handshake in ordine. Dove sono i due nonce?
+    \item Quale sito si sta visitando è leggibile in chiaro: in quale messaggio, quale campo?
+    \item Aprire il certificato: soggetto, emittente, validità. Chi garantisce per chi?
+    \item Da quale record in poi tutto è cifrato?
+    \item Nella cattura 1.3, quali di queste cose si leggono ancora? Che cosa ha perso un osservatore di rete?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Client Hello; Server Hello, Certificate, Server Key Exchange, Server Hello Done; Client Key Exchange, Change Cipher Spec, Finished;
+          Change Cipher Spec, Finished; poi Application Data. I nonce sono i campi \texttt{Random} del Client Hello e del Server Hello.
+    \item Nel Client Hello, estensione \texttt{server\_name} (la SNI).
+    \item Il soggetto è \texttt{www.unina.it} (o un nome che lo comprende); l'emittente è una CA intermedia, il cui certificato è firmato a
+          sua volta da una radice presente nel sistema: la radice garantisce per l'intermedia, l'intermedia per il sito.
+    \item Dal primo \emph{Finished}, che segue il Change Cipher Spec: da lì in poi tutto è cifrato.
+    \item In 1.3 si leggono solo Client Hello (con la SNI) e Server Hello; certificato, Finished e tutto il resto viaggiano come Application
+          Data. Un osservatore perde la vista del certificato (e quindi della catena e del soggetto): resta la SNI, finché non c'è ECH.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Un firewall stateful}
+La rete interna è \texttt{222.22.0.0/16}. Scrivere la tabella dei filtri e la tabella delle connessioni di un firewall stateful, il più
+restrittivo possibile, che (a) permetta a ogni utente interno di aprire sessioni Telnet verso host esterni; (b) permetta agli utenti esterni
+di navigare il sito aziendale su \texttt{222.22.0.12}; (c) blocchi ogni altro pacchetto in entrata e in uscita. La tabella delle connessioni
+contiene ora tre connessioni, tutte aperte dall'interno. Inventare indirizzi e porte, e dire per ogni riga della tabella dei filtri se
+consulta la tabella delle connessioni.
 
 \svolgimento
 \begin{center}
-\begin{tikzpicture}
-  \node[enode] (x) at (0,0) {x};
-  \node[enode] (y) at (2,1.5) {y};
-  \node[enode] (z) at (4,0) {z};
-  \draw[eedge] (x) -- node[ecost] {2} (y);
-  \draw[eedge] (y) -- node[ecost] {1} (z);
-  \draw[eedge] (x) -- node[ecost] {7} (z);
-\end{tikzpicture}
-\end{center}
-
-\textbf{All'avvio} ogni nodo conosce solo i costi verso i vicini:
-$D_x = (0, 2, 7)$, \ $D_y = (2, 0, 1)$, \ $D_z = (7, 1, 0)$ (nell'ordine x, y, z).
-
-\textbf{Dopo il primo scambio} ogni nodo applica Bellman-Ford con i vettori ricevuti:
-\begin{align*}
-D_x(z) &= \min\{c(x,y) + D_y(z),\ c(x,z) + D_z(z)\} = \min\{2 + 1,\ 7 + 0\} = 3 \quad \text{(via y)}\\
-D_z(x) &= \min\{c(z,y) + D_y(x),\ c(z,x) + D_x(x)\} = \min\{1 + 2,\ 7 + 0\} = 3 \quad \text{(via y)}\\
-D_y &= (2, 0, 1) \quad \text{invariato}
-\end{align*}
-Quindi $D_x = (0, 2, 3)$, $D_y = (2, 0, 1)$, $D_z = (3, 1, 0)$. x e z, essendo cambiati, inviano i nuovi vettori; al
-\textbf{secondo scambio} nessun valore cambia e l'algoritmo \textbf{converge}: da quel momento nessuno invia più aggiornamenti.
-
-\begin{esercizio}{Poisoned reverse contro il count-to-infinity}
-Si riprenda lo scenario del capitolo sul routing: $c(x,y) = 4$, $c(y,z) = 1$, $c(x,z) = 50$, con z che raggiunge x passando per y.
-Il costo di x--y sale a 60 e solo y se ne accorge. Mostrare come evolvono $D_y(x)$ e $D_z(x)$ se si usa il \textbf{poisoned reverse}.
-\end{esercizio}
-
-\svolgimento
-Con il poisoned reverse, poiché z raggiunge x \emph{passando per y}, z annuncia a y $D_z(x) = \infty$.
-\begin{table}[H]
-\centering
 \small
-\begin{tabular}{clcc}
+\begin{tabular}{lllcccc c}
 \toprule
-\textbf{Passo} & \textbf{Calcolo} & $D_y(x)$ & $D_z(x)$ \\
+\textbf{Azione} & \textbf{Sorgente} & \textbf{Destinazione} & \textbf{Prot.} & \textbf{P. sorg.} & \textbf{P. dest.} & \textbf{Flag} &
+\textbf{Conn.} \\
 \midrule
-0 & situazione iniziale; z dice a y ``$D_z(x) = \infty$'' & 4 (diretto) & 5 (via y) \\
-1 & y: $\min\{60,\ 1 + \infty\} = 60$ & \textbf{60} (diretto) & 5 \\
-2 & z riceve 60: $\min\{50,\ 1 + 60\} = 50$ & 60 & \textbf{50} (diretto) \\
-3 & ora z non passa più per y: annuncia 50. y: $\min\{60,\ 1 + 50\} = 51$ & \textbf{51} (via z) & 50 \\
-4 & y passa per z, quindi annuncia a z $D_y(x) = \infty$; z: $\min\{50,\ \infty\} = 50$ & 51 & 50 \\
+allow & \texttt{222.22/16} & esterno & TCP & $>1023$ & 23 & qualsiasi & \\
+allow & esterno & \texttt{222.22/16} & TCP & 23 & $>1023$ & ACK & X \\
+allow & esterno & \texttt{222.22.0.12} & TCP & $>1023$ & 80 & qualsiasi & \\
+allow & \texttt{222.22.0.12} & esterno & TCP & 80 & $>1023$ & ACK & X \\
+deny & tutto & tutto & tutto & tutto & tutto & tutto & \\
 \bottomrule
 \end{tabular}
-\caption{Con il poisoned reverse la convergenza richiede pochi scambi invece di oltre 40.}
-\end{table}
-Il ciclo tra y e z non si forma perché y non può più ``credere'' al vecchio cammino di z, che passava per y stesso. Il limite del
-poisoned reverse è che funziona per cicli tra \textbf{due} nodi: con cicli che coinvolgono tre o più nodi il problema può ripresentarsi.
+\end{center}
+Le righe marcate X lasciano passare un pacchetto solo se appartiene a una connessione nella tabella: le risposte Telnet solo per sessioni
+aperte dall'interno, le risposte del server Web solo per connessioni aperte con un SYN passato dalla terza riga. Tabella delle connessioni:
+\begin{center}
+\small\ttfamily
+\begin{tabular}{llll}
+\toprule
+\textrm{\textbf{Sorgente}} & \textrm{\textbf{Destinazione}} & \textrm{\textbf{P. sorg.}} & \textrm{\textbf{P. dest.}} \\
+\midrule
+222.22.1.7 & 37.96.87.123 & 12699 & 23 \\
+222.22.93.2 & 199.1.205.23 & 37654 & 23 \\
+222.22.65.143 & 203.77.240.43 & 48712 & 23 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{esercizio}
 
-\gbox{\iinfo\ Formule da ricordare}{primary!80!black}{
+% ══════════════════════════════════════════════════════════════
+\section{Anonimato}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Chi sa che cosa in un circuito}
+Alice raggiunge il sito S attraverso Tor, su un circuito con un guard G, un relay intermedio M e un exit X.
+\begin{enumerate}[label=(\alph*)]
+    \item Per G, M, X e S, dire se conosce l'indirizzo IP di Alice, il nome di S e il contenuto della richiesta. Rispondere due volte: con
+          S raggiunto in \texttt{http://} e in \texttt{https://}.
+    \item Un'osservatrice vede sia il traffico tra Alice e G sia quello tra X e S, ma non può decifrare nulla. Che cosa può ancora imparare,
+          e come?
+    \item Perché tre relay? Che cosa rivelerebbe un relay solo, e che cosa due?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item \begin{tabular}[t]{lccc}
+          \toprule
+           & \textbf{IP di Alice} & \textbf{nome di S} & \textbf{contenuto} \\
+          \midrule
+          G & sì & no & no \\
+          M & no & no & no \\
+          X & no & sì & sì in \texttt{http}, no in \texttt{https} \\
+          S & no (vede X) & sì & sì \\
+          \bottomrule
+          \end{tabular}
+
+          In \texttt{https} l'exit vede solo nome (SNI) e indirizzo di S; in entrambi i casi G non vede né S né il contenuto, cifrati dagli
+          strati di M e X.
+    \item Che Alice sta parlando con S: confronta tempi, raffiche e volumi del traffico ai due capi (correlazione temporale). La cifratura non
+          cambia quando i byte si muovono né quanti sono.
+    \item Un relay conosce entrambi gli estremi. Con due, l'exit conosce l'ingresso, che diventa il nodo da sorvegliare. Con tre l'exit
+          conosce solo un intermedio, e l'intermedio nessuno dei due estremi.
+\end{enumerate}
+\end{esercizio}
+
+% ══════════════════════════════════════════════════════════════
+\section{Tutta la pila}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Tutta la pila, su carta}
+Si entra in una stanza, si collega il portatile all'Ethernet e si scarica una pagina Web. Nulla è in cache: nessun indirizzo, nessuna riga
+ARP, nessuna risposta DNS.
+\begin{enumerate}[label=(\alph*)]
+    \item Elencare ogni passo di protocollo dall'accensione del portatile alla visualizzazione della pagina: Ethernet, DHCP, ARP, DNS, TCP,
+          HTTP.
+    \item Dire esplicitamente come il portatile impara l'indirizzo IP del proprio gateway, e poi il suo indirizzo MAC.
+    \item Per ogni passo, quali indirizzi sono noti e quali ancora sconosciuti?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item DHCP Discover (da \texttt{0.0.0.0:68} a \texttt{255.255.255.255:67}, frame in broadcast), Offer, Request, ACK; ARP per il gateway
+          (o per il server DNS, se è sulla LAN); query DNS per il nome del sito (UDP 53, verso il server DNS attraverso il gateway) e
+          risposta; handshake TCP con il server Web (SYN, SYN-ACK, ACK); GET HTTP e risposta; chiusura della connessione.
+    \item Il DHCP ACK porta, oltre all'indirizzo e alla maschera, l'indirizzo IP del gateway (opzione \emph{router}) e quello del server
+          DNS. Il MAC del gateway lo dà poi una richiesta ARP in broadcast per quell'indirizzo.
+    \item Al DHCP il portatile conosce solo il proprio MAC (usa \texttt{0.0.0.0} e i broadcast). Dopo l'ACK conosce il proprio IP, la maschera,
+          l'IP del gateway e del DNS, ma non il MAC del gateway; dopo l'ARP anche quello. Per la query DNS conosce l'IP del server DNS ma non
+          quello del sito; dopo la risposta, l'IP del sito. Il MAC del sito non lo conoscerà mai: ogni frame va al gateway.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{La vostra chat, tutta la pila}
+Server su una macchina, client su un'altra della stessa LAN; cattura sull'interfaccia reale del client, senza filtro. Sul client, in ordine:
+\begin{lstlisting}[language=bash]
+$ nmcli connection down <conn> ; nmcli connection up <conn>    # solo sulla propria macchina
+$ sudo ip neigh flush all ; resolvectl flush-caches
+$ ./chat <nome o indirizzo del server> 5000                     # un messaggio breve, poi quit
+\end{lstlisting}
+Si rinnova l'indirizzo solo sulla propria macchina: in laboratorio si salta quella riga. Ci si collega per nome se il server ne ha uno nel
+DNS; altrimenti per indirizzo, e la parte DNS si salta.
+\begin{enumerate}[label=(\alph*)]
+    \item Costruire la sequenza temporale: ogni protocollo che compare, in ordine, con il numero del suo primo pacchetto. Quanti messaggi
+          DHCP si vedono, e perché forse non quattro?
+    \item Per ogni scambio ARP e DNS: chi ha chiesto, su chi, e perché in quel momento?
+    \item Si prende il frame che porta il messaggio breve. Livello per livello, dare la lunghezza di ogni header e il campo che dice che cosa
+          viene dopo: EtherType, protocollo IP, porta di destinazione, e il proprio byte di tipo. Verificare che le lunghezze tornino con la
+          lunghezza del frame.
+    \item Inviare un messaggio con un corpo di 3000 byte, prima con la versione connessa della chat, poi con quella a datagrammi (alzando
+          la lunghezza massima dichiarata, se serve). Quanti frame produce ciascuna? Quale livello ha tagliato il messaggio, e come lo
+          rimette insieme il ricevente?
+    \item Nella versione a datagrammi, che cosa succede all'intero messaggio se uno di quei frame si perde? E in quella connessa?
+    \item Disegnare il diagramma temporale completo di (a), una linea verticale per macchina coinvolta: client, server, gateway, server DHCP e
+          DNS.
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item DHCP, ARP (spesso un ARP ``gratuito'' o di verifica del proprio indirizzo, poi la richiesta per il gateway), DNS, ARP per il
+          server della chat (è sulla stessa LAN), TCP (handshake), i dati della chat, la chiusura. Al rinnovo di un indirizzo già noto il
+          client salta la scoperta: si vedono solo \textbf{Request e ACK}, due messaggi invece di quattro.
+    \item ARP per il gateway (o per il server DNS) prima della query DNS, perché il frame della query ha bisogno di un MAC di destinazione;
+          DNS dal client verso il resolver, per il nome del server, prima della \texttt{connect}; ARP per il server della chat, chiesto dal
+          client subito prima del SYN.
+    \item Ethernet 14 byte (EtherType \texttt{0x0800}), IP 20 (protocollo 6), TCP 32 con le opzioni timestamp (porta di destinazione 5000),
+          poi il nostro header di 5 byte (quattro di lunghezza e il byte di tipo) e il corpo. Per un corpo di 5 byte: $14 + 20 + 32 + 5 + 5 =
+          76$ byte, la lunghezza stampata da Wireshark (senza preambolo e CRC).
+    \item Connessa: TCP taglia il flusso in segmenti di al più 1448 byte, quindi \textbf{3 frame}; il ricevente riceve un flusso, e il nostro
+          framing (la lunghezza in testa) ricompone il messaggio. A datagrammi: un datagramma UDP di 3013 byte, che IP \textbf{frammenta} in 3
+          frammenti; il riassemblaggio lo fa IP del ricevente prima di consegnare il datagramma.
+    \item A datagrammi, se si perde un frammento si perde l'intero datagramma, e quindi l'intero messaggio (a meno che la chat non lo
+          ritrasmetta). Nella versione connessa TCP ritrasmette solo il segmento perso, e il messaggio arriva intero.
+    \item Client, server DHCP (spesso il gateway stesso), gateway, server DNS e server della chat: DHCP tra client e server DHCP; ARP tra
+          client e gateway; DNS tra client e resolver attraverso il gateway; ARP tra client e server della chat; handshake, dati e chiusura
+          tra client e server.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Quanto costa la vostra chat sotto carico}
+Si prendono le versioni concorrenti della chat (con processi, con thread, a eventi e con un pool) e le si misura sotto lo stesso carico.
 \begin{itemize}
-    \item Rete $=$ IP AND maschera; broadcast $=$ bit di host a 1; host utilizzabili $= 2^{32-n} - 2$.
-    \item Longest prefix matching: tra le righe che corrispondono vince il prefisso più lungo; nessuna $\Rightarrow$ default.
-    \item Frammentazione: dati per frammento $= \lfloor (\text{MTU} - 20)/8 \rfloor \cdot 8$; offset in unità da 8 byte; MF $= 0$ solo nell'ultimo.
-    \item Dijkstra: $D(v) = \min\{D(v),\ D(w) + c(w,v)\}$; Bellman-Ford: $d_x(y) = \min_v\{c(x,v) + d_v(y)\}$.
+    \item Il carico: un client che apre $N$ connessioni; ciascuna invia un messaggio ogni 100 ms, con l'istante d'invio, e registra quanto
+          impiega ogni messaggio a raggiungere un altro client. Si esegue per 60 secondi.
+    \item Le misure, per $N = 10$, 50 e 200: media e 95º percentile del ritardo; messaggi consegnati al secondo; tempo di CPU e memoria
+          residente del server (\texttt{ps -o rss,time}).
+    \item Tutto in una tabella: una riga per versione, un gruppo di colonne per $N$.
 \end{itemize}
-}
+\begin{enumerate}[label=(\alph*)]
+    \item Quale versione peggiora per prima al crescere di $N$, e qual è il suo collo di bottiglia: CPU, un lock, una coda per client, il
+          numero di thread? Mostrarlo dai numeri, non dalle lezioni.
+    \item Durante un'esecuzione con $N = 50$, sospendere un client con Ctrl-Z per dieci secondi. Quali versioni rallentano tutti, e perché
+          proprio quelle?
+    \item Server e client su due macchine. A quale $N$ la rete diventa il collo di bottiglia, e come lo si capisce dalle misure? Confrontare
+          il tasso consegnato con la velocità del collegamento.
+    \item Con 200 client, quanti byte dei messaggi sono header di TCP, IP ed Ethernet? La versione a datagrammi lo cambierebbe?
+\end{enumerate}
+
+\svolgimento
+È un esercizio di misura: i numeri sono i vostri. Che cosa aspettarsi e come leggerli:
+\begin{enumerate}[label=(\alph*)]
+    \item La chat è un \emph{broadcast}: ogni messaggio va a tutti, quindi il lavoro cresce come $N^2$ (a $N = 200$, 2000 messaggi al secondo
+          da consegnare a 199 destinatari). La versione con processi paga i passaggi tra processi e la memoria (un processo per client: la RSS
+          cresce linearmente), quella con thread un \textbf{lock} sulla lista dei client tenuto durante l'invio a tutti, quella a eventi
+          l'unico thread che fa tutto (CPU al 100\% su un core). Il collo di bottiglia si legge dal 95º percentile che esplode e dalla CPU o
+          dalla memoria che lo accompagnano.
+    \item Rallentano tutti le versioni che inviano a ciascun client con \texttt{write} \textbf{bloccanti} tenendo un lock, o dall'unico
+          thread: quando il buffer del client sospeso si riempie, la \texttt{write} verso di lui si blocca e ferma la consegna agli altri. Le
+          versioni con una coda per client (o con scritture non bloccanti) non ne risentono.
+    \item Quando il tasso consegnato smette di crescere con $N$ mentre la CPU del server resta sotto il massimo, e si avvicina alla velocità
+          del collegamento (contando gli header): il collo di bottiglia è la rete.
+    \item Per un messaggio breve, $14 + 20 + 32 = 66$ byte di header (più preambolo, CRC e intervallo tra frame sul filo) contro una decina di
+          byte di dati: la maggior parte dei byte sono header. Con UDP l'header di trasporto scende da 32 a 8 byte, ma resta la stessa
+          proporzione di fondo, e si perde l'affidabilità.
+\end{enumerate}
+\end{esercizio}

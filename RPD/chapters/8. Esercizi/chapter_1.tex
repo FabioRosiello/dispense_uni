@@ -1,387 +1,532 @@
-\chapter{Esercizi sui fondamenti}
+\chapter{Esercitazione E1: reti, stratificazione e livello applicativo}
+\titolobreve{Esercitazione E1}
 
-Questa parte raccoglie gli esercizi svolti, organizzati per livello. Molti riprendono gli esempi visti nei capitoli teorici
-\textbf{con numeri diversi}, così da potersi esercitare davvero; altri sono le esercitazioni di laboratorio proposte a lezione,
-con lo svolgimento completo. Il consiglio è sempre lo stesso: \textbf{provare prima da soli}, e solo dopo leggere la soluzione.
+Questo capitolo e i tre successivi raccolgono i \textbf{quattro pacchetti di esercizi} del corso (E1--E4), nell'ordine delle slide:
+l'esercizio $n$ di questo capitolo è l'\textbf{E1.$n$}. Nelle slide gli esercizi non hanno soluzioni (``un risultato che non potete
+confrontare con un numero è un risultato che dovete argomentare''); qui per ciascuno c'è uno svolgimento, da leggere \emph{dopo} averci
+provato. Per gli esercizi di laboratorio lo svolgimento dice che cosa ci si deve aspettare: i numeri esatti dipendono dalla vostra rete.
 
-% ══════════════════════════════════════════════════════════════
-\section{Ritardi e tempi di trasmissione}
-% ══════════════════════════════════════════════════════════════
-
-\info{Richiamo: i ritardi di un pacchetto}{
-    Un pacchetto che attraversa un nodo accumula quattro ritardi:
-    $$d_{\text{nodo}} = d_{\text{elab}} + d_{\text{coda}} + d_{\text{trasm}} + d_{\text{prop}}$$
-    \begin{itemize}
-      \item $d_{\text{elab}}$: elaborazione (controllo degli errori, scelta dell'uscita), tipicamente microsecondi;
-      \item $d_{\text{coda}}$: attesa in coda, dipende dal traffico;
-      \item $d_{\text{trasm}} = L/R$: tempo per ``spingere'' sul collegamento tutti gli $L$ bit al rate $R$. Dipende dalla
-            \textbf{dimensione del pacchetto} e dal \textbf{rate}, \emph{non} dalla distanza;
-      \item $d_{\text{prop}} = d/s$: tempo che il segnale impiega a percorrere la distanza $d$ alla velocità $s$
-            ($2$--$3 \cdot 10^8$ m/s). Dipende dalla \textbf{distanza}, \emph{non} dal pacchetto.
-    \end{itemize}
+\info{Strumenti}{
+    Wireshark installato e configurato per catturare come utente normale (si avvia la cattura \emph{prima} del comando), e da terminale
+    \texttt{nc}, \texttt{curl}, \texttt{dig} e \texttt{ftp}. Su Debian, Ubuntu e derivate:
+    \texttt{sudo apt install netcat-openbsd curl bind9-dnsutils tnftp}. Alcune reti bloccano FTP o la porta 80 in uscita: in quel caso si
+    prova da casa. I server cambiano: se un nome non risponde più, se ne sceglie un altro che faccia la stessa cosa.
 }
 
-\begin{esercizio}{Trasmissione contro propagazione}
-Un pacchetto di $L = 1000$ byte viaggia su un collegamento lungo $d = 2500$ km, con rate $R = 10$ Mb/s e velocità di
-propagazione $s = 2{,}5 \cdot 10^8$ m/s.
-\begin{enumerate}[label=(\alph*)]
-    \item Calcolare il tempo di trasmissione e il tempo di propagazione. Quale dei due domina?
-    \item Ripetere il calcolo con $R = 1$ Gb/s. Che cosa cambia?
-    \item Quanto è ``lungo'', in metri, un singolo bit sul cavo nei due casi?
-    \item Un collegamento via satellite geostazionario (quota $36\,000$ km, $s = 3\cdot 10^8$ m/s) collega due stazioni a
-          terra. Quanto vale il ritardo di propagazione tra le due stazioni?
-\end{enumerate}
-\end{esercizio}
-
-\svolgimento
-\textbf{(a)} Il pacchetto è di $1000 \cdot 8 = 8000$ bit.
-$$d_{\text{trasm}} = \frac{L}{R} = \frac{8000}{10^7} = 0{,}8 \text{ ms} \qquad
-  d_{\text{prop}} = \frac{d}{s} = \frac{2{,}5 \cdot 10^6 \text{ m}}{2{,}5 \cdot 10^8 \text{ m/s}} = 10 \text{ ms}$$
-Domina la propagazione (12,5 volte più grande); il totale, senza code ed elaborazione, è $10{,}8$ ms.
-
-\textbf{(b)} Con $R = 10^9$ b/s: $d_{\text{trasm}} = 8000/10^9 = 8\ \mu$s, mentre $d_{\text{prop}}$ resta $10$ ms. Il totale scende
-solo a $10{,}008$ ms: aumentare la banda \textbf{non accorcia la propagazione}.
-
-\textbf{(c)} In un secondo escono $R$ bit che si distribuiscono su $s$ metri, quindi ogni bit occupa $s/R$ metri:
-\begin{itemize}
-    \item a 10 Mb/s: $2{,}5\cdot 10^8 / 10^7 = 25$ m per bit (il pacchetto intero è lungo $200$ km);
-    \item a 1 Gb/s: $2{,}5\cdot 10^8 / 10^9 = 25$ cm per bit.
-\end{itemize}
-
-\textbf{(d)} Il segnale sale e scende: $d = 2 \cdot 36\,000$ km $= 7{,}2\cdot 10^7$ m, quindi
-$d_{\text{prop}} = 7{,}2\cdot 10^7 / 3\cdot 10^8 = 0{,}24$ s. Un RTT via satellite supera così il mezzo secondo, ed è per questo
-che le telefonate satellitari hanno quel fastidioso ritardo.
-
-\warning{L'analogia dell'autostrada}{
-    Pensate a una colonna di 10 auto (i bit) che attraversa un casello (il router) e poi percorre 100 km di autostrada. Il
-    tempo per far passare \emph{tutte} le auto dal casello è il ritardo di \textbf{trasmissione}; il tempo che ciascuna
-    impiega a percorrere l'autostrada è il ritardo di \textbf{propagazione}. Aprire più caselli (più banda) non rende
-    l'autostrada più corta.
-}
-
-\begin{esercizio}{Messaggio intero o pacchetti?}
-Un messaggio di $8 \cdot 10^6$ bit va dalla sorgente alla destinazione attraverso due router, cioè su $N = 3$ collegamenti
-da $R = 2$ Mb/s. Si trascurino propagazione, code ed elaborazione.
-\begin{enumerate}[label=(\alph*)]
-    \item Quanto tempo serve se il messaggio viene inviato \textbf{intero} (commutazione di messaggio, store-and-forward)?
-    \item Quanto tempo serve se viene diviso in $P = 800$ pacchetti da $10\,000$ bit ciascuno? Quando arriva il primo pacchetto?
-    \item Ricavare la formula generale e spiegare da dove viene il guadagno.
-\end{enumerate}
-\end{esercizio}
-
-\svolgimento
-\textbf{(a)} Ogni nodo deve ricevere tutto il messaggio prima di inoltrarlo. Ogni collegamento richiede
-$8\cdot 10^6 / 2\cdot 10^6 = 4$ s, quindi il totale è $3 \cdot 4 = 12$ s.
-
-\textbf{(b)} Ogni pacchetto richiede $L/R = 10^4 / 2\cdot 10^6 = 5$ ms per collegamento.
-\begin{itemize}
-    \item Il \textbf{primo} pacchetto arriva dopo $3 \cdot 5 = 15$ ms.
-    \item La sorgente finisce di trasmettere l'\textbf{ultimo} pacchetto dopo $800 \cdot 5$ ms $= 4$ s; da lì servono altri 2
-          collegamenti, cioè $10$ ms. Il messaggio è completo dopo $4{,}01$ s.
-\end{itemize}
-
-\textbf{(c)} La figura mostra il caso di $P = 3$ pacchetti su $N = 3$ collegamenti, con il tempo diviso in intervalli da $L/R$.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[x=1.25cm, y=0.8cm, every node/.style={font=\scriptsize\sffamily}]
-  \foreach \r/\n in {0/{collegamento 1}, 1/{collegamento 2}, 2/{collegamento 3}} \node[anchor=east] at (0,-\r-0.5) {\n};
-  \foreach \t in {0,...,5} \draw[black!25] (\t,0) -- (\t,-3);
-  \foreach \t in {1,...,5} \node at (\t-0.5,0.3) {$t_{\t}$};
-  \foreach \r in {0,...,3} \draw[black!25] (0,-\r) -- (5,-\r);
-  \foreach \r in {0,1,2} {
-    \foreach \p/\c in {1/netblue!55, 2/netgreen!55, 3/netorange!60} {
-      \pgfmathtruncatemacro{\s}{\r+\p-1}
-      \fill[\c] (\s+0.05,-\r-0.1) rectangle (\s+0.95,-\r-0.9);
-      \node at (\s+0.5,-\r-0.5) {p\p};
-    }
-  }
-  \draw[decorate, decoration={brace, amplitude=5pt, mirror}] (0,-3.15) -- (5,-3.15) node[midway, below=6pt] {$(P + N - 1)\cdot L/R = (3+3-1)\cdot L/R = 5\cdot L/R$};
-\end{tikzpicture}
-\caption{Con i pacchetti i collegamenti lavorano \emph{in parallelo}, come una catena di montaggio.}
-\end{figure}
-
-Il primo pacchetto impiega $N$ intervalli, e ciascuno dei $P-1$ successivi arriva un intervallo dopo il precedente:
-$$T = (P + N - 1)\cdot\frac{L}{R} = (800 + 3 - 1) \cdot 5 \text{ ms} = 4{,}01 \text{ s}$$
-Con il messaggio intero, invece, $T = N \cdot P \cdot L/R$: i collegamenti lavorano \emph{uno alla volta}. Dividere in pacchetti
-permette ai router di lavorare contemporaneamente; inoltre un errore costringe a ritrasmettere solo un pacchetto, e più
-comunicazioni possono alternarsi sullo stesso collegamento. Il prezzo sono gli header di ogni pacchetto e la necessità di
-riordinarli a destinazione.
-
-\begin{esercizio}{Throughput e collo di bottiglia}
-Un server invia un file di 4 MB a un client attraverso tre collegamenti in serie: $R_1 = 500$ kb/s, $R_2 = 2$ Mb/s,
-$R_3 = 1$ Mb/s.
-\begin{enumerate}[label=(\alph*)]
-    \item Qual è il throughput del trasferimento, in assenza di altro traffico?
-    \item Quanto dura, approssimativamente, il trasferimento?
-    \item Il collegamento centrale viene condiviso in parti uguali da 10 trasferimenti contemporanei. Come cambiano le risposte?
-\end{enumerate}
-\end{esercizio}
-
-\svolgimento
-\begin{center}
-\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
-  \node (s) at (0,0) {\icon[0.7cm]{server}}; \node[below=-1pt of s] {server};
-  \node (r1) at (3,0) {\icon[0.8cm]{router}};
-  \node (r2) at (6,0) {\icon[0.8cm]{router}};
-  \node (c) at (9,0) {\icon[0.8cm]{laptop}}; \node[below=-1pt of c] {client};
-  \draw[wired, line width=1pt] (s) -- node[above] {$R_1 = 500$ kb/s} (r1);
-  \draw[wired, line width=3pt] (r1) -- node[above] {$R_2 = 2$ Mb/s} (r2);
-  \draw[wired, line width=2pt] (r2) -- node[above] {$R_3 = 1$ Mb/s} (c);
-  \node[text=netred] at (1.5,-0.45) {collo di bottiglia};
-\end{tikzpicture}
-\end{center}
-
-\textbf{(a)} Il throughput è limitato dal collegamento più lento: $\min\{R_1, R_2, R_3\} = 500$ kb/s.
-
-\textbf{(b)} $4$ MB $= 32 \cdot 10^6$ bit, quindi $T = 32\cdot 10^6 / 5 \cdot 10^5 = 64$ s.
-
-\textbf{(c)} Ogni trasferimento ottiene $R_2/10 = 200$ kb/s sul collegamento centrale, che diventa il nuovo collo di bottiglia:
-throughput $= \min\{500, 200, 1000\} = 200$ kb/s, e il trasferimento dura $32\cdot 10^6 / 2\cdot 10^5 = 160$ s. Il collo di
-bottiglia non è sempre il collegamento con il rate più basso: dipende anche da \textbf{quanto è condiviso}.
-
 % ══════════════════════════════════════════════════════════════
-\section{Commutazione di circuito e di pacchetto}
+\section{Reti e commutazione}
 % ══════════════════════════════════════════════════════════════
 
-\begin{esercizio}{Quanti utenti su un collegamento}
-Un collegamento da 1 Mb/s è condiviso da utenti che, quando sono attivi, trasmettono a 100 kb/s; ogni utente è attivo in
-media il 10\% del tempo, in modo indipendente dagli altri.
+\begin{esercizio}{Host ed end system}
+Qual è la differenza tra un host e un end system? Elencare diversi tipi di end system. Un server Web è un end system?
+
+\svolgimento
+Nessuna: i due termini sono sinonimi, e indicano i dispositivi ai bordi della rete che eseguono le applicazioni. Sono end system PC,
+portatili, smartphone, server, sensori, televisori, console, automobili connesse. Un server Web è un end system (un host), come il
+browser che lo interroga.
+\end{esercizio}
+
+\begin{esercizio}{Circuiti, TDM e FDM}
+Quale vantaggio ha una rete a commutazione di circuito rispetto a una a commutazione di pacchetto? In una rete a circuito, quali
+vantaggi ha il TDM rispetto all'FDM?
+
+\svolgimento
+Il circuito \textbf{garantisce} la banda per tutta la durata della chiamata: niente code, ritardo costante, nessuna perdita per
+congestione, ottimo per traffico continuo come la voce. Il TDM rispetto all'FDM: ogni circuito usa tutta la banda per il proprio slot,
+non serve dividere lo spettro con filtri e bande di guardia, è naturalmente digitale e si adatta meglio a canali di velocità diverse
+(più slot per lo stesso circuito).
+\end{esercizio}
+
+\begin{esercizio}{Peering e IXP}
+Perché due ISP allo stesso livello della gerarchia fanno spesso peering tra loro? Come guadagna un IXP?
+
+\svolgimento
+Scambiandosi direttamente il traffico tra i rispettivi clienti, senza passare dal provider di livello superiore, \textbf{non pagano}
+il transito per quel traffico (il peering di solito è gratuito) e accorciano i percorsi. Un IXP è un punto in cui molti ISP si
+incontrano e fanno peering: guadagna facendo pagare agli ISP la connessione alla propria infrastruttura di commutazione (porte, spazio,
+corrente), non il traffico.
+\end{esercizio}
+
+\begin{esercizio}{Topologie, contate}
+Otto host devono essere collegati tra loro.
+\begin{enumerate}[label=(\alph*)]
+    \item Per un bus, un anello, una stella attorno a uno switch e una maglia completa, quanti collegamenti servono? Per il bus si contano
+          la dorsale e un cavo di discesa per host.
+    \item Per ciascuna topologia, trovare un singolo guasto (un collegamento o un dispositivo) che isoli almeno un host dagli altri.
+          Quanti host isola? C'è una topologia in cui nessun guasto di un singolo collegamento isola qualcuno?
+    \item Con $n$ host, come cresce il numero di collegamenti nei quattro casi?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Bus: 1 dorsale $+$ 8 discese $=$ 9. Anello: 8. Stella: 8. Maglia completa: $8 \cdot 7/2 = 28$.
+    \item Bus: un cavo di discesa isola il suo host; un taglio della dorsale divide gli host in due gruppi (quanti, dipende dal punto).
+          Anello: un collegamento rotto lascia una linea, e nessuno è isolato; ne servono due. Stella: un cavo isola il suo host, lo switch
+          guasto isola tutti e otto. Maglia: nessun singolo collegamento isola nessuno. Anello e maglia sono quindi le topologie in cui nessun
+          guasto di un singolo collegamento isola qualcuno (il guasto di un host isola, ovviamente, solo lui).
+    \item Bus $n + 1$, anello $n$, stella $n$: lineare. Maglia $n(n-1)/2$: quadratica.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{La legge di Metcalfe}
+La legge di Metcalfe dice che il valore di una rete cresce con il quadrato del numero dei suoi utenti. Se ciascuno di $n$ utenti invia un
+messaggio a ciascuno degli altri, quanti messaggi vengono inviati? La risposta sostiene la legge? Confrontarla con i collegamenti della
+maglia completa dell'esercizio precedente.
+
+\svolgimento
+$n(n-1)$ messaggi: crescono come $n^2$, ed è proprio l'intuizione della legge (ogni nuovo utente può parlare con tutti quelli già
+presenti). È esattamente il doppio dei collegamenti della maglia completa, $n(n-1)/2$: un collegamento serve due messaggi, uno per verso.
+\end{esercizio}
+
+\begin{esercizio}{Multiplexing statistico}
+Un collegamento da 10 Mb/s è condiviso da utenti che, quando trasmettono, richiedono 200 kb/s ciascuno, ma trasmettono solo il 10\% del
+tempo.
 \begin{enumerate}[label=(\alph*)]
     \item Con la commutazione di circuito, quanti utenti si possono servire?
-    \item Con la commutazione di pacchetto e 35 utenti, qual è la probabilità che esattamente $n$ utenti siano attivi?
-    \item Qual è la probabilità che più di 10 utenti siano attivi contemporaneamente? Commentare.
+    \item Con la commutazione di pacchetto, qual è la probabilità che un dato utente stia trasmettendo?
+    \item Con 120 utenti, qual è la probabilità che esattamente $n$ trasmettano insieme? E che siano 51 o più?
 \end{enumerate}
-\end{esercizio}
 
 \svolgimento
-\textbf{(a)} Ogni circuito riserva 100 kb/s anche quando l'utente tace: $1000/100 = 10$ utenti.
-
-\textbf{(b)} Ogni utente è attivo con probabilità $p = 0{,}1$, indipendentemente dagli altri: il numero di utenti attivi segue
-una \textbf{distribuzione binomiale}
-$$P(n \text{ attivi}) = \binom{35}{n}\, p^n (1-p)^{35-n}$$
-Per esempio $P(0) \approx 0{,}025$, $P(3) \approx 0{,}225$ (il valore più probabile), $P(10) \approx 0{,}0013$.
-
-\textbf{(c)} Il collegamento va in sovraccarico solo se ci sono almeno 11 utenti attivi:
-$$P(n > 10) = 1 - \sum_{n=0}^{10} \binom{35}{n}\, 0{,}1^n\, 0{,}9^{35-n} \approx 1 - 0{,}99958 = 0{,}00042$$
-Circa \textbf{4 volte su diecimila}. La commutazione di pacchetto serve quindi 3,5 volte gli utenti del circuito, con prestazioni
-quasi identiche: è il guadagno della \textbf{multiplazione statistica}, che sfrutta il fatto che il traffico dati è
-\emph{a raffiche} (\emph{bursty}). Il prezzo è che, in quei rari momenti, i pacchetti si accodano e possono andare persi: non c'è
-più una garanzia.
-
-\begin{esercizio}{Un file su un circuito TDM}
-Quanto tempo serve per inviare un file di $640\,000$ bit dall'host A all'host B su una rete a commutazione di circuito, se tutti
-i collegamenti sono da $1{,}536$ Mb/s, ognuno usa TDM con 24 slot, e servono 500 ms per stabilire il circuito? Quanto
-servirebbe se il collegamento fosse tutto per noi?
-\end{esercizio}
-
-\svolgimento
-Con TDM a 24 slot, a ogni circuito spetta $1{,}536 / 24 = 64$ kb/s. Il trasferimento dura
-$640\,000 / 64\,000 = 10$ s, a cui si sommano i $0{,}5$ s di instaurazione: $\mathbf{10{,}5}$ \textbf{s}.
-
-Se potessimo usare l'intero collegamento, la trasmissione durerebbe $640\,000 / 1\,536\,000 \approx 0{,}42$ s (per
-collegamento). Il circuito ci \textbf{garantisce} i 64 kb/s, ma ci impedisce di usare la capacità lasciata libera dagli altri.
-
-% ══════════════════════════════════════════════════════════════
-\section{Topologie}
-% ══════════════════════════════════════════════════════════════
-
-\begin{esercizio}{Contare collegamenti e porte}
-Una rete ha $n = 8$ nodi.
 \begin{enumerate}[label=(\alph*)]
-    \item Quanti collegamenti servono con topologia a maglia completa, a stella, ad anello e a bus? Quante porte deve avere ogni
-          nodo nella maglia completa?
-    \item Si aggiunge un nono nodo: quanti collegamenti in più servono in ciascun caso?
-    \item Che cosa succede, in ciascuna topologia, se si guasta un singolo collegamento? E se si guasta il nodo centrale della stella?
+    \item $10 \text{ Mb/s} / 200 \text{ kb/s} = 50$ utenti.
+    \item $p = 0{,}1$.
+    \item Distribuzione binomiale: $P(n) = \binom{120}{n}\, 0{,}1^n\, 0{,}9^{120-n}$. La probabilità che ne trasmettano 51 o più (e quindi che
+          il collegamento sia sovraccarico) è $\sum_{n=51}^{120} P(n) \approx 2 \cdot 10^{-20}$: in pratica mai. Con i pacchetti si servono
+          120 utenti dove il circuito ne serve 50.
 \end{enumerate}
 \end{esercizio}
 
-\svolgimento
-\textbf{(a)} e \textbf{(b)}:
-\begin{table}[H]
-\centering
-\begin{tabular}{lccc}
-\toprule
-\textbf{Topologia} & \textbf{Collegamenti con 8 nodi} & \textbf{Con 9 nodi} & \textbf{In più} \\
-\midrule
-Maglia completa & $\frac{8\cdot 7}{2} = 28$ & $\frac{9 \cdot 8}{2} = 36$ & 8 \\
-Stella & 8 (più il nodo centrale) & 9 & 1 \\
-Anello & 8 & 9 & 1 (se ne toglie uno e se ne aggiungono due) \\
-Bus & 1 dorsale + 8 derivazioni & 1 + 9 & 1 derivazione \\
-\bottomrule
-\end{tabular}
-\caption{Collegamenti richiesti dalle diverse topologie.}
-\end{table}
-Nella maglia completa ogni nodo è collegato a tutti gli altri: servono $n - 1 = 7$ porte per nodo. Aggiungere un nodo costa
-$n$ collegamenti nuovi e una porta in più su \emph{ogni} nodo esistente: è la crescita quadratica che rende la maglia completa
-impraticabile per reti grandi.
-
-\textbf{(c)} Guasto di un collegamento:
-\begin{itemize}
-    \item \textbf{maglia completa}: nessun effetto sulla connettività, esistono altri cammini;
-    \item \textbf{stella}: resta isolato solo il nodo di quel collegamento;
-    \item \textbf{anello}: se l'anello è unidirezionale la rete si interrompe; se è bidirezionale (o doppio) i messaggi
-          possono girare nell'altro verso;
-    \item \textbf{bus}: se si guasta la dorsale la rete si divide in due parti (e il segnale riflesso può disturbare tutti).
-\end{itemize}
-Se si guasta il \textbf{centro della stella} si ferma tutta la rete: è il suo \emph{single point of failure}.
-
-\begin{esercizio}{Perché esistono gli IXP}
-Sei ISP regionali vogliono scambiarsi traffico direttamente, a coppie. Quanti collegamenti di peering servono? E se si
-incontrano tutti in un IXP? Ripetere con 50 ISP.
-\end{esercizio}
-
-\svolgimento
-Collegare tutti con tutti è una maglia completa: $\frac{6 \cdot 5}{2} = 15$ collegamenti. Con un IXP ogni ISP porta un solo
-collegamento al punto di scambio: $6$ collegamenti. Con 50 ISP: $\frac{50 \cdot 49}{2} = 1225$ contro $50$. L'IXP trasforma una
-maglia in una \textbf{stella}, ed è il motivo per cui questi punti neutrali di scambio si sono diffusi.
-
-% ══════════════════════════════════════════════════════════════
-\section{Stratificazione e incapsulamento}
-% ══════════════════════════════════════════════════════════════
-
-\begin{esercizio}{Quanto pesano gli header}
-Un'applicazione invia messaggi di $M$ byte. Lungo la pila TCP/IP su Ethernet si aggiungono un header TCP da 20 byte, un header
-IP da 20 byte e 18 byte di header e trailer Ethernet.
+\begin{esercizio}{Direzioni, dimensioni e velocità}
+Sei situazioni: (1) una tastiera senza fili invia tasti a un PC; (2) due persone parlano con i walkie-talkie; (3) una telefonata su una
+linea in fibra; (4) la rete che unisce gli edifici di un'università sparsi in una città; (5) un portatile collegato allo switch
+dell'ufficio; (6) due data center su continenti diversi.
 \begin{enumerate}[label=(\alph*)]
-    \item Che frazione dei byte trasmessi è occupata dagli header se $M = 100$ byte? E se $M = 1460$ byte?
-    \item In una sessione remota ogni tasto premuto invia 1 byte. Che frazione è overhead?
-    \item Ricavare la formula per una pila di $n$ strati, ognuno dei quali aggiunge $h$ byte.
+    \item Per (1), (2) e (3): simplex, half-duplex o full-duplex?
+    \item Per (1), (4), (5) e (6): PAN, LAN, MAN o WAN?
+    \item Un download mostra 40 Mbit/s su una linea venduta come 100 Mbit/s. Quale dei due numeri è più vicino alla banda del percorso e
+          quale è il throughput? Dare due ragioni per cui differiscono.
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item (1) simplex; (2) half-duplex (si parla a turno); (3) full-duplex.
+    \item (1) PAN; (4) MAN; (5) LAN; (6) WAN.
+    \item 100 Mbit/s è la banda nominale del collegamento d'accesso; 40 Mbit/s è il throughput misurato. Differiscono perché il collo di
+          bottiglia può stare altrove sul percorso (il server, un collegamento congestionato, il Wi-Fi di casa), perché header e
+          ritrasmissioni consumano banda, perché il controllo di congestione di TCP non tiene sempre il tubo pieno, e perché il
+          collegamento è condiviso con altri.
 \end{enumerate}
 \end{esercizio}
 
-\svolgimento
-Gli header valgono in tutto $h_{\text{tot}} = 20 + 20 + 18 = 58$ byte.
+% ══════════════════════════════════════════════════════════════
+\section{Livelli e incapsulamento}
+% ══════════════════════════════════════════════════════════════
 
+\begin{esercizio}{Chi elabora quali livelli}
+Quali livelli della pila Internet elabora un router? Uno switch di collegamento? Un host?
+
+\svolgimento
+Router: fisico, collegamento e rete. Switch: fisico e collegamento. Host: tutti e cinque.
+\end{esercizio}
+
+\begin{esercizio}{Compiti dei livelli}
+Elencare cinque compiti che un livello può svolgere. Lo stesso compito può essere svolto da due o più livelli? Dare un esempio dal corso.
+
+\svolgimento
+Rilevazione degli errori, controllo di flusso, segmentazione e riassemblaggio, multiplexing, indirizzamento, instaurazione della
+connessione, consegna affidabile, instradamento. Sì: la rilevazione degli errori sta nel CRC del collegamento, nel checksum dell'header
+IP e nel checksum di TCP/UDP; la consegna affidabile sia nel Wi-Fi (riscontri sul singolo hop) sia in TCP (da estremo a estremo).
+\end{esercizio}
+
+\begin{esercizio}{Incapsulamento a mano}
+Un browser invia una richiesta HTTP di 500 byte su TCP, IPv4 ed Ethernet: header TCP di 20 byte, header IP di 20 byte, header Ethernet di
+14 byte più 4 byte di controllo in fondo al frame.
+\begin{enumerate}[label=(\alph*)]
+    \item Disegnare il frame come scatole annidate. Quale livello aggiunge qualcosa anche in fondo?
+    \item Quanti byte invia l'adattatore, senza contare il preambolo? Che frazione è la richiesta HTTP?
+    \item Ripetere (b) per un messaggio applicativo di 10 byte. Che cosa dice il risultato sull'invio di molti messaggi piccoli?
+    \item Un router sul percorso riceve il frame. Quali header legge, e quali riscrive prima di inoltrarlo?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item \texttt{[Eth 14 [IP 20 [TCP 20 [HTTP 500]]] CRC 4]}: il collegamento aggiunge anche un trailer, il CRC.
+    \item $14 + 20 + 20 + 500 + 4 = 558$ byte; la richiesta è $500/558 \approx 89{,}6\%$.
+    \item $14 + 20 + 20 + 10 + 4 = 68$ byte, di cui solo il $14{,}7\%$ è utile: con molti messaggi piccoli la maggior parte della banda se
+          ne va in header. Conviene raggrupparli.
+    \item Legge l'header Ethernet (il MAC di destinazione è il suo) e l'header IP (l'indirizzo di destinazione per la tabella). Costruisce
+          un header Ethernet nuovo (MAC sorgente e destinazione, CRC) e nell'header IP riscrive TTL e checksum. TCP e HTTP non li tocca.
+\end{enumerate}
+\end{esercizio}
+
+% ══════════════════════════════════════════════════════════════
+\section{Applicazioni}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Client e server nel P2P}
+Per un'applicazione P2P di condivisione di file, siete d'accordo che ``non c'è nozione di lato client e lato server in una sessione di
+comunicazione''? Perché?
+
+\svolgimento
+No. In ogni sessione un peer chiede (fa da client) e l'altro serve (fa da server): ciò che il P2P elimina è il ruolo \emph{fisso}, non
+la distinzione in una sessione. Lo stesso peer è client in una sessione e server in un'altra, anche contemporaneamente.
+\end{esercizio}
+
+\begin{esercizio}{I servizi del trasporto}
+Un protocollo di trasporto può offrire quattro tipi di servizio: consegna affidabile, throughput, temporizzazione e sicurezza. Per
+ciascuno, dire se lo offre TCP, UDP, entrambi o nessuno.
+
+\svolgimento
+Consegna affidabile: solo TCP. Throughput garantito: nessuno dei due. Temporizzazione: nessuno. Sicurezza: nessuno dei due da solo; la
+offre TLS sopra TCP.
+\end{esercizio}
+
+\begin{esercizio}{Progettare un protocollo applicativo}
+Progettare il protocollo tra un bancomat e il computer centrale della banca: deve permettere di verificare carta e PIN, chiedere il saldo
+e prelevare, compreso il caso frequente in cui il conto non basta.
+\begin{enumerate}[label=(\alph*)]
+    \item Elencare i tipi di messaggio, la loro sintassi, il significato di ogni campo e le regole su chi invia che cosa e quando.
+    \item Disegnare lo scambio per un prelievo riuscito come diagramma temporale.
+    \item Che cosa assume il protocollo sul trasporto sottostante? Che cosa succede se la richiesta del bancomat arriva ma la risposta si
+          perde: il cliente riceve i soldi due volte, mai, o una volta?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Messaggi di testo, una riga ciascuno: \texttt{AUTH <carta> <pin>} $\rightarrow$ \texttt{OK} oppure \texttt{ERR pin};
+          \texttt{BALANCE} $\rightarrow$ \texttt{BAL <importo>}; \texttt{WITHDRAW <id> <importo>} $\rightarrow$ \texttt{GRANTED <id> <nuovo
+          saldo>} oppure \texttt{DENIED <id> <saldo>}; \texttt{DISPENSED <id>} $\rightarrow$ \texttt{ACK <id>}; \texttt{BYE}. Regole: il
+          bancomat parla per primo, ogni richiesta ha una sola risposta, nessuna operazione prima di un \texttt{OK}, \texttt{<id>} è un
+          identificatore unico di transazione scelto dal bancomat.
+    \item Bancomat $\rightarrow$ \texttt{AUTH}, banca $\rightarrow$ \texttt{OK}; \texttt{WITHDRAW 17 100} $\rightarrow$ \texttt{GRANTED 17
+          420}; il bancomat eroga e invia \texttt{DISPENSED 17} $\rightarrow$ \texttt{ACK 17}; \texttt{BYE}.
+    \item Assume un trasporto affidabile e ordinato (TCP), e cifrato e autenticato (TLS). Se la risposta si perde, il bancomat non sa se il
+          prelievo è stato autorizzato: con l'identificatore di transazione può ripetere \texttt{WITHDRAW 17} senza che la banca addebiti
+          due volte (la banca riconosce il duplicato), e il bancomat eroga solo dopo un \texttt{GRANTED}. Così il cliente riceve i soldi
+          \textbf{al più una volta}; se il bancomat si arrende, la banca annulla l'addebito non seguito da \texttt{DISPENSED}.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{FTP, mentre viaggia}
+Si avvia una cattura e si apre una sessione anonima su un server FTP pubblico (\texttt{ftp ftp.gnu.org}, utente \texttt{anonymous}),
+con \texttt{ls}, \texttt{get README} e \texttt{quit}; filtro \texttt{ftp || ftp-data}.
+\begin{enumerate}[label=(\alph*)]
+    \item Quante connessioni TCP sono state aperte, verso quali porte del server, e quale è rimasta aperta per tutta la sessione?
+    \item Si leggono nome utente e password? Che cosa se ne deduce?
+    \item Quale comando e quale risposta hanno preparato ciascuna connessione dati, e chi si è collegato a chi? Come sa il client che il
+          file è finito?
+\end{enumerate}
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Tre: la connessione di \textbf{controllo} verso la porta 21, aperta per tutta la sessione, e una connessione \textbf{dati} per
+          \texttt{ls} e una per \texttt{get}, verso porte alte del server.
+    \item Sì: \texttt{USER anonymous} e \texttt{PASS} viaggiano in chiaro sulla connessione di controllo. FTP non protegge le credenziali:
+          per quelle vere servono FTPS o SFTP.
+    \item In modalità passiva il client invia \texttt{PASV} (o \texttt{EPSV}); il server risponde \texttt{227} (o \texttt{229}) con
+          indirizzo e porta, ed è il \textbf{client} a collegarsi al server. Il file è finito quando il server chiude la connessione dati
+          (FIN): FTP delimita i dati chiudendo la connessione, e la risposta \texttt{226} sulla connessione di controllo lo conferma.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{Il primo chunk di Alice}
+Una nuova peer, Alice, entra in un torrent BitTorrent senza alcun chunk. Non avendo nulla da caricare, non può diventare una delle
+prime quattro uploader di nessuno. Come ottiene il suo primo chunk?
+
+\svolgimento
+Con l'\textbf{optimistic unchoking}: ogni 30 secondi ciascun peer sceglie a caso un vicino in più a cui inviare, indipendentemente da
+quanto ne riceve. Prima o poi qualcuno sceglie Alice, che riceve i primi chunk e da lì può cominciare a scambiare.
+\end{esercizio}
+
+\begin{esercizio}{Distribuzione client-server e P2P}
+Un file di $F = 20$ Gbit deve raggiungere $N$ peer. Il server carica a $u_s = 30$ Mb/s; ogni peer scarica a $d = 2$ Mb/s e carica a $u$.
+Con i tempi minimi di distribuzione visti nel corso, riempire una tabella per $N = 10, 100, 1000$ e $u = 300$ kb/s, 700 kb/s, 2 Mb/s, per
+client-server e per P2P. Che cosa fa ciascuna architettura al crescere di $N$?
+
+\svolgimento
+$D_{cs} = \max\{NF/u_s,\ F/d\}$ e $D_{P2P} = \max\{F/u_s,\ F/d,\ NF/(u_s + Nu)\}$, con $F/u_s \approx 667$ s e $F/d = 10\,000$ s.
 \begin{center}
-\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}]
-  \node[field, fill=llink, minimum width=1.3cm] (e) at (0,0) {Ethernet 14};
-  \node[field, fill=lnet, minimum width=1.2cm, right=0pt of e] (i) {IP 20};
-  \node[field, fill=ltra, minimum width=1.2cm, right=0pt of i] (t) {TCP 20};
-  \node[field, fill=lapp, minimum width=4.2cm, right=0pt of t] (m) {messaggio: $M$ byte};
-  \node[field, fill=llink, minimum width=1.2cm, right=0pt of m] {CRC 4};
-\end{tikzpicture}
+\begin{tabular}{rrrrr}
+\toprule
+$N$ & client-server & P2P, $u = 300$ kb/s & P2P, $u = 700$ kb/s & P2P, $u = 2$ Mb/s \\
+\midrule
+10 & 10\,000 s & 10\,000 s & 10\,000 s & 10\,000 s \\
+100 & 66\,667 s & 33\,333 s & 20\,000 s & 10\,000 s \\
+1000 & 666\,667 s & 60\,606 s & 27\,397 s & 10\,000 s \\
+\bottomrule
+\end{tabular}
 \end{center}
+Il client-server cresce \textbf{linearmente} con $N$; il P2P resta limitato, perché ogni peer porta anche capacità di upload: per $N$
+grande tende a $F/u$ (e con $u = d$ il collo di bottiglia resta lo scaricamento dei peer).
+\end{esercizio}
 
-\textbf{(a)}
-$$M = 100: \quad \frac{58}{100 + 58} \approx 36{,}7\% \qquad\qquad M = 1460: \quad \frac{58}{1460 + 58} \approx 3{,}8\%$$
+% ══════════════════════════════════════════════════════════════
+\section{HTTP}
+% ══════════════════════════════════════════════════════════════
 
-\textbf{(b)} $\dfrac{58}{1 + 58} \approx 98{,}3\%$: per spedire un byte se ne trasmettono 59. I messaggi piccoli sono i più
-penalizzati dalla stratificazione.
+\begin{esercizio}{Vero o falso}
+Giustificare ciascuna risposta in una riga.
+\begin{enumerate}[label=(\alph*)]
+    \item Una pagina fatta di un testo e tre immagini richiede un messaggio di richiesta e quattro messaggi di risposta.
+    \item \texttt{www.mit.edu/research.html} e \texttt{www.mit.edu/students.html} possono essere inviate sulla stessa connessione
+          persistente.
+    \item Con connessioni non persistenti, un solo segmento TCP può portare due messaggi di richiesta HTTP distinti.
+    \item L'header \texttt{Date:} di una risposta dice quando l'oggetto è stato modificato l'ultima volta.
+    \item Le risposte HTTP non hanno mai il corpo vuoto.
+\end{enumerate}
 
-\textbf{(c)} La frazione occupata dagli header è
-$$\frac{n\,h}{M + n\,h}$$
-che tende a 0 per messaggi grandi e a 1 per messaggi piccoli.
-
-\begin{esercizio}{A quale livello?}
-Per ciascuna voce indicare il livello della pila a cinque strati coinvolto e, dove ha senso, l'unità di dati.
-\begin{enumerate}
-    \item Scegliere il cammino di un pacchetto tra i router.
-    \item Consegnare i dati al processo giusto, individuato da un numero di porta.
-    \item Delimitare i frame e rilevare gli errori su un singolo collegamento.
-    \item Trasformare i bit in segnali elettrici o luminosi.
-    \item Chiedere una pagina Web a un server.
-    \item Ritrasmettere dati persi lungo il percorso tra i due estremi.
-    \item Tradurre un nome come \texttt{www.unina.it} in un indirizzo IP.
-    \item Uno switch; un router; un hub (ripetitore).
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Falso: ogni oggetto ha la sua richiesta, quindi quattro richieste e quattro risposte.
+    \item Vero: stanno sullo stesso server, e una connessione persistente porta più oggetti dello stesso server.
+    \item Falso: con connessioni non persistenti ogni connessione porta una sola richiesta.
+    \item Falso: \texttt{Date:} è il momento in cui la risposta è stata generata; la modifica è in \texttt{Last-Modified:}.
+    \item Falso: per esempio \texttt{304 Not Modified}, \texttt{204 No Content} e le risposte a \texttt{HEAD} non hanno corpo.
 \end{enumerate}
 \end{esercizio}
 
-\svolgimento
-\begin{table}[H]
-\centering
-\begin{tabular}{clp{6.6cm}}
-\toprule
-\textbf{\#} & \textbf{Livello} & \textbf{Nota} \\
-\midrule
-1 & Rete & routing; unità: datagramma \\
-2 & Trasporto & consegna processo-a-processo; unità: segmento \\
-3 & Collegamento & consegna \emph{hop-to-hop}; unità: frame \\
-4 & Fisico & unità: bit \\
-5 & Applicazione & HTTP; unità: messaggio \\
-6 & Trasporto & il trasferimento affidabile è di TCP (end-to-end) \\
-7 & Applicazione & il DNS è un'applicazione che offre un servizio alle altre applicazioni \\
-8 & Collegamento; Rete; Fisico & lo switch implementa 2 livelli, il router 3, l'hub solo il fisico \\
-\bottomrule
-\end{tabular}
-\caption{Livelli e unità di dati.}
-\end{table}
+\begin{esercizio}{Una richiesta, come è stata catturata}
+Questi sono i byte esatti di un GET inviato da un browser (\texttt{<cr><lf>} sono i caratteri di fine riga):
+\begin{lstlisting}[language=bash]
+GET /cs453/index.html HTTP/1.1<cr><lf>
+Host: gaia.cs.umass.edu<cr><lf>
+User-Agent: Mozilla/5.0 (Windows;U; Windows NT 5.1; en-US; rv:1.7.2) Gecko/20040804 Netscape/7.2<cr><lf>
+Accept: text/xml, application/xml, application/xhtml+xml, text/html;q=0.9, */*;q=0.5<cr><lf>
+Accept-Language: en-us,en;q=0.5<cr><lf>
+Keep-Alive: 300<cr><lf>
+Connection: keep-alive<cr><lf>
+<cr><lf>
+\end{lstlisting}
+Dire dove si trova ciascuna risposta: (a) l'URL del documento; (b) la versione di HTTP; (c) connessione persistente o no; (d)
+l'indirizzo IP dell'host del browser; (e) il tipo di browser, e perché un server vuole saperlo.
 
-\begin{esercizio}{Che servizio serve?}
-Per ciascuna applicazione scegliere il tipo di servizio più adatto tra i sei visti nel capitolo sulla stratificazione, e dire
-se ci si aspetta che usi TCP o UDP.
-(a) scaricare un file ISO; (b) una telefonata VoIP; (c) una query DNS; (d) stampare un libro diviso in pagine;
-(e) pubblicità inviata in massa; (f) un messaggio con conferma di lettura.
+\svolgimento
+(a) \texttt{http://gaia.cs.umass.edu/cs453/index.html}: il percorso nella riga di richiesta, l'host nell'header \texttt{Host:}. (b)
+HTTP/1.1, alla fine della riga di richiesta. (c) Persistente: \texttt{Connection: keep-alive}. (d) Non c'è: l'indirizzo sta nell'header
+IP, non nel messaggio HTTP. (e) \texttt{User-Agent:}, Netscape 7.2 (motore Gecko): il server può inviare versioni diverse dello stesso
+oggetto a browser diversi.
 \end{esercizio}
 
-\svolgimento
-\begin{itemize}
-    \item \textbf{(a)} Flusso di byte affidabile (TCP): non può mancare nemmeno un byte.
-    \item \textbf{(b)} Connessione inaffidabile (tipicamente UDP): un pacchetto perso è un piccolo ``click'', uno in ritardo è inutile.
-    \item \textbf{(c)} Richiesta-risposta (UDP): una domanda, una risposta; se si perde, si ripete.
-    \item \textbf{(d)} Flusso di messaggi affidabile: i confini tra le pagine vanno preservati.
-    \item \textbf{(e)} Datagram inaffidabile: nessuno si preoccupa se qualche messaggio va perso.
-    \item \textbf{(f)} Datagram con conferma: niente connessione, ma il mittente vuole sapere che il messaggio è arrivato.
-\end{itemize}
+\begin{esercizio}{La risposta}
+La risposta del server alla richiesta precedente:
+\begin{lstlisting}[language=bash]
+HTTP/1.1 200 OK<cr><lf>
+Date: Tue, 07 Mar 2008 12:39:45 GMT<cr><lf>
+Server: Apache/2.0.52 (Fedora)<cr><lf>
+Last-Modified: Sat, 10 Dec 2005 18:27:46 GMT<cr><lf>
+ETag: "526c3-f22-a88a4c80"<cr><lf>
+Content-Length: 3874<cr><lf>
+Keep-Alive: timeout=max=100<cr><lf>
+Connection: Keep-Alive<cr><lf>
+Content-Type: text/html; charset=ISO-8859-1<cr><lf>
+<cr><lf>
+<!doctype html public "-//w3c//dtd html 4.0 transitional//en"><lf>
+\end{lstlisting}
+(a) Il documento è stato trovato, e quando è stata generata la risposta? (b) Quando è stato modificato l'ultima volta? (c) Quanti byte
+contiene? (d) Quali sono i suoi primi cinque byte? Il server ha accettato una connessione persistente?
 
-\begin{esercizio}{Chi legge quale header}
-L'host A invia una richiesta HTTP al server B. Il percorso attraversa uno switch, poi un router, poi arriva a B. Per ciascun
-dispositivo dire fino a quale livello ``apre'' il pacchetto e quali campi legge o modifica.
+\svolgimento
+(a) Sì, \texttt{200 OK}; generata il 7 marzo 2008 alle 12:39:45 GMT (\texttt{Date:}). (b) 10 dicembre 2005, 18:27:46 GMT. (c) 3874 byte
+(\texttt{Content-Length:}). (d) \texttt{<!doc}. Sì: \texttt{Connection: Keep-Alive}.
 \end{esercizio}
 
+\begin{esercizio}{Contare i round trip}
+Si clicca su un link. L'indirizzo del server non è in cache: prima che arrivi si visitano $n$ server DNS, con round trip
+$\text{RTT}_1, \dots, \text{RTT}_n$. Sia $\text{RTT}_0$ il round trip tra l'host e il server Web; i tempi di trasmissione sono trascurabili.
+\begin{enumerate}[label=(\alph*)]
+    \item La pagina è un solo piccolo oggetto HTML. Quanto passa dal clic alla ricezione?
+    \item L'HTML fa riferimento a otto oggetti piccolissimi sullo stesso server. Quanto ci vuole con HTTP non persistente e nessuna
+          connessione parallela?
+    \item Con HTTP non persistente e fino a sei connessioni in parallelo?
+    \item Con HTTP persistente e pipelining?
+\end{enumerate}
+
 \svolgimento
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[every node/.style={font=\scriptsize\sffamily}, lay/.style={minimum width=1.6cm, minimum height=0.45cm, font=\tiny\sffamily}]
-  % host A
-  \node[lay app, lay] (a5) at (0,0) {Applicazione};
-  \node[lay tra, lay, below=0pt of a5] (a4) {Trasporto};
-  \node[lay net, lay, below=0pt of a4] (a3) {Rete};
-  \node[lay link, lay, below=0pt of a3] (a2) {Collegamento};
-  \node[lay phy, lay, below=0pt of a2] (a1) {Fisico};
-  \node[lay link, lay] (s2) at (3.3,-1.35) {Collegamento};
-  \node[lay phy, lay, below=0pt of s2] (s1) {Fisico};
-  \node[lay net, lay] (r3) at (6.6,-0.9) {Rete};
-  \node[lay link, lay, below=0pt of r3] (r2) {Collegamento};
-  \node[lay phy, lay, below=0pt of r2] (r1) {Fisico};
-  \node[lay app, lay] (b5) at (9.9,0) {Applicazione};
-  \node[lay tra, lay, below=0pt of b5] (b4) {Trasporto};
-  \node[lay net, lay, below=0pt of b4] (b3) {Rete};
-  \node[lay link, lay, below=0pt of b3] (b2) {Collegamento};
-  \node[lay phy, lay, below=0pt of b2] (b1) {Fisico};
-  \foreach \x/\n in {0/host A, 3.3/switch, 6.6/router, 9.9/server B} \node[font=\footnotesize\bfseries\sffamily] at (\x,0.55) {\n};
-  \draw[very thick, netred, -{Stealth}, rounded corners=2pt] (0.95,0) -- (0.95,-2.25) -- (2.35,-2.25) -- (2.35,-1.0) -- (4.25,-1.0)
-     -- (4.25,-2.25) -- (5.65,-2.25) -- (5.65,-0.55) -- (7.55,-0.55) -- (7.55,-2.25) -- (8.85,-2.25) -- (8.85,0);
-\end{tikzpicture}
-\caption{Il pacchetto sale lungo la pila solo fino al livello che il dispositivo implementa.}
-\end{figure}
-
-\begin{itemize}
-    \item \textbf{Switch} (livello 2): legge l'header Ethernet, in particolare il \textbf{MAC di destinazione}, per scegliere la
-          porta d'uscita. Non modifica il frame e non guarda dentro il payload.
-    \item \textbf{Router} (livello 3): rimuove l'header Ethernet, legge l'\textbf{IP di destinazione} per scegliere l'uscita,
-          \textbf{decrementa il TTL} e ricalcola il checksum IP, poi incapsula il datagramma in un \textbf{nuovo frame} con nuovi MAC.
-          Non legge l'header TCP né la richiesta HTTP.
-    \item \textbf{Server B}: decapsula tutti gli strati fino alla richiesta HTTP, che consegna al processo server individuato
-          dalla porta di destinazione (80).
-\end{itemize}
-Ogni strato tratta il proprio payload come \textbf{opaco}: il router trasporta la richiesta HTTP senza sapere che esiste.
-
-\begin{esercizio}{Simplex, half-duplex o full-duplex?}
-Classificare: (a) una trasmissione televisiva; (b) una coppia di walkie-talkie; (c) una telefonata; (d) una tastiera
-collegata a un computer; (e) un segmento Ethernet condiviso su hub; (f) un collegamento Ethernet commutato moderno.
+Sia $\Sigma = \text{RTT}_1 + \dots + \text{RTT}_n$.
+\begin{enumerate}[label=(\alph*)]
+    \item $\Sigma + 2\,\text{RTT}_0$ (un RTT per la connessione TCP, uno per richiesta e risposta).
+    \item $\Sigma + 2\,\text{RTT}_0 + 8 \cdot 2\,\text{RTT}_0 = \Sigma + 18\,\text{RTT}_0$.
+    \item Otto oggetti in due ondate (sei, poi due): $\Sigma + 2\,\text{RTT}_0 + 2 \cdot 2\,\text{RTT}_0 = \Sigma + 6\,\text{RTT}_0$.
+    \item Una sola connessione e tutte le richieste insieme: $\Sigma + 2\,\text{RTT}_0 + \text{RTT}_0 = \Sigma + 3\,\text{RTT}_0$.
+\end{enumerate}
 \end{esercizio}
 
-\svolgimento
-(a) simplex; (b) half-duplex (si parla a turno, ``passo''); (c) full-duplex; (d) simplex; (e) half-duplex (una stazione
-alla volta, altrimenti collisione); (f) full-duplex (coppie di fili separate per i due versi, niente collisioni).
+\begin{esercizio}{Quanto vale una cache}
+Un'istituzione ha una LAN da 100 Mb/s collegata a Internet da un collegamento d'accesso da 15 Mb/s. Gli oggetti sono in media di
+1\,000\,000 bit e i browser ne chiedono 16 al secondo. Dal momento in cui il router lato Internet inoltra una richiesta, la risposta
+torna in media dopo 3 s. Il tempo di risposta è il ritardo d'accesso più il ritardo di Internet; per l'accesso si usa
+$\Delta/(1 - \Delta\beta)$, con $\Delta$ il tempo per inviare un oggetto sul collegamento d'accesso e $\beta$ il tasso di arrivo degli
+oggetti.
+\begin{enumerate}[label=(\alph*)]
+    \item Trovare il tempo di risposta medio totale. Che cosa significa il numero?
+    \item Si installa una cache nella LAN con tasso di miss 0,4. Trovare di nuovo il tempo di risposta.
+\end{enumerate}
 
-\gbox{\iinfo\ Formule da ricordare}{primary!80!black}{
-\begin{itemize}
-    \item $d_{\text{trasm}} = L/R$; \quad $d_{\text{prop}} = d/s$; \quad lunghezza di un bit sul mezzo $= s/R$.
-    \item $P$ pacchetti su $N$ collegamenti store-and-forward: $T = (P + N - 1)\cdot L/R$.
-    \item Throughput end-to-end $= \min_i R_i$ (tenendo conto della condivisione).
-    \item Maglia completa: $n(n-1)/2$ collegamenti; stella e anello: $n$.
-    \item Overhead degli header: $n\,h / (M + n\,h)$.
-\end{itemize}
-}
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item $\Delta = 10^6/(15 \cdot 10^6) \approx 0{,}0667$ s e $\Delta\beta = 0{,}0667 \cdot 16 \approx 1{,}07 > 1$: il collegamento riceve
+          più di quanto può inviare, la coda cresce senza limite e il ritardo medio è \textbf{infinito} (la formula non ha senso, ed è
+          proprio questo il messaggio).
+    \item Al collegamento arrivano solo i miss: $\beta = 0{,}4 \cdot 16 = 6{,}4$, $\Delta\beta \approx 0{,}43$, ritardo d'accesso
+          $0{,}0667/(1 - 0{,}43) \approx 0{,}12$ s. Un miss costa $3 + 0{,}12 \approx 3{,}12$ s, un hit circa 0 (10 ms sulla LAN). In media
+          $0{,}4 \cdot 3{,}12 + 0{,}6 \cdot 0{,}01 \approx 1{,}25$ s.
+\end{enumerate}
+\end{esercizio}
+
+\begin{esercizio}{HTTP/2: frame e priorità}
+Una pagina è fatta di un video e cinque immagini. Su HTTP/2 il video viaggia in 2000 frame e ogni immagine in 3; il tempo si conta in
+tempi di frame.
+\begin{enumerate}[label=(\alph*)]
+    \item Se si inviano prima tutti i frame del video, senza intercalarli, quanti tempi di frame passano prima che tutte e cinque le
+          immagini siano state inviate?
+    \item Se i frame sono intercalati, uno per oggetto a turno, quanti?
+    \item Ora le immagini hanno priorità sul video, e la prima sulla seconda, e così via. Quanti tempi di frame fino all'invio completo
+          della seconda immagine?
+\end{enumerate}
+
+\svolgimento
+(a) $2000 + 5 \cdot 3 = 2015$. (b) Un giro manda un frame di ciascuno dei sei oggetti; le immagini finiscono al terzo giro: $3 \cdot 6 =
+18$. (c) $3 + 3 = 6$.
+\end{esercizio}
+
+\begin{esercizio}{Un GET condizionale, scritto a mano}
+\texttt{printf} ripete il formato per ogni argomento, quindi ogni riga parte con il \verb|\r\n| richiesto dal protocollo; l'argomento
+vuoto è la riga vuota che chiude l'header:
+\begin{lstlisting}[language=bash]
+$ printf '%s\r\n' 'GET /hypertext/WWW/TheProject.html HTTP/1.1' \
+                  'Host: info.cern.ch' 'Connection: close' '' \
+  | nc info.cern.ch 80 | head -20
+\end{lstlisting}
+\begin{enumerate}[label=(\alph*)]
+    \item Trovare la riga \texttt{Last-Modified:}. Inviare una seconda richiesta che aggiunga \texttt{If-Modified-Since:} con quella data,
+          e ottenere un \texttt{304 Not Modified}. Che cosa c'è nel corpo questa volta?
+    \item Quale delle due risposte preferirebbe una cache, e perché?
+    \item Rimandare la richiesta condizionale con una data più vecchia, per esempio \texttt{Thu, 01 Jan 1970 00:00:00 GMT}. Perché questa
+          volta la risposta è \texttt{200}, e che cosa dice su come decide il server?
+\end{enumerate}
+
+\svolgimento
+(a) Nulla: un \texttt{304} non ha corpo, solo l'header. (b) Il \texttt{304}: conferma che la copia in cache è ancora valida senza
+trasferire di nuovo l'oggetto. (c) Il documento è stato modificato dopo il 1970: il server confronta la data della richiesta con la data
+di ultima modifica dell'oggetto, e invia l'oggetto intero solo se quest'ultima è più recente.
+\end{esercizio}
+
+\begin{esercizio}{Persistente o no, sul filo}
+Si cattura (filtro \texttt{tcp.port == 80}) mentre si scarica due volte la stessa pagina con un solo comando, prima normalmente, poi
+chiedendo al server di chiudere dopo ogni risposta:
+\begin{lstlisting}[language=bash]
+$ u=http://info.cern.ch/hypertext/WWW/TheProject.html
+$ curl -s -o /dev/null -o /dev/null $u $u
+$ curl -s -H 'Connection: close' -o /dev/null -o /dev/null $u $u
+\end{lstlisting}
+\begin{enumerate}[label=(\alph*)]
+    \item Quanti SYN produce ciascun comando? Chi invia il primo FIN nel secondo caso?
+    \item Misurare l'RTT dall'handshake. Per ogni oggetto, quanti RTT passano dal primo pacchetto della sua connessione (o dal suo GET) al
+          primo byte della risposta?
+    \item I numeri tornano con il conteggio fatto nel corso per connessioni persistenti e non persistenti?
+\end{enumerate}
+
+\svolgimento
+(a) Il primo comando un solo SYN (una connessione persistente per i due oggetti); il secondo due. Con \texttt{Connection: close} chiude
+per primo il \textbf{server}, dopo aver inviato la risposta. (b) Persistente: il primo oggetto arriva dopo 2 RTT dal SYN, il secondo
+dopo 1 RTT dal suo GET; non persistente: 2 RTT ciascuno. (c) Sì: è il conteggio $2\,\text{RTT}$ per oggetto contro $\text{RTT}$ per
+oggetto dopo il primo.
+\end{esercizio}
+
+% ══════════════════════════════════════════════════════════════
+\section{Posta e DNS}
+% ══════════════════════════════════════════════════════════════
+
+\begin{esercizio}{Il percorso di un messaggio}
+Alice invia un messaggio da un account di webmail; Bob legge la posta con IMAP. Elencare in ordine i protocolli applicativi che il
+messaggio attraversa dall'host di Alice a quello di Bob, e tra quali macchine gira ciascuno.
+
+\svolgimento
+HTTP(S) tra il browser di Alice e il suo server di webmail; SMTP tra il server di posta di Alice e quello di Bob; IMAP tra il client di
+Bob e il suo server di posta.
+\end{esercizio}
+
+\begin{esercizio}{La fine del corpo}
+Come segna SMTP la fine del corpo di un messaggio? E HTTP? HTTP potrebbe usare il metodo di SMTP? Perché?
+
+\svolgimento
+SMTP con una riga che contiene solo un punto (\verb|\r\n.\r\n|). HTTP con \texttt{Content-Length:} (o con la codifica
+\emph{chunked}, o chiudendo la connessione). HTTP non può usare il punto: il suo corpo può essere binario e contenere quella sequenza,
+quindi servirebbe uno stuffing di tutti i dati (SMTP lo fa raddoppiando i punti a inizio riga, ma lavora su testo).
+\end{esercizio}
+
+\begin{esercizio}{Chi ha mentito?}
+Ogni server di posta che tratta un messaggio aggiunge in cima agli header una riga \texttt{Received:}, con chi gli ha consegnato il
+messaggio e chi l'ha preso. Questi sono gli header di uno spam, dal più recente:
+\begin{lstlisting}[language=bash]
+Received: from barmail.cs.umass.edu ([128.119.240.3]) by cs.umass.edu; 7 Nov 2008 13:27:10 -0500
+Received: from asusus-4b96 (localhost [127.0.0.1]) by barmail.cs.umass.edu (Spam Firewall); 7 Nov 2008 13:27:07 -0500
+Received: from asusus-4b96 ([58.88.21.177]) by barmail.cs.umass.edu; 7 Nov 2008 13:27:07 -0500
+Received: from [58.88.21.177] by inbnd55.exchangeddd.com; 8 Nov 2008 01:27:07 +0700
+From: "Jonny" <tennis5@pp33head.com>
+To: <hg@cs.umass.edu>
+\end{lstlisting}
+\begin{enumerate}[label=(\alph*)]
+    \item Solo chi ha originato il messaggio è malevolo; tutti gli altri host sono onesti. Quale host ha generato il messaggio? Di quali
+          righe ci si può fidare?
+    \item Guardare gli header di un messaggio ricevuto di recente: quante righe \texttt{Received:} ci sono, e si trova l'indirizzo IP
+          dell'host del mittente?
+\end{enumerate}
+
+\svolgimento
+(a) L'ha generato l'host \texttt{58.88.21.177}. Le prime tre righe sono state scritte da server onesti: la terza in particolare è di
+\texttt{barmail}, che ha visto la connessione arrivare da \texttt{58.88.21.177} (il nome \texttt{asusus-4b96} invece lo dichiara il
+mittente, e non è affidabile). L'ultima riga, che parla di \texttt{inbnd55.exchangeddd.com}, sta \emph{sotto} il primo server onesto:
+l'ha scritta l'originatore stesso, ed è falsa. (b) Di solito da due a sei righe; l'indirizzo dell'host del mittente si trova nella riga
+più in basso scritta dal suo primo server, se il provider non lo nasconde.
+\end{esercizio}
+
+\begin{esercizio}{Lo stesso alias per Web e posta}
+Il server Web e il server di posta di un'organizzazione possono avere esattamente lo stesso alias, per esempio \texttt{foo.com}? Quale
+tipo di resource record contiene il nome del server di posta?
+
+\svolgimento
+Sì: il server Web si trova con un record \texttt{A} (o \texttt{CNAME}) per \texttt{foo.com}, il server di posta con un record
+\texttt{MX} per lo stesso nome, che contiene il nome canonico del server di posta.
+\end{esercizio}
+
+\begin{esercizio}{La cache del DNS di dipartimento}
+Il dipartimento ha un server DNS locale per tutte le sue macchine, e voi siete un utente normale, non un amministratore. Potete scoprire
+se un sito esterno è stato visitato da una macchina del dipartimento pochi secondi fa?
+
+\svolgimento
+Sì: si interroga il server locale \textbf{senza ricorsione} (\texttt{dig +norecurse @server nome}). Se risponde con il record, ce l'ha
+in cache, quindi qualcuno l'ha chiesto di recente; il TTL rimasto, più basso di quello originale, dice anche quanto tempo fa. Se non
+risponde, nessuno l'ha chiesto entro il TTL.
+\end{esercizio}
+
+\begin{esercizio}{Giù per l'albero a mano}
+Si fa ciò che fa il server locale con la cache vuota: si parte da un root server e si seguono i rinvii fino al server autoritativo per
+il nome.
+\begin{lstlisting}[language=bash]
+$ dig +norecurse @a.root-servers.net www.unina.it A      # poi si chiedono i server che nomina
+\end{lstlisting}
+\begin{enumerate}[label=(\alph*)]
+    \item Scrivere la catena di deleghe: ogni server interrogato, la zona per cui risponde e i server a cui rinvia.
+    \item Ripetere per un nome sotto un dominio di primo livello diverso, per esempio un'università giapponese.
+    \item Nell'ultima risposta, il flag \texttt{aa} è acceso, e qual è il TTL? Chiedere lo stesso nome al resolver locale: quale TTL è più
+          piccolo, e perché?
+    \item Qualche passo ha risposto con un CNAME? Dove ha portato la catena?
+\end{enumerate}
+Prima si spegne qualsiasi VPN: una VPN può rispondere al posto del root server. Un root server accende \texttt{aa} solo se è autoritativo
+e non accende mai \texttt{ra}; se si vede \texttt{ra}, qualcuno sulla strada sta rispondendo al suo posto.
+
+\svolgimento
+\begin{enumerate}[label=(\alph*)]
+    \item Root server (zona \texttt{.}) $\rightarrow$ rinvio ai server di \texttt{it.} (\texttt{*.nic.it}, \dots) $\rightarrow$ i
+          server di \texttt{it.} rinviano ai name server di \texttt{unina.it.} $\rightarrow$ questi danno la risposta. Ogni rinvio ha la
+          sezione AUTHORITY con i record \texttt{NS} e, se ci sono, i \emph{glue} nella sezione ADDITIONAL.
+    \item Stessa forma: root $\rightarrow$ \texttt{jp.} $\rightarrow$ \texttt{ac.jp.} $\rightarrow$ il dominio dell'università: un
+          livello in più.
+    \item Sì, \texttt{aa} è acceso nella risposta del server autoritativo, con il TTL pieno impostato dalla zona. Il resolver locale
+          risponde con un TTL più piccolo (o uguale, se l'ha appena chiesto): lo prende dalla sua cache, che fa scendere il TTL con il passare
+          del tempo.
+    \item Spesso \texttt{www} è un CNAME verso un nome di una CDN o di un altro dominio: la catena allora riparte dalla zona di quel nome.
+\end{enumerate}
+\end{esercizio}
