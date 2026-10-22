@@ -17,6 +17,45 @@ dobbiamo affrontare tre problemi:
 Li affrontiamo uno alla volta, costruendo la stessa applicazione
 \guillemotleft lista di cose da fare\guillemotright\ già vista nell'esempio CGI.
 
+\section{L'applicazione da costruire}
+
+L'applicazione ha tre pagine. Vedremo se costruirla con Node.js sarà meno
+doloroso del famigerato esempio con CGI e Bash.
+
+\begin{itemize}
+  \item La \textbf{homepage} è la pagina d'ingresso, con i collegamenti alla
+        lista e alla pagina di azzeramento.
+  \item La \textbf{lista} contiene un form per salvare nuovi elementi, inviato
+        con \code{POST} \textbf{allo stesso URL} della pagina, e l'elenco degli
+        elementi già salvati.
+  \item La pagina di \textbf{azzeramento} (\textit{reset}) cancella tutti gli
+        elementi salvati.
+\end{itemize}
+
+\noindent\begin{minipage}[t]{0.31\linewidth}
+\begin{browser}[localhost:3000/]
+  {\Lora\bfseries\large To-do list}\\[3pt]
+  Benvenuto! Che cosa vuoi fare?\\[3pt]
+  \textbullet\ \wtlink{Vedere la lista}\\
+  \textbullet\ \wtlink{Azzerare l'app}
+\end{browser}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.35\linewidth}
+\begin{browser}[localhost:3000/todo]
+  {\Lora\bfseries\large La lista}\\[3pt]
+  \wtcampo[1.9cm]{Learn Node.js}\ \wtbottone{Salva}\\[3pt]
+  \textbullet\ Learn HTML\\
+  \textbullet\ Learn CSS
+\end{browser}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.30\linewidth}
+\begin{browser}[localhost:3000/reset]
+  {\Lora\bfseries\large Azzerata}\\[3pt]
+  Tutti gli elementi sono stati cancellati.\\[3pt]
+  \wtlink{Torna alla lista}
+\end{browser}
+\end{minipage}
+
 \section{Lo scheletro dell'applicazione}
 
 \begin{affianco}[0.5][c]
@@ -381,6 +420,26 @@ html
 \end{immagine}
 \end{affianco}
 
+Il risultato è un'unica pagina, in cui i due frammenti hanno preso il posto
+delle rispettive direttive \code{include}:
+
+\begin{lstlisting}[style=html, name=output.html]
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Hello Pug</title>
+    <script src="/js/script.js"></script>
+    <link rel="stylesheet" href="/style.css"/>
+  </head>
+  <body>
+    <h1>Hello Pug!</h1>
+    <footer id="footer">
+      <p>Copyright (c) Web Tech</p>
+    </footer>
+  </body>
+</html>
+\end{lstlisting}
+
 Si noti \code{footer\#footer}: in Pug il cancelletto è l'abbreviazione per
 l'attributo \attr{id}, esattamente come nei selettori CSS.
 
@@ -723,6 +782,281 @@ function parseRequestBodyString(body) {
   \textbf{e} applicare \code{decodeURIComponent}: saltare uno dei due passaggi
   produce bug che si manifestano solo con certi input.}
 
+\section{Mettere insieme i pezzi}
+
+Routing, template e lettura del corpo bastano per scrivere l'intera
+applicazione. A lezione la si guarda dal vivo (il codice è fra i materiali del
+corso); qui ne riportiamo una versione completa e funzionante, che si avvia con
+\code{node app.js} dopo aver installato Pug. Gli elementi salvati stanno in un
+array in memoria: si perdono a ogni riavvio del server, ma per ora va bene così.
+
+Si comincia con lo stato dell'applicazione, il server e il router:
+
+\begin{lstlisting}[style=js, name=app.js]
+import http from 'http';
+import fs from 'fs';
+import pug from 'pug';
+
+const PORT = 3000;
+let todos = [];        // gli elementi salvati, in memoria
+let nextId = 1;
+
+let server = http.createServer();
+server.listen(PORT);
+server.on('request', handleRequest);
+
+function handleRequest(request, response) {
+  switch (request.url) {
+    case "/":
+      renderHomepage(request, response); break;
+    case "/todo":
+      handleTodoListRequest(request, response); break;
+    case "/reset":
+      handleResetRequest(request, response); break;
+    case "/css/style.css":
+      serveStatic(response, "./static/css/style.css", "text/css"); break;
+    default:
+      handleError(request, response, 404, "Pagina non trovata");
+  }
+}
+\end{lstlisting}
+
+I \textbf{controller}, uno per pagina, con la scelta in base al metodo per la
+lista:
+
+\begin{lstlisting}[style=js, name=app.js, firstnumber=last]
+function renderHomepage(request, response) {
+  render(response, "homepage");
+}
+
+function handleTodoListRequest(request, response, context = {}) {
+  switch (request.method) {
+    case "GET":
+      handleTodoListRequestGet(request, response, context); break;
+    case "POST":
+      handleTodoListRequestPost(request, response, context); break;
+    default:
+      handleError(request, response, 405, "Metodo non supportato");
+  }
+}
+
+function handleTodoListRequestGet(request, response, context) {
+  render(response, "todo", { todos: todos, message: context.message });
+}
+
+async function handleTodoListRequestPost(request, response, context) {
+  let data = await parseRequestBody(request);     // la funzione vista sopra
+  let text = (data.todo || "").trim();
+  if (text === "") {
+    context.message = "Scrivi qualcosa prima di salvare.";
+  } else {
+    todos.push({ id: nextId++, text: text });
+    context.message = "Elemento salvato!";
+  }
+  handleTodoListRequestGet(request, response, context);
+}
+
+function handleResetRequest(request, response) {
+  todos = [];
+  render(response, "reset");
+}
+\end{lstlisting}
+
+E infine tre funzioni di servizio, per generare le pagine, servire i file
+statici e rispondere con un errore:
+
+\begin{lstlisting}[style=js, name=app.js, firstnumber=last]
+function render(response, template, locals = {}, statusCode = 200) {
+  let html = pug.renderFile(`./templates/${template}.pug`, locals);
+  response.writeHead(statusCode, { "Content-Type": "text/html; charset=utf-8" });
+  response.end(html);
+}
+
+function serveStatic(response, path, contentType) {
+  fs.readFile(path, function (err, data) {
+    if (err) {
+      response.writeHead(500);
+      return response.end();
+    }
+    response.writeHead(200, { "Content-Type": contentType });
+    response.end(data);
+  });
+}
+
+function handleError(request, response, statusCode, message) {
+  render(response, "errorPage", { code: statusCode, description: message }, statusCode);
+}
+\end{lstlisting}
+
+Le funzioni sono quelle viste una per una nelle sezioni precedenti; l'unica
+novità è \code{render}, che raccoglie in un posto solo le tre righe che ogni
+pagina ripeterebbe (generare l'HTML dal template, scrivere l'intestazione,
+inviare il corpo). Il \code{context} passato da un gestore all'altro serve a
+portare fino al template un messaggio per l'utente.
+
+Tutte le pagine estendono lo stesso layout, che contiene la barra di
+navigazione: è l'ereditarietà fra template vista prima, applicata a un caso
+vero.
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=pug, name=templates/layout.pug]
+doctype html
+html(lang="it")
+  head
+    meta(charset="utf-8")
+    title To-do list
+    link(rel="stylesheet" href="/css/style.css")
+  body
+    nav
+      a(href="/") Home
+      a(href="/todo") La lista
+      a(href="/reset") Azzera
+    main
+      block content
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=pug, name=templates/todo.pug]
+extends layout.pug
+
+block content
+  h1 La lista
+  if message
+    p.message #{message}
+  form(action="/todo" method="POST")
+    label(for="todo") Elemento da fare
+    input(type="text" id="todo" name="todo" required)
+    button(type="submit") Salva
+  ul
+    each todo in todos
+      li #{todo.text}
+    else
+      li La lista è vuota.
+\end{lstlisting}
+\end{affianco}
+
+\begin{esempio}{L'applicazione al lavoro}
+Con il server avviato, si possono fare a mano le richieste che farebbe il
+browser:
+\begin{lstlisting}[style=shell, name=Terminale]
+$ curl -X POST -d "todo=Learn+Node.js" http://localhost:3000/todo
+...<p class="message">Elemento salvato!</p>...<ul><li>Learn Node.js</li></ul>...
+
+$ curl -X POST --data-urlencode "todo=Prove that P=NP & <script>" http://localhost:3000/todo
+...<ul><li>Learn Node.js</li><li>Prove that P=NP &amp; &lt;script&gt;</li></ul>...
+
+$ curl -i -X DELETE http://localhost:3000/todo
+HTTP/1.1 405 Method Not Allowed
+
+$ curl -i http://localhost:3000/nonesiste
+HTTP/1.1 404 Not Found
+\end{lstlisting}
+Il secondo elemento attraversa tutta la catena: \code{curl} lo codifica come
+URL, \code{parseRequestBodyString} lo decodifica, e Pug, all'uscita, ne fa
+l'escaping. Il \code{<script>} arriva al browser come testo, non come codice.
+\end{esempio}
+
+\Needspace{12\baselineskip}
+\begin{infobox}{{Dopo una POST, ricaricare la pagina}}
+  Dopo aver salvato un elemento, la pagina mostrata è la \textbf{risposta alla
+  POST}. Se l'utente la ricarica, il browser chiede se reinviare il form: e
+  l'elemento verrebbe salvato due volte. La soluzione abituale è il pattern
+  \term{Post/Redirect/Get}: invece di mostrare la lista, il gestore della
+  \code{POST} risponde con un reindirizzamento, e il browser chiede da solo la
+  pagina con una \code{GET}, che si può ricaricare quante volte si vuole.
+\begin{lstlisting}[style=js]
+todos.push({ id: nextId++, text: text });
+response.writeHead(303, { "Location": "/todo" });   // "vai a vedere /todo"
+response.end();
+\end{lstlisting}
+\end{infobox}
+
+\section{Estendere l'applicazione: cancellare un elemento}
+
+Alla fine della lezione viene proposto un piccolo compito: aggiungere la
+possibilità di \textbf{cancellare} un elemento, con gli strumenti visti finora.
+I suggerimenti sono tre: aggiungere un nuovo percorso (per esempio
+\code{/delete}), passare l'identificativo dell'elemento come \textbf{parametro
+della query} (\code{/delete?id=X}), e mostrare accanto a ogni elemento della
+lista un collegamento che punti all'URL giusto.
+
+Prima di scrivere il gestore c'è un ostacolo. Il router confronta
+\code{request.url} con stringhe esatte, ma \code{request.url} contiene
+\textbf{anche la query}: per \code{/delete?id=3} vale proprio
+\code{"/delete?id=3"}, che non è uguale a \code{"/delete"}, e la richiesta
+finirebbe nel ramo \code{404}. Bisogna separare il percorso dai parametri, e
+la classe \code{URL} lo fa per noi.
+
+\begin{lstlisting}[style=js, name=app.js]
+function handleRequest(request, response) {
+  let url = new URL(request.url, `http://${request.headers.host}`);
+  switch (url.pathname) {                       // solo il percorso, senza query
+    /* ... le rotte di prima ... */
+    case "/delete":
+      handleDeleteRequest(request, response, url.searchParams); break;
+    default:
+      handleError(request, response, 404, "Pagina non trovata");
+  }
+}
+
+function handleDeleteRequest(request, response, params) {
+  let id = Number(params.get("id"));            // "3" -> 3
+  let index = todos.findIndex(todo => todo.id === id);
+  if (index === -1) {
+    return handleError(request, response, 404, "Elemento inesistente");
+  }
+  todos.splice(index, 1);
+  handleTodoListRequestGet(request, response, { message: "Elemento cancellato" });
+}
+\end{lstlisting}
+
+Ora che il router guarda solo il percorso, anche \code{/todo?ordina=si} arriva
+correttamente alla lista. Nel template ogni elemento riceve il suo
+collegamento:
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=pug, name=templates/todo.pug]
+  ul
+    each todo in todos
+      li
+        | #{todo.text}
+        a(href=`/delete?id=${todo.id}`) cancella
+    else
+      li La lista è vuota.
+\end{lstlisting}
+\risultato
+\begin{browser}[localhost:3000/todo]
+  \textbullet\ Learn Node.js \wtlink{cancella}\\
+  \textbullet\ Learn Pug \wtlink{cancella}\\
+  \textbullet\ Learn Express \wtlink{cancella}
+\end{browser}
+\end{affianco}
+
+Per questo usiamo un identificativo e non la posizione nell'array: dopo una
+cancellazione le posizioni degli elementi successivi cambiano, e un collegamento
+generato prima punterebbe all'elemento sbagliato. Un identificativo che non
+esiste più produce invece un \code{404}, come è giusto.
+
+\Needspace{14\baselineskip}
+\begin{warningbox}{{Una GET non dovrebbe cambiare nulla}}
+  La soluzione con un collegamento funziona, ma viola una regola di HTTP: una
+  \code{GET} è un metodo \textbf{sicuro}, che non deve modificare lo stato del
+  server (capitolo 9). Browser che precaricano i collegamenti, crawler dei motori
+  di ricerca o un'estensione che controlla i link potrebbero «visitare»
+  \code{/delete?id=3} e cancellare l'elemento senza che nessuno l'abbia chiesto.
+  Lo stesso vale, a rigore, per la pagina \code{/reset}. La versione corretta usa
+  un form con il metodo \code{POST}, e l'identificativo in un campo nascosto:
+\begin{lstlisting}[style=pug]
+li
+  | #{todo.text}
+  form(action="/delete" method="POST")
+    input(type="hidden" name="id" value=todo.id)
+    button(type="submit") cancella
+\end{lstlisting}
+  Il gestore legge allora \code{id} dal corpo con \code{parseRequestBody},
+  esattamente come la \code{POST} su \code{/todo}, e risponde \code{405} a ogni
+  altro metodo.
+\end{warningbox}
+
 \section{Anatomia di un'applicazione web}
 
 Mettendo insieme i pezzi visti finora, si delinea l'architettura tipica di
@@ -774,8 +1108,9 @@ un'applicazione web.
   \item \textbf{Single page apps in depth}, Mikito Takada. \\
         \urlx{http://singlepageappbook.com/} \\
         Parte rilevante: \textit{Templating: from data to HTML}.
-  \item \textbf{Node.js v.20.X (LTS) documentation}. \\
-        \urlx{https://nodejs.org/docs/latest-v20.x/api/index.html}
+  \item \textbf{Node.js v.22.X (LTS) documentation}. \\
+        \urlx{https://nodejs.org/docs/latest-v22.x/api/index.html} \\
+        Per approfondire i metodi integrati di Node.js usati in questo capitolo.
   \item \textbf{A beginner's Guide to Pug}, James Hibbard. \\
         \urlx{https://www.sitepoint.com/a-beginners-guide-to-pug/}
 \end{itemize}
