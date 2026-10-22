@@ -1,0 +1,528 @@
+\chapter{PDF condizionate e funzioni di variabili continue}
+
+Questo capitolo porta nel continuo due strumenti che conosciamo già dal discreto (Capitolo~6). Il primo è il
+\textbf{condizionamento}: come cambia la densità di $X$ quando si sa che si è verificato un evento. Il secondo sono le
+\textbf{funzioni di variabili aleatorie}: se $X$ ha una certa densità, che densità ha $Y = g(X)$? La risposta è una
+formula che nel discreto non c'era, perché trasformare una variabile continua non sposta soltanto la probabilità, ma la
+\emph{stira} e la \emph{comprime}. Vedremo anche due applicazioni importantissime: come un computer genera numeri
+casuali con qualsiasi densità, e come un convertitore analogico-digitale trasforma una variabile continua in una
+discreta.
+
+% ============================================================
+\section{PDF e CDF condizionate a un evento}
+% ============================================================
+
+In modo del tutto analogo a quanto fatto per le variabili discrete, se $A$ è un evento con $P(A) > 0$ possiamo
+considerare la probabilità che $X$ cada in un intervallino attorno a $x$ \emph{sapendo} che si è verificato $A$:
+\[ P\left( X \in \left[ x - \tfrac{\Delta x}{2},\ x + \tfrac{\Delta x}{2} \right] \;\Big|\; A \right) = P_X(x, \Delta x
+   \mid A) . \]
+
+\dfn{PDF e CDF condizionate}{
+  La \term{densità di $X$ condizionata all'evento $A$} è
+  \[ f_{X \mid A}(x) = \lim_{\Delta x \to 0} \frac{P_X(x, \Delta x \mid A)}{\Delta x} . \]
+  La \term{CDF condizionata} è
+  \[ F_{X \mid A}(x) = P(X \leq x \mid A) = \frac{P(\{X \leq x\} \cap A)}{P(A)} , \qquad\text{e}\qquad
+     f_{X \mid A}(x) = \frac{\dd}{\dd x} F_{X \mid A}(x) . \]
+}
+
+Siccome la probabilità condizionata è a sua volta una probabilità (Teorema~\ref{teo:condprob}), $f_{X \mid A}$ è una
+densità a tutti gli effetti: non negativa e con area 1. Il caso più frequente è quello in cui $A$ dice che $X$ è caduta
+in un certo intervallo.
+
+\begin{esempio}{Una Laplace ristretta a un intervallo}
+Sia $X \sim \mathcal{L}(\lambda)$ e sia $A = \{-1 \leq X \leq 2\}$. Allora
+\[ F_{X \mid A}(x) = P(X \leq x \mid A) = \frac{P(\{X \leq x\} \cap \{-1 \leq X \leq 2\})}{P(-1 \leq X \leq 2)} , \]
+e il denominatore è $P(A) = F_X(2) - F_X(-1)$. Per il numeratore si guarda dove si trova $x$:
+\begin{itemize}
+  \item se $x < -1$, i due eventi sono incompatibili (non si può essere sotto $-1$ e fra $-1$ e 2): l'intersezione è
+        vuota;
+  \item se $-1 \leq x < 2$, l'intersezione è $\{-1 \leq X \leq x\}$, con probabilità $F_X(x) - F_X(-1)$;
+  \item se $x \geq 2$, l'intersezione è tutto $A$.
+\end{itemize}
+Quindi
+\[
+  F_{X \mid A}(x) =
+  \begin{cases}
+    0 & x < -1 \\[1mm]
+    \dfrac{F_X(x) - F_X(-1)}{F_X(2) - F_X(-1)} & -1 \leq x < 2 \\[3mm]
+    \dfrac{F_X(2) - F_X(-1)}{F_X(2) - F_X(-1)} = 1 & x \geq 2
+  \end{cases}
+  \qquad\qquad
+  f_{X \mid A}(x) =
+  \begin{cases}
+    \dfrac{f_X(x)}{F_X(2) - F_X(-1)} & -1 \leq x < 2 \\[3mm]
+    0 & \text{altrove}
+  \end{cases}
+\]
+La densità condizionata si ottiene derivando: il denominatore è una costante. Con $\lambda = 1$:
+$F_X(2) = 1 - \frac12 e^{-2} \approx 0{,}932$, $F_X(-1) = \frac12 e^{-1} \approx 0{,}184$, e $P(A) \approx 0{,}748$.
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[quaderno, width=11cm, height=5cm, xmin=-3.6, xmax=3.8, ymin=0, ymax=0.75, xtick={-3,-2,-1,1,2,3},
+  ytick={0.5,0.668}, yticklabels={$0{,}5$,$0{,}67$}, xlabel=$x$, legend style={font=\scriptsize, at={(0.98,0.98)},
+  anchor=north east}]
+  \addplot[fill=evid, draw=none, domain=-1:2, samples=60, forget plot] {0.5*exp(-abs(x))} \closedcycle;
+  \addplot[mspiA, domain=-3.4:3.4, samples=161] {0.5*exp(-abs(x))};
+  \addplot[mspiB, line width=1.3pt, domain=-1:2, samples=61] {0.5*exp(-abs(x))/0.7484};
+  \addplot[mspiB, line width=1.3pt, forget plot] coordinates {(-3.4,0) (-1,0)};
+  \addplot[mspiB, line width=1.3pt, forget plot] coordinates {(2,0) (3.4,0)};
+  \draw[mspiB, dashed] (axis cs:-1,0) -- (axis cs:-1,0.2459);
+  \draw[mspiB, dashed] (axis cs:2,0) -- (axis cs:2,0.0904);
+  \legend{$f_X(x)$, $f_{X \mid A}(x)$}
+\end{axis}
+\end{tikzpicture}
+\end{center}
+L'area gialla vale $P(A) \approx 0{,}748$. La densità condizionata (in arancione) è la stessa curva, tagliata fuori
+dall'intervallo e «rialzata» dividendola per $0{,}748$: così la sua area torna a essere 1. È esattamente quello che
+succedeva con le pmf nel Capitolo~6.
+\end{esempio}
+
+% ============================================================
+\section{La probabilità totale per le densità}
+% ============================================================
+
+\teorema[totalepdf]{Probabilità totale per le PDF e per le medie}{
+  Se $\{E_m\}_{m=1}^{M}$ è una partizione di $\Omega$ con $P(E_m) > 0$, allora
+  \[ F_X(x) = \sum_{m=1}^{M} F_{X \mid E_m}(x)\, P(E_m) , \qquad f_X(x) = \sum_{m=1}^{M} f_{X \mid E_m}(x)\, P(E_m) , \]
+  \[ E[X] = \sum_{m=1}^{M} E[X \mid E_m]\, P(E_m) = \sum_{m=1}^{M} P(E_m) \int_{-\infty}^{\infty} x\, f_{X \mid E_m}(x) \dd x . \]
+}
+
+\begin{dimostrazione}
+\passo{La CDF} Come nel Capitolo~3, si ritaglia l'evento con la partizione:
+\[
+  F_X(x) = P(\{X \leq x\} \cap \Omega) = P\left( \{X \leq x\} \cap \bigcup_{m=1}^{M} E_m \right)
+  = P\left( \bigcup_{m=1}^{M} \left( \{X \leq x\} \cap E_m \right) \right) ,
+\]
+e i pezzi sono incompatibili, quindi le probabilità si sommano:
+\[ F_X(x) = \sum_{m=1}^{M} P(\{X \leq x\} \cap E_m) = \sum_{m=1}^{M} F_{X \mid E_m}(x)\, P(E_m) . \]
+\passo{La densità} Si deriva rispetto a $x$: la derivata di una somma è la somma delle derivate, e i $P(E_m)$ sono
+costanti.
+\passo{La media} Si moltiplica la densità per $x$ e si integra: per la linearità dell'integrale
+\[ E[X] = \int x \sum_m f_{X \mid E_m}(x)\, P(E_m) \dd x = \sum_m P(E_m) \int x\, f_{X \mid E_m}(x) \dd x = \sum_m
+   P(E_m)\, E[X \mid E_m] . \]
+\end{dimostrazione}
+
+\begin{esempio}{La Laplace spezzata in due}
+Con riferimento all'esempio precedente ($\lambda = 1$), gli eventi $A$ e $\compl{A}$ formano una partizione:
+\[ E[X] = E[X \mid A]\, P(A) + E[X \mid \compl{A}]\, P(\compl{A}) . \]
+Ogni pezzo ha un significato semplice:
+$E[X \mid A]\, P(A) = \frac{1}{P(A)} \int_{-1}^{2} x\, f_X(x) \dd x \cdot P(A) = \int_{-1}^{2} x\, f_X(x) \dd x$, cioè
+l'integrale di $x f_X(x)$ ristretto ai valori per cui $A$ è vero; e lo stesso per $\compl{A}$, con i valori per cui $A$ è
+falso. Sommando i due pezzi si integra su tutta la retta, e si ritrova $E[X] = \int x\, f_X(x) \dd x = 0$.
+
+Con i numeri: usando $\int_0^c x\, e^{-x} \dd x = 1 - (1 + c)\, e^{-c}$ (per parti),
+\[ \int_{-1}^{2} x\, \tfrac12 e^{-\abs{x}} \dd x = \tfrac12 \left[ \int_0^2 x\, e^{-x} \dd x - \int_0^1 x\, e^{-x} \dd x
+   \right] = \tfrac12 \left[ (1 - 3e^{-2}) - (1 - 2e^{-1}) \right] \approx 0{,}165 , \]
+quindi $E[X \mid A] \approx \frac{0{,}165}{0{,}748} \approx 0{,}22$: sapendo che $X$ è fra $-1$ e 2, la media si sposta
+verso destra, perché l'intervallo è più lungo da quella parte. Il pezzo di $\compl{A}$ vale $-0{,}165$, e il totale è
+zero.
+\end{esempio}
+
+\begin{esempio}{Due tipi di componenti}
+Un magazzino contiene componenti di due fornitori, in parti uguali. Quelli del primo durano un tempo esponenziale di
+media 1 anno ($\lambda = 1$), quelli del secondo di media 3 anni ($\lambda = \frac13$). Si prende un componente a caso:
+la sua durata ha densità
+\[ f_X(x) = \tfrac12 \cdot 1 \cdot e^{-x} u(x) + \tfrac12 \cdot \tfrac13 e^{-x/3} u(x) , \]
+una «miscela» di due esponenziali, e media $E[X] = \frac12 \cdot 1 + \frac12 \cdot 3 = 2$ anni, senza calcolare nessun
+integrale.
+\end{esempio}
+
+% ============================================================
+\section{Funzioni di variabili aleatorie continue}
+% ============================================================
+
+Il problema è simile a quello già affrontato per le variabili discrete. Si assuma che $X = X(\omega)$ sia una variabile
+aleatoria continua con alfabeto $\mathcal{X}$, densità $f_X(x)$ e CDF $F_X(x)$, e sia $g$ una funzione definita sui
+punti di $\mathcal{X}$ (tranne, al più, un insieme di probabilità nulla). Si forma la nuova variabile aleatoria
+\[ Y = g(X) = g[X(\omega)] \in \mathcal{Y} , \qquad \mathcal{Y} = g(\mathcal{X}) . \]
+Vogliamo ricavare la caratterizzazione di $Y$ da quella di $X$: la densità (o la CDF) e, nel prossimo capitolo, la
+media. A differenza del caso discreto, qui si distinguono tre casi:
+\begin{enumerate}[label=\alph*)]
+  \item $g$ è \textbf{biunivoca}, cioè invertibile, continua e derivabile;
+  \item $g$ non è invertibile, ma è continua e derivabile, e $\mathcal{Y}$ è continuo;
+  \item $g$ non è invertibile e $\mathcal{Y}$ è \textbf{discreto}: è una \textbf{conversione A/D} della variabile
+        continua (una quantizzazione, cioè una compressione con perdite), come quella che si fa sui segnali
+        analogici.
+\end{enumerate}
+
+\begin{richiamo}{funzioni monotone e derivata della funzione inversa}
+Una funzione è \term{strettamente crescente} se a $x$ più grandi corrispondono valori più grandi, \term{strettamente
+decrescente} se corrispondono valori più piccoli; in entrambi i casi si dice \term{strettamente monotona}. Una funzione
+continua su un intervallo è invertibile esattamente quando è strettamente monotona: se tornasse indietro, qualche
+valore verrebbe raggiunto due volte. L'inversa $x = g^{-1}(y)$ risponde alla domanda «quale $x$ dà $y$?», e il suo
+grafico è quello di $g$ riflesso rispetto alla bisettrice $y = x$.
+
+\textbf{Derivata dell'inversa.} Per definizione $g\big(g^{-1}(y)\big) = y$. Derivando entrambi i membri rispetto a $y$
+con la regola della catena: $\dot g\big(g^{-1}(y)\big) \cdot \frac{\dd}{\dd y} g^{-1}(y) = 1$, cioè
+\[ \dot x(y) = \frac{\dd}{\dd y}\, g^{-1}(y) = \frac{1}{\dot g\big(g^{-1}(y)\big)} : \]
+la derivata della funzione inversa in un punto è l'inverso della derivata della funzione originaria, valutata nel punto
+corrispondente. (Il puntino, $\dot g$, è un altro modo di indicare la derivata, usato nelle slide.) Nel disegno: le due
+tangenti sono una il riflesso dell'altra, e scambiare $x$ con $y$ trasforma la pendenza $m$ in $\frac1m$.
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[quaderno, width=6.4cm, height=6.4cm, xmin=0, xmax=2.6, ymin=0, ymax=2.6, xtick=\empty, ytick=\empty,
+  grid=none, axis equal image]
+  \addplot[mspigray, dashed, domain=0:2.5] {x};
+  \addplot[mspiA, domain=0:1.58, samples=40] {x^2};
+  \addplot[mspiB, domain=0:2.5, samples=60] {sqrt(x)};
+  \addplot[mspiA!85!black, domain=0.8:1.6] {1.44+2.4*(x-1.2)};
+  \addplot[mspiB!85!black, domain=0.6:2.3] {1.2+(x-1.44)/2.4};
+  \fill[mspiA] (axis cs:1.2,1.44) circle (1.6pt); \fill[mspiB] (axis cs:1.44,1.2) circle (1.6pt);
+  \node[font=\scriptsize, mspiA!85!black, anchor=east] at (axis cs:0.95,1.95) {$g(x) = x^2$};
+  \node[font=\scriptsize, mspiB!85!black, anchor=north west] at (axis cs:1.6,1.0) {$g^{-1}(y) = \sqrt{y}$};
+  \node[font=\scriptsize, mspigray, anchor=south] at (axis cs:2.3,2.35) {$y = x$};
+\end{axis}
+\end{tikzpicture}
+\hspace{0.5cm}
+\begin{minipage}[b]{6.6cm}\small
+In $x = 1{,}2$ la parabola ha pendenza $2x = 2{,}4$. Nel punto corrispondente $y = 1{,}44$ la radice ha pendenza
+$\frac{1}{2\sqrt{y}} = \frac{1}{2{,}4}$. Le pendenze sono una l'inversa dell'altra.
+\end{minipage}
+\end{center}
+\end{richiamo}
+
+\subsection{Primo caso: \texorpdfstring{$g$}{g} è invertibile}
+
+Se $g$ è invertibile è strettamente monotona su $\mathcal{X}$.
+
+\teorema[monotona]{Densità di una funzione monotona}{
+  Se $g$ è strettamente monotona e derivabile, la densità di $Y = g(X)$ è
+  \[ f_Y(y) = \frac{f_X\big(g^{-1}(y)\big)}{\abs{\dot g\big(g^{-1}(y)\big)}} = \frac{f_X\big(x(y)\big)}{\abs{\dot
+     g\big(x(y)\big)}} , \]
+  dove $x(y) = g^{-1}(y)$ è la soluzione dell'equazione $y = g(x)$, che naturalmente dipende da $y$.
+}
+
+\begin{dimostrazione}
+\passo{$g$ crescente ($\dot g > 0$): la CDF} Se $g$ è crescente, $g(X) \leq y$ succede esattamente quando $X \leq
+g^{-1}(y)$:
+\[ F_Y(y) = P(Y \leq y) = P(g(X) \leq y) = P\big(X \leq g^{-1}(y)\big) = F_X\big(g^{-1}(y)\big) = F_X\big(x(y)\big) . \]
+\passo{$g$ crescente: la densità} Si deriva con la regola della catena e la derivata dell'inversa:
+\[ f_Y(y) = \frac{\dd}{\dd y} F_Y(y) = f_X\big(g^{-1}(y)\big)\, \frac{\dd}{\dd y} g^{-1}(y) = \frac{f_X\big(g^{-1}(y)\big)}{\dot
+   g\big(g^{-1}(y)\big)} . \]
+\passo{$g$ decrescente ($\dot g < 0$): la CDF} Ora la disuguaglianza si rovescia, perché una funzione decrescente
+scambia l'ordine: $g(X) \leq y$ succede esattamente quando $X \geq g^{-1}(y)$:
+\[ F_Y(y) = P(g(X) \leq y) = P\big(X \geq g^{-1}(y)\big) = 1 - F_X\big(g^{-1}(y)\big) . \]
+\passo{$g$ decrescente: la densità}
+\[ f_Y(y) = -f_X\big(g^{-1}(y)\big)\, \frac{\dd}{\dd y} g^{-1}(y) = -\frac{f_X\big(g^{-1}(y)\big)}{\dot g\big(g^{-1}(y)\big)} . \]
+\passo{Una formula sola} Nel secondo caso $\dot g < 0$, quindi $-\dot g = \abs{\dot g}$; nel primo $\dot g = \abs{\dot g}$.
+In entrambi i casi il denominatore è $\abs{\dot g}$.
+\end{dimostrazione}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[quaderno, width=8.4cm, height=6.6cm, xmin=0, xmax=3.3, ymin=0, ymax=3.1, xtick={1,2.4},
+  xticklabels={$x_1$,$x_2$}, ytick={0.65,2.27}, yticklabels={$y_1$,$y_2$}, xlabel=$x$, ylabel=$y$, grid=none]
+  \addplot[mspiA, domain=0.1:3.1, samples=60] {0.35*x^2+0.3};
+  \fill[mspiB!35] (axis cs:0.95,0) rectangle (axis cs:1.05,0.65);
+  \fill[mspiB!35] (axis cs:0,0.615) rectangle (axis cs:1,0.685);
+  \fill[mspiC!35] (axis cs:2.35,0) rectangle (axis cs:2.45,2.27);
+  \fill[mspiC!35] (axis cs:0,2.19) rectangle (axis cs:2.4,2.35);
+  \node[font=\scriptsize, align=left, anchor=west] at (axis cs:1.15,0.35) {qui la curva è piatta:\\ $\mathrm{d}y$ stretto,
+    densità alta};
+  \node[font=\scriptsize, align=left, anchor=west] at (axis cs:0.1,2.65) {qui è ripida: $\mathrm{d}y$ largo,\\ densità bassa};
+\end{axis}
+\end{tikzpicture}
+\caption{Perché si divide per $\lvert \dot g \rvert$. La probabilità contenuta in una striscia larga $\mathrm{d}x$ attorno a $x$,
+cioè $f_X(x)\,\mathrm{d}x$, finisce in una striscia larga $\mathrm{d}y = \lvert \dot g(x) \rvert\,\mathrm{d}x$ attorno a
+$y = g(x)$. La probabilità si conserva, $f_Y(y)\,\mathrm{d}y = f_X(x)\,\mathrm{d}x$, quindi
+$f_Y = f_X/\lvert \dot g \rvert$: dove $g$ è ripida la probabilità si «spalma» su un intervallo più largo e la densità si
+abbassa.}
+\end{figure}
+
+\begin{esempio}{Una trasformazione lineare}
+Sia $Y = aX + b$ con $a \neq 0$. Allora $g(x) = ax + b$, $x(y) = \frac{y - b}{a}$ e $\dot g = a$:
+\[ f_Y(y) = \frac{1}{\abs{a}}\, f_X\left( \frac{y - b}{a} \right) . \]
+Il grafico di $f_Y$ è quello di $f_X$ spostato di $b$, allargato di un fattore $\abs{a}$ in orizzontale e abbassato
+dello stesso fattore, così che l'area resti 1. Per esempio, se $X \sim \mathcal{C}(0, 1)$, allora
+$bX + a \sim \mathcal{C}(a, b)$: i parametri della Cauchy sono proprio una traslazione e un cambio di scala. Useremo questa
+formula nel Capitolo~15 per costruire tutte le gaussiane a partire da una sola.
+\end{esempio}
+
+\begin{esempio}{Il faro e la variabile di Cauchy}
+Un faro ruota e si ferma puntando in una direzione a caso, con un angolo $\Theta \sim \mathcal{U}\left(-\frac{\pi}{2},
+\frac{\pi}{2}\right)$ rispetto alla perpendicolare a un muro lungo e diritto che si trova a distanza 1. Il punto
+illuminato sul muro è $X = \tan\Theta$. La funzione $g(\theta) = \tan\theta$ è crescente su
+$\left(-\frac{\pi}{2}, \frac{\pi}{2}\right)$, con inversa $\theta(x) = \arctan x$ e derivata
+$\dot g = 1 + \tan^2\theta = 1 + x^2$ (Capitolo~11). La densità di $\Theta$ è $\frac1\pi$ sull'intervallo, quindi
+\[ f_X(x) = \frac{f_\Theta(\arctan x)}{1 + x^2} = \frac{1}{\pi}\, \frac{1}{1 + x^2} : \]
+il punto illuminato è una variabile di Cauchy $\mathcal{C}(0, 1)$. Quando il faro punta quasi parallelo al muro, il
+punto illuminato schizza lontanissimo: sono i valori enormi che impediscono alla Cauchy di avere una media.
+\begin{center}
+\begin{tikzpicture}
+  \draw[line width=1.5pt, mspigray] (-3.6,2) -- (3.6,2);
+  \node[font=\scriptsize, mspigray, anchor=south] at (-3.2,2) {muro};
+  \fill[mspiB] (0,0) circle (0.12); \node[font=\scriptsize, below] at (0,-0.12) {faro};
+  \draw[mspigray, dashed] (0,0) -- (0,2);
+  \draw[mspiB, line width=0.8pt] (0,0) -- (1.6,2); \fill[evid!70!black] (1.6,2) circle (0.07);
+  \draw[mspiB] (0,0.6) arc (90:51.3:0.6); \node[font=\scriptsize] at (0.3,0.85) {$\Theta$};
+  \draw[decorate, decoration={brace, amplitude=4pt}] (0,2.1) -- (1.6,2.1) node[midway, above=4pt, font=\scriptsize]
+    {$X = \tan\Theta$};
+  \node[font=\scriptsize, anchor=east] at (-0.05,1.3) {1};
+\end{tikzpicture}
+\end{center}
+\end{esempio}
+
+\subsection{Secondo caso: \texorpdfstring{$g$}{g} non è invertibile}
+
+Se $g$ non è invertibile, per un valore $y$ l'equazione $g(x) = y$ può avere più soluzioni:
+\[ \forall y \in \mathcal{Y} \quad \exists\ \{x_i(y)\}_{i=1}^{M(y)} : \quad g[x_i(y)] = y . \]
+Per fissare le idee supponiamo $M(y) = 4$, come nella figura, con $\dot g(x_1) < 0$. Allora $g(x) \leq y$ per
+$x_1(y) \leq x \leq x_2(y)$; ovviamente sarà $\dot g(x_2) > 0$ e $g(x) \geq y$ per $x_2(y) \leq x \leq x_3(y)$. La
+funzione ripassa per il valore $g(x_3) = y$ (con derivata negativa) e si mantiene al di sotto di $y$ fino a $x_4(y)$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[quaderno, width=10cm, height=5.6cm, xmin=0, xmax=4.6, ymin=0, ymax=2.5, xtick={0.5,1.5,3,4},
+  xticklabels={$x_1$,$x_2$,$x_3$,$x_4$}, ytick={1}, yticklabels={$y$}, xlabel=$x$, grid=none]
+  \fill[evid] (axis cs:0.5,0) rectangle (axis cs:1.5,0.07);
+  \fill[evid] (axis cs:3,0) rectangle (axis cs:4,0.07);
+  \draw[mspiB, dashed] (axis cs:0,1) -- (axis cs:4.5,1);
+  \addplot[mspiA, domain=0.2:4.3, samples=120] {1+0.3*(x-0.5)*(x-1.5)*(x-3)*(x-4)};
+  \foreach \x in {0.5,1.5,3,4} {
+    \edef\tmp{\noexpand\draw[mspigray, dotted] (axis cs:\x,0) -- (axis cs:\x,1);}\tmp
+  }
+  \addplot[only marks, mark=*, mark size=1.8pt, mspiB] coordinates {(0.5,1) (1.5,1) (3,1) (4,1)};
+  \node[font=\scriptsize, anchor=south] at (axis cs:1,0.08) {$g(x) \leq y$};
+  \node[font=\scriptsize, anchor=south] at (axis cs:3.5,0.08) {$g(x) \leq y$};
+  \node[font=\small, mspiA!85!black] at (axis cs:2.25,1.75) {$g(x)$};
+\end{axis}
+\end{tikzpicture}
+\caption{Una funzione non invertibile: il livello $y$ viene raggiunto in quattro punti. L'evento $\{Y \leq y\}$ è
+l'unione dei due intervalli gialli dell'asse $x$.}
+\end{figure}
+
+Quindi
+\[ F_Y(y) = P(Y \leq y) = P\big( \{x_1(y) \leq X \leq x_2(y)\} \cup \{x_3(y) \leq X \leq x_4(y)\} \big) , \]
+e sfruttando il fatto che gli intervalli sono disgiunti
+\[ F_Y(y) = F_X\big(x_2(y)\big) - F_X\big(x_1(y)\big) + F_X\big(x_4(y)\big) - F_X\big(x_3(y)\big) . \]
+
+\teorema[nonmonotona]{Densità di una funzione non invertibile}{
+  Se $y = g(x)$ ha le soluzioni $x_1(y), \ldots, x_M(y)$, tutte con $\dot g \neq 0$:
+  \[ f_Y(y) = \sum_{i=1}^{M(y)} \frac{f_X\big(x_i(y)\big)}{\abs{\dot g\big(x_i(y)\big)}} . \]
+}
+
+\begin{dimostrazione}[nel caso della figura]
+\passo{Si deriva la CDF} Ogni soluzione $x_i(y)$ è, vicino a $y$, l'inversa del tratto monotono di $g$ che passa per
+$x_i$; per la derivata dell'inversa $\dot x_i(y) = \frac{1}{\dot g(x_i(y))}$. Derivando la CDF termine per termine con la
+regola della catena:
+\[ f_Y(y) = \frac{f_X(x_2)}{\dot g(x_2)} - \frac{f_X(x_1)}{\dot g(x_1)} + \frac{f_X(x_4)}{\dot g(x_4)} - \frac{f_X(x_3)}{\dot
+   g(x_3)} . \]
+\passo{I segni} Nel secondo e nel quarto termine la derivata a denominatore è negativa ($g$ scende in $x_1$ e in
+$x_3$), quindi $-\frac{1}{\dot g} = \frac{1}{\abs{\dot g}}$; nel primo e nel terzo è positiva. Tutti i termini diventano
+$\frac{f_X(x_i)}{\abs{\dot g(x_i)}}$.
+\end{dimostrazione}
+
+\begin{formula}[densità di una funzione di variabile aleatoria]
+\[ f_Y(y) = \sum_{i \,:\, g(x_i) = y} \frac{f_X(x_i)}{\abs{\dot g(x_i)}} \qquad \text{(si somma su tutte le soluzioni di } y = g(x)) \]
+\end{formula}
+
+È lo stesso principio del discreto, dove le probabilità dei punti con la stessa immagine si sommavano; in più, ogni
+contributo è diviso per la «velocità» $\abs{\dot g}$ con cui $g$ attraversa il livello $y$.
+
+\begin{esempio}{Il quadrato di due variabili diverse}
+Sia $g(x) = x^2$, e si considerino $X_1 \sim \mathcal{E}(\lambda)$ e $X_2 \sim \mathcal{C}(0, 1)$.
+
+\textbf{Esponenziale.} Nel caso $Y_1 = X_1^2$, la variabile $X_1$ è non negativa ($\mathcal{X}_1 = [0, \infty[$), e su
+$x \geq 0$ la trasformazione $g(x) = x^2$ è biunivoca: l'equazione $x^2 = y$ ammette solo la soluzione $x(y) = \sqrt{y}$.
+Quindi
+\[ \dot x(y) = \frac{1}{\dot g(x)} \bigg|_{x = \sqrt{y}} = \frac{1}{2x} \bigg|_{x = \sqrt{y}} = \frac{1}{2\sqrt{y}} ,
+   \qquad f_{Y_1}(y) = \lambda e^{-\lambda x} u(x) \Big|_{x = \sqrt{y}}\, \dot x(y) = \frac{\lambda e^{-\lambda
+   \sqrt{y}}}{2\sqrt{y}}\, u(y) . \]
+\textbf{Cauchy.} Nel caso $Y_2 = X_2^2$ invece $\mathcal{X}_2 = \R$, la trasformazione non è biunivoca e per $y > 0$
+l'equazione $x^2 = y$ ha due soluzioni, $x_{1,2}(y) = \pm\sqrt{y}$, in cui $\abs{\dot g} = 2\sqrt{y}$. Con
+$f_{X_2}(x) = \frac{1}{\pi} \frac{1}{1 + x^2}$, che vale lo stesso in $\pm\sqrt{y}$:
+\[ f_{Y_2}(y) = \left[ \frac{f_{X_2}(\sqrt{y})}{2\sqrt{y}} + \frac{f_{X_2}(-\sqrt{y})}{2\sqrt{y}} \right] u(y) =
+   \frac{1}{\pi}\, \frac{1}{2\sqrt{y}}\, \frac{1}{1 + y} \cdot 2\; u(y) = \frac{1}{\pi \sqrt{y}\,(1 + y)}\, u(y) . \]
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[quaderno, width=10cm, height=5cm, xmin=0, xmax=4.4, ymin=0, ymax=1.6, xtick={1,2,3,4}, ytick={0.5,1},
+  yticklabels={$0{,}5$,$1$}, xlabel=$y$, legend style={font=\scriptsize, at={(0.98,0.98)}, anchor=north east}]
+  \addplot[mspiA, domain=0.04:4.2, samples=120] {exp(-sqrt(x))/(2*sqrt(x))};
+  \addplot[mspiB, domain=0.04:4.2, samples=120] {1/(pi*sqrt(x)*(1+x))};
+  \legend{$f_{Y_1}$ ($\lambda = 1$), $f_{Y_2}$}
+\end{axis}
+\end{tikzpicture}
+\end{center}
+\end{esempio}
+
+\warning{Una densità può valere infinito}{
+  Entrambe le densità dell'esempio tendono a infinito per $y \to 0$, a causa del fattore $\frac{1}{\sqrt{y}}$: vicino
+  a $x = 0$ la parabola $x^2$ è piattissima ($\dot g = 2x \to 0$), e schiaccia tanta probabilità in un intervallino di
+  $y$. Non c'è nessuna contraddizione: l'area resta finita, perché $\int_0^1 \frac{1}{\sqrt{y}} \dd y = \left[ 2\sqrt{y}
+  \right]_0^1 = 2$. Ancora una volta: conta l'area, non l'altezza.
+}
+
+\subsection{Due trasformazioni speciali}
+
+\begin{esempio}{Ogni variabile, passata nella propria CDF, diventa uniforme}
+Sia $X \sim f_X(x)$, e consideriamo $Y = F_X(X)$, cioè $g(x) = F_X(x)$. Qualunque sia la densità, $Y \in [0, 1]$,
+perché la CDF assume valori fra 0 e 1. Inoltre $g$ è crescente; potrebbe non essere strettamente crescente (avere
+tratti in cui è costante, dove $f_X = 0$), ma escludiamo questo caso. Allora
+\[ g(x) = F_X(x) \;\Longrightarrow\; x(y) = F_X^{-1}(y) , \qquad \dot g(x) = f_X(x) , \]
+e con la formula del primo caso
+\[ f_Y(y) = \frac{f_X\big(F_X^{-1}(y)\big)}{f_X\big(F_X^{-1}(y)\big)} = 1 , \quad y \in [0, 1] , \qquad\text{cioè}\quad
+   f_Y(y) = \mathrm{rect}\left( y - \tfrac12 \right) : \]
+$Y$ è una variabile aleatoria uniforme in $(0, 1)$, $Y \sim \mathcal{U}(0, 1)$. Il motivo intuitivo: $F_X(X)$ è «la
+frazione di probabilità che sta a sinistra del valore osservato», e questa frazione può essere un numero qualsiasi fra 0
+e 1 con uguale probabilità.
+\end{esempio}
+
+Il risultato si può usare al contrario, ed è così che si simula al computer una variabile con qualsiasi densità.
+
+\teorema[inversione]{Il metodo dell'inversione}{
+  Se $U \sim \mathcal{U}(0, 1)$ e $F_X$ è una CDF strettamente crescente, la variabile $Z = F_X^{-1}(U)$ ha CDF $F_X$.
+}
+
+\begin{dimostrazione}
+\passo{} Per ogni $z$:
+\[ F_Z(z) = P(Z \leq z) = P\big(F_X^{-1}(U) \leq z\big) \underset{(a)}{=} P\big(U \leq F_X(z)\big) = F_U\big(F_X(z)\big)
+   \underset{(b)}{=} F_X(z) . \]
+\passo{(a)} $F_X$ è per ipotesi strettamente crescente, e quindi lo è anche la sua inversa: applicando $F_X$ ai due
+membri di $F_X^{-1}(U) \leq z$ la disuguaglianza non cambia verso.
+\passo{(b)} La CDF di una variabile uniforme in $(0, 1)$ è la funzione identica nell'intervallo $(0, 1)$:
+$U \sim \mathcal{U}(0, 1) \iff f_U(u) = \mathrm{rect}\left(u - \frac12\right) \iff F_U(u) = u$ per $0 \leq u \leq 1$.
+Quindi $F_U(F_X(z)) = F_X(z)$.
+\end{dimostrazione}
+
+I generatori di numeri casuali dei computer producono numeri uniformi in $(0, 1)$; con il metodo dell'inversione si
+trasformano in numeri con la densità voluta. Questo ha notevoli conseguenze nelle procedure di simulazione dei sistemi
+numerici (tutte le simulazioni di questa dispensa sono state fatte così).
+
+\begin{esempio}{Generare tempi di attesa esponenziali}
+Per $X \sim \mathcal{E}(\lambda)$, $F_X(x) = 1 - e^{-\lambda x}$. Risolvendo $u = 1 - e^{-\lambda x}$ rispetto a $x$:
+$e^{-\lambda x} = 1 - u$, cioè $x = -\frac{1}{\lambda} \ln(1 - u)$. Quindi
+\[ Z = -\frac{1}{\lambda} \ln(1 - U) \sim \mathcal{E}(\lambda) . \]
+\begin{center}
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=1.6cm},
+  quaderno, width=6.8cm, height=4.8cm, xmin=0, xmax=5.3, xtick={1,2,3,4,5}]
+\nextgroupplot[ymin=0, ymax=1.15, ytick={0.7,1}, yticklabels={$u$,$1$}, xlabel=$x$, ylabel={$F_X(x)$}]
+  \addplot[mspiB, domain=0:5.1, samples=80] {1-exp(-x)};
+  \draw[-{Stealth}, mspiA, line width=0.8pt] (axis cs:0,0.7) -- (axis cs:1.204,0.7);
+  \draw[-{Stealth}, mspiA, line width=0.8pt] (axis cs:1.204,0.7) -- (axis cs:1.204,0);
+  \node[font=\scriptsize, mspiA!85!black, anchor=north west] at (axis cs:1.25,0.12) {$z = F_X^{-1}(u)$};
+\nextgroupplot[ymin=0, ymax=1.1, ytick={0.5,1}, yticklabels={$0{,}5$,$1$}, xlabel=$x$]
+  \addplot[ybar interval, fill=mspiA!35, draw=mspiA!70] coordinates {(0.00,0.8496) (0.25,0.6960) (0.50,0.5480) (0.75,0.4080) (1.00,0.3064) (1.25,0.2808) (1.50,0.2040) (1.75,0.1536) (2.00,0.1136) (2.25,0.1024) (2.50,0.0648) (2.75,0.0664) (3.00,0.0512) (3.25,0.0280) (3.50,0.0352) (3.75,0.0184) (4.00,0.0112) (4.25,0.0136) (4.50,0.0088) (4.75,0.0080) (5.00,0.0080)};
+  \addplot[mspiB, line width=1.1pt, domain=0:5.1, samples=80] {exp(-x)};
+\end{groupplot}
+\end{tikzpicture}
+\end{center}
+A sinistra: si estrae $u$ uniforme sull'asse verticale, si va orizzontalmente fino alla CDF e si scende: il punto
+d'arrivo è $z$. A destra: l'istogramma di 5000 numeri ottenuti così (con $\lambda = 1$) segue la densità esponenziale.
+Dove la CDF è ripida (vicino a 0) molti valori di $u$ finiscono in un intervallo stretto di $x$: lì la densità è alta.
+\end{esempio}
+
+\begin{esempio}{La sinusoide con fase a caso}
+Siano $X \sim \mathcal{U}\left(-\frac12, \frac12\right)$ e $g(x) = A \cos(2\pi x + \varphi)$, con $A > 0$. Cerchiamo la
+densità di $Y = A \cos(2\pi X + \varphi)$: il valore di una sinusoide osservata in un istante a caso.
+
+Si noti che $\mathcal{Y} = [-A, A]$ (il coseno sta fra $-1$ e 1) e che la trasformazione non è biunivoca. Poiché
+$\mathcal{X} = \left[-\frac12, \frac12\right]$, l'argomento del coseno varia in un intervallo di ampiezza $2\pi$, un
+periodo intero, e in questo intervallo l'equazione $y = A \cos(2\pi x + \varphi)$ ha due soluzioni $x_1, x_2$ (una
+mentre il coseno scende e una mentre sale). Quindi
+\[ f_Y(y) = \frac{f_X(x_1(y))}{\abs{\dot g(x_1(y))}} + \frac{f_X(x_2(y))}{\abs{\dot g(x_2(y))}} \underset{(a)}{=}
+   \frac{1}{\abs{\dot g(x_1(y))}} + \frac{1}{\abs{\dot g(x_2(y))}} , \]
+dove (a) vale perché $f_X = 1$ sull'intervallo. La derivata del coseno è meno il seno (con la regola della catena il
+fattore $2\pi$ esce dall'argomento):
+\[ \dot g(x) = -A \sin(2\pi x + \varphi) \cdot 2\pi , \qquad \abs{\dot g(x)} = 2\pi A \abs{\sin(2\pi x + \varphi)} . \]
+Va scritta in funzione di $y$: per Pitagora $\sin^2\alpha + \cos^2\alpha = 1$ (seno e coseno sono i cateti di un
+triangolo rettangolo con ipotenusa 1), quindi $\abs{\sin\alpha} = \sqrt{1 - \cos^2\alpha}$, e $\cos(2\pi x + \varphi) =
+\frac{y}{A}$ nei punti $x_i(y)$:
+\[ \abs{\dot g(x_i(y))} = 2\pi A \sqrt{1 - \cos^2(2\pi x_i + \varphi)} = 2\pi A \sqrt{1 - \left( \frac{y}{A} \right)^2} . \]
+I due termini sono uguali, e
+\[ f_Y(y) = \frac{2}{2\pi A \sqrt{1 - \left( \frac{y}{A} \right)^2}} = \frac{1}{\pi A \sqrt{1 - \left( \frac{y}{A} \right)^2}} =
+   \frac{1}{\pi \sqrt{A^2 - y^2}} , \qquad y \in (-A, A) . \]
+È la \term{distribuzione dell'arcoseno}, a forma di «U»: la sinusoide passa più tempo vicino ai massimi e ai minimi, dove
+rallenta per invertire il moto, che vicino allo zero, dove corre.
+\begin{center}
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=1.4cm},
+  quaderno, width=6.8cm, height=4.6cm]
+\nextgroupplot[xmin=0, xmax=1.1, ymin=-1.35, ymax=1.35, xtick={0.5,1}, ytick={-1,1}, yticklabels={$-A$,$A$}, xlabel=$t$]
+  \fill[evid] (axis cs:0,0.85) rectangle (axis cs:1,1);
+  \fill[mspiC!25] (axis cs:0,-0.075) rectangle (axis cs:1,0.075);
+  \addplot[mspiA, domain=0:1, samples=100] {cos(deg(2*pi*x))};
+  \addplot[mspiA, line width=2.2pt, domain=0:0.0877, samples=10] {cos(deg(2*pi*x))};
+  \addplot[mspiA, line width=2.2pt, domain=0.9123:1, samples=10] {cos(deg(2*pi*x))};
+  \addplot[mspiA, line width=2.2pt, domain=0.238:0.262, samples=5] {cos(deg(2*pi*x))};
+  \addplot[mspiA, line width=2.2pt, domain=0.738:0.762, samples=5] {cos(deg(2*pi*x))};
+\nextgroupplot[xmin=-1.15, xmax=1.15, ymin=0, ymax=1.6, xtick={-1,1}, xticklabels={$-A$,$A$}, ytick={0.3183},
+  yticklabels={$\frac{1}{\pi A}$}, xlabel=$y$]
+  \addplot[ybar interval, fill=mspiA!30, draw=mspiA!60] coordinates {(-1.00,1.4325) (-0.90,0.6020) (-0.80,0.4835) (-0.70,0.4310) (-0.60,0.3805) (-0.50,0.3725) (-0.40,0.3460) (-0.30,0.3245) (-0.20,0.3160) (-0.10,0.3160) (0.00,0.3165) (0.10,0.3255) (0.20,0.3510) (0.30,0.3430) (0.40,0.3585) (0.50,0.3990) (0.60,0.4070) (0.70,0.4805) (0.80,0.5995) (0.90,1.4150) (1.00,1.4150)};
+  \addplot[mspiB, line width=1.1pt, domain=-0.985:0.985, samples=120] {1/(pi*sqrt(1-x^2))};
+\end{groupplot}
+\end{tikzpicture}
+\end{center}
+A sinistra: in un periodo, la sinusoide resta nella fascia gialla vicino al massimo (le parti spesse a sinistra e a
+destra) molto più a lungo che nella fascia verde, alta uguale, attorno allo zero (le due parti spesse in mezzo). A
+destra: l'istogramma di 20\,000 valori simulati con $A = 1$ e la densità dell'arcoseno.
+\end{esempio}
+
+% ============================================================
+\section{Terzo caso: la conversione A/D}
+% ============================================================
+
+Quando $X$ è continua e $Y$ è discreta si ha una \textbf{conversione analogico-digitale} (A/D) della variabile
+aleatoria. Supponiamo di voler rappresentare $X$ (con perdite) con $R$ bit, cioè con $M = 2^R$ livelli.
+\begin{itemize}
+  \item Si scelgono gli $M$ valori di rappresentazione $\mathcal{Y} = \{y_1, y_2, \ldots, y_M\}$, i valori che $Y$ può
+        assumere.
+  \item Si divide l'alfabeto $\mathcal{X}$ in $M$ intervalli, definiti dalle $M + 1$ soglie $\{x_i\}_{i=1}^{M+1}$.
+\end{itemize}
+
+\dfn{Rappresentazione a R bit}{
+  Si definisce \term{rappresentazione a $R$ bit} di $X$ la variabile aleatoria discreta
+  \[ Y = y_i \qquad \text{se} \quad x_i \leq X < x_{i+1} , \qquad i = 1, 2, \ldots, M . \]
+}
+
+La pmf di $Y$ si scrive facilmente: $Y$ vale $y_i$ quando $X$ cade nell'$i$-esimo intervallo, quindi
+\[ p_Y(y_i) = P(x_i \leq X < x_{i+1}) = F_X(x_{i+1}) - F_X(x_i) , \qquad i = 1, 2, \ldots, M . \]
+Ovviamente tanto la partizione quanto i livelli di rappresentazione sono gradi di libertà a disposizione del
+progettista: scegliendoli bene si riduce l'errore commesso rappresentando $X$ con $Y$.
+
+\begin{esempio}{Un convertitore a 3 bit}
+I campioni di un segnale vocale si modellano bene con una variabile di Laplace (valori piccoli frequentissimi, valori
+grandi rari). Sia $X \sim \mathcal{L}(1)$, quantizzata con $R = 3$ bit, cioè $M = 8$ livelli: soglie
+$-\infty, -3, -2, -1, 0, 1, 2, 3, +\infty$ e livelli $-3{,}5;\ -2{,}5;\ \ldots;\ 3{,}5$ (il centro di ogni intervallo,
+e per i due intervalli estremi il punto a distanza $\frac12$ dall'ultima soglia).
+\begin{center}
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=1.5cm}, quaderno, axis lines=left,
+  width=6.8cm, height=5.2cm]
+\nextgroupplot[xmin=-4.6, xmax=4.6, ymin=-4, ymax=4, xtick={-3,-2,-1,0,1,2,3}, ytick={-3.5,-1.5,0.5,1.5,3.5},
+  yticklabels={$-3{,}5$,$-1{,}5$,$0{,}5$,$1{,}5$,$3{,}5$}, xlabel=$x$, ylabel={$y = g(x)$}]
+  \addplot[mspiA, line width=1.3pt, jump mark left] coordinates {(-4.5,-3.5) (-3,-2.5) (-2,-1.5) (-1,-0.5) (0,0.5) (1,1.5) (2,2.5) (3,3.5) (4.5,3.5)};
+  \addplot[mspiB, domain=-4.5:4.5, samples=121] {3*0.5*exp(-abs(x))-3.9};
+  \node[font=\scriptsize, mspiB!85!black, anchor=west] at (axis cs:1.2,-3.1) {$f_X(x)$};
+\nextgroupplot[xmin=-4.2, xmax=4.2, ymin=0, ymax=0.38, xtick={-3.5,-2.5,-1.5,-0.5,0.5,1.5,2.5,3.5},
+  xticklabels={$-3{,}5$,,$-1{,}5$,,,$1{,}5$,,$3{,}5$}, ytick={0.1,0.2,0.3}, yticklabels={$0{,}1$,$0{,}2$,$0{,}3$},
+  xlabel=$y$, ylabel={$p_Y(y)$}]
+  \addplot[bastoncini, mspiA] coordinates {(-3.5,0.0249) (-2.5,0.0428) (-1.5,0.1163) (-0.5,0.3161) (0.5,0.3161) (1.5,0.1163) (2.5,0.0428) (3.5,0.0249)};
+\end{groupplot}
+\end{tikzpicture}
+\end{center}
+A sinistra la caratteristica «a scalini» del convertitore (in basso, per riferimento, la densità di $X$); a destra la
+pmf di $Y$. Per esempio
+\[ p_Y(0{,}5) = F_X(1) - F_X(0) = \left( 1 - \tfrac12 e^{-1} \right) - \tfrac12 \approx 0{,}316 , \qquad
+   p_Y(3{,}5) = F_X(+\infty) - F_X(3) = \tfrac12 e^{-3} \approx 0{,}025 . \]
+Più del 63\% delle volte il convertitore usa uno dei due livelli centrali, e solo il 5\% delle volte uno dei due
+estremi. Nella parte del corso sull'informazione vedremo che questa disuguaglianza si può sfruttare per comprimere i
+dati.
+\end{esempio}
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item \textbf{Condizionamento}: $F_{X \mid A}(x) = P(\{X \leq x\} \cap A)/P(A)$ e $f_{X \mid A} = F_{X \mid A}'$; se $A$
+        è un intervallo, la densità viene tagliata e rialzata dividendo per $P(A)$.
+  \item \textbf{Probabilità totale}: $f_X = \sum_m f_{X \mid E_m} P(E_m)$ e $E[X] = \sum_m E[X \mid E_m] P(E_m)$.
+  \item Se $Y = g(X)$: $f_Y(y) = \sum_i \frac{f_X(x_i)}{\abs{\dot g(x_i)}}$, sommando sulle soluzioni di $g(x) = y$. La
+        probabilità si conserva, $f_Y \mathrm{d}y = f_X \mathrm{d}x$: dove $g$ è ripida la densità si abbassa. Lineare:
+        $f_{aX + b}(y) = f_X\left(\frac{y - b}{a}\right)/\abs{a}$.
+  \item $F_X(X) \sim \mathcal{U}(0, 1)$, e viceversa $F_X^{-1}(U)$ ha CDF $F_X$: è il metodo dell'inversione per
+        simulare qualsiasi densità.
+  \item $A\cos(2\pi X + \varphi)$ con $X$ uniforme su un periodo ha la densità dell'arcoseno $\frac{1}{\pi\sqrt{A^2 - y^2}}$.
+  \item \textbf{Conversione A/D} a $R$ bit: $M = 2^R$ livelli, $p_Y(y_i) = F_X(x_{i+1}) - F_X(x_i)$.
+\end{itemize}
+}
