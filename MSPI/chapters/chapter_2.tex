@@ -1,0 +1,711 @@
+\chapter{Contare: il calcolo combinatorio}
+
+In molti esperimenti i risultati possibili sono tutti «alla pari»: un dado non truccato non preferisce nessuna faccia,
+una moneta non preferisce testa a croce, un mazzo ben mescolato non preferisce nessuna carta. In questi casi, come
+vedremo fra poco, la probabilità di un evento si ottiene \textbf{contando}: quanti risultati fanno verificare
+l'evento, su quanti risultati possibili. Contare sembra facile, ma i numeri crescono in fretta: le mani possibili di
+cinque carte da un mazzo di 52 sono più di due milioni e mezzo, e nessuno le vuole elencare una per una. Il
+\term{calcolo combinatorio} è l'insieme delle tecniche per contare \textbf{senza elencare}.
+
+% ============================================================
+\section{Quando tutti i risultati si equivalgono}
+% ============================================================
+
+Prendiamo un dado non truccato, che d'ora in poi chiameremo \textbf{onesto}, e lanciamolo $n$ volte. Ogni lancio dà
+uno dei sei risultati di $\Omega = \{1, 2, 3, 4, 5, 6\}$. Contiamo quante volte esce ciascuna faccia.
+
+\dfn{Numero di occorrenze e frequenza relativa}{
+  Se un esperimento si ripete $n$ volte, il \term{numero di occorrenze} $n_A$ di un evento $A$ è il numero di prove in
+  cui $A$ si è verificato. La \term{frequenza relativa} di $A$ è la frazione di prove in cui si è verificato:
+  \[ f_n(A) = \frac{n_A}{n} . \]
+  È sempre un numero fra 0 (non si è mai verificato) e 1 (si è verificato sempre).
+}
+
+Detto $n_i$ il numero di volte in cui esce la faccia $i$, per un dado onesto ci aspettiamo che, se $n$ è abbastanza
+grande, i sei numeri $n_1, \ldots, n_6$ siano \textbf{all'incirca uguali} fra loro, cioè ognuno vicino a
+$n / \card{\Omega} = n/6$. La figura mostra che cosa succede davvero in tre serie di lanci simulati al computer.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[
+  group style={group size=3 by 1, horizontal sep=1.1cm},
+  width=5.6cm, height=4.4cm, ybar, /pgf/bar width=9pt,
+  ymin=0, ymax=0.32, xmin=0.4, xmax=6.6, xtick={1,...,6},
+  ytick={0, 0.1, 0.1667, 0.3}, yticklabels={$0$, $0{,}1$, $\tfrac16$, $0{,}3$},
+  tick label style={font=\scriptsize}, title style={font=\small},
+  axis lines=left, axis line style={-}, enlarge x limits=false,
+  grid=major, grid style={mspigray!15}, xmajorgrids=false,
+]
+\nextgroupplot[title={$n = 60$ lanci}, ylabel={$f_n(i) = n_i/n$}, ylabel style={font=\small}]
+  \addplot[fill=mspiA!60, draw=mspiA!85!black] coordinates {(1,0.3) (2,0.15) (3,0.0833) (4,0.1) (5,0.2667) (6,0.1)};
+  \draw[mspiB, dashed, line width=0.9pt] (axis cs:0.4,0.1667) -- (axis cs:6.6,0.1667);
+\nextgroupplot[title={$n = 600$ lanci}]
+  \addplot[fill=mspiA!60, draw=mspiA!85!black] coordinates {(1,0.1783) (2,0.1783) (3,0.155) (4,0.165) (5,0.1817) (6,0.1417)};
+  \draw[mspiB, dashed, line width=0.9pt] (axis cs:0.4,0.1667) -- (axis cs:6.6,0.1667);
+\nextgroupplot[title={$n = 60\,000$ lanci}]
+  \addplot[fill=mspiA!60, draw=mspiA!85!black] coordinates {(1,0.1664) (2,0.1677) (3,0.1659) (4,0.1664) (5,0.1667) (6,0.1668)};
+  \draw[mspiB, dashed, line width=0.9pt] (axis cs:0.4,0.1667) -- (axis cs:6.6,0.1667);
+\end{groupplot}
+\end{tikzpicture}
+\caption{Frequenze relative delle sei facce in tre serie di lanci di un dado onesto (simulate). Con pochi lanci sono
+molto irregolari; al crescere di $n$ si schiacciano tutte sulla linea tratteggiata $1/6$.}
+\end{figure}
+
+Consideriamo ora i due eventi $A = \{1, 3, 5\}$ («esce un dispari») e $B = \{2, 4, 6\}$ («esce un pari»). L'evento $A$
+si verifica ogni volta che esce l'1, il 3 o il 5, quindi il suo numero di occorrenze è la somma di quelli delle tre
+facce; e siccome ognuna esce circa $n/\card{\Omega}$ volte:
+\[
+  n_A = n_1 + n_3 + n_5 \simeq \frac{n}{\card{\Omega}} + \frac{n}{\card{\Omega}} + \frac{n}{\card{\Omega}}
+      = \frac{n}{\card{\Omega}} \, \card{A},
+  \qquad
+  n_B = n_2 + n_4 + n_6 \simeq \frac{n}{\card{\Omega}} \, \card{B} .
+\]
+Il simbolo $\simeq$ si legge «circa uguale». Dividendo per $n$ si ottengono le frequenze relative:
+\[
+  \frac{n_A}{n} \simeq \frac{\card{A}}{\card{\Omega}} = \frac{3}{6} = \frac{1}{2},
+  \qquad
+  \frac{n_B}{n} \simeq \frac{\card{B}}{\card{\Omega}} = \frac{3}{6} = \frac{1}{2} .
+\]
+La frazione di volte in cui si verifica un evento è (circa) il numero dei suoi elementi diviso il numero di tutti i
+risultati possibili.
+
+\subsection{Due lanci consecutivi}
+
+Ora l'esperimento consiste nel lanciare il dado \textbf{due volte di seguito}, annotando il primo e il secondo
+risultato. Lo spazio campione è l'insieme delle coppie ordinate:
+\[ \Omega = \{(1,1), (1,2), \ldots, (1,6), (2,1), \ldots, (6,1), (6,2), \ldots, (6,6)\} = \{1, \ldots, 6\}^2 , \]
+che ha $6 \cdot 6 = 36$ elementi. Se il dado è onesto, in un gran numero $n$ di prove ogni coppia esce circa
+$n / \card{\Omega} = n/36$ volte. Sia $A$ l'evento «esce almeno un 6»:
+\[ A = \{(1,6), (2,6), \ldots, (5,6), (6,1), (6,2), \ldots, (6,6)\} . \]
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.78cm, y=0.62cm]
+  % caselle dell'evento: ultima riga e ultima colonna
+  \fill[evid] (0,0) rectangle (6,1);
+  \fill[evid] (5,0) rectangle (6,6);
+  \draw[mspigray, step=1] (0,0) grid (6,6);
+  \foreach \i in {1,...,6} {
+    \node at ({\i-0.5},6.55) {\dado[0.42cm]{\i}};
+    \node at (-0.55,{6.5-\i}) {\dado[0.42cm]{\i}};
+    \foreach \j in {1,...,6}
+      \node[font=\scriptsize] at ({\j-0.5},{6.5-\i}) {$(\i,\j)$};
+  }
+  \node[font=\small\bfseries, anchor=south] at (3,7.0) {secondo lancio};
+  \node[font=\small\bfseries, rotate=90, anchor=south] at (-1.0,3) {primo lancio};
+  \node[font=\small, anchor=west, text width=5.2cm] at (6.6,3.4)
+    {Le 11 caselle gialle sono l'evento «almeno un 6»: le 6 della riga in basso (il primo lancio è un 6) più le 6
+     della colonna a destra (il secondo lancio è un 6), meno la casella $(6,6)$, che sta in entrambe e non va contata
+     due volte: $6 + 6 - 1 = 11$.};
+\end{tikzpicture}
+\caption{I 36 risultati del lancio doppio di un dado.}
+\end{figure}
+
+Anche qui ci aspettiamo che, per $n$ abbastanza grande, la frequenza dell'evento sia
+\[ \frac{n_A}{n} \simeq \frac{\card{A}}{\card{\Omega}} = \frac{11}{36} \approx 0{,}306 . \]
+
+\subsection{La regola generale}
+
+Gli esempi suggeriscono una regola che vale ogni volta che i risultati sono «alla pari».
+
+\dfn{Eventi elementari equivalenti}{
+  In uno spazio campione finito $\Omega$ gli eventi elementari sono \term{equivalenti} se nessuno è privilegiato
+  rispetto agli altri: ripetendo l'esperimento un numero molto grande di volte, ciascun risultato si verifica
+  all'incirca lo stesso numero di volte di qualsiasi altro.
+}
+
+In questo caso, per qualsiasi evento $A \subseteq \Omega$, la frequenza relativa gode della proprietà
+\[ f_n(A) = \frac{n_A}{n} \;\longrightarrow\; \frac{\card{A}}{\card{\Omega}} \qquad \text{per } n \to \infty . \]
+La freccia si legge «tende a»: al crescere del numero $n$ di prove la frequenza si avvicina quanto si vuole al numero
+$\card{A} / \card{\Omega}$. (La definizione precisa di questo «avvicinarsi», il \emph{limite}, è nel prossimo
+capitolo.) La conseguenza pratica è importantissima: quando gli eventi elementari sono equivalenti, \textbf{tutto si
+riduce a contare} quanti elementi hanno gli insiemi che ci interessano. Il resto del capitolo insegna a farlo.
+
+% ============================================================
+\section{Il principio fondamentale: moltiplicare le scelte}
+% ============================================================
+
+Quasi tutte le formule di conteggio discendono da un'unica idea. Prima però serve una notazione, perché di prodotti
+lunghi ne scriveremo parecchi.
+
+\begin{richiamo}{sommatorie e produttorie}
+Quando si devono sommare molti termini che seguono una regola, invece dei puntini si usa la lettera greca $\Sigma$
+(\emph{sigma} maiuscola, la «S» di somma):
+\[ \sum_{i=1}^{n} a_i = a_1 + a_2 + \cdots + a_n . \]
+Si legge «sommatoria per $i$ che va da 1 a $n$ di $a_i$». L'\term{indice} $i$ parte dal valore scritto sotto, cresce
+di uno alla volta e si ferma al valore scritto sopra; per ogni valore si calcola il termine e alla fine si somma
+tutto:
+\[
+  \sum_{i=1}^{4} i = 1 + 2 + 3 + 4 = 10, \qquad
+  \sum_{k=0}^{3} 2^k = 1 + 2 + 4 + 8 = 15, \qquad
+  \sum_{i=1}^{3} 5 = 5 + 5 + 5 = 15 .
+\]
+Nell'ultimo esempio il termine non dipende da $i$: si somma tre volte lo stesso numero, e in generale
+$\sum_{i=1}^{n} c = n \cdot c$. Il nome dell'indice non conta: $\sum_{i=1}^{4} i$ e $\sum_{k=1}^{4} k$ sono la stessa
+somma.
+
+Allo stesso modo la lettera $\Pi$ (\emph{pi} maiuscola, la «P» di prodotto) indica un prodotto:
+\[
+  \prod_{i=1}^{n} a_i = a_1 \cdot a_2 \cdots a_n, \qquad
+  \prod_{i=1}^{4} i = 1 \cdot 2 \cdot 3 \cdot 4 = 24, \qquad
+  \prod_{i=0}^{2} (5 - i) = 5 \cdot 4 \cdot 3 = 60 .
+\]
+
+Due proprietà delle sommatorie si usano di continuo. Una costante che moltiplica tutti i termini si può portare fuori
+(è la proprietà distributiva: $c\,a_1 + \cdots + c\,a_n = c\,(a_1 + \cdots + a_n)$), e la somma di due successioni si
+può spezzare in due somme (basta riordinare i termini):
+\[
+  \sum_{i=1}^{n} c\, a_i = c \sum_{i=1}^{n} a_i ,
+  \qquad\qquad
+  \sum_{i=1}^{n} (a_i + b_i) = \sum_{i=1}^{n} a_i + \sum_{i=1}^{n} b_i .
+\]
+\end{richiamo}
+
+\begin{esempio}{Quanti pranzi diversi?}
+Un menù offre 2 primi (pasta, riso) e 3 secondi (carne, pesce, uova). Un pranzo è formato da un primo e un secondo.
+Per ognuno dei 2 primi si può scegliere uno qualsiasi dei 3 secondi: i pranzi diversi sono $2 \cdot 3 = 6$.
+\begin{center}
+\begin{tikzpicture}[x=1cm, y=0.55cm, every node/.style={font=\small}]
+  \node[draw, circle, fill=mspilight, inner sep=2pt] (r) at (0,0) {};
+  \node[draw, rounded corners=2pt, fill=mspiA!12] (p) at (2.2,1.6) {pasta};
+  \node[draw, rounded corners=2pt, fill=mspiA!12] (s) at (2.2,-1.6) {riso};
+  \draw (r) -- (p); \draw (r) -- (s);
+  \foreach \y/\c [count=\k] in {2.6/carne, 1.6/pesce, 0.6/uova} {
+    \node[draw, rounded corners=2pt, fill=mspiB!12] (a\k) at (4.6,\y) {\c};
+    \draw (p.east) -- (a\k.west);
+    \node[anchor=west, mspigray] at (5.5,\y) {pasta e \c};
+  }
+  \foreach \y/\c [count=\k] in {-0.6/carne, -1.6/pesce, -2.6/uova} {
+    \node[draw, rounded corners=2pt, fill=mspiB!12] (b\k) at (4.6,\y) {\c};
+    \draw (s.east) -- (b\k.west);
+    \node[anchor=west, mspigray] at (5.5,\y) {riso e \c};
+  }
+  \node[font=\scriptsize\bfseries, align=center] at (2.2,4.1) {1° passo\\ 2 scelte};
+  \node[font=\scriptsize\bfseries, align=center] at (4.6,4.1) {2° passo\\ 3 scelte};
+  \node[font=\scriptsize\bfseries, align=center] at (6.4,4.1) {risultati\\ $2 \cdot 3 = 6$};
+\end{tikzpicture}
+\end{center}
+Il disegno si chiama \term{diagramma ad albero}: ogni ramo è una scelta, ogni foglia (a destra) è un risultato
+completo. Le foglie sono tante quanti i rami del primo livello moltiplicati per i rami che partono da ciascuno di essi.
+\end{esempio}
+
+L'esempio contiene già tutta l'idea. Per dimostrarla in generale serve uno strumento che useremo più volte.
+
+\begin{richiamo}{il principio di induzione}
+Per dimostrare che un'affermazione $P(n)$ è vera \textbf{per ogni} numero naturale $n \geq 1$ non serve verificarla su
+infiniti numeri. Bastano due cose:
+\begin{enumerate}
+  \item la \textbf{base}: si verifica che $P(1)$ è vera;
+  \item il \textbf{passo induttivo}: si dimostra che, \emph{se} $P(n-1)$ è vera (è l'\term{ipotesi induttiva}),
+        \emph{allora} è vera anche $P(n)$.
+\end{enumerate}
+\begin{center}
+\begin{tikzpicture}
+  \foreach \x/\a [count=\i] in {0/-62, 0.75/-55, 1.5/-40, 2.25/-18, 3.0/0, 3.75/0, 4.5/0} {
+    \begin{scope}[shift={(\x,0)}, rotate around={\a:(0.09,0)}]
+      \draw[fill=mspiA!20, draw=mspiA!85!black, rounded corners=1pt] (0,0) rectangle (0.18,1.1);
+    \end{scope}
+    \node[font=\scriptsize] at (\x+0.09,-0.3) {$P(\i)$};
+  }
+  \node[font=\scriptsize] at (5.3,0.4) {$\cdots$};
+  \draw[-{Stealth}, mspiB] (-0.2,1.35) .. controls (0.6,1.7) and (1.2,1.6) .. (1.7,1.2);
+  \node[font=\scriptsize, mspiB, anchor=south] at (0.7,1.65) {ognuna fa cadere la successiva};
+\end{tikzpicture}
+\end{center}
+È come una fila di tessere del domino: la base fa cadere la prima tessera; il passo induttivo garantisce che ogni
+tessera, cadendo, fa cadere la successiva. Allora cadono tutte: $P(1)$ fa cadere $P(2)$, che fa cadere $P(3)$, e così
+via senza fine.
+\end{richiamo}
+
+\teorema[moltiplicazione]{Principio fondamentale del calcolo combinatorio}{
+  Se una scelta si compie in $k$ passi successivi e al passo $i$-esimo ci sono $m_i$ possibilità, \textbf{qualunque}
+  siano state le scelte fatte ai passi precedenti, allora i modi di compiere l'intera scelta sono
+  \[ m_1 \cdot m_2 \cdots m_k = \prod_{i=1}^{k} m_i . \]
+  In particolare, dati $k$ insiemi finiti $A_1, A_2, \ldots, A_k$ (non necessariamente distinti), il loro
+  \term{prodotto cartesiano} $A^{(k)} = A_1 \times A_2 \times \cdots \times A_k$, cioè l'insieme delle $k$-ple ordinate
+  con il primo elemento in $A_1$, il secondo in $A_2$ e così via, ha come numero di elementi il prodotto dei numeri
+  di elementi dei singoli insiemi:
+  \[ \card{A^{(k)}} = \prod_{i=1}^{k} \card{A_i} . \qquad (\bullet) \]
+}
+
+\begin{dimostrazione}
+\passo{Base} Con un solo passo ($k = 1$) i modi sono $m_1$, e la formula dà proprio $m_1$.
+\passo{Ipotesi induttiva} Supponiamo che i primi $k - 1$ passi si possano compiere in $m_1 \cdot m_2 \cdots m_{k-1}$
+modi.
+\passo{Passo induttivo} Ognuno di questi modi si può completare con una qualsiasi delle $m_k$ possibilità del passo
+$k$-esimo, e completamenti diversi danno scelte complete diverse. Come nell'albero dei pranzi, ogni foglia del livello
+$k-1$ si apre in $m_k$ rami: le scelte complete sono $(m_1 \cdots m_{k-1}) \cdot m_k$.
+\passo{Il prodotto cartesiano} Costruire una $k$-pla di $A^{(k)}$ vuol dire scegliere il primo elemento in $A_1$
+($m_1 = \card{A_1}$ modi), poi il secondo in $A_2$ ($m_2 = \card{A_2}$ modi, qualunque sia il primo), e così via. La
+formula $(\bullet)$ è il caso particolare con $m_i = \card{A_i}$.
+\end{dimostrazione}
+
+Il numero di elementi del prodotto cartesiano è il \textbf{prodotto} del numero di elementi dei singoli insiemi: è
+la relazione fondamentale del calcolo combinatorio, da cui derivano tutte le formule del capitolo. La forma con i
+«passi» è un po' più generale ed è quella che serve quando l'insieme delle scelte disponibili cambia da un passo
+all'altro: conta solo che ne cambi il \emph{contenuto}, non il \emph{numero}.
+
+\begin{esempio}{Targhe e lanci}
+\begin{itemize}
+  \item Il lancio doppio di una moneta ha $\card{\{T,C\}^2} = 2 \cdot 2 = 4$ risultati; il lancio doppio di un dado
+        $6 \cdot 6 = 36$; tre lanci di un dado $6^3 = 216$.
+  \item Una targa automobilistica italiana ha la forma \texttt{AB 123 CD}: due lettere, tre cifre, due lettere. Le
+        lettere ammesse sono 22 (sono escluse I, O, Q e U, che si confondono con altri simboli). Le targhe possibili
+        sono $22 \cdot 22 \cdot 10 \cdot 10 \cdot 10 \cdot 22 \cdot 22 = 22^4 \cdot 10^3 = 234\,256\,000$.
+\end{itemize}
+\end{esempio}
+
+% ============================================================
+\section{Disposizioni: quando l'ordine conta}
+% ============================================================
+
+\subsection{Disposizioni semplici}
+
+\dfn{Disposizioni semplici}{
+  Dato un insieme $A = \{a_1, a_2, \ldots, a_n\}$ di $n$ elementi, le \term{disposizioni semplici di $n$ oggetti di
+  classe $k$} (o $k$-ple ordinate senza ripetizione) sono le sequenze ordinate di $k$ elementi \textbf{distinti} di
+  $A$: le «stringhe» di lunghezza $k$ in cui ogni elemento di $A$ compare al più una volta.
+}
+
+\teorema[disposizioni]{Numero di disposizioni semplici}{
+  Per $k \leq n$ il numero di disposizioni semplici di $n$ oggetti di classe $k$ è
+  \[ K_{o,nr} = n\,(n-1)\,(n-2) \cdots (n-k+1) = \prod_{i=0}^{k-1} (n - i) . \]
+  I pedici ricordano che l'ordine conta ($o$) e che non sono ammesse ripetizioni ($nr$).
+}
+
+\begin{dimostrazione}
+\passo{I passi} Si costruisce la sequenza una posizione alla volta: $k$ passi.
+\passo{Le scelte a ogni passo} Al primo passo si può scegliere uno qualsiasi degli $n$ elementi. Al secondo passo un
+elemento è già stato usato e non si può ripetere: restano $n - 1$ scelte, \emph{qualunque} sia l'elemento usato. Al
+terzo ne restano $n - 2$, e in generale al passo $i$-esimo ne restano $n - (i - 1)$. All'ultimo passo, il
+$k$-esimo, le scelte sono $n - k + 1$.
+\passo{Si moltiplica} Per il principio fondamentale (Teorema~\ref{teo:moltiplicazione}) il totale è
+$n\,(n-1) \cdots (n-k+1)$. Nella formula $(\bullet)$ è come avere $\card{A_1} = n$, $\card{A_2} = n - 1$, \ldots,
+$\card{A_k} = n - k + 1$.
+\end{dimostrazione}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[slot/.style={draw=mspiA!85!black, fill=mspiA!10, rounded corners=3pt, minimum width=2.1cm,
+                    minimum height=0.8cm, font=\small}]
+  \node[slot] (o) at (0,0) {oro};
+  \node[slot] (a) at (3,0) {argento};
+  \node[slot] (b) at (6,0) {bronzo};
+  \node at (1.5,0) {$\times$}; \node at (4.5,0) {$\times$};
+  \node[font=\small, below=2pt of o] {8 scelte};
+  \node[font=\small, below=2pt of a] {7 scelte};
+  \node[font=\small, below=2pt of b] {6 scelte};
+  \node[font=\small, anchor=west] at (7.4,0) {$= 8 \cdot 7 \cdot 6 = 336$ podi};
+\end{tikzpicture}
+\caption{Otto atleti in finale: chi vince l'oro si sceglie fra 8, l'argento fra i 7 rimasti, il bronzo fra i 6
+rimasti. Contano l'ordine (oro e argento non sono la stessa cosa) e l'assenza di ripetizioni (nessuno vince due
+medaglie).}
+\end{figure}
+
+Si noti che la formula funziona anche se si prova a esagerare: per $k > n$ il prodotto contiene il fattore
+$n - n = 0$ e dà zero, come deve essere (non si possono mettere in fila $k$ oggetti distinti se se ne hanno meno di
+$k$).
+
+\subsection{Disposizioni con ripetizione}
+
+\dfn{Disposizioni con ripetizione}{
+  Le \term{disposizioni con ripetizione di $n$ oggetti di classe $k$} (o $k$-ple ordinate con ripetizione) sono le
+  sequenze ordinate di $k$ elementi di $A = \{a_1, \ldots, a_n\}$ in cui ogni elemento \textbf{può ripetersi}.
+}
+
+\teorema[disprip]{Numero di disposizioni con ripetizione}{
+  Il numero di disposizioni con ripetizione di $n$ oggetti di classe $k$ è
+  \[ K_{o,r} = \prod_{i=0}^{k-1} n = n^k . \]
+}
+
+\begin{dimostrazione}
+\passo{Le scelte non diminuiscono} Questa volta a ogni posizione si può rimettere qualsiasi elemento, anche se è già
+stato usato: a ognuno dei $k$ passi le scelte sono sempre $n$.
+\passo{Si moltiplica} Per il principio fondamentale il totale è $n \cdot n \cdots n$ ($k$ volte), cioè $n^k$. Nella
+$(\bullet)$ è il caso $\card{A_1} = \card{A_2} = \cdots = \card{A_k} = n$: le disposizioni con ripetizione sono
+proprio gli elementi del prodotto cartesiano $A^k$.
+\end{dimostrazione}
+
+\begin{esempio}{Stringhe binarie, byte e codici PIN}
+\begin{itemize}
+  \item Le stringhe binarie di lunghezza $k$ sono le $k$-ple ordinate con ripetizione dell'insieme $\{0, 1\}$, che ha
+        2 elementi: sono $2^k$. Un byte ($k = 8$) può quindi assumere $2^8 = 256$ valori diversi.
+  \item Un PIN di 4 cifre è una disposizione con ripetizione delle 10 cifre: i PIN possibili sono $10^4 = 10\,000$.
+        Chi prova a indovinarlo a caso ha una sola possibilità su diecimila.
+\end{itemize}
+\end{esempio}
+
+\subsection{Permutazioni}
+
+Un caso particolare, ma importantissimo, delle disposizioni semplici è quello in cui si usano \textbf{tutti} gli
+elementi: $k = n$. La domanda è: in quanti modi si possono mettere in fila $n$ oggetti distinti?
+
+\dfn{Permutazioni}{
+  Una \term{permutazione} di $n$ oggetti distinti è un modo di metterli in fila, cioè una disposizione semplice di
+  classe $k = n$.
+}
+
+\teorema[permutazioni]{Numero di permutazioni}{
+  Il numero di permutazioni di $n$ oggetti distinti è
+  \[ n\,(n-1)\,(n-2) \cdots 2 \cdot 1 = n! \]
+  (si legge «$n$ fattoriale»).
+}
+
+\begin{dimostrazione}
+\passo{} È la formula delle disposizioni semplici con $k = n$: l'ultimo fattore diventa $n - n + 1 = 1$, e il prodotto
+comprende tutti gli interi da $n$ fino a 1.
+\end{dimostrazione}
+
+\begin{richiamo}{il fattoriale}
+Il \term{fattoriale} di un intero $n \geq 1$ è il prodotto di tutti gli interi da 1 a $n$:
+\[ n! = \prod_{i=1}^{n} i = 1 \cdot 2 \cdot 3 \cdots n , \qquad \text{e per convenzione}\quad 0! = 1 . \]
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}c|ccccccccccc@{}}
+  $n$ & 0 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 \\ \hline
+  $n!$ & 1 & 1 & 2 & 6 & 24 & 120 & 720 & 5\,040 & 40\,320 & 362\,880 & 3\,628\,800
+\end{tabular}
+\end{center}
+Il fattoriale cresce in modo vertiginoso: $52!$, il numero di modi di mescolare un mazzo di carte francesi, vale circa
+$8 \cdot 10^{67}$, un numero con 68 cifre. Ogni volta che si mescola bene un mazzo, quasi certamente si ottiene un
+ordine che non è mai esistito prima nella storia.
+
+Due proprietà si usano di continuo:
+\begin{itemize}
+  \item $n! = n \cdot (n-1)!$: il fattoriale di $n$ è $n$ volte il fattoriale del numero precedente (per esempio
+        $5! = 5 \cdot 4! = 5 \cdot 24 = 120$);
+  \item un rapporto di fattoriali si semplifica cancellando i fattori comuni:
+        $\dfrac{7!}{4!} = \dfrac{7 \cdot 6 \cdot 5 \cdot \cancel{4!}}{\cancel{4!}} = 7 \cdot 6 \cdot 5 = 210$.
+\end{itemize}
+\textbf{Perché $0! = 1$?} Perché è l'unico valore che rende vera la regola $n! = n \cdot (n-1)!$ anche per $n = 1$:
+$1! = 1 \cdot 0!$ richiede $0! = 1$. C'è anche una lettura «combinatoria»: c'è esattamente \textbf{un} modo di
+mettere in fila zero oggetti, cioè non fare niente.
+\end{richiamo}
+
+Con il fattoriale la formula delle disposizioni semplici si scrive in forma compatta. Basta moltiplicare e dividere
+per $(n-k)!$, che «completa» il prodotto fino a 1:
+\[
+  K_{o,nr} = n\,(n-1) \cdots (n-k+1) = \frac{n\,(n-1) \cdots (n-k+1) \cdot (n-k)!}{(n-k)!} = \frac{n!}{(n-k)!} .
+\]
+Per esempio, i podi della figura sono $\dfrac{8!}{5!} = 8 \cdot 7 \cdot 6 = 336$.
+
+\begin{esempio}{Anagrammi}
+Gli anagrammi della parola ROMA (anche senza senso) sono le permutazioni delle sue 4 lettere distinte:
+$4! = 24$. Si possono ottenere dall'albero: 4 scelte per la prima lettera, 3 per la seconda, 2 per la terza, 1 per
+l'ultima. Fra questi ci sono AMOR, MORA, RAMO, ORMA e MARO.
+\end{esempio}
+
+% ============================================================
+\section{Combinazioni: quando l'ordine non conta}
+% ============================================================
+
+Spesso l'ordine non interessa: in una mano di carte conta \emph{quali} carte si hanno, non in che ordine sono
+arrivate; in una schedina del lotto conta \emph{quali} numeri si giocano.
+
+\dfn{Combinazioni}{
+  Le \term{combinazioni di $n$ elementi su $k$ posti}, indicate con $C_{n,k}$, sono le $k$-ple \textbf{non
+  ordinate} e senza ripetizioni che si possono formare con $n$ elementi. In altre parole, $C_{n,k}$ è il numero di
+  \textbf{sottoinsiemi di $k$ elementi} di un insieme di $n$ elementi.
+}
+
+In un sottoinsieme contano solo gli elementi, non il loro ordine: $\{a_1, a_2\}$ e $\{a_2, a_1\}$ sono lo stesso
+insieme e vanno contati una volta sola. Il trucco per contarli è partire dalle disposizioni, in cui l'ordine conta, e
+accorgersi che ogni sottoinsieme viene contato più volte.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[sub/.style={draw=mspiA!85!black, fill=mspiA!10, rounded corners=3pt, minimum width=1.7cm,
+                    minimum height=0.6cm, font=\small},
+                    ord/.style={font=\small, mspiB!85!black}]
+  \foreach \s/\x/\y [count=\i] in {ab/a/b, ac/a/c, ad/a/d, bc/b/c, bd/b/d, cd/c/d} {
+    \node[sub] (s\i) at ({(\i-1)*2.3},0) {$\{\x, \y\}$};
+    \node[ord] (o\i) at ({(\i-1)*2.3},-0.95) {$(\x,\y)$};
+    \node[ord] at ({(\i-1)*2.3},-1.5) {$(\y,\x)$};
+    \draw[mspigray] (s\i.south) -- (o\i.north);
+  }
+  \node[font=\small, anchor=east] at (-1.1,0) {6 sottoinsiemi};
+  \node[font=\small, anchor=east, mspiB!85!black] at (-1.1,-1.22) {12 coppie ordinate};
+\end{tikzpicture}
+\caption{Con $n = 4$ elementi $\{a, b, c, d\}$ e $k = 2$: le $4 \cdot 3 = 12$ disposizioni si raggruppano a due a due
+(le $2! = 2$ permutazioni di ciascuna coppia), e i gruppi sono i $12 / 2 = 6$ sottoinsiemi.}
+\end{figure}
+
+\teorema[combinazioni]{Numero di combinazioni}{
+  Il numero di sottoinsiemi di $k$ elementi di un insieme di $n$ elementi ($0 \leq k \leq n$) è
+  \[
+    C_{n,k} = \frac{n\,(n-1)\,(n-2) \cdots (n-k+1)}{k!} = \frac{n!}{k!\,(n-k)!} = \binom{n}{k} .
+  \]
+  Il numero $\binom{n}{k}$ si chiama \term{coefficiente binomiale} e si legge «$n$ su $k$».
+}
+
+\begin{dimostrazione}[contare due volte la stessa cosa]
+\passo{L'idea} Contiamo le $k$-ple ordinate senza ripetizione in due modi diversi. Siccome contiamo la stessa cosa, i
+due risultati devono essere uguali.
+\passo{Primo modo} Sono le disposizioni semplici: $K_{o,nr} = n\,(n-1) \cdots (n-k+1)$.
+\passo{Secondo modo} Una $k$-pla ordinata si può costruire in due passi: prima si sceglie \emph{quali} $k$ elementi
+usare (un sottoinsieme: $C_{n,k}$ modi), poi si sceglie \emph{in che ordine} metterli (le permutazioni di $k$
+oggetti: $k!$ modi, qualunque sia il sottoinsieme). Per il principio fondamentale le $k$-ple ordinate sono
+$C_{n,k} \cdot k!$.
+\passo{Si uguaglia} $C_{n,k} \cdot k! = n\,(n-1) \cdots (n-k+1)$, quindi
+\[ C_{n,k} = \frac{n\,(n-1) \cdots (n-k+1)}{k!} . \]
+In altre parole: tutte le $k!$ permutazioni di una stessa $k$-pla ordinata \emph{collassano} in un'unica
+combinazione.
+\passo{La forma con i fattoriali} Moltiplicando numeratore e denominatore per $(n-k)!$, il numeratore diventa $n!$
+(come per le disposizioni):
+\[ C_{n,k} = \frac{n\,(n-1) \cdots (n-k+1) \cdot (n-k)!}{k!\,(n-k)!} = \frac{n!}{k!\,(n-k)!} . \]
+\end{dimostrazione}
+
+\begin{esempio}{Il SuperEnalotto}
+Una giocata del SuperEnalotto consiste nello scegliere 6 numeri diversi fra 1 e 90, senza che l'ordine conti. Le
+giocate possibili sono
+\[ \binom{90}{6} = \frac{90 \cdot 89 \cdot 88 \cdot 87 \cdot 86 \cdot 85}{6!} = 622\,614\,630 . \]
+Con una sola giocata, le probabilità di fare «sei» sono una su più di seicento milioni.
+\end{esempio}
+
+\begin{richiamo}{il coefficiente binomiale e il triangolo di Tartaglia}
+Il coefficiente binomiale $\binom{n}{k} = \dfrac{n!}{k!\,(n-k)!}$ ha alcune proprietà che conviene conoscere.
+\begin{itemize}
+  \item \textbf{Casi estremi}: $\binom{n}{0} = \binom{n}{n} = 1$ (un solo sottoinsieme vuoto, un solo sottoinsieme
+        «tutto») e $\binom{n}{1} = n$ (i sottoinsiemi con un elemento sono tanti quanti gli elementi).
+  \item \textbf{Simmetria}: $\binom{n}{k} = \binom{n}{n-k}$. Nella formula basta scambiare $k$ con $n - k$: il
+        denominatore $k!\,(n-k)!$ non cambia. A parole: scegliere i $k$ elementi che \emph{entrano} equivale a
+        scegliere gli $n - k$ che \emph{restano fuori}. Per esempio $\binom{90}{84} = \binom{90}{6}$.
+  \item \textbf{Regola di Stifel}: $\binom{n}{k} = \binom{n-1}{k-1} + \binom{n-1}{k}$ per $1 \leq k \leq n - 1$.
+        Si fissa un elemento $x$ dell'insieme. I sottoinsiemi di $k$ elementi o contengono $x$, e allora gli altri
+        $k - 1$ si scelgono fra i rimanenti $n - 1$ ($\binom{n-1}{k-1}$ modi), oppure non lo contengono, e allora
+        tutti i $k$ elementi si scelgono fra gli altri $n - 1$ ($\binom{n-1}{k}$ modi). I due gruppi non hanno
+        elementi in comune, quindi i totali si sommano.
+\end{itemize}
+La regola di Stifel permette di costruire tutti i coefficienti binomiali senza fattoriali, riga dopo riga: è il
+\term{triangolo di Tartaglia}. La riga $n$ contiene $\binom{n}{0}, \binom{n}{1}, \ldots, \binom{n}{n}$; ai lati ci
+sono degli 1 e ogni numero interno è la somma dei due che ha sopra.
+\begin{center}
+\begin{tikzpicture}[x=0.62cm, y=0.55cm]
+  \foreach \n in {0,...,6} {
+    \node[font=\scriptsize, mspigray, anchor=east] at (-4.6,-\n) {$n = \n$};
+    \foreach \k in {0,...,\n} {
+      \pgfmathtruncatemacro{\c}{round(factorial(\n)/(factorial(\k)*factorial(\n-\k)))}
+      \node[font=\small] (t\n\k) at ({\k - \n/2},-\n) {\c};
+    }
+  }
+  \draw[mspiB, line width=0.8pt, rounded corners=4pt] ($(t41)+(-0.35,0.32)$) rectangle ($(t42)+(0.35,-0.3)$);
+  \draw[-{Stealth}, mspiB] (t41) -- (t52);
+  \draw[-{Stealth}, mspiB] (t42) -- (t52);
+  \draw[mspiB, line width=0.8pt] (t52) circle (0.3);
+  \node[font=\scriptsize, mspiB, anchor=west] at (3.9,-4.5) {$\binom{4}{1} + \binom{4}{2} = 4 + 6 = 10 = \binom{5}{2}$};
+\end{tikzpicture}
+\end{center}
+\end{richiamo}
+
+% ============================================================
+\section{Un problema con le carte}
+% ============================================================
+
+\begin{esercizio}{Estrazioni da un mazzo di carte francesi}
+Un mazzo di carte francesi ha 52 carte, 13 per ognuno dei quattro semi: Cuori (C), Fiori (F), Picche (P) e Quadri (Q).
+Si estraggono delle carte \textbf{senza reinserimento} (una carta estratta non torna nel mazzo). Si calcolino:
+\begin{enumerate}[label=\alph*)]
+  \item il numero di possibili quaterne ordinate;
+  \item il numero di quaterne non ordinate;
+  \item il numero di quaterne ordinate con semi (C, F, P, Q), cioè con la prima carta di cuori, la seconda di fiori, la
+        terza di picche e la quarta di quadri;
+  \item il numero di cinquine non ordinate in cui compaiono esattamente due assi.
+\end{enumerate}
+\svolgimento
+\textbf{a)} Contano l'ordine e l'assenza di ripetizioni (una carta estratta non può riuscire): sono disposizioni
+semplici di 52 oggetti di classe 4,
+\[ 52 \cdot 51 \cdot 50 \cdot 49 = 6\,497\,400 . \]
+\textbf{b)} Ora l'ordine non conta: le $4! = 24$ permutazioni di ogni quaterna collassano in un'unica quaterna non
+ordinata,
+\[ \frac{52 \cdot 51 \cdot 50 \cdot 49}{4!} = \frac{6\,497\,400}{24} = 270\,725 = \binom{52}{4} . \]
+\textbf{c)} La prima carta si sceglie fra le 13 di cuori, la seconda fra le 13 di fiori, la terza fra le 13 di picche,
+la quarta fra le 13 di quadri: è il prodotto cartesiano di quattro insiemi con $\card{A_i} = 13$ ($k = 4$),
+\[ 13 \cdot 13 \cdot 13 \cdot 13 = 13^4 = 28\,561 . \]
+Le ripetizioni sono impossibili da sole, perché le quattro carte hanno semi diversi.
+
+\textbf{d)} Si costruisce la cinquina in due passi. Prima si scelgono i due assi fra i 4 del mazzo: i sottoinsiemi
+di 2 assi sono $\binom{4}{2}$ (4 assi su 2 posti). Poi si scelgono le altre 3 carte fra le $52 - 4 = 48$ che non sono
+assi (altrimenti gli assi sarebbero più di due): sono $\binom{48}{3}$. Per il principio fondamentale:
+\[
+  \binom{4}{2}\binom{48}{3} = \frac{4!}{2!\,2!} \cdot \frac{48!}{3!\,45!}
+  = \frac{4 \cdot 3}{2} \cdot \frac{48 \cdot 47 \cdot 46}{3 \cdot 2} = 6 \cdot 17\,296 = 103\,776 .
+\]
+\end{esercizio}
+
+\info{Una curiosità sul punto c)}{
+  Se nel punto c) l'ordine non contasse (cioè si volessero le quaterne non ordinate con una carta per seme), il
+  risultato sarebbe ancora $13^4$: ogni mano con una carta per seme corrisponde a una e una sola quaterna ordinata
+  nell'ordine C, F, P, Q. Se invece si volessero le quaterne \emph{ordinate} con una carta per seme in un ordine
+  qualsiasi, bisognerebbe moltiplicare per le $4!$ disposizioni dei semi: $4! \cdot 13^4 = 685\,464$.
+}
+
+% ============================================================
+\section{L'insieme delle parti e il binomio di Newton}
+% ============================================================
+
+\dfn{Insieme delle parti}{
+  L'\term{insieme delle parti} $\mathcal{P}(A)$ di un insieme $A$ è l'insieme di \textbf{tutti} i sottoinsiemi di $A$,
+  compresi l'insieme vuoto $\emptyset$ e $A$ stesso.
+}
+
+Quanti sono i sottoinsiemi di un insieme $A$ con $n$ elementi? Quelli con esattamente $k$ elementi sono
+$\binom{n}{k}$, e $k$ può andare da 0 (l'insieme vuoto) a $n$ ($A$ stesso). Sommando su tutte le dimensioni possibili:
+\[ \card{\mathcal{P}(A)} = \sum_{k=0}^{n} \binom{n}{k} = \binom{n}{0} + \binom{n}{1} + \cdots + \binom{n}{n} . \]
+Questa somma ha un valore molto semplice, che si scopre con una delle formule più famose della matematica.
+
+\teorema[newton]{Binomio di Newton}{
+  Per qualsiasi coppia di numeri $a$, $b$ e per ogni naturale $n$:
+  \[ (a + b)^n = \sum_{k=0}^{n} \binom{n}{k}\, a^k\, b^{n-k} . \]
+}
+
+Prima della dimostrazione, i casi piccoli. Per $n = 2$ si ritrova il quadrato di un binomio,
+$(a + b)^2 = b^2 + 2ab + a^2$, con i coefficienti $1, 2, 1$ della riga 2 del triangolo di Tartaglia. Per $n = 3$:
+$(a + b)^3 = b^3 + 3ab^2 + 3a^2 b + a^3$, con i coefficienti $1, 3, 3, 1$ della riga 3. Non è una coincidenza.
+
+\begin{dimostrazione}
+\passo{Si scrive la potenza come prodotto} $(a + b)^n = (a + b)(a + b) \cdots (a + b)$, con $n$ fattori.
+\passo{Come si sviluppa un prodotto} Moltiplicando tutto (proprietà distributiva) si ottiene una somma di termini, e
+ogni termine si forma scegliendo \textbf{da ciascun fattore} o la $a$ o la $b$ e moltiplicando le scelte. Per esempio
+con $n = 3$ la scelta «$a$ dal primo fattore, $b$ dal secondo, $a$ dal terzo» produce il termine $a \cdot b \cdot a =
+a^2 b$.
+\passo{Che termini si ottengono} Se la $a$ è stata scelta da $k$ fattori, la $b$ è stata scelta dagli altri $n - k$:
+il termine vale $a^k b^{n-k}$. Quindi i termini possibili sono $a^0 b^n, a^1 b^{n-1}, \ldots, a^n b^0$.
+\passo{Quante volte compare ciascuno} Il termine $a^k b^{n-k}$ compare una volta per ogni modo di scegliere
+\emph{quali} $k$ fattori (fra gli $n$) danno la $a$. Sono i sottoinsiemi di $k$ elementi di un insieme di $n$:
+$\binom{n}{k}$. Raccogliendo i termini uguali si ottiene $\binom{n}{k}\, a^k b^{n-k}$, e sommando su $k$ da 0 a $n$ si
+ha la tesi.
+\end{dimostrazione}
+
+\teorema[parti]{Numero dei sottoinsiemi}{
+  Un insieme $A$ con $n$ elementi ha $2^n$ sottoinsiemi:
+  \[ \card{\mathcal{P}(A)} = \sum_{k=0}^{n} \binom{n}{k} = 2^n . \]
+}
+
+\begin{dimostrazione}[due modi]
+\passo{Con il binomio di Newton} Ponendo $a = b = 1$ nella formula di Newton, ogni potenza di 1 vale 1:
+\[ 2^n = (1 + 1)^n = \sum_{k=0}^{n} \binom{n}{k}\, 1^k\, 1^{n-k} = \sum_{k=0}^{n} \binom{n}{k} = \card{\mathcal{P}(A)} . \]
+\passo{Con una stringa binaria} Si mettono in fila gli $n$ elementi di $A$. Un sottoinsieme si descrive dicendo, per
+ogni elemento, se c'è (1) o non c'è (0): è una stringa binaria di lunghezza $n$, e sottoinsiemi diversi danno
+stringhe diverse. Le stringhe binarie di lunghezza $n$ sono $2^n$ (disposizioni con ripetizione, Teorema~\ref{teo:disprip}),
+quindi anche i sottoinsiemi.
+\end{dimostrazione}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=2.2cm, y=1.25cm, ins/.style={draw=mspiA!85!black, fill=mspiA!8, rounded corners=3pt,
+                    font=\small, minimum width=1.5cm, align=center}]
+  \node[ins] (e)   at (0,0)  {$\emptyset$\\[-2pt] {\scriptsize\ttfamily 000}};
+  \node[ins] (a)   at (-1,1) {$\{a\}$\\[-2pt] {\scriptsize\ttfamily 100}};
+  \node[ins] (b)   at (0,1)  {$\{b\}$\\[-2pt] {\scriptsize\ttfamily 010}};
+  \node[ins] (c)   at (1,1)  {$\{c\}$\\[-2pt] {\scriptsize\ttfamily 001}};
+  \node[ins] (ab)  at (-1,2) {$\{a,b\}$\\[-2pt] {\scriptsize\ttfamily 110}};
+  \node[ins] (ac)  at (0,2)  {$\{a,c\}$\\[-2pt] {\scriptsize\ttfamily 101}};
+  \node[ins] (bc)  at (1,2)  {$\{b,c\}$\\[-2pt] {\scriptsize\ttfamily 011}};
+  \node[ins] (abc) at (0,3)  {$\{a,b,c\}$\\[-2pt] {\scriptsize\ttfamily 111}};
+  \foreach \u/\v in {e/a, e/b, e/c, a/ab, a/ac, b/ab, b/bc, c/ac, c/bc, ab/abc, ac/abc, bc/abc}
+    \draw[mspigray] (\u) -- (\v);
+  \foreach \k/\c in {0/1, 1/3, 2/3, 3/1}
+    \node[font=\small, anchor=west] at (1.55,\k) {$k = \k$: $\c = \binom{3}{\k}$};
+\end{tikzpicture}
+\caption{Gli $2^3 = 8$ sottoinsiemi di $\{a, b, c\}$, ordinati per numero di elementi $k$, ognuno con la sua stringa
+binaria (1 = l'elemento c'è). Le righe ne contengono $1, 3, 3, 1$: la riga 3 del triangolo di Tartaglia.}
+\end{figure}
+
+% ============================================================
+\section{Prove ripetute e conteggio dei successi}
+% ============================================================
+
+Un ultimo conteggio, che sarà la chiave della distribuzione binomiale (Capitolo~5). Si considerino le stringhe
+binarie di lunghezza $n$ che contengono esattamente $k$ valori «1» e $n - k$ valori «0». Quante sono?
+
+\teorema[stringhe]{Stringhe con $k$ uni}{
+  Le stringhe binarie di lunghezza $n$ con esattamente $k$ valori «1» (e $n - k$ valori «0») sono
+  \[ \frac{n!}{k!\,(n-k)!} = \binom{n}{k} . \]
+}
+
+\begin{dimostrazione}[permutazioni inefficaci]
+\passo{Si parte da una stringa qualsiasi} Si prende una stringa con $k$ «1» e $n - k$ «0», per esempio
+$1\,1\,0\,0\,0$ ($n = 5$, $k = 2$), e si immagina di aver dato un nome diverso a ogni simbolo, come se fossero $n$
+oggetti distinti. Le loro permutazioni sono $n!$.
+\passo{Molte permutazioni non cambiano nulla} Scambiare fra loro due «1» lascia la stringa identica: le $k!$
+permutazioni degli «1» sulle posizioni che già occupano sono \emph{inefficaci}. Lo stesso vale per le $(n-k)!$
+permutazioni degli «0» sulle loro posizioni.
+\passo{Si divide} Ogni stringa diversa viene quindi prodotta da $k!\,(n-k)!$ permutazioni. Dividendo le $n!$
+permutazioni iniziali per $k!$ e per $(n-k)!$ si ottiene il numero di stringhe diverse: $\dfrac{n!}{k!\,(n-k)!} =
+\binom{n}{k}$.
+\passo{Un modo più breve} Una stringa con $k$ uni è individuata da \emph{quali} $k$ posizioni, fra le $n$, contengono
+un 1: un sottoinsieme di $k$ elementi dell'insieme delle posizioni $\{1, \ldots, n\}$. Sono $\binom{n}{k}$.
+\end{dimostrazione}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.62cm, y=0.62cm]
+  \foreach \a/\b [count=\r] in {1/2, 1/3, 1/4, 2/3, 2/4, 3/4} {
+    \pgfmathsetmacro{\xo}{mod(\r-1,3)*6.2}
+    \pgfmathsetmacro{\yo}{-floor((\r-1)/3)*1.6}
+    \foreach \p in {1,...,4} {
+      \draw[fill=white, draw=mspigray] (\xo+\p,\yo) rectangle ++(0.9,0.9);
+      \node[font=\scriptsize, mspigray] at (\xo+\p+0.45,\yo+0.45) {0};
+    }
+    \foreach \p in {\a,\b} {
+      \draw[fill=mspiA!55, draw=mspiA!85!black] (\xo+\p,\yo) rectangle ++(0.9,0.9);
+      \node[font=\scriptsize, white] at (\xo+\p+0.45,\yo+0.45) {1};
+    }
+  }
+\end{tikzpicture}
+\caption{Le $\binom{4}{2} = \frac{4!}{2!\,2!} = 6$ stringhe di lunghezza 4 con due «1»: tante quante le coppie di
+posizioni in cui mettere gli uni.}
+\end{figure}
+
+Il nome del paragrafo viene dall'interpretazione più importante: se si ripete $n$ volte una prova che può riuscire
+(1, un \emph{successo}) o fallire (0, un \emph{insuccesso}), le sequenze di risultati con esattamente $k$ successi sono
+$\binom{n}{k}$. Per esempio, nei 10 lanci di una moneta le sequenze con esattamente 3 teste sono $\binom{10}{3} = 120$.
+
+% ============================================================
+\section{Riepilogo delle formule}
+% ============================================================
+
+Davanti a un problema di conteggio le domande da farsi sono due: \textbf{l'ordine conta?} e \textbf{sono ammesse
+ripetizioni?}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{@{}lccl@{}}
+  \toprule
+  \textbf{Che cosa si conta} & \textbf{Ordine} & \textbf{Ripetizioni} & \textbf{Quante sono} \\
+  \midrule
+  disposizioni con ripetizione & sì & sì & $n^k$ \\
+  disposizioni semplici & sì & no & $n\,(n-1) \cdots (n-k+1) = \dfrac{n!}{(n-k)!}$ \\
+  permutazioni ($k = n$) & sì & no & $n!$ \\
+  combinazioni (sottoinsiemi) & no & no & $\dbinom{n}{k} = \dfrac{n!}{k!\,(n-k)!}$ \\
+  tutti i sottoinsiemi & --- & --- & $2^n$ \\
+  \bottomrule
+\end{tabular}
+\caption{Le formule del calcolo combinatorio per $k$ scelte da $n$ elementi.}
+\end{table}
+
+\info{Il caso che manca: combinazioni con ripetizione}{
+  Nella tabella manca la casella «ordine no, ripetizioni sì», che nel corso non serve ma completa il quadro. Per
+  esempio: in quanti modi si possono scegliere 3 palline di gelato fra 5 gusti, potendo ripetere un gusto? La
+  risposta è $\binom{n+k-1}{k} = \binom{7}{3} = 35$. Il motivo: una scelta si può disegnare con $k$ pallini (le
+  palline) e $n - 1$ stanghette che separano i gusti; per esempio $\bullet\bullet\,|\,|\,\bullet\,|\,|$ vuol dire due
+  palline del primo gusto e una del terzo. Ogni scelta è una stringa di $n + k - 1$ simboli in cui si decide dove
+  stanno i $k$ pallini: $\binom{n+k-1}{k}$ modi.
+}
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item Se gli eventi elementari sono \textbf{equivalenti}, la frequenza di un evento tende a
+        $\card{A}/\card{\Omega}$: la probabilità si calcola \textbf{contando}.
+  \item \textbf{Principio fondamentale}: se una scelta si fa in $k$ passi con $m_i$ possibilità al passo $i$, i modi
+        sono $\prod m_i$; in particolare $\card{A_1 \times \cdots \times A_k} = \prod \card{A_i}$.
+  \item Disposizioni con ripetizione: $n^k$. Disposizioni semplici: $n!/(n-k)!$. Permutazioni: $n!$.
+  \item Combinazioni (sottoinsiemi di $k$ elementi): $\binom{n}{k} = \frac{n!}{k!\,(n-k)!}$, perché le $k!$
+        permutazioni di ogni $k$-pla collassano in un'unica combinazione.
+  \item Binomio di Newton: $(a+b)^n = \sum_k \binom{n}{k} a^k b^{n-k}$; di conseguenza un insieme di $n$ elementi ha
+        $2^n$ sottoinsiemi.
+  \item Le stringhe binarie lunghe $n$ con $k$ uni (le sequenze di $n$ prove con $k$ successi) sono $\binom{n}{k}$.
+\end{itemize}
+}
