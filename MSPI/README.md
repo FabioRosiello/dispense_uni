@@ -20,6 +20,12 @@ Questa cartella contiene i sorgenti LaTeX di `DispensaMSPI.pdf`.
     uniforme, Poisson (con il numero e e la Poisson come limite della binomiale) (slide 49-61)
   - `chapters/chapter_6.tex` — Pmf condizionate e funzioni di variabili aleatorie: pmf e medie condizionate,
     probabilità totale per le pmf, funzioni di v.a., teorema fondamentale per il calcolo della media (slide 62-73)
+  - `chapters/chapter_7.tex` — Varianza e disuguaglianze: valore quadratico medio, varianza, derivate (richiamo),
+    varianza di binomiale, uniforme e Poisson, proprietà, disuguaglianze di Markov e Chebyshev (slide 74-94)
+  - `chapters/chapter_8.tex` — Variabili aleatorie multiple: pmf congiunta, marginali, indipendenza, pmf condizionate,
+    Bayes, regola della catena, tre bit con bit di parità (slide 95-112)
+  - `chapters/chapter_9.tex` — Funzioni di più variabili, covarianza e correlazione: linearità della media, teorema
+    della media condizionata, covarianza, coefficiente di correlazione, varianza di una somma (slide 113-133)
 - `Slides_Metodi_statistici_parte_*.pdf` — le slide del corso
 - `unina_doc_class.cls`, `fonts/`, `sources/` — template Unina Docs (lo stesso delle altre dispense)
 - `Images/` — eventuali immagini
