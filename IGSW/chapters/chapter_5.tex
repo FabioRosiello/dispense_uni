@@ -348,6 +348,24 @@ Il sistema deve essere veloce e reattivo. & Il tempo medio di risposta del siste
 \end{table}
 
 % ============================================================
+\begin{esempio}{Un requisito testabile è un test che si può scrivere}
+«Il tempo medio di risposta del sistema non deve superare i 100 ms» si traduce direttamente in un test automatico:
+\begin{lstlisting}[style=java, name=PrestazioniTest.java]
+@Test
+void tempoMedioDiRispostaEntroCentoMillisecondi() {
+  int richieste = 1000;
+  long inizio = System.nanoTime();
+  for (int i = 0; i < richieste; i++) {
+    catalogo.cerca("pantaloni");
+  }
+  double mediaMs = (System.nanoTime() - inizio) / 1_000_000.0 / richieste;
+
+  assertTrue(mediaMs <= 100, "tempo medio: " + mediaMs + " ms");
+}
+\end{lstlisting}
+Per «il sistema deve essere veloce e reattivo», invece, nessuno saprebbe che cosa scrivere nell'\code{assertTrue}.
+\end{esempio}
+
 \section{Il processo di Requirements Engineering}
 
 Il processo di RE si articola in tre attività principali.
@@ -713,6 +731,28 @@ Stato finale del sistema & Il sistema ha memorizzato il nuovo appuntamento. \\
 \end{table}
 
 % ------------------------------------------------------------
+\begin{esempio}{Dallo scenario al test di accettazione}
+Ogni riga «cosa può andare storto» di uno scenario è un caso da verificare. Il secondo, lo slot preso da un altro utente
+mentre Pamela sceglie, diventa un test con la stessa struttura dello scenario:
+\begin{lstlisting}[style=java, name=PrenotazioneTest.java]
+@Test
+void loSlotNonEPiuDisponibileAlMomentoDellaConferma() {
+  // assunzioni iniziali: Pamela e Bruno hanno un account, lo slot delle 10:00 e' libero
+  Slot dieci = agenda.slotLiberi(oggi).get(0);
+
+  // un altro utente conferma per primo
+  agenda.prenota(bruno, dieci);
+
+  // flusso: Pamela conferma lo stesso slot
+  Esito esito = agenda.prenota(pamela, dieci);
+
+  // cosa puo' andare storto: errore, e lo slot non e' piu' fra quelli liberi
+  assertEquals(Esito.SLOT_NON_DISPONIBILE, esito);
+  assertFalse(agenda.slotLiberi(oggi).contains(dieci));
+}
+\end{lstlisting}
+\end{esempio}
+
 \subsection{Mock-up a bassa fedeltà}
 
 \dfn{Mock-up a bassa fedeltà (wireframe)}{
@@ -953,6 +993,21 @@ Senza condizione & \textit{Il sistema di fatturazione} [Soggetto] \textit{deve m
 \end{table}
 
 % ============================================================
+\begin{esempio}{Dal requisito al codice, parte per parte}
+Il terzo requisito della tabella, «il sistema di fatturazione deve mostrare le fatture dei clienti in sospeso in ordine
+crescente di data di scadenza», si ritrova pezzo per pezzo nel metodo che lo realizza. È questa corrispondenza che
+permette di \textbf{tracciare} un requisito fino al codice e ai test.
+\begin{lstlisting}[style=java, name=ServizioFatturazione.java]
+public List<Fattura> fattureInSospeso(Cliente cliente) {
+  return fatture.stream()
+      .filter(f -> f.cliente().equals(cliente))        // le fatture dei clienti...
+      .filter(f -> !f.pagata())                        // ...in sospeso [Oggetto]
+      .sorted(Comparator.comparing(Fattura::scadenza)) // in ordine crescente di scadenza [Vincolo]
+      .toList();
+}
+\end{lstlisting}
+\end{esempio}
+
 \section{I documenti dei requisiti}
 
 Esistono standard che definiscono la \textbf{struttura} del documento dei requisiti.

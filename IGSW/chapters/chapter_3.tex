@@ -406,7 +406,7 @@ automaticamente gli oggetti del programma in righe delle tabelle di un database 
 
 \begin{esempio}{Stesso comportamento, qualità molto diversa}
 Entrambe le versioni calcolano il totale di un carrello applicando gli sconti. La prima «funziona», ma è illeggibile:
-\Needspace{14\baselineskip}\begin{lstlisting}[language=Java]
+\Needspace{14\baselineskip}\begin{lstlisting}[style=java]
 public double c(List<double[]> l) {
     double t = 0;
     for (double[] x : l) t += x[0] * x[1] * (1 - x[2]);
@@ -415,7 +415,7 @@ public double c(List<double[]> l) {
 \end{lstlisting}
 Cosa sono \texttt{x[0]}, \texttt{x[1]} e \texttt{x[2]}? Senza leggere il resto del programma è impossibile saperlo.
 La seconda versione dice esattamente cosa fa:
-\Needspace{14\baselineskip}\begin{lstlisting}[language=Java]
+\Needspace{14\baselineskip}\begin{lstlisting}[style=java]
 public double calcolaTotaleCarrello(List<RigaCarrello> righe) {
     double totale = 0;
     for (RigaCarrello riga : righe) {
@@ -507,6 +507,29 @@ il codice faccia quello che deve, poi che i \textbf{moduli} funzionino insieme e
 \caption{I livelli del test funzionale, dal più piccolo al più grande.}
 \end{figure}
 
+\begin{esempio}{Un test di unità con JUnit}
+Il test di unità della \code{calcolaTotaleCarrello} vista nella fase di implementazione: si prepara un carrello noto, si
+chiama il metodo e si confronta il risultato con quello atteso, calcolato a mano. JUnit esegue il test in un istante, e
+lo si può ripetere a ogni modifica.
+\begin{lstlisting}[style=java, name=CarrelloTest.java]
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
+
+class CarrelloTest {
+  @Test
+  void applicaLoScontoRigaPerRiga() {
+    List<RigaCarrello> righe = List.of(
+        new RigaCarrello(10.00, 2, 0.0),     // 2 pezzi da 10 euro, senza sconto: 20
+        new RigaCarrello(50.00, 1, 0.2));    // 1 pezzo da 50 euro, sconto del 20%: 40
+
+    double totale = new Carrello().calcolaTotaleCarrello(righe);
+
+    assertEquals(60.00, totale, 0.001);      // il terzo argomento e' la tolleranza sui double
+  }
+}
+\end{lstlisting}
+\end{esempio}
+
 \info{Per approfondire: il modello a V}{
   Una variante molto diffusa del modello a cascata, il \textbf{modello a V}, rende esplicito che ogni fase di progettazione
   ha una fase di test «gemella» che ne verifica il risultato:
@@ -567,6 +590,31 @@ Tipo & Scopo & Esempio \\
 \end{tabularx}
 \caption{I tipi di manutenzione.}
 \end{table}
+
+\begin{esempio}{Manutenzione correttiva, in pratica}
+Un cliente segnala che il 29 febbraio 1900 risulta una data valida. Il difetto è nella regola degli anni bisestili:
+\begin{lstlisting}[style=java, name=Calendario.java]
+// prima: divisibile per 4 non basta
+static boolean bisestile(int anno) {
+  return anno % 4 == 0;
+}
+
+// dopo la correzione: i secoli sono bisestili solo se divisibili per 400
+static boolean bisestile(int anno) {
+  return (anno % 4 == 0 && anno % 100 != 0) || anno % 400 == 0;
+}
+\end{lstlisting}
+Insieme alla correzione si aggiunge un \textbf{test di regressione}, che riproduce il caso segnalato e impedisce al
+difetto di tornare con una modifica futura:
+\begin{lstlisting}[style=java, name=CalendarioTest.java]
+@Test
+void ilMilleNovecentoNonEraBisestile() {
+  assertFalse(Calendario.bisestile(1900));
+  assertTrue(Calendario.bisestile(2000));
+  assertTrue(Calendario.bisestile(2024));
+}
+\end{lstlisting}
+\end{esempio}
 
 \info{Un problema specifico della cascata}{
   Nel modello a cascata la manutenzione è l'ultima fase, ma una modifica importante (ad esempio un nuovo requisito) non si può

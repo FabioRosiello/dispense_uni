@@ -252,6 +252,41 @@ Si elencano dentro l'ellisse, sotto il nome, e l'etichetta della freccia «exten
 \end{tikzpicture}
 \end{center}
 
+\begin{esempio}{«include» ed «extend» quando si arriva al codice}
+Un caso d'uso descrive un'interazione, non un metodo: non c'è una traduzione meccanica in codice. Quando però si arriva
+all'implementazione, le due relazioni lasciano tracce riconoscibili, con lo stesso verso delle dipendenze.
+\begin{lstlisting}[style=java, name=Bancomat.java]
+public class Bancomat {
+  private final List<EstensionePrelievo> estensioni = new ArrayList<>();   // chi estende si registra qui
+
+  public void preleva(Carta carta, int importo) {
+    identificaCarta(carta);                      // «include»: sempre, e il prelievo dipende da lei
+    erogaContanti(importo);
+    for (EstensionePrelievo e : estensioni) {    // extension point "print operation receipt"
+      e.dopoOperazione(carta, importo);          // «extend»: se c'e', quando serve
+    }
+  }
+
+  public void versaAssegno(Carta carta, Assegno assegno) {
+    identificaCarta(carta);                      // la stessa parte comune, riusata
+    acquisisciAssegno(assegno);
+  }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=StampaRicevuta.java]
+public class StampaRicevuta implements EstensionePrelievo {
+  @Override
+  public void dopoOperazione(Carta carta, int importo) {
+    if (cliente.vuoleLaRicevuta()) {             // la condizione dell'estensione
+      stampante.stampa("Prelievo di " + importo + " euro");
+    }
+  }
+}
+\end{lstlisting}
+\code{Bancomat} chiama \code{identificaCarta} e non potrebbe farne a meno; non conosce invece \code{StampaRicevuta}, che
+dipende da lui (implementa la sua interfaccia) e da sola non avrebbe senso.
+\end{esempio}
+
 \subsection{Generalizzazione tra casi d'uso}
 
 \dfn{Generalizzazione tra casi d'uso}{

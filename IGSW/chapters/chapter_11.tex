@@ -389,6 +389,29 @@ L'esempio più familiare è il \textbf{Web}: il browser è il client, il server 
 richiesta HTTP, senza sapere in anticipo chi o quanti saranno.
 
 % ------------------------------------------------------------
+\begin{esempio}{Un server che non conosce i suoi client}
+Il più piccolo server possibile: offre un solo servizio (l'ora esatta) a chiunque si colleghi, senza sapere chi sia.
+\begin{lstlisting}[style=java, name=ServerOrario.java]
+try (ServerSocket server = new ServerSocket(5000)) {
+  while (true) {
+    try (Socket client = server.accept();                      // chiunque, in qualunque numero
+         PrintWriter risposta = new PrintWriter(client.getOutputStream(), true)) {
+      risposta.println(LocalTime.now());                       // il servizio
+    }
+  }
+}
+\end{lstlisting}
+Il client, invece, deve sapere dove si trova il server e che cosa offre (la sua interfaccia: «collegati alla porta 5000
+e leggi una riga»):
+\begin{lstlisting}[style=java, name=ClientOrario.java]
+try (Socket server = new Socket("orologio.example.it", 5000);
+     BufferedReader richiesta = new BufferedReader(new InputStreamReader(server.getInputStream()))) {
+  System.out.println("Sono le " + richiesta.readLine());
+}
+\end{lstlisting}
+Nei sistemi reali al posto dei socket si usa quasi sempre HTTP, con le API REST del Capitolo 14; lo schema resta questo.
+\end{esempio}
+
 \subsection{Repository}
 
 \dfn{Architettura a repository}{
@@ -628,6 +651,39 @@ livello 3 non sa come funziona la logica applicativa.
 \end{minipage}
 
 % ------------------------------------------------------------
+\begin{esempio}{Tre livelli, in codice}
+Ogni livello è una classe (in un sistema reale, un package o un componente) che conosce solo quella sotto.
+\begin{lstlisting}[style=java, name=OrdineController.java]
+public class OrdineController {                      // interfaccia utente
+  private final OrdineService service;
+
+  public String mostra(long id) {
+    return VistaOrdine.html(service.dettaglio(id));
+  }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=OrdineService.java]
+public class OrdineService {                         // logica applicativa
+  private final OrdineRepository repository;
+
+  public Ordine dettaglio(long id) {
+    Ordine ordine = repository.trova(id).orElseThrow();
+    ordine.applicaScontiInVigore();                  // le regole del dominio stanno qui
+    return ordine;
+  }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=OrdineRepository.java]
+public class OrdineRepository {                      // gestione dei dati
+  public Optional<Ordine> trova(long id) {
+    // SELECT ... FROM ordini WHERE id = ?
+  }
+}
+\end{lstlisting}
+Se il controller chiamasse direttamente il repository «per fare prima», l'architettura diventerebbe \textbf{aperta}, e
+l'ordine mostrato all'utente salterebbe le regole del dominio: in questo caso, gli sconti.
+\end{esempio}
+
 \subsection{Multi-tier}
 
 L'architettura \term{multi-tier} è l'evoluzione della three-tier su $N$ livelli, e ammette configurazioni diverse. I suoi

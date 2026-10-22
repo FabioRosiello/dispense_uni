@@ -89,6 +89,67 @@ cambiare l'interfaccia senza toccare le classi del dominio.
 \end{esempio}
 
 % ============================================================
+\begin{esempio}{I package nel codice}
+In Java ogni package UML diventa un \code{package}, e ogni freccia di dipendenza fra package diventa una serie di
+\code{import}: leggendo gli \code{import} di un file si ricostruisce il diagramma, e un \code{import} che non dovrebbe
+esserci (il model che importa la GUI) è una violazione dell'architettura che si vede a colpo d'occhio.
+\begin{lstlisting}[style=java, name=dao/ListinoDAO.java]
+package dao;
+
+import model.Societa;
+
+public interface ListinoDAO {
+  void addSocietaDB(Societa societa);
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=controller/Controller.java]
+package controller;
+
+import dao.ListinoDAO;              // l'interfaccia, non l'implementazione per PostgreSQL
+import model.Borsa;
+import model.Societa;
+
+public class Controller {
+  private final Borsa borsa;
+  private final ListinoDAO listinoDAO;
+
+  public Controller(Borsa borsa, ListinoDAO listinoDAO) {
+    this.borsa = borsa;
+    this.listinoDAO = listinoDAO;
+  }
+
+  public void nuovaSocieta(String nome, double prezzo) {
+    Societa societa = new Societa(nome, prezzo);   // «create»
+    borsa.getListino().addSocieta(societa);
+    listinoDAO.addSocietaDB(societa);
+  }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=implementazionePostgresDAO/ListinoImplementazionePostgresDAO.java]
+package implementazionePostgresDAO;
+
+import dao.ListinoDAO;
+import database.ConnessioneDatabase;
+import model.Societa;
+
+public class ListinoImplementazionePostgresDAO implements ListinoDAO {
+  @Override
+  public void addSocietaDB(Societa societa) {
+    String sql = "INSERT INTO societa (nome, prezzo) VALUES (?, ?)";
+    try (PreparedStatement query = ConnessioneDatabase.getInstance().connection.prepareStatement(sql)) {
+      query.setString(1, societa.getNome());
+      query.setDouble(2, societa.getPrezzo());
+      query.executeUpdate();
+    } catch (SQLException e) {
+      throw new IllegalStateException("Salvataggio non riuscito", e);
+    }
+  }
+}
+\end{lstlisting}
+Il Controller non importa nulla da \code{implementazionePostgresDAO}: chi crea il Controller gli passa
+un'implementazione di \code{ListinoDAO}, e passare a un altro database significa scriverne un'altra.
+\end{esempio}
+
 \section{I diagrammi di interazione}
 
 \dfn{Diagrammi di interazione}{
@@ -313,7 +374,7 @@ Esistono anche altri costrutti, ad esempio per il parallelismo (\texttt{par}) o 
 
 \begin{esempio}{La spedizione di un ordine}
 \noindent\begin{minipage}[c]{0.33\textwidth}
-\begin{lstlisting}[language=Java, basicstyle=\scriptsize\ttfamily]
+\begin{lstlisting}[style=plain, name=dispatch (pseudocodice)]
 procedure dispatch
   foreach (lineitem)
     if (product.value > 10K)
@@ -372,7 +433,8 @@ l'architettura GUI--Controller--Model vista sopra.
 
 \Needspace{16\baselineskip}
 \textbf{1. La schermata Home.} Servono due input, quindi si crea una nuova finestra e la si apre dalla Home:
-\begin{lstlisting}[language=Java]
+\Needspace{12\baselineskip}
+\begin{lstlisting}[style=java]
 aggiungiNuovaSocietaButton.addActionListener(new ActionListener() {
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -386,7 +448,8 @@ aggiungiNuovaSocietaButton.addActionListener(new ActionListener() {
 \Needspace{18\baselineskip}
 \textbf{2. Il pulsante OK.} Alla pressione bisogna verificare che i dati siano validi (lo si farà in futuro), inserire i dati nel
 modello tramite il controller e tornare alla schermata precedente (\textit{Annulla} farà solo quest'ultima operazione):
-\begin{lstlisting}[language=Java]
+\Needspace{15\baselineskip}
+\begin{lstlisting}[style=java]
 OKButton.addActionListener(new ActionListener() {
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -403,7 +466,8 @@ OKButton.addActionListener(new ActionListener() {
 \Needspace{24\baselineskip}
 \textbf{3. Controller e modello.} Il controller si limita a inoltrare la richiesta all'oggetto \texttt{borsa}, che ha una lista di
 società inizialmente vuota; \texttt{aggiungiSocieta} crea una nuova società e la aggiunge alla lista.
-\begin{lstlisting}[language=Java]
+\Needspace{24\baselineskip}
+\begin{lstlisting}[style=java]
 // nel Controller
 public void aggiungiSocietaBorsa(String text, double parseDouble) {
     borsa.aggiungiSocieta(text, parseDouble);

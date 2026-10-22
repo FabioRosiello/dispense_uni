@@ -295,6 +295,48 @@ Esempio & Uno script per rinominare le foto delle vacanze & Un'app di home banki
 \caption{Programma e prodotto software a confronto.}
 \end{table}
 
+\begin{esempio}{Lo stesso compito: programma o prodotto}
+Rinominare le foto delle vacanze, come programma per sé, sono poche righe scritte in dieci minuti:
+\begin{lstlisting}[style=java, name=Rinomina.java]
+public class Rinomina {
+  public static void main(String[] args) {
+    File[] foto = new File("/home/anna/Vacanze2026").listFiles();
+    for (int i = 0; i < foto.length; i++) {
+      foto[i].renameTo(new File(foto[i].getParent(), "sardegna_" + (i + 1) + ".jpg"));
+    }
+  }
+}
+\end{lstlisting}
+Funziona per Anna, che sa che la cartella esiste, che contiene solo foto e che l'ordine non le interessa. Lo stesso
+compito, come \textbf{prodotto} per altre persone, deve fare i conti con tutto il resto:
+\begin{lstlisting}[style=java, name=Rinominatore.java]
+/**
+ * Prepara la rinomina delle foto di una cartella in ordine di data: prefisso_001.jpg, prefisso_002.jpg...
+ * Non tocca nessun file: restituisce il piano, che l'utente vede in anteprima prima di confermarlo.
+ * @throws IllegalArgumentException se la cartella non esiste
+ */
+public List<Rinomina> pianifica(Path cartella, String prefisso) throws IOException {
+  if (!Files.isDirectory(cartella)) {
+    throw new IllegalArgumentException("Cartella inesistente: " + cartella);
+  }
+  try (Stream<Path> file = Files.list(cartella)) {
+    List<Path> foto = file.filter(Rinominatore::eUnaFoto)              // salta video, testi e file nascosti
+                          .sorted(Comparator.comparing(Rinominatore::dataDiScatto))
+                          .toList();
+    List<Rinomina> piano = new ArrayList<>();
+    for (int i = 0; i < foto.size(); i++) {
+      String nome = String.format("%s_%03d.jpg", prefisso, i + 1);
+      piano.add(new Rinomina(foto.get(i), cartella.resolve(nome)));
+    }
+    return piano;
+  }
+}
+\end{lstlisting}
+E il codice è solo una parte: al prodotto servono anche i test automatici (cartella vuota, nomi già usati, mille foto),
+un'interfaccia, un installatore, il manuale, le traduzioni, e qualcuno che lo aggiorni quando esce un nuovo formato di
+immagine.
+\end{esempio}
+
 \subsection{Tipi di prodotti software}
 
 I prodotti software si dividono in due grandi famiglie. La differenza chiave è \textbf{chi definisce i requisiti}.
@@ -441,6 +483,25 @@ A volte le conseguenze di un software difettoso vanno ben oltre il budget:
   \item \textbf{Boeing 737 MAX (2018--2019)}: due incidenti con 346 vittime complessive, legati al sistema automatico di controllo MCAS,
         che si basava sui dati di un singolo sensore.
 \end{itemize}
+
+\begin{esempio}{L'overflow dell'Ariane 5, in Java}
+Il software di riferimento inerziale convertiva la velocità orizzontale da un numero in virgola mobile a 64 bit a un
+intero a 16 bit, che arriva al massimo a 32\,767. Sull'Ariane 4 bastava; l'Ariane 5 era più veloce.
+\begin{lstlisting}[style=java, name=Conversione.java]
+double velocitaOrizzontale = 40000.0;        // con l'Ariane 4 restava sotto 32767
+short bh = (short) velocitaOrizzontale;      // da 64 bit in virgola mobile a 16 bit interi
+System.out.println(bh);                      // stampa -25536
+\end{lstlisting}
+In Java la conversione «riesce» e produce silenziosamente un numero assurdo. Il software dell'Ariane era scritto in Ada,
+dove la stessa conversione solleva un'eccezione: nessuno la gestiva, il calcolatore si spense e quello di riserva, con lo
+stesso software, si era già spento allo stesso modo. Quel valore, per di più, serviva solo prima del decollo. Un controllo
+esplicito avrebbe trasformato la catastrofe in un caso gestito:
+\begin{lstlisting}[style=java, name=Conversione.java]
+if (velocitaOrizzontale > Short.MAX_VALUE || velocitaOrizzontale < Short.MIN_VALUE) {
+  bh = saturaOSegnala(velocitaOrizzontale);  // decisione presa in progetto, non lasciata al caso
+}
+\end{lstlisting}
+\end{esempio}
 
 \error{Il messaggio}{
   Il software controlla ospedali, aerei, centrali, banche. Un difetto di \textbf{processo} (requisiti sbagliati, test insufficienti,

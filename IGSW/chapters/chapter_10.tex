@@ -457,7 +457,7 @@ in Java.
 
 \Needspace{16\baselineskip}
 \noindent\begin{minipage}[c]{0.62\textwidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 public class Report {
   private List<ReportDataElement> getData() {
     System.out.println("Getting data...");
@@ -500,7 +500,7 @@ Applicando l'SRP si separano le tre responsabilità in tre classi; \code{Report}
 
 \Needspace{24\baselineskip}
 \noindent\begin{minipage}[t]{0.49\textwidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 public class DataAccess {
   public List<ReportDataElement> getData() {
     System.out.println("Getting data...");
@@ -516,7 +516,7 @@ public class ReportFormatter {
 \end{lstlisting}
 \end{minipage}\hfill
 \begin{minipage}[t]{0.49\textwidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 public class ReportPrinter {
   public void print() {
     DataAccess dataAccess = new DataAccess();
@@ -658,6 +658,29 @@ Responsibility Principle è quella \textbf{funzionale}, e nelle classi quella \t
   funzionalmente coeso.
 }
 
+\begin{esempio}{Dalla coesione temporale alla coesione funzionale}
+Un \code{init()} tipico: le istruzioni stanno insieme solo perché vanno eseguite all'avvio.
+\begin{lstlisting}[style=java, name=Applicazione.java]
+public void init() throws Exception {
+  connessione = DriverManager.getConnection(URL_DB);      // database
+  Properties p = new Properties();                        // configurazione
+  p.load(new FileInputStream("app.properties"));
+  timeout = Integer.parseInt(p.getProperty("timeout"));
+  contatoreAccessi = 0;                                   // statistiche
+  contatoreErrori = 0;
+}
+\end{lstlisting}
+Se cambia il formato della configurazione o il database, si modifica la stessa classe che tiene le statistiche. Dopo il
+refactoring all'avvio resta solo il \textbf{coordinamento}, e ogni passo sta in un modulo funzionalmente coeso:
+\begin{lstlisting}[style=java, name=Applicazione.java]
+public void avvia() {
+  database.connetti();                       // Database: solo la connessione
+  configurazione.carica("app.properties");   // Configurazione: solo leggere e validare le impostazioni
+  statistiche.azzera();                      // Statistiche: solo i contatori
+}
+\end{lstlisting}
+\end{esempio}
+
 \subsection{Un controesempio: la God Class}
 
 \dfn{Antipattern}{
@@ -757,6 +780,20 @@ metodi della superclasse e spesso ne dipende anche nei dettagli di implementazio
 rompere tutte le sottoclassi, anche quelle che non si sono mai occupate della parte modificata. L'interfaccia (caso 4),
 invece, impegna solo a rispettare un \textbf{contratto}, senza portarsi dietro alcuna implementazione.
 
+\begin{esempio}{Le quattro forme di accoppiamento in una classe}
+\begin{lstlisting}[style=java, name=X.java]
+public class X extends Base implements Stampabile {   // 3: sottoclasse di Base   4: implementa Stampabile
+  private Y y;                                          // 1: attributo di tipo Y
+
+  public Z converti(W w) {                              // 2: W e Z usati in un metodo
+    return new Z(w.valore());
+  }
+}
+\end{lstlisting}
+\code{X} è accoppiata a cinque tipi: una modifica a \code{Base} (il legame più forte), a \code{Stampabile}, a \code{Y}, a
+\code{W} o a \code{Z} può costringere a modificarla.
+\end{esempio}
+
 \subsection{Pensare per interfacce}
 
 Le interfacce sono uno strumento centrale per ridurre l'accoppiamento, e la libreria standard di Java ne contiene centinaia
@@ -774,7 +811,7 @@ Vediamo l'effetto di un'interfaccia su un esempio concreto.
 \begin{esempio}{Il viaggiatore e l'automobile}
 \Needspace{14\baselineskip}
 \noindent\begin{minipage}[c]{0.5\textwidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 class Traveler {
   Car c = new Car();
 
@@ -810,7 +847,7 @@ Introduciamo un'interfaccia \code{Vehicle}, che \code{Car} e \code{Bike} impleme
 
 \Needspace{18\baselineskip}
 \noindent\begin{minipage}[c]{0.5\textwidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 interface Vehicle {
   void move();
 }
@@ -860,7 +897,7 @@ L'interfaccia \code{Vehicle} ha \textbf{spezzato} l'accoppiamento fra \code{Trav
         cambiamento});
   \item serve però un'\textbf{entità esterna} che fornisca (\textit{inietti}) l'implementazione concreta: qui il metodo
         \code{setV}, chiamato ad esempio così:
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 Traveler t = new Traveler();
 t.setV(new Bike());      // chi crea Traveler sceglie il mezzo
 t.startJourney();
@@ -886,7 +923,7 @@ accoppiamento eccessivo molto comune, e come correggerlo.
 
 \Needspace{24\baselineskip}
 \noindent\begin{minipage}[t]{0.49\textwidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 public class Customer {
   private String firstName;
   private String lastName;
@@ -905,7 +942,7 @@ public class Customer {
 \end{lstlisting}
 \end{minipage}\hfill
 \begin{minipage}[t]{0.49\textwidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 public class Wallet {
   private float value;
 
@@ -928,7 +965,7 @@ public class Wallet {
 Ecco il codice di un metodo della classe \code{Paperboy}, che riscuote due dollari.
 
 \Needspace{10\baselineskip}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 float payment = 2.00f;                     // "voglio i miei due dollari!"
 Wallet theWallet = myCustomer.getWallet();
 if (theWallet.getTotalMoney() > payment) {
@@ -952,7 +989,8 @@ if (theWallet.getTotalMoney() > payment) {
   \Needspace{16\baselineskip}
   \item \textbf{È fragile.} Supponiamo che a un cliente rubino il portafoglio, e che un collega decida di modellare il
         furto impostando il portafoglio a \code{null}:
-\begin{lstlisting}[language=Java]
+\Needspace{5\baselineskip}
+\begin{lstlisting}[style=java]
 victim.setWallet(null);
 \end{lstlisting}
         È una scelta ragionevole: né la documentazione né il codice impongono che il
@@ -990,7 +1028,7 @@ e il cliente decide come farlo.
 
 \Needspace{16\baselineskip}
 \noindent\begin{minipage}[t]{0.52\textwidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 public class Customer {
   private String firstName;
   private String lastName;
@@ -1010,7 +1048,7 @@ public class Customer {
 \end{lstlisting}
 \end{minipage}\hfill
 \begin{minipage}[t]{0.45\textwidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 // in un metodo di Paperboy
 float payment = 2.00f;
 float paidAmount =
@@ -1086,7 +1124,7 @@ ai cambiamenti: ogni classe lungo la catena è una classe da cui dipendiamo.
 
 \begin{esempio}{Chiamate permesse e vietate}
 \Needspace{16\baselineskip}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 class Driver {
   private Car car;                          // componente diretto
 
