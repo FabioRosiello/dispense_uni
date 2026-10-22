@@ -1,0 +1,643 @@
+\chapter{Variabili aleatorie discrete}
+
+Finora i risultati di un esperimento erano oggetti qualsiasi: testa e croce, coppie di dadi, mani di carte. Ma molto
+spesso ciò che interessa è un \textbf{numero}: quante teste sono uscite, quanti pacchetti ci sono in coda, quanti bit
+sono arrivati sbagliati. Le \textbf{variabili aleatorie} trasformano i risultati in numeri, e con i numeri si possono
+fare cose che con le teste e le croci non si possono fare: per esempio la \textbf{media}. In questo capitolo
+introduciamo le variabili aleatorie discrete, la loro funzione di probabilità e la loro media, e studiamo le tre
+famiglie più importanti: la \textbf{binomiale}, l'\textbf{uniforme} e quella di \textbf{Poisson}.
+
+% ============================================================
+\section{Dai risultati ai numeri}
+% ============================================================
+
+Se $\Omega$ è un insieme di numeri, il risultato dell'esperimento è già un numero. In molti casi interessanti, come il
+lancio di una moneta o l'estrazione di una carta, $\Omega$ non è un insieme numerico; però lo si può sempre mettere in
+corrispondenza con un insieme discreto di numeri. Lo strumento per farlo è una funzione.
+
+\begin{richiamo}{che cos'è una funzione}
+Una \term{funzione} $f : D \to C$ è una regola che associa a \textbf{ogni} elemento $x$ dell'insieme $D$ (il
+\term{dominio}) \textbf{uno e un solo} elemento $f(x)$ dell'insieme $C$ (il \term{codominio}). Si scrive anche
+$x \mapsto f(x)$, «$x$ va in $f(x)$». Si può disegnare con delle frecce: da ogni elemento del dominio parte
+esattamente una freccia.
+\begin{center}
+\begin{tikzpicture}[el/.style={font=\small, inner sep=2pt}]
+  \draw[mspiA!85!black, line width=0.7pt] (0,0) ellipse (0.8 and 1.15);
+  \draw[mspiB!85!black, line width=0.7pt] (3.6,0) ellipse (0.8 and 1.15);
+  \node[el] (a) at (0,0.6) {$a$}; \node[el] (b) at (0,0) {$b$}; \node[el] (c) at (0,-0.6) {$c$};
+  \node[el] (u) at (3.6,0.45) {$1$}; \node[el] (v) at (3.6,-0.45) {$2$};
+  \draw[-{Stealth}] (a) -- (u); \draw[-{Stealth}] (b) -- (u); \draw[-{Stealth}] (c) -- (v);
+  \node[font=\small, mspiA!85!black] at (0,-1.5) {dominio $D$};
+  \node[font=\small, mspiB!85!black] at (3.6,-1.5) {codominio $C$};
+  \node[font=\small, anchor=west, text width=6.4cm] at (5,0)
+    {Da ogni elemento di $D$ parte una sola freccia. Più frecce possono arrivare allo stesso elemento di $C$ (qui
+     $a$ e $b$ vanno entrambi in 1): è permesso.};
+\end{tikzpicture}
+\end{center}
+\end{richiamo}
+
+\dfn{Variabile aleatoria}{
+  Una \term{variabile aleatoria} è una funzione che associa a ogni risultato $\omega$ di un esperimento un numero reale:
+  \[ X : \omega \in \Omega \;\longmapsto\; X(\omega) \in \mathcal{X} \subseteq \R . \]
+  L'insieme $\mathcal{X}$ dei valori che può assumere (il suo codominio, necessariamente discreto se $\Omega$ è
+  discreto) si chiama \term{alfabeto} di $X$.
+}
+
+Gli eventi elementari diventano allora gli eventi $\{X = x\}$, con $x \in \mathcal{X}$: «la variabile ha assunto il
+valore $x$». Le loro frequenze relative e le loro probabilità si indicano con $f_n(x)$ e $P(X = x)$.
+
+\info{Che cosa c'è di aleatorio}{
+  Il nome inganna: la \emph{funzione} $X$ non ha niente di casuale, è una regola fissata una volta per tutte (per
+  esempio «conta le teste»). Aleatorio è il suo \emph{argomento} $\omega$, il risultato dell'esperimento: siccome non
+  sappiamo quale $\omega$ uscirà, non sappiamo nemmeno quale valore assumerà $X(\omega)$.
+}
+
+\begin{esempio}{Monete trasformate in numeri}
+\begin{itemize}
+  \item \textbf{Lancio singolo}: $X : \omega \in \{T, C\} \mapsto X(\omega) \in \{0, 1\}$, con $X(T) = 0$ e
+        $X(C) = 1$. Allora $P(X = 0) = P(X = 1) = \frac12$.
+  \item \textbf{Lancio doppio}: $X : \omega \in \{T, C\}^2 \mapsto X(\omega) \in \{0, 1, 2, 3\}$, numerando i quattro
+        risultati: $TT \mapsto 0$, $TC \mapsto 1$, $CT \mapsto 2$, $CC \mapsto 3$. Allora
+        $P(X = i) = \frac14$ per $i = 0, 1, 2, 3$.
+  \item \textbf{Lancio doppio, contando le croci}: $Y(\omega)$ = numero di croci in $\omega$, con alfabeto
+        $\{0, 1, 2\}$. Questa volta due risultati vanno nello stesso numero, e le probabilità si sommano:
+        $P(Y = 0) = P(\{TT\}) = \frac14$, $P(Y = 1) = P(\{TC, CT\}) = \frac12$, $P(Y = 2) = P(\{CC\}) = \frac14$.
+\end{itemize}
+\begin{center}
+\begin{tikzpicture}[el/.style={font=\small, inner sep=2pt}]
+  \foreach \w/\y in {TT/0.9, TC/0.3, CT/-0.3, CC/-0.9} \node[el] (\w) at (0,\y) {$\w$};
+  \draw[mspigray, rounded corners=4pt] (-0.55,-1.3) rectangle (0.55,1.3);
+  \node[font=\small, mspigray] at (0,1.55) {$\Omega$};
+  % X: numerazione
+  \foreach \v/\y in {0/0.9, 1/0.3, 2/-0.3, 3/-0.9} \node[el] (x\v) at (-2.8,\y) {$\v$};
+  \draw[mspiA!85!black, rounded corners=4pt] (-3.15,-1.3) rectangle (-2.45,1.3);
+  \node[font=\small, mspiA!85!black] at (-2.8,1.55) {$X$};
+  \draw[-{Stealth}, mspiA!85!black] (TT) -- (x0); \draw[-{Stealth}, mspiA!85!black] (TC) -- (x1);
+  \draw[-{Stealth}, mspiA!85!black] (CT) -- (x2); \draw[-{Stealth}, mspiA!85!black] (CC) -- (x3);
+  % Y: numero di croci
+  \foreach \v/\y in {0/0.9, 1/0, 2/-0.9} \node[el] (y\v) at (2.8,\y) {$\v$};
+  \draw[mspiB!85!black, rounded corners=4pt] (2.45,-1.3) rectangle (3.15,1.3);
+  \node[font=\small, mspiB!85!black] at (2.8,1.55) {$Y$};
+  \draw[-{Stealth}, mspiB!85!black] (TT) -- (y0); \draw[-{Stealth}, mspiB!85!black] (TC) -- (y1);
+  \draw[-{Stealth}, mspiB!85!black] (CT) -- (y1); \draw[-{Stealth}, mspiB!85!black] (CC) -- (y2);
+  \node[font=\scriptsize, mspiA!85!black, align=center] at (-1.45,-1.75) {numera i risultati:\\ una freccia per valore};
+  \node[font=\scriptsize, mspiB!85!black, align=center] at (1.45,-1.75) {conta le croci: $TC$ e $CT$\\ finiscono
+    entrambi in 1};
+\end{tikzpicture}
+\end{center}
+\end{esempio}
+
+% ============================================================
+\section{La funzione di probabilità}
+% ============================================================
+
+Per descrivere una variabile aleatoria discreta basta dire con che probabilità assume ciascuno dei suoi valori.
+
+\dfn{Funzione di probabilità (pmf)}{
+  La sequenza di numeri
+  \[ p_X(x) = P(X = x) , \qquad x \in \mathcal{X} , \]
+  si chiama \term{funzione di probabilità}, in inglese \emph{probability mass function} (\term{pmf}) o
+  \emph{Distribution Function} (DF), della variabile aleatoria $X$. Una variabile aleatoria si dice
+  \term{caratterizzata} quando è assegnata la sequenza dei $\card{\mathcal{X}}$ valori della sua pmf.
+}
+
+Il nome inglese viene da un'immagine utile: si pensi alla probabilità come a un chilo di sabbia da distribuire sui
+punti dell'alfabeto. La pmf dice quanta \emph{massa} di probabilità sta su ciascun punto.
+
+\teorema[pmf]{Proprietà della pmf}{
+  Per ogni variabile aleatoria discreta $X$:
+  \[ p_X(x) \geq 0 \quad \forall x \in \mathcal{X} \qquad\text{e}\qquad \sum_{x \in \mathcal{X}} p_X(x) = 1 . \]
+}
+
+\begin{dimostrazione}
+\passo{Con le frequenze} Se $n_x = n_{\{X = x\}}$ è il numero di occorrenze dell'evento $\{X = x\}$ su $n$ prove,
+$p_X(x) = \lim_{n \to \infty} n_x / n$, limite di numeri $\geq 0$: quindi $p_X(x) \geq 0$.
+\passo{La somma} In ogni prova la variabile assume uno e un solo valore, quindi $\sum_{x} n_x = n$ e
+$\sum_x f_n(x) = 1$ per ogni $n$. Passando al limite, $\sum_x p_X(x) = 1$.
+\passo{Con gli assiomi} Gli eventi $\{X = x\}$, al variare di $x \in \mathcal{X}$, sono incompatibili (la variabile
+non può assumere due valori insieme) e la loro unione è $\Omega$ (qualche valore lo assume sempre): formano una
+partizione. Per la (numerabile) additività, $\sum_x P(X = x) = P(\Omega) = 1$; e ogni $P(X = x) \geq 0$ per il primo
+assioma.
+\end{dimostrazione}
+
+\begin{esempio}{È una pmf?}
+Sia $\mathcal{X} = \{1, 2, 3, 4\}$. La sequenza $\left(\frac12, \frac14, \frac18, \frac18\right)$ può essere la pmf di
+una variabile aleatoria? Tutti i valori sono $\geq 0$ e
+\[ \sum_{x \in \mathcal{X}} p_X(x) = \frac12 + \frac14 + \frac18 + \frac18 = \frac{4 + 2 + 1 + 1}{8} = 1 , \]
+quindi la risposta è sì. Invece $\left(\frac12, \frac12, \frac14, 0\right)$ non lo è (la somma vale $\frac54 > 1$), e
+nemmeno $(0{,}6;\ 0{,}6;\ -0{,}2;\ 0)$, che somma a 1 ma contiene un valore negativo.
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[quaderno, width=7cm, height=4.6cm, xmin=0, xmax=4.8, ymin=0, ymax=0.62, xtick={1,2,3,4},
+  ytick={0.125,0.25,0.5}, yticklabels={$\frac18$,$\frac14$,$\frac12$}, xlabel=$x$, ylabel=$p_X(x)$]
+  \addplot[bastoncini, mspiA] coordinates {(1,0.5) (2,0.25) (3,0.125) (4,0.125)};
+\end{axis}
+\end{tikzpicture}
+\end{center}
+Il grafico di una pmf si disegna così, con un «bastoncino» su ogni valore dell'alfabeto, alto quanto la sua
+probabilità.
+\end{esempio}
+
+\subsection{Un'avvertenza sulle notazioni}
+
+Per come è stata definita, la probabilità è una funzione definita su sottoinsiemi di $\Omega$, a valori in $[0, 1]$:
+\[ P : A \subseteq \Omega \;\longmapsto\; P(A) \in [0, 1] . \]
+(A rigore bisognerebbe strutturare $\Omega$ con un'algebra di eventi, ma sorvoliamo.) Quando si passa alle variabili
+aleatorie, la notazione corretta sarebbe quindi
+\[ P\left( \{\omega \in \Omega : X(\omega) = x\} \right) , \]
+cioè la probabilità dell'insieme dei risultati che la variabile manda nel valore $x$. Useremo la notazione
+semplificata $P(X = x)$, o a volte $P(\{X = x\})$ per ricordare che ci riferiamo a un insieme di elementi di $\Omega$,
+al posto di quella più precisa ma più lunga.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[el/.style={font=\small, inner sep=2pt}]
+  \fill[evid, rounded corners=4pt] (-0.5,-0.55) rectangle (0.5,0.55);
+  \foreach \w/\y in {TT/0.9, TC/0.3, CT/-0.3, CC/-0.9} \node[el] (\w) at (0,\y) {$\w$};
+  \draw[mspigray, rounded corners=4pt] (-0.6,-1.3) rectangle (0.6,1.3);
+  \node[font=\small, mspigray] at (0,1.55) {$\Omega$};
+  \foreach \v/\y in {0/0.9, 1/0, 2/-0.9} \node[el] (y\v) at (2.8,\y) {$\v$};
+  \draw[mspiB!85!black, rounded corners=4pt] (2.45,-1.3) rectangle (3.15,1.3);
+  \draw[-{Stealth}, mspigray] (TT) -- (y0); \draw[-{Stealth}, mspiB!85!black, line width=0.9pt] (TC) -- (y1);
+  \draw[-{Stealth}, mspiB!85!black, line width=0.9pt] (CT) -- (y1); \draw[-{Stealth}, mspigray] (CC) -- (y2);
+  \node[font=\small, anchor=west, text width=7.3cm] at (3.7,0)
+    {$\{Y = 1\}$ è un modo breve per scrivere l'insieme giallo $\{\omega \in \Omega : Y(\omega) = 1\} = \{TC, CT\}$:
+     i risultati da cui parte una freccia verso 1. Quindi $P(Y = 1) = P(\{TC, CT\}) = \frac12$.};
+\end{tikzpicture}
+\caption{L'evento $\{Y = 1\}$ è un sottoinsieme di $\Omega$.}
+\end{figure}
+
+% ============================================================
+\section{La media}
+% ============================================================
+
+La pmf descrive tutto, ma è una tabella di numeri. Spesso basta una caratterizzazione meno precisa, riassunta in un
+solo numero: il valore «attorno a cui» la variabile si distribuisce.
+
+\subsection{La media campionaria}
+
+Si abbia una variabile aleatoria $X(\omega)$ e si compiano $n$ esperimenti. La collezione dei risultati sarà
+\[ \left[ X(\tilde\omega_1)\ \ X(\tilde\omega_2)\ \ \ldots\ \ X(\tilde\omega_n) \right] , \]
+dove $\tilde\omega_i$ è il risultato dell'esperimento $i$-esimo e $X(\tilde\omega_i)$ il valore assunto dalla
+variabile in quell'esperimento. La loro media aritmetica si chiama \term{media campionaria}:
+\[ \overline{X}_n = \frac{1}{n} \sum_{i=1}^{n} X(\tilde\omega_i) . \]
+
+\begin{esempio}{La media di venti lanci}
+Venti lanci di un dado onesto (simulati) hanno dato:
+\[ 5,\ 3,\ 6,\ 3,\ 6,\ 6,\ 6,\ 5,\ 1,\ 4,\ 2,\ 6,\ 1,\ 2,\ 1,\ 3,\ 4,\ 2,\ 4,\ 5 . \]
+La media campionaria è la somma divisa per 20: $\overline{X}_{20} = 75/20 = 3{,}75$. Ma la somma si può fare in modo più
+furbo, \textbf{raggruppando i valori uguali}: ogni faccia è uscita un certo numero di volte $n_i$.
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}c|cccccc|c@{}}
+  valore $x_i$ & 1 & 2 & 3 & 4 & 5 & 6 & \\ \hline
+  volte $n_i$ & 3 & 3 & 3 & 3 & 3 & 5 & totale 20 \\
+  frequenza $f_{20}(x_i)$ & $0{,}15$ & $0{,}15$ & $0{,}15$ & $0{,}15$ & $0{,}15$ & $0{,}25$ & totale 1 \\
+\end{tabular}
+\end{center}
+\[
+  \overline{X}_{20} = \frac{1 \cdot 3 + 2 \cdot 3 + 3 \cdot 3 + 4 \cdot 3 + 5 \cdot 3 + 6 \cdot 5}{20}
+  = 1 \cdot 0{,}15 + 2 \cdot 0{,}15 + \cdots + 6 \cdot 0{,}25 = 3{,}75 .
+\]
+La media è la somma dei valori, ciascuno moltiplicato per la sua frequenza relativa.
+\end{esempio}
+
+\subsection{Dalla media campionaria alla media statistica}
+
+Il raggruppamento dell'esempio funziona sempre. Siccome $X(\tilde\omega_i) \in \mathcal{X} = \{x_1, x_2, \ldots,
+x_M\}$, al crescere di $n$ la variabile assumerà $n_1$ volte il valore $x_1$, $n_2$ volte il valore $x_2$, e così via
+(il caso $M = \infty$ si tratta come caso limite). Quindi, per $n \to \infty$,
+\[
+  \overline{X}_n = \frac{1}{n} \sum_{i=1}^{M} n_i\, x_i = \sum_{i=1}^{M} x_i\, f_n(x_i)
+  \;\longrightarrow\; \sum_{i=1}^{M} x_i\, P(X = x_i) = \sum_{i=1}^{M} x_i\, p_X(x_i) \stackrel{\triangle}{=} E[X] ,
+\]
+dove $f_n(x_i) = n_{\{X = x_i\}}/n$ e il simbolo $\stackrel{\triangle}{=}$ si legge «è uguale per definizione». Le
+frequenze tendono alle probabilità, quindi la media campionaria tende a un numero che dipende solo dalla pmf.
+
+\dfn{Media statistica}{
+  La \term{media statistica} (o \term{valore atteso}) di una variabile aleatoria discreta $X$ è
+  \[ E[X] = \sum_{x \in \mathcal{X}} x\, p_X(x) : \]
+  la somma dei valori assunti, ciascuno moltiplicato per la probabilità con cui è assunto. Si indica anche con
+  $\mu_X$.
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=12cm, height=5cm, xmode=log, xmin=1, xmax=3000, ymin=2.5, ymax=5.2,
+  xlabel={numero di lanci $n$ (scala logaritmica)}, ylabel={$\overline{X}_n$},
+  log ticks with fixed point, xtick={1,10,100,1000,3000}, ytick={3,3.5,4,4.5,5},
+  yticklabels={$3$,$3{,}5$,$4$,$4{,}5$,$5$}, tick label style={font=\scriptsize}, label style={font=\small},
+  grid=major, grid style={mspigray!20}, axis lines=left]
+  \draw[mspiB, dashed, line width=0.9pt] (axis cs:1,3.5) -- (axis cs:3000,3.5)
+    node[pos=0.88, below, font=\scriptsize] {$E[X] = 3{,}5$};
+  \addplot[mspiA, line width=1pt, mark=*, mark size=1pt] coordinates {(1,5.000) (2,4.000) (3,4.667) (4,4.250) (5,4.600) (6,4.833) (8,5.000) (10,4.500) (13,4.154) (16,3.750) (20,3.750) (25,3.600) (30,3.500) (40,3.250) (50,3.260) (65,3.138) (80,3.250) (100,3.280) (130,3.292) (160,3.337) (200,3.345) (250,3.476) (300,3.540) (400,3.522) (500,3.570) (650,3.545) (800,3.481) (1000,3.433) (1300,3.432) (1600,3.435) (2000,3.454) (2500,3.461) (3000,3.473)};
+\end{axis}
+\end{tikzpicture}
+\caption{La media campionaria dei lanci di un dado onesto (simulati), al crescere del numero di lanci: oscilla molto
+all'inizio e poi si avvicina alla media statistica $E[X] = 3{,}5$.}
+\end{figure}
+
+\begin{esempio}{Due medie}
+\begin{itemize}
+  \item Un dado onesto: $E[X] = 1 \cdot \frac16 + 2 \cdot \frac16 + \cdots + 6 \cdot \frac16 = \frac{21}{6} = 3{,}5$.
+        La media \textbf{non} è per forza un valore che la variabile può assumere: nessun dado mostra 3,5.
+  \item Il dado truccato del Capitolo~3 ($P(1) = \frac56$, $P(i) = \frac1{30}$ per le altre facce):
+        $E[X] = 1 \cdot \frac56 + (2 + 3 + 4 + 5 + 6) \cdot \frac1{30} = \frac56 + \frac{20}{30} = \frac{25 + 20}{30}
+        = 1{,}5$. Il trucco sposta la media verso l'1.
+\end{itemize}
+\end{esempio}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=2.2cm, y=4cm]
+  \draw[line width=2.2pt, mspigray] (0.6,0) -- (4.4,0);
+  \foreach \x/\p/\f in {1/0.5/\frac12, 2/0.25/\frac14, 3/0.125/\frac18, 4/0.125/\frac18} {
+    \fill[mspiA!60, draw=mspiA!85!black] (\x-0.12,0.012) rectangle (\x+0.12,{0.012+\p});
+    \node[font=\scriptsize, above] at (\x,{0.012+\p}) {$\f$};
+    \node[font=\small, below=6pt] at (\x,0) {$\x$};
+  }
+  \fill[mspiB] (1.875,-0.01) -- (1.765,-0.2) -- (1.985,-0.2) -- cycle;
+  \node[font=\small, mspiB!85!black, anchor=north] at (1.875,-0.21) {$E[X] = 1{,}875$};
+\end{tikzpicture}
+\caption{La media come baricentro. Se si appoggiano su un'asta dei pesi proporzionali alle probabilità della pmf
+$\left(\frac12, \frac14, \frac18, \frac18\right)$, l'asta sta in equilibrio esattamente sul punto
+$E[X] = 1 \cdot \frac12 + 2 \cdot \frac14 + 3 \cdot \frac18 + 4 \cdot \frac18 = 1{,}875$.}
+\end{figure}
+
+% ============================================================
+\section{Il conteggio bernoulliano: la variabile binomiale}
+% ============================================================
+
+Consideriamo $N$ lanci di una moneta. Ogni lancio dà testa ($T$) con probabilità $p$ e croce ($C$) con probabilità
+$q = 1 - p$ (la moneta non deve essere per forza onesta). I lanci sono \textbf{indipendenti}: l'esito di ognuno non
+dipende da quelli precedenti o successivi. Lo spazio campione è l'insieme delle $N$-ple del tipo
+\[ (\underbrace{C, C, T, T, C, \ldots, C, T, T}_{N}) , \qquad \Omega = \{T, C\}^N . \]
+Sia $X_N(\omega)$ la variabile aleatoria che \textbf{conta} il numero di teste in $N$ lanci:
+\[ X_N : \omega \in \{T, C\}^N \;\longmapsto\; X_N(\omega) \in \mathcal{X} = \{0, 1, 2, \ldots, N\} , \]
+dove $X_N(\omega) = k$ se $\omega$ contiene $k$ teste. Vogliamo la sua pmf.
+
+\subsection{La probabilità di una sequenza}
+
+Prendiamo una sequenza particolare con $k$ teste, per esempio quella con tutte le teste all'inizio:
+\[ \omega = (\underbrace{T, T, \ldots, T}_{k \text{ volte}}, \underbrace{C, C, \ldots, C}_{N - k \text{ volte}}) . \]
+Per l'indipendenza dei lanci la probabilità che si verifichino insieme tutti questi esiti è il prodotto delle
+probabilità dei singoli esiti:
+\[ P(\omega) = \underbrace{p \cdot p \cdots p}_{k \text{ volte}} \cdot \underbrace{q \cdot q \cdots q}_{N - k \text{ volte}}
+   = p^k\, q^{N-k} . \]
+L'ordine delle teste e delle croci non conta nel prodotto: \textbf{tutte} le sequenze con $k$ teste e $N - k$ croci
+hanno la stessa probabilità $p^k q^{N-k}$. E quante sono? Sono le stringhe di lunghezza $N$ con $k$ «uni»
+(Teorema~\ref{teo:stringhe}): $C_{N,k} = \binom{N}{k}$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=2.1cm, y=0.48cm, nd/.style={draw, circle, inner sep=1.2pt, font=\scriptsize,
+                    minimum size=0.42cm}]
+  \node[nd, fill=mspilight] (r) at (0,0) {};
+  \foreach \a/\ya in {T/4, C/-4} {
+    \node[nd, fill=mspiA!15] (\a) at (1,\ya) {$\a$};
+    \draw (r) -- node[font=\scriptsize, fill=white, inner sep=0.8pt] {\if\a T$p$\else$q$\fi} (\a);
+    \foreach \b/\yb in {T/2, C/-2} {
+      \node[nd, fill=mspiA!15] (\a\b) at (2,\ya+\yb) {$\b$};
+      \draw (\a) -- node[font=\scriptsize, fill=white, inner sep=0.8pt] {\if\b T$p$\else$q$\fi} (\a\b);
+      \foreach \c/\yc in {T/0.9, C/-0.9} {
+        \node[nd, fill=mspiA!15] (\a\b\c) at (3,\ya+\yb+\yc) {$\c$};
+        \draw (\a\b) -- node[font=\scriptsize, fill=white, inner sep=0.8pt] {\if\c T$p$\else$q$\fi} (\a\b\c);
+      }
+    }
+  }
+  \foreach \s/\y/\pr/\k in {TTT/6.9/p^3/3, TTC/5.1/p^2q/2, TCT/2.9/p^2q/2, TCC/1.1/pq^2/1,
+                            CTT/-1.1/p^2q/2, CTC/-2.9/pq^2/1, CCT/-5.1/pq^2/1, CCC/-6.9/q^3/0}
+    \node[font=\small, anchor=west] at (3.25,\y) {$\s$\quad $\pr$\quad {\color{mspiB!85!black}$k = \k$}};
+  \node[font=\small, anchor=west, text width=4.6cm] at (4.7,0)
+    {Con $N = 3$ lanci: una sequenza con $k$ teste ha probabilità $p^k q^{3-k}$. Le sequenze con $k = 0, 1, 2, 3$
+     teste sono $1, 3, 3, 1 = \binom{3}{k}$, quindi
+     $P(X_3 = 2) = 3\,p^2 q$, $P(X_3 = 1) = 3\,p\,q^2$, \ldots};
+\end{tikzpicture}
+\caption{L'albero di tre lanci. La probabilità di un percorso è il prodotto delle probabilità dei suoi rami.}
+\end{figure}
+
+\subsection{La pmf binomiale}
+
+Sia $\Omega_{N,k} = \bigcup_{i=1}^{C_{N,k}} \{\omega_i\}$ l'insieme di tutte le sequenze con $k$ teste. L'evento
+$\{X_N = k\}$ è proprio $\Omega_{N,k}$, quindi
+\[ P(X_N = k) = p_{X_N}(k) = P(\Omega_{N,k}) = P\left( \bigcup_{i=1}^{C_{N,k}} \{\omega_i\} \right) . \]
+Gli eventi elementari $\omega_i$ sono mutuamente esclusivi ($P(\omega_i \cap \omega_j) = 0$ per $i \neq j$), quindi le
+probabilità si sommano, e sono tutte uguali a $p^k q^{N-k}$:
+\[ P(X_N = k) = \sum_{i=1}^{C_{N,k}} P(\{\omega_i\}) = \binom{N}{k}\, p^k\, q^{N-k} . \]
+
+\dfn{Variabile binomiale}{
+  Una variabile aleatoria $X$ con alfabeto $\{0, 1, \ldots, N\}$ e pmf
+  \[ p_X(k) = \binom{N}{k}\, p^k\, (1-p)^{N-k} , \qquad k = 0, 1, \ldots, N , \]
+  si dice \term{binomiale} di parametri $N$ e $p$; in breve $X \sim \mathcal{B}(N, p)$. Conta i successi in $N$ prove
+  indipendenti, ognuna con probabilità di successo $p$. Per $N = 1$ si chiama \term{variabile di Bernoulli}: vale 1
+  con probabilità $p$ e 0 con probabilità $1 - p$.
+}
+
+\teorema[binomialepmf]{La binomiale è una pmf}{
+  Per ogni $N$ e ogni $p \in [0, 1]$: $p_{X_N}(k) \geq 0$ per $k \in \{0, 1, \ldots, N\}$ e
+  $\sum_{k=0}^{N} p_{X_N}(k) = 1$.
+}
+
+\begin{dimostrazione}
+\passo{Non negatività} È il prodotto di un coefficiente binomiale (positivo) e di potenze di $p$ e $q$, che sono
+$\geq 0$.
+\passo{Somma, con il binomio di Newton} La somma è proprio lo sviluppo di Newton (Teorema~\ref{teo:newton}) con
+$a = p$ e $b = q$:
+\[ \sum_{k=0}^{N} \binom{N}{k}\, p^k\, q^{N-k} = (p + q)^N = (p + 1 - p)^N = 1^N = 1 . \]
+Ecco da dove viene il nome «binomiale»: i suoi valori sono i termini dello sviluppo del binomio $(p + q)^N$.
+\end{dimostrazione}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=3 by 1, horizontal sep=0.9cm},
+  width=5.6cm, height=4.4cm, ymin=0, ymax=0.33, axis lines=left, tick label style={font=\scriptsize}, clip=false,
+  title style={font=\small}, grid=major, grid style={mspigray!15}, xmajorgrids=false,
+  yticklabel style={/pgf/number format/fixed, /pgf/number format/use comma}]
+\nextgroupplot[title={$\mathcal{B}(10;\ 0{,}5)$}, xmin=-0.6, xmax=10.6, xtick={0,2,...,10}]
+  \addplot[bastoncini, mspiA, mark size=1.3pt] coordinates {(0,0.0010) (1,0.0098) (2,0.0439) (3,0.1172) (4,0.2051) (5,0.2461) (6,0.2051) (7,0.1172) (8,0.0439) (9,0.0098) (10,0.0010)};
+  \draw[mspiB, dashed] (axis cs:5,0) -- (axis cs:5,0.31) node[pos=0.93, right, font=\scriptsize] {$Np = 5$};
+\nextgroupplot[title={$\mathcal{B}(10;\ 0{,}2)$}, xmin=-0.6, xmax=10.6, xtick={0,2,...,10}]
+  \addplot[bastoncini, mspiA, mark size=1.3pt] coordinates {(0,0.1074) (1,0.2684) (2,0.3020) (3,0.2013) (4,0.0881) (5,0.0264) (6,0.0055) (7,0.0008) (8,0.0001) (9,0.0000) (10,0.0000)};
+  \draw[mspiB, dashed] (axis cs:2,0) -- (axis cs:2,0.31) node[pos=0.93, right, font=\scriptsize] {$Np = 2$};
+\nextgroupplot[title={$\mathcal{B}(20;\ 0{,}7)$}, xmin=-0.8, xmax=20.8, xtick={0,5,...,20}]
+  \addplot[bastoncini, mspiA, mark size=1.1pt] coordinates {(0,0.0000) (1,0.0000) (2,0.0000) (3,0.0000) (4,0.0000) (5,0.0000) (6,0.0002) (7,0.0010) (8,0.0039) (9,0.0120) (10,0.0308) (11,0.0654) (12,0.1144) (13,0.1643) (14,0.1916) (15,0.1789) (16,0.1304) (17,0.0716) (18,0.0278) (19,0.0068) (20,0.0008)};
+  \draw[mspiB, dashed] (axis cs:14,0) -- (axis cs:14,0.31) node[pos=0.93, left, font=\scriptsize] {$Np = 14$};
+\end{groupplot}
+\end{tikzpicture}
+\caption{Tre pmf binomiali. Con $p = 0{,}5$ la pmf è simmetrica; con $p$ piccolo è spostata verso sinistra, con $p$
+grande verso destra. La linea tratteggiata è la media $Np$, che calcoliamo fra poco.}
+\end{figure}
+
+\subsection{La media della binomiale}
+
+Il calcolo della media usa un trucco che ritroveremo spesso: spostare l'indice di una sommatoria.
+
+\begin{richiamo}{cambiare l'indice di una sommatoria}
+In una sommatoria si può cambiare il nome dell'indice e anche \emph{spostarlo}, purché si spostino di conseguenza gli
+estremi. Per esempio, ponendo $l = k - 1$: quando $k$ va da 1 a $N$, $l$ va da 0 a $N - 1$, e
+\[ \sum_{k=1}^{N} a_{k-1} = \sum_{l=0}^{N-1} a_l . \]
+I termini sommati sono esattamente gli stessi ($a_0, a_1, \ldots, a_{N-1}$); cambia solo il nome con cui li si
+conta. Esempio: $\sum_{k=1}^{3} 2^{k-1} = 2^0 + 2^1 + 2^2 = \sum_{l=0}^{2} 2^l = 7$.
+
+Un'altra cosa utile: se il termine con $k = 0$ vale zero, lo si può togliere senza cambiare la somma, e la
+sommatoria parte da $k = 1$.
+\end{richiamo}
+
+\teorema[mediabinomiale]{Media della binomiale}{
+  Se $X_N \sim \mathcal{B}(N, p)$, allora
+  \[ E[X_N] = N\,p . \]
+}
+
+\begin{dimostrazione}
+\passo{Si scrive la definizione} Per definizione di media, con la pmf binomiale e la formula del coefficiente
+binomiale:
+\[ E[X_N] = \sum_{k=0}^{N} k\, p_{X_N}(k) = \sum_{k=0}^{N} k \binom{N}{k} p^k q^{N-k}
+          = \sum_{k=0}^{N} k\, \frac{N!}{k!\,(N-k)!}\, p^k q^{N-k} . \]
+\passo{Si toglie il termine nullo} Per $k = 0$ il termine contiene il fattore $k = 0$ e vale zero: la somma può partire
+da $k = 1$.
+\passo{Si semplifica $k/k!$} Per $k \geq 1$ vale $k! = k \cdot (k-1)!$, quindi $\dfrac{k}{k!} = \dfrac{1}{(k-1)!}$:
+\[ E[X_N] = \sum_{k=1}^{N} \frac{N!}{(k-1)!\,(N-k)!}\, p^k q^{N-k} . \]
+\passo{Si fa comparire $N - 1$} Si scrive $N! = N \cdot (N-1)!$ e si nota che $N - k = (N-1) - (k-1)$, sia nel
+fattoriale sia nell'esponente di $q$:
+\[ E[X_N] = \sum_{k=1}^{N} \frac{N\,(N-1)!}{(k-1)!\,[(N-1)-(k-1)]!}\, p^k q^{N-1-(k-1)} . \]
+\passo{Si porta fuori $N\,p$} $N$ non dipende da $k$, e da $p^k$ si può staccare un fattore $p$: $p^k = p \cdot
+p^{k-1}$. Portando fuori entrambi:
+\[ E[X_N] = N p \sum_{k=1}^{N} \frac{(N-1)!}{(k-1)!\,[(N-1)-(k-1)]!}\, p^{k-1} q^{N-1-(k-1)} . \]
+\passo{Si cambia indice} Si pone $l = k - 1$ e $M = N - 1$. Quando $k$ va da 1 a $N$, $l$ va da 0 a $M$:
+\[ E[X_N] = N p \sum_{l=0}^{M} \frac{M!}{l!\,(M-l)!}\, p^l q^{M-l} = N p\, (p + q)^M = N p . \]
+La somma rimasta è la somma di tutti i valori di una pmf binomiale $\mathcal{B}(M, p)$, cioè (binomio di Newton)
+$(p + q)^M = 1$.
+\end{dimostrazione}
+
+Il risultato è quello che l'intuito suggerisce: se in ogni lancio esce testa con probabilità $p$, in $N$ lanci ci si
+aspettano in media $N p$ teste (con 10 lanci di una moneta onesta, 5 teste). Nel Capitolo~9 ritroveremo questo
+risultato in una riga, con la linearità della media.
+
+% ============================================================
+\section{La variabile uniforme}
+% ============================================================
+
+\dfn{Variabile uniforme}{
+  Una variabile aleatoria $X$ che assume valori in un alfabeto finito $\mathcal{X}$ di cardinalità
+  $\card{\mathcal{X}} = M$ si dice \term{uniformemente distribuita} su $\mathcal{X}$, in breve
+  $X \sim \mathcal{U}(\mathcal{X})$, se tutti i valori hanno la stessa probabilità:
+  \[ p_X(x) = P(X = x) = \frac{1}{M} \qquad \forall x \in \mathcal{X} . \]
+}
+
+Ovviamente $p_X(x)$ soddisfa le condizioni per essere una pmf: è positiva e $M$ termini uguali a $1/M$ sommano a 1. Il
+calcolo della media è immediato:
+\[ E[X] = \sum_{x \in \mathcal{X}} x\, p_X(x) = \frac{1}{M} \sum_{x \in \mathcal{X}} x : \]
+è la \textbf{media aritmetica} dei valori dell'alfabeto. Il dado onesto è una variabile uniforme su
+$\{1, \ldots, 6\}$, e infatti la sua media è $(1 + 2 + \cdots + 6)/6 = 3{,}5$.
+
+Un caso interessante è $\mathcal{X} = \{0, 1, 2, \ldots, M - 1\}$ (per esempio un numero casuale di $k$ bit, con
+$M = 2^k$). Per calcolarne la media serve la somma dei primi numeri naturali.
+
+\teorema[gauss]{Somma dei primi $n$ naturali}{
+  Per ogni naturale $n \geq 1$:
+  \[ \sum_{i=1}^{n} i = 1 + 2 + \cdots + n = \frac{n\,(n+1)}{2} . \]
+}
+
+\begin{dimostrazione}[il trucco di Gauss]
+\passo{Si scrive la somma due volte} Sia $S = 1 + 2 + \cdots + n$. La si scrive una volta in avanti e una volta
+all'indietro, e si sommano le due righe colonna per colonna:
+\[
+\begin{array}{rcccccccc}
+  S & = & 1 & + & 2 & + & \cdots & + & n \\
+  S & = & n & + & (n-1) & + & \cdots & + & 1 \\ \hline
+  2S & = & (n+1) & + & (n+1) & + & \cdots & + & (n+1)
+\end{array}
+\]
+\passo{Ogni colonna vale $n + 1$} In ogni colonna, mentre il numero in alto cresce di 1, quello in basso cala di 1:
+la somma resta sempre $n + 1$. Le colonne sono $n$, quindi $2S = n\,(n+1)$ e $S = n\,(n+1)/2$.
+\end{dimostrazione}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.5cm, y=0.5cm]
+  \foreach \c in {1,...,5} {
+    \foreach \r in {1,...,\c} \draw[fill=mspiA!45, draw=white, line width=0.8pt] (\c-1,\r-1) rectangle (\c,\r);
+    \foreach \r in {\c,...,5} \draw[fill=mspiB!35, draw=white, line width=0.8pt] (\c-1,\r) rectangle (\c,\r+1);
+  }
+  \draw[mspigray] (0,0) rectangle (5,6);
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (0,-0.15) -- (5,-0.15) node[midway, below=4pt,
+    font=\scriptsize] {$n = 5$};
+  \draw[decorate, decoration={brace, amplitude=4pt}] (-0.15,0) -- (-0.15,6) node[midway, left=4pt,
+    font=\scriptsize] {$n + 1 = 6$};
+  \node[font=\small, anchor=west, text width=7.5cm] at (6,3)
+    {La «scala» blu ha $1 + 2 + 3 + 4 + 5$ quadretti. Una seconda scala uguale (arancione), capovolta, la completa in
+     un rettangolo di $5 \times 6 = 30$ quadretti. Quindi una scala sola ne ha la metà: $\frac{5 \cdot 6}{2} = 15$.};
+\end{tikzpicture}
+\caption{La dimostrazione di Gauss, disegnata.}
+\end{figure}
+
+\begin{esempio}{La media di un'uniforme su $\{0, 1, \ldots, M-1\}$}
+Se $X \sim \mathcal{U}(\{0, 1, \ldots, M-1\})$, il termine con 0 non contribuisce e si applica il
+Teorema~\ref{teo:gauss} con $n = M - 1$:
+\[
+  E[X] = \sum_{x \in \mathcal{X}} x\, p_X(x) = \frac{1}{M} \sum_{i=0}^{M-1} i = \frac{1}{M} \cdot \frac{(M-1)\,M}{2}
+  = \frac{M-1}{2} .
+\]
+È il punto di mezzo fra il valore più piccolo (0) e il più grande ($M - 1$), come ci si aspetta da una distribuzione
+che non preferisce nessun valore. Per un byte casuale ($M = 256$) la media è $127{,}5$.
+\end{esempio}
+
+% ============================================================
+\section{La variabile di Poisson}
+% ============================================================
+
+La terza variabile notevole ha un alfabeto infinito e una pmf in cui compare il numero $e$. Prima di definirla,
+conviene ricordare da dove viene quel numero.
+
+\begin{richiamo}{il numero $e$ e la serie esponenziale}
+Si depositi 1 euro in una banca che paga il 100\% di interesse all'anno. Se l'interesse viene pagato una volta sola,
+a fine anno si hanno 2 euro. Se viene pagato ogni sei mesi, metà alla volta, si hanno
+$(1 + \frac12)^2 = 2{,}25$ euro. Se viene pagato $n$ volte all'anno, ogni volta l'$\frac1n$ del capitale, a fine anno
+si hanno $\left(1 + \frac1n\right)^n$ euro:
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}c|ccccccc@{}}
+  $n$ & 1 & 2 & 4 & 12 & 52 & 365 & 1\,000\,000 \\ \hline
+  $\left(1 + \frac1n\right)^n$ & 2 & 2,25 & 2,4414 & 2,6130 & 2,6926 & 2,7146 & 2,71828
+\end{tabular}
+\end{center}
+Il guadagno cresce, ma sempre più lentamente: la successione ha un limite, che si chiama $e$, il \term{numero di
+Nepero}:
+\[ e = \lim_{n \to \infty} \left( 1 + \frac{1}{n} \right)^n = 2{,}718281828\ldots \]
+Più in generale, per qualsiasi numero reale $x$ vale $\left(1 + \frac{x}{n}\right)^n \to e^x$; per esempio
+$\left(1 - \frac{\lambda}{n}\right)^n \to e^{-\lambda}$. La funzione $x \mapsto e^x$ si chiama \term{esponenziale}.
+
+L'esponenziale si può scrivere anche come una somma infinita (la \term{serie esponenziale}):
+\[ e^x = \sum_{k=0}^{\infty} \frac{x^k}{k!} = 1 + x + \frac{x^2}{2} + \frac{x^3}{6} + \frac{x^4}{24} + \cdots \]
+Con $x = 1$ le somme parziali sono $1$, $2$, $2{,}5$, $2{,}6667$, $2{,}7083$, $2{,}7167$, $2{,}7181$, $2{,}71825$,
+\ldots{} e si avvicinano a $e$ molto in fretta, perché i fattoriali al denominatore crescono vertiginosamente. Il
+\emph{perché} di questa formula si capisce con le derivate: lo vedremo nel Capitolo~7, dove le introdurremo.
+\end{richiamo}
+
+\dfn{Variabile di Poisson}{
+  Una variabile aleatoria $X$ si dice \term{di Poisson} (o poissoniana) di parametro $\lambda > 0$, in breve
+  $X \sim \mathcal{P}(\lambda)$, se:
+  \begin{enumerate}
+    \item il suo alfabeto è $\mathcal{X} = \{0, 1, 2, 3, \ldots\} = \N_0$;
+    \item la sua pmf è
+          \[ p_X(k) = P(X = k) = \frac{\lambda^k}{k!}\, e^{-\lambda} , \qquad k \in \N_0 . \]
+  \end{enumerate}
+}
+
+\teorema[poissonpmf]{La Poisson è una pmf}{
+  Per ogni $\lambda > 0$: $p_X(k) \geq 0$ per ogni $k \in \N_0$ e $\sum_{k=0}^{\infty} p_X(k) = 1$.
+}
+
+\begin{dimostrazione}
+\passo{Non negatività} $\lambda^k > 0$, $k! > 0$ ed $e^{-\lambda} > 0$.
+\passo{Somma} Il fattore $e^{-\lambda}$ non dipende da $k$ e si porta fuori; quello che resta è la serie
+esponenziale con $x = \lambda$:
+\[ \sum_{x \in \mathcal{X}} p_X(x) = \sum_{k=0}^{\infty} \frac{\lambda^k}{k!}\, e^{-\lambda}
+   = e^{-\lambda} \sum_{k=0}^{\infty} \frac{\lambda^k}{k!} = e^{-\lambda}\, e^{\lambda} = 1 . \]
+\end{dimostrazione}
+
+\teorema[mediapoisson]{Media della Poisson}{
+  Se $X \sim \mathcal{P}(\lambda)$, allora $E[X] = \lambda$.
+}
+
+\begin{dimostrazione}
+\passo{La definizione}
+\[ E[X] = \sum_{x \in \mathcal{X}} x\, p_X(x) = \sum_{k=0}^{\infty} k\, \frac{\lambda^k}{k!}\, e^{-\lambda} . \]
+\passo{Si toglie il termine nullo e si semplifica} Il termine con $k = 0$ è nullo e si può togliere; per $k \geq 1$,
+$k/k! = 1/(k-1)!$. Si porta fuori $e^{-\lambda}$ e un fattore $\lambda$ (da $\lambda^k = \lambda \cdot
+\lambda^{k-1}$):
+\[ E[X] = \sum_{k=1}^{\infty} \frac{\lambda^k}{(k-1)!}\, e^{-\lambda} = e^{-\lambda}\, \lambda \sum_{k=1}^{\infty}
+   \frac{\lambda^{k-1}}{(k-1)!} . \]
+\passo{Si cambia indice} Posto $j = k - 1$, quando $k$ va da 1 a $\infty$, $j$ va da 0 a $\infty$, e si riconosce la
+serie esponenziale:
+\[ E[X] = e^{-\lambda}\, \lambda \sum_{j=0}^{\infty} \frac{\lambda^j}{j!} = e^{-\lambda}\, \lambda\, e^{\lambda}
+   = \lambda . \]
+\end{dimostrazione}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=12cm, height=5.2cm, xmin=-0.6, xmax=14.6, ymin=0, ymax=0.4, xtick={0,...,14},
+  axis lines=left, tick label style={font=\scriptsize}, xlabel=$k$, ylabel={$p_X(k)$},
+  yticklabel style={/pgf/number format/fixed, /pgf/number format/use comma},
+  grid=major, grid style={mspigray!15}, xmajorgrids=false, legend style={font=\small}, legend pos=north east]
+  \addplot[bastoncini, mspiA, mark size=1.4pt, xshift=-2.5pt] coordinates {(0,0.3679) (1,0.3679) (2,0.1839) (3,0.0613) (4,0.0153) (5,0.0031) (6,0.0005) (7,0.0001) (8,0.0000)};
+  \addplot[bastoncini, mspiB, mark size=1.4pt] coordinates {(0,0.0498) (1,0.1494) (2,0.2240) (3,0.2240) (4,0.1680) (5,0.1008) (6,0.0504) (7,0.0216) (8,0.0081) (9,0.0027) (10,0.0008) (11,0.0002) (12,0.0001)};
+  \addplot[bastoncini, mspiC, mark size=1.4pt, xshift=2.5pt] coordinates {(0,0.0025) (1,0.0149) (2,0.0446) (3,0.0892) (4,0.1339) (5,0.1606) (6,0.1606) (7,0.1377) (8,0.1033) (9,0.0688) (10,0.0413) (11,0.0225) (12,0.0113) (13,0.0052) (14,0.0022)};
+  \legend{$\lambda = 1$, $\lambda = 3$, $\lambda = 6$}
+\end{axis}
+\end{tikzpicture}
+\caption{Tre pmf di Poisson (i bastoncini dei tre colori sono leggermente sfalsati per non sovrapporsi). La massa si
+concentra attorno a $\lambda$, che è la media; al crescere di $\lambda$ si sposta a destra e si allarga.}
+\end{figure}
+
+\subsection{Da dove viene la formula di Poisson}
+
+La pmf di Poisson non è stata inventata a caso: è quello che diventa la binomiale quando le prove sono
+\textbf{moltissime} e il successo in ciascuna è \textbf{rarissimo}. Si pensi ai pacchetti che arrivano a un router in
+un millisecondo: molti utenti potrebbero spedirne uno ($N$ grande), ma ognuno lo fa con probabilità piccola ($p$
+piccolo), e il numero medio di arrivi è $\lambda = N p$.
+
+\teorema[poissonlimite]{La Poisson come limite della binomiale}{
+  Sia $\lambda > 0$ fissato e sia $X_N \sim \mathcal{B}(N, \lambda/N)$, una binomiale con media $N \cdot \lambda/N =
+  \lambda$. Allora, per ogni $k \in \N_0$,
+  \[ \lim_{N \to \infty} P(X_N = k) = \frac{\lambda^k}{k!}\, e^{-\lambda} . \]
+}
+
+\begin{dimostrazione}
+\passo{Si scrive la binomiale con $p = \lambda/N$}
+\[ P(X_N = k) = \binom{N}{k} \left(\frac{\lambda}{N}\right)^k \left(1 - \frac{\lambda}{N}\right)^{N-k}
+   = \frac{N\,(N-1) \cdots (N-k+1)}{k!} \cdot \frac{\lambda^k}{N^k} \cdot \left(1 - \frac{\lambda}{N}\right)^{N}
+     \left(1 - \frac{\lambda}{N}\right)^{-k} . \]
+\passo{Si raggruppano i fattori} Il numeratore $N\,(N-1) \cdots (N-k+1)$ ha $k$ fattori, come $N^k$: li si divide uno
+per uno.
+\[ P(X_N = k) = \frac{\lambda^k}{k!} \cdot \underbrace{\frac{N}{N} \cdot \frac{N-1}{N} \cdots \frac{N-k+1}{N}}_{(1)}
+   \cdot \underbrace{\left(1 - \frac{\lambda}{N}\right)^{N}}_{(2)} \cdot
+   \underbrace{\left(1 - \frac{\lambda}{N}\right)^{-k}}_{(3)} . \]
+\passo{Il limite di ogni pezzo} Con $k$ fissato e $N \to \infty$:
+\begin{itemize}
+  \item (1): ogni fattore è $1 - i/N$ con $i$ fra 0 e $k - 1$, e tende a 1; i fattori sono $k$, un numero fissato,
+        quindi il prodotto tende a 1;
+  \item (2): è il limite del richiamo sul numero $e$, con $x = -\lambda$: tende a $e^{-\lambda}$;
+  \item (3): la base $1 - \lambda/N$ tende a 1 e l'esponente $-k$ è fisso, quindi tende a $1^{-k} = 1$.
+\end{itemize}
+\passo{Si mette insieme} Il limite di un prodotto è il prodotto dei limiti:
+$P(X_N = k) \to \dfrac{\lambda^k}{k!} \cdot 1 \cdot e^{-\lambda} \cdot 1$.
+\end{dimostrazione}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=12cm, height=5cm, xmin=-0.6, xmax=10.6, ymin=0, ymax=0.34, xtick={0,...,10},
+  axis lines=left, tick label style={font=\scriptsize}, xlabel=$k$, ylabel={$P(X = k)$},
+  yticklabel style={/pgf/number format/fixed, /pgf/number format/use comma},
+  grid=major, grid style={mspigray!15}, xmajorgrids=false, legend style={font=\small}, legend pos=north east]
+  \addplot[bastoncini, mspigray, mark size=1.3pt, xshift=-4pt] coordinates {(0,0.0156) (1,0.0938) (2,0.2344) (3,0.3125) (4,0.2344) (5,0.0938) (6,0.0156)};
+  \addplot[bastoncini, mspiA, mark size=1.3pt, xshift=-1.3pt] coordinates {(0,0.0317) (1,0.1267) (2,0.2323) (3,0.2581) (4,0.1936) (5,0.1032) (6,0.0401) (7,0.0115) (8,0.0024) (9,0.0004) (10,0.0000)};
+  \addplot[bastoncini, mspiC, mark size=1.3pt, xshift=1.3pt] coordinates {(0,0.0424) (1,0.1413) (2,0.2277) (3,0.2361) (4,0.1771) (5,0.1023) (6,0.0474) (7,0.0180) (8,0.0058) (9,0.0016) (10,0.0004)};
+  \addplot[bastoncini, mspiB, mark size=1.3pt, xshift=4pt] coordinates {(0,0.0498) (1,0.1494) (2,0.2240) (3,0.2240) (4,0.1680) (5,0.1008) (6,0.0504) (7,0.0216) (8,0.0081) (9,0.0027) (10,0.0008)};
+  \legend{$\mathcal{B}(6;\ \frac12)$, $\mathcal{B}(12;\ \frac14)$, $\mathcal{B}(30;\ \frac1{10})$, $\mathcal{P}(3)$}
+\end{axis}
+\end{tikzpicture}
+\caption{Binomiali con media $N p = 3$ e $N$ sempre più grande: al crescere di $N$ i bastoncini si avvicinano a
+quelli della Poisson con $\lambda = 3$ (in arancione).}
+\end{figure}
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item Una \textbf{variabile aleatoria} è una funzione $X : \Omega \to \mathcal{X} \subseteq \R$ che trasforma i
+        risultati in numeri; $\mathcal{X}$ è il suo \textbf{alfabeto}. $P(X = x)$ abbrevia
+        $P(\{\omega : X(\omega) = x\})$.
+  \item La \textbf{pmf} $p_X(x) = P(X = x)$ è $\geq 0$ e somma a 1.
+  \item La \textbf{media statistica} $E[X] = \sum_x x\, p_X(x)$ è il limite della media campionaria: la somma dei
+        valori pesati con le loro probabilità, il baricentro della pmf.
+  \item \textbf{Binomiale} $\mathcal{B}(N, p)$: $p_X(k) = \binom{N}{k} p^k (1-p)^{N-k}$, $k = 0, \ldots, N$; conta i
+        successi in $N$ prove indipendenti; $E[X] = N p$.
+  \item \textbf{Uniforme} su $M$ valori: $p_X(x) = 1/M$; la media è la media aritmetica dei valori, e su
+        $\{0, \ldots, M-1\}$ vale $(M-1)/2$.
+  \item \textbf{Poisson} $\mathcal{P}(\lambda)$: $p_X(k) = \frac{\lambda^k}{k!} e^{-\lambda}$, $k \in \N_0$;
+        $E[X] = \lambda$. È il limite della binomiale con $N \to \infty$ e $N p = \lambda$: conta gli eventi rari.
+\end{itemize}
+}

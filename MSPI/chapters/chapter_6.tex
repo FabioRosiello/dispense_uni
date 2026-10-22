@@ -1,0 +1,447 @@
+\chapter{Pmf condizionate e funzioni di variabili aleatorie}
+
+Nel Capitolo~3 abbiamo visto come cambia la probabilità di un evento quando si sa che ne è accaduto un altro. Lo
+stesso si può fare con le variabili aleatorie: sapendo qualcosa sul risultato, la pmf e la media cambiano, e si
+parla di \textbf{pmf condizionata} e di \textbf{media condizionata}. Nella seconda metà del capitolo applichiamo una
+funzione a una variabile aleatoria (la eleviamo al quadrato, ne prendiamo il seno\ldots) e ci chiediamo come si
+calcolano la pmf e la media della nuova variabile.
+
+% ============================================================
+\section{La pmf condizionata a un evento}
+% ============================================================
+
+Introduciamo l'argomento con un esempio. Sia $X \sim \mathcal{B}\left(16, \frac13\right)$, cioè
+\[
+  \mathcal{X} = \{0, 1, 2, \ldots, 16\} , \qquad
+  p_X(k) = \binom{16}{k} \left(\frac13\right)^k \left(\frac23\right)^{16-k} , \qquad
+  E[X] = 16 \cdot \frac13 = \frac{16}{3} \approx 5{,}33 .
+\]
+Supponiamo ora di sapere che si è verificata la condizione $X > 4$. Come si distribuisce $X$ sotto questa condizione?
+Dal punto di vista «fisico» significa considerare un insieme di $n$ esperimenti, \textbf{scartare} quelli in cui $X$
+ha dato un valore inferiore a 5 e valutare la frequenza dei 12 valori residui (da 5 a 16) nel campione così ridotto.
+È esattamente la probabilità condizionata del Capitolo~3, applicata agli eventi $\{X = k\}$:
+\[ p_{X \mid X > 4}(k) = P(X = k \mid X > 4) = \frac{P(\{X = k\} \cap \{X > 4\})}{P(\{X > 4\})} . \]
+L'intersezione al numeratore è facile: se $k > 4$, l'evento $\{X = k\}$ è contenuto in $\{X > 4\}$ e l'intersezione è
+$\{X = k\}$ stesso; se $k \leq 4$, i due eventi sono incompatibili e l'intersezione è vuota. Quindi
+\[
+  p_{X \mid X > 4}(k) =
+  \begin{cases}
+    \dfrac{P(X = k)}{P(X > 4)} = \dfrac{P(X = k)}{\sum_{j=5}^{16} P(X = j)} & k = 5, 6, \ldots, 16 \\[3mm]
+    0 & k < 5
+  \end{cases}
+\]
+Con i numeri: $P(X > 4) = \sum_{j=5}^{16} P(X = j) \approx 0{,}661$, quindi le probabilità dei valori rimasti vengono
+divise per $0{,}661$, cioè moltiplicate per circa $1{,}51$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=1.3cm},
+  width=7.4cm, height=4.8cm, ymin=0, ymax=0.34, xmin=-0.6, xmax=16.6, xtick={0,2,...,16},
+  axis lines=left, tick label style={font=\scriptsize}, title style={font=\small}, xlabel=$k$,
+  yticklabel style={/pgf/number format/fixed, /pgf/number format/use comma},
+  grid=major, grid style={mspigray!15}, xmajorgrids=false]
+\nextgroupplot[title={$p_X(k)$: la pmf di partenza}]
+  \addplot[bastoncini, mspigray!70, mark size=1.3pt] coordinates {(0,0.0015) (1,0.0122) (2,0.0457) (3,0.1066) (4,0.1732)};
+  \addplot[bastoncini, mspiA, mark size=1.3pt] coordinates {(5,0.2078) (6,0.1905) (7,0.1361) (8,0.0765) (9,0.0340) (10,0.0119) (11,0.0032) (12,0.0007) (13,0.0001) (14,0.0000) (15,0.0000) (16,0.0000)};
+  \draw[mspiB, dashed] (axis cs:4.5,0) -- (axis cs:4.5,0.32);
+  \node[font=\scriptsize, mspigray, align=center] at (axis cs:2,0.27) {scartati\\ ($X \leq 4$)};
+\nextgroupplot[title={$p_{X \mid X > 4}(k)$: la pmf condizionata}]
+  \addplot[bastoncini, mspiB, mark size=1.3pt] coordinates {(5,0.3145) (6,0.2882) (7,0.2059) (8,0.1158) (9,0.0515) (10,0.0180) (11,0.0049) (12,0.0010) (13,0.0002) (14,0.0000) (15,0.0000) (16,0.0000)};
+  \draw[mspiB, dashed] (axis cs:4.5,0) -- (axis cs:4.5,0.32);
+\end{groupplot}
+\end{tikzpicture}
+\caption{Condizionare a $X > 4$: i valori da 0 a 4 vengono scartati e quelli rimasti vengono «rialzati» tutti nella
+stessa proporzione (divisi per $P(X > 4) \approx 0{,}661$), in modo che la loro somma torni a 1.}
+\end{figure}
+
+La pmf condizionata trovata è davvero una pmf: è $\geq 0$ e
+\[
+  \sum_{k \in \mathcal{X}} p_{X \mid X > 4}(k) = \sum_{k=5}^{16} \frac{P(X = k)}{\sum_{j=5}^{16} P(X = j)}
+  = \frac{\sum_{k=5}^{16} P(X = k)}{\sum_{j=5}^{16} P(X = j)} = 1 ,
+\]
+perché il denominatore è lo stesso per tutti i termini e si può portare fuori dalla somma.
+
+Siamo ora in grado di dare la definizione generale: si può condizionare una variabile aleatoria a un \textbf{qualsiasi}
+evento $A$ di probabilità non nulla, non necessariamente definito tramite $X$ stessa.
+
+\dfn{Pmf condizionata}{
+  Sia $X$ una variabile aleatoria e $A \subseteq \Omega$ un evento con $P(A) \neq 0$. La \term{pmf di $X$
+  condizionata ad $A$} è
+  \[ p_{X \mid A}(x) = P(X = x \mid A) = \frac{P(\{X = x\} \cap A)}{P(A)} , \qquad x \in \mathcal{X} . \]
+}
+
+\teorema[pmfcond]{La pmf condizionata è una pmf}{
+  Fissato l'evento $A$ (con $P(A) \neq 0$), al variare di $x \in \mathcal{X}$ la funzione $p_{X \mid A}(x)$ è una pmf:
+  \[ p_{X \mid A}(x) \geq 0 \qquad\text{e}\qquad \sum_{x \in \mathcal{X}} p_{X \mid A}(x) = 1 . \]
+}
+
+\begin{dimostrazione}
+\passo{Una probabilità condizionata è una probabilità} Per il Teorema~\ref{teo:condprob}, $P(\,\cdot \mid A)$ rispetta
+tutti gli assiomi; in particolare è $\geq 0$.
+\passo{La somma} Gli eventi $\{X = x\}$, al variare di $x$, formano una partizione di $\Omega$. Per l'additività
+della probabilità condizionata:
+\[ \sum_{x \in \mathcal{X}} P(X = x \mid A) = P\left( \bigcup_{x \in \mathcal{X}} \{X = x\} \;\Big|\; A \right) =
+   P(\Omega \mid A) = 1 . \]
+\end{dimostrazione}
+
+% ============================================================
+\section{La probabilità totale per le pmf}
+% ============================================================
+
+Ricordiamo la legge della probabilità totale: per un qualunque evento $C$ e una qualunque partizione
+$\{E_i\}_{i=1}^{M}$ di $\Omega$,
+\[ P(C) = \sum_{i=1}^{M} P(C \mid E_i)\, P(E_i) . \]
+Specializzandola all'evento $C = \{X = x\}$ si ottiene una formula per la pmf.
+
+\teorema[totalepmf]{Probabilità totale per le pmf}{
+  Se $\{E_i\}_{i=1}^{M}$ è una partizione di $\Omega$ con $P(E_i) > 0$, allora per ogni $x \in \mathcal{X}$:
+  \[ p_X(x) = P(X = x) = \sum_{i=1}^{M} P(\{X = x\} \mid E_i)\, P(E_i) = \sum_{i=1}^{M} p_{X \mid E_i}(x)\, P(E_i) . \]
+  La pmf di $X$ è una \textbf{media pesata} delle pmf condizionate, con pesi le probabilità dei casi.
+}
+
+\begin{dimostrazione}
+\passo{} È la legge della probabilità totale (Teorema~\ref{teo:totale}) applicata all'evento $C = \{X = x\}$, con
+$P(\{X = x\} \mid E_i) = p_{X \mid E_i}(x)$ per definizione di pmf condizionata.
+\end{dimostrazione}
+
+\begin{esempio}{Spezzare una binomiale}
+Con riferimento all'esempio precedente, $X \sim \mathcal{B}(16, \frac13)$, si può usare la partizione in due casi
+$E_1 = \{X > 4\}$, $E_2 = \{X \leq 4\}$, che coprono $\Omega$ e sono incompatibili:
+\[ p_X(k) = p_{X \mid X > 4}(k)\, P(X > 4) + p_{X \mid X \leq 4}(k)\, P(X \leq 4) . \]
+Oppure la partizione in tre casi $\{X \leq 1\}$, $\{2 \leq X \leq 6\}$, $\{X \geq 7\}$, che sono a due a due
+incompatibili e la cui unione è tutto $\Omega$:
+\[
+  p_X(k) = p_{X \mid X \leq 1}(k)\, P(X \leq 1) + p_{X \mid 2 \leq X \leq 6}(k)\, P(2 \leq X \leq 6)
+         + p_{X \mid X \geq 7}(k)\, P(X \geq 7) .
+\]
+In questi due casi la formula è quasi ovvia: per ogni $k$ solo uno dei termini è diverso da zero (quello del caso che
+contiene $k$), e per quel termine $p_{X \mid E_i}(k)\, P(E_i) = P(X = k)$. Attenzione però a scegliere bene gli
+intervalli: una partizione deve contenere ogni valore una e una sola volta.
+\end{esempio}
+
+La formula diventa davvero utile quando i casi $E_i$ \textbf{non} sono definiti tramite $X$, ma descrivono qualcosa
+che influenza $X$ e che non si conosce.
+
+\begin{esempio}{Due monete in un cassetto}
+In un cassetto ci sono due monete identiche all'aspetto: una è onesta ($p = 0{,}5$), l'altra è truccata e dà testa con
+probabilità $p = 0{,}8$. Se ne prende una a caso e la si lancia 10 volte; sia $X$ il numero di teste. I due casi
+$E_1$ = «è la moneta onesta» ed $E_2$ = «è la moneta truccata» hanno probabilità $\frac12$ ciascuno, e
+\emph{sapendo} quale moneta è stata presa $X$ è binomiale:
+\[ p_{X \mid E_1} = \mathcal{B}(10;\ 0{,}5) , \qquad p_{X \mid E_2} = \mathcal{B}(10;\ 0{,}8) . \]
+Per la probabilità totale:
+\[ p_X(k) = \frac12 \binom{10}{k} 0{,}5^{10} + \frac12 \binom{10}{k} 0{,}8^k\, 0{,}2^{10-k} . \]
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[ybar stacked, width=11cm, height=5cm, bar width=12pt, ymin=0, ymax=0.2, xmin=-0.6, xmax=10.6,
+  xtick={0,...,10}, axis lines=left, tick label style={font=\scriptsize}, xlabel=$k$, ylabel=$p_X(k)$,
+  yticklabel style={/pgf/number format/fixed, /pgf/number format/use comma},
+  grid=major, grid style={mspigray!15}, xmajorgrids=false, legend style={font=\small, at={(0.02,0.97)},
+  anchor=north west}]
+  \addplot[fill=mspiA!55, draw=mspiA!85!black] coordinates {(0,0.0005) (1,0.0049) (2,0.0220) (3,0.0586) (4,0.1025) (5,0.1230) (6,0.1025) (7,0.0586) (8,0.0220) (9,0.0049) (10,0.0005)};
+  \addplot[fill=mspiB!55, draw=mspiB!85!black] coordinates {(0,0.0000) (1,0.0000) (2,0.0000) (3,0.0004) (4,0.0028) (5,0.0132) (6,0.0440) (7,0.1007) (8,0.1510) (9,0.1342) (10,0.0537)};
+  \legend{$\frac12\,p_{X \mid E_1}(k)$: moneta onesta, $\frac12\,p_{X \mid E_2}(k)$: moneta truccata}
+\end{axis}
+\end{tikzpicture}
+\end{center}
+Ogni barra è la somma di due pezzi: il contributo della moneta onesta (blu) e quello della moneta truccata
+(arancione). Si può anche andare al contrario, con Bayes: se sono uscite 9 teste, la probabilità che la moneta sia
+quella truccata è
+\[
+  P(E_2 \mid X = 9) = \frac{p_{X \mid E_2}(9)\, P(E_2)}{p_X(9)} = \frac{0{,}2684 \cdot \frac12}{0{,}2684 \cdot \frac12 +
+  0{,}0098 \cdot \frac12} \approx 0{,}965 .
+\]
+\end{esempio}
+
+% ============================================================
+\section{Le medie condizionate}
+% ============================================================
+
+Un analogo sviluppo è possibile sulle medie. Si calcola la pmf condizionata e poi la sua media.
+
+\dfn{Media condizionata}{
+  La \term{media di $X$ condizionata all'evento $E$} (con $P(E) > 0$) è la media della pmf condizionata:
+  \[ E[X \mid E] = \sum_{x \in \mathcal{X}} x\, p_{X \mid E}(x) . \]
+}
+
+Per dimostrare il risultato principale serve scambiare l'ordine di due sommatorie.
+
+\begin{richiamo}{scambiare l'ordine di due sommatorie}
+Una \term{somma doppia} $\sum_{i} \sum_{j} a_{ij}$ somma tutti i numeri $a_{ij}$ di una tabella, con $i$ che indica la
+riga e $j$ la colonna. Il totale non dipende dall'ordine: si può sommare prima ogni riga e poi i totali delle righe,
+oppure prima ogni colonna e poi i totali delle colonne.
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{c|ccc|c}
+         & $j = 1$ & $j = 2$ & $j = 3$ & riga \\ \hline
+  $i = 1$ & 1 & 2 & 3 & 6 \\
+  $i = 2$ & 4 & 5 & 6 & 15 \\ \hline
+  colonna & 5 & 7 & 9 & \textbf{21}
+\end{tabular}
+\qquad
+$\displaystyle \sum_{i=1}^{2} \sum_{j=1}^{3} a_{ij} = 6 + 15 = 21 = 5 + 7 + 9 = \sum_{j=1}^{3} \sum_{i=1}^{2} a_{ij}$
+\end{center}
+Inoltre, un fattore che dipende solo dall'indice esterno si può portare dentro o fuori dalla somma interna:
+$\sum_i \sum_j b_i\, c_j = \sum_i b_i \sum_j c_j$. Con infiniti termini lo scambio resta lecito quando i termini sono
+tutti $\geq 0$, o più in generale quando le serie convergono «bene» (assolutamente): sarà sempre il nostro caso.
+\end{richiamo}
+
+\teorema[mediacond]{Media e medie condizionate}{
+  Se $\{E_m\}_{m=1}^{M}$ è una partizione di $\Omega$ con $P(E_m) > 0$, allora
+  \[ E[X] = \sum_{m=1}^{M} P(E_m)\, E[X \mid E_m] . \]
+  La media è la media pesata delle medie condizionate.
+}
+
+\begin{dimostrazione}
+\passo{Si usa la probabilità totale per la pmf} Nella definizione di media si sostituisce $p_X(x)$ con la formula del
+Teorema~\ref{teo:totalepmf}:
+\[ E[X] = \sum_{x \in \mathcal{X}} x\, p_X(x) = \sum_{x \in \mathcal{X}} x \sum_{m=1}^{M} p_{X \mid E_m}(x)\, P(E_m) . \]
+\passo{Si scambiano le somme} Si porta la $x$ dentro, si scambia l'ordine delle due somme e si porta fuori $P(E_m)$, che
+non dipende da $x$:
+\[ E[X] = \sum_{m=1}^{M} P(E_m) \underbrace{\sum_{x \in \mathcal{X}} x\, p_{X \mid E_m}(x)}_{E[X \mid E_m]} . \]
+\passo{Si riconosce la media condizionata} La somma interna è, per definizione, $E[X \mid E_m]$.
+\end{dimostrazione}
+
+\begin{esempio}{Le medie condizionate al lavoro}
+\begin{itemize}
+  \item Per $X \sim \mathcal{B}(16, \frac13)$ e la partizione $\{X \leq 4\}$, $\{X > 4\}$:
+        \[ E[X] = P(X \leq 4)\, E[X \mid X \leq 4] + P(X > 4)\, E[X \mid X > 4] . \]
+        Con i numeri: $P(X \leq 4) \approx 0{,}339$, $E[X \mid X \leq 4] \approx 3{,}29$ (la media dei soli valori
+        da 0 a 4, con la pmf condizionata), $P(X > 4) \approx 0{,}661$, $E[X \mid X > 4] \approx 6{,}38$. Infatti
+        $0{,}339 \cdot 3{,}29 + 0{,}661 \cdot 6{,}38 \approx 1{,}116 + 4{,}217 = 5{,}333 = 16/3$.
+  \item Per le due monete: sapendo quale moneta è stata presa, la media è quella di una binomiale, $Np$. Quindi
+        \[ E[X] = \frac12 \cdot (10 \cdot 0{,}5) + \frac12 \cdot (10 \cdot 0{,}8) = \frac12 \cdot 5 + \frac12 \cdot 8
+           = 6{,}5 , \]
+        senza bisogno di calcolare la pmf di $X$.
+\end{itemize}
+\end{esempio}
+
+% ============================================================
+\section{Funzioni di variabili aleatorie}
+% ============================================================
+
+Si assuma che $X = X(\omega)$ sia una variabile aleatoria con alfabeto $\mathcal{X}$ e pmf $\{p_X(x)\}_{x \in
+\mathcal{X}}$, e sia $g(x)$ una funzione definita (almeno) sui valori di $\mathcal{X}$. Si forma la nuova variabile
+aleatoria
+\[ Y = g(X) = g[X(\omega)] \in \mathcal{Y} , \qquad \text{dove } \mathcal{Y} = g(\mathcal{X}) \]
+è l'insieme dei valori che $g$ assume sui punti di $\mathcal{X}$. Per esempio, se $X$ è la tensione misurata su un
+resistore, $Y = X^2/R$ è la potenza dissipata. Il problema è ricavare una caratterizzazione di $Y$ da quella di $X$:
+\begin{enumerate}
+  \item la pmf $\{p_Y(y)\}_{y \in \mathcal{Y}}$;
+  \item la media statistica $E[Y] = \sum_{y \in \mathcal{Y}} y\, p_Y(y)$.
+\end{enumerate}
+
+\begin{richiamo}{funzioni iniettive, biunivoche e controimmagine}
+Una funzione $g$ è \term{iniettiva} se manda elementi diversi in elementi diversi: $x_1 \neq x_2 \Rightarrow
+g(x_1) \neq g(x_2)$. Nel disegno a frecce: a ogni punto di arrivo arriva \emph{al massimo una} freccia. Se inoltre
+ogni elemento del codominio viene raggiunto, la funzione è \term{biunivoca} (o \emph{biiettiva}): fra i due insiemi
+c'è una corrispondenza uno a uno, e la funzione si può invertire, $x = g^{-1}(y)$.
+
+La \term{controimmagine} di un valore $y$ è l'insieme dei punti che vanno in $y$:
+$g^{-1}(y) = \{x : g(x) = y\}$. Per una funzione biunivoca contiene un solo punto; in generale può contenerne più
+d'uno.
+\begin{center}
+\begin{tikzpicture}[el/.style={font=\small, inner sep=2pt}]
+  \begin{scope}
+    \foreach \v/\y in {-1/0.6, 0/0, 1/-0.6} \node[el] (a\v) at (0,\y) {$\v$};
+    \foreach \v/\y in {-3/0.6, 0/0, 3/-0.6} \node[el] (b\v) at (2.2,\y) {$\v$};
+    \draw[-{Stealth}, mspiA!85!black] (a-1) -- (b-3); \draw[-{Stealth}, mspiA!85!black] (a0) -- (b0);
+    \draw[-{Stealth}, mspiA!85!black] (a1) -- (b3);
+    \node[font=\small, align=center] at (1.1,-1.35) {$g(x) = 3x$: biunivoca\\ (una freccia per punto)};
+  \end{scope}
+  \begin{scope}[shift={(6,0)}]
+    \foreach \v/\y in {-1/0.6, 0/0, 1/-0.6} \node[el] (c\v) at (0,\y) {$\v$};
+    \foreach \v/\y in {0/0.3, 1/-0.3} \node[el] (d\v) at (2.2,\y) {$\v$};
+    \draw[-{Stealth}, mspiB!85!black] (c-1) -- (d1); \draw[-{Stealth}, mspiB!85!black] (c0) -- (d0);
+    \draw[-{Stealth}, mspiB!85!black] (c1) -- (d1);
+    \node[font=\small, align=center] at (1.1,-1.35) {$g(x) = x^2$: non iniettiva\\ $g^{-1}(1) = \{-1, 1\}$};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+\end{richiamo}
+
+Distinguiamo due casi.
+
+\textbf{Primo caso: $g$ è biunivoca su $\mathcal{X}$}, cioè $\card{\mathcal{Y}} = \card{\mathcal{X}}$ e per ogni
+$y \in \mathcal{Y}$ è definito un solo $x = g^{-1}(y)$. Si tratta solo di una \textbf{ridenominazione}
+dell'alfabeto: i valori cambiano nome, le probabilità restano le stesse.
+\[ p_Y(y_i) = P(Y = y_i) = P\left(X = g^{-1}(y_i)\right) = P(X = x_i) = p_X(x_i) . \]
+
+\textbf{Secondo caso: $g$ non è iniettiva}, cioè associa a più valori di $\mathcal{X}$ un solo valore di
+$\mathcal{Y}$: $\mathcal{X} = \{x_1, \ldots, x_n\}$, $\mathcal{Y} = \{y_1, \ldots, y_m\}$, con $n > m$. Nei punti di
+$\mathcal{Y}$ in cui $g$ è invertibile vale la relazione precedente. Per un punto $y_k$ raggiunto da $L_k$ valori
+diversi,
+\[ g\left(x_1^{(k)}\right) = g\left(x_2^{(k)}\right) = \cdots = g\left(x_{L_k}^{(k)}\right) = y_k , \]
+l'evento $\{Y = y_k\}$ si verifica quando $X$ assume \emph{uno qualsiasi} di quei valori, e le probabilità si sommano
+(gli eventi $\{X = x_i^{(k)}\}$ sono incompatibili):
+\[
+  p_Y(y_k) = P\left( \bigcup_{i=1}^{L_k} \left\{ X = x_i^{(k)} \right\} \right)
+  = \sum_{i=1}^{L_k} P\left( X = x_i^{(k)} \right) = \sum_{i=1}^{L_k} p_X\left( x_i^{(k)} \right) .
+\]
+Le probabilità «collassano»: tutta la massa dei punti che vanno nello stesso valore si accumula lì. Le due formule si
+riassumono in una sola.
+
+\begin{formula}[pmf di una funzione di variabile aleatoria]
+\[ p_Y(y) = \sum_{x \,:\, g(x) = y} p_X(x) \qquad \text{(si sommano le probabilità della controimmagine di } y) \]
+\end{formula}
+
+% ============================================================
+\section{La media di una funzione di variabile aleatoria}
+% ============================================================
+
+Per la media seguiamo la stessa suddivisione. Se $g$ è biunivoca c'è solo una ridenominazione dell'alfabeto, quindi
+\[ E[Y] = \sum_{y \in \mathcal{Y}} y\, p_Y(y) = \sum_{x \in \mathcal{X}} g(x)\, p_X(x) . \]
+La cosa notevole è che la stessa formula vale \textbf{sempre}, anche quando $g$ non è iniettiva.
+
+\teorema[valoremedio]{Teorema fondamentale per il calcolo della media}{
+  Se $Y = g(X)$, allora
+  \[ E[Y] = E[g(X)] = \sum_{x \in \mathcal{X}} g(x)\, p_X(x) . \]
+  Per calcolare la media di $g(X)$ non serve conoscere la pmf di $Y$: basta quella di $X$.
+}
+
+\begin{dimostrazione}
+\passo{Si parte dalla definizione per $Y$} Usando la formula della pmf di $Y$:
+\[ E[Y] = \sum_{y \in \mathcal{Y}} y\, p_Y(y) = \sum_{y \in \mathcal{Y}} y \sum_{x \,:\, g(x) = y} p_X(x) . \]
+\passo{Si porta $y$ dentro} Nella somma interna ogni $x$ soddisfa $g(x) = y$, quindi si può scrivere $g(x)$ al posto
+di $y$:
+\[ E[Y] = \sum_{y \in \mathcal{Y}} \ \sum_{x \,:\, g(x) = y} g(x)\, p_X(x) . \]
+\passo{I gruppi coprono tutto $\mathcal{X}$} Ogni $x \in \mathcal{X}$ va in uno e un solo valore $y = g(x)$: le
+controimmagini dei diversi $y$ dividono $\mathcal{X}$ in gruppi disgiunti che lo coprono tutto. Sommare gruppo per
+gruppo e poi sommare i gruppi equivale a sommare su tutti gli $x$:
+\[ E[Y] = \sum_{x \in \mathcal{X}} g(x)\, p_X(x) . \]
+\end{dimostrazione}
+
+Il teorema si chiama anche \term{teorema del valore medio}. È comodissimo: per esempio
+$E[X^2] = \sum_x x^2\, p_X(x)$, senza dover prima trovare la pmf di $X^2$.
+
+\warning{La media di $g(X)$ non è $g$ della media}{
+  In generale $E[g(X)] \neq g(E[X])$. Se $X$ vale $-1$ o $+1$ con probabilità $\frac12$ ciascuno, allora $E[X] = 0$
+  e quindi $(E[X])^2 = 0$, ma $X^2$ vale sempre 1 e $E[X^2] = 1$. Si può portare la funzione «fuori» dalla media solo
+  in casi speciali, come le funzioni lineari che vedremo nel prossimo capitolo.
+}
+
+% ============================================================
+\section{Un esempio completo}
+% ============================================================
+
+Sia $X \sim \mathcal{U}(\{-2, -1, 0, 2\})$: ognuno dei quattro valori ha probabilità $\frac14$. Troviamo la pmf delle
+due variabili aleatorie
+\[
+  Y_1 = X^2 \quad \left(g(x) = x^2\right) , \qquad\qquad
+  Y_2 = 3 \sin\left( \frac{2\pi}{5} X \right) \quad \left(g(x) = 3 \sin\left(\frac{2\pi}{5} x\right)\right) .
+\]
+
+\subsection{Il quadrato}
+
+I valori di $Y_1$ sono $(-2)^2 = 4$, $(-1)^2 = 1$, $0^2 = 0$ e $2^2 = 4$: l'alfabeto è $\mathcal{Y}_1 = \{0, 1, 4\}$,
+con $\card{\mathcal{Y}_1} = 3 < \card{\mathcal{X}} = 4$. La funzione non è iniettiva: $-2$ e $2$ vanno entrambi in 4.
+\begin{center}
+\begin{tikzpicture}[el/.style={font=\small, inner sep=2pt}]
+  \foreach \v/\y in {-2/0.9, -1/0.3, 0/-0.3, 2/-0.9} \node[el] (x\v) at (0,\y) {$\v$};
+  \foreach \v/\y in {0/0.6, 1/0, 4/-0.6} \node[el] (y\v) at (2.6,\y) {$\v$};
+  \draw[mspiA!85!black, rounded corners=4pt] (-0.45,-1.25) rectangle (0.45,1.25);
+  \draw[mspiB!85!black, rounded corners=4pt] (2.25,-1.25) rectangle (2.95,1.25);
+  \node[font=\small, mspiA!85!black] at (0,1.5) {$\mathcal{X}$};
+  \node[font=\small, mspiB!85!black] at (2.6,1.5) {$\mathcal{Y}_1$};
+  \draw[-{Stealth}] (x-2) -- (y4); \draw[-{Stealth}] (x-1) -- (y1); \draw[-{Stealth}] (x0) -- (y0);
+  \draw[-{Stealth}] (x2) -- (y4);
+  \foreach \v in {-2,-1,0,2} \node[font=\scriptsize, mspigray, anchor=east] at ($(x\v)+(-0.3,0)$) {$\frac14$};
+  \node[font=\scriptsize, mspiB!85!black, anchor=west] at ($(y0)+(0.45,0)$) {$\frac14$};
+  \node[font=\scriptsize, mspiB!85!black, anchor=west] at ($(y1)+(0.45,0)$) {$\frac14$};
+  \node[font=\scriptsize, mspiB!85!black, anchor=west] at ($(y4)+(0.45,0)$) {$\frac14 + \frac14 = \frac12$};
+\end{tikzpicture}
+\end{center}
+\[
+  p_{Y_1}(0) = P(X = 0) = \frac14 , \qquad
+  p_{Y_1}(1) = P(X = -1) = \frac14 , \qquad
+  p_{Y_1}(4) = P(\{X = -2\} \cup \{X = 2\}) = P(X = -2) + P(X = 2) = \frac12 .
+\]
+La media si può calcolare in due modi, e il teorema fondamentale garantisce che danno lo stesso risultato:
+\[
+  E[Y_1] = 0 \cdot \frac14 + 1 \cdot \frac14 + 4 \cdot \frac12 = \frac94 ,
+  \qquad
+  E[Y_1] = \sum_{x} x^2\, p_X(x) = \frac{4 + 1 + 0 + 4}{4} = \frac94 .
+\]
+
+\subsection{Il seno}
+
+Per $Y_2$ serve ricordare la funzione seno.
+
+\begin{richiamo}{il seno e i radianti}
+Si disegni una circonferenza di raggio 1 centrata nell'origine. Un angolo $\theta$ si misura in \term{radianti}: è la
+lunghezza dell'arco che l'angolo stacca sulla circonferenza, partendo dal punto $(1, 0)$ e girando in senso
+antiorario. Il giro completo, la lunghezza della circonferenza, è $2\pi$ radianti, cioè $360^\circ$; quindi $\pi$ radianti
+sono $180^\circ$ e $\frac{2\pi}{5}$ radianti sono $72^\circ$. Angoli negativi si misurano in senso orario.
+
+Il \term{seno} $\sin\theta$ è l'altezza (la coordinata verticale) del punto della circonferenza raggiunto dopo
+l'angolo $\theta$.
+\begin{center}
+\begin{tikzpicture}[scale=1.7]
+  \draw[-{Stealth}, mspigray] (-1.3,0) -- (1.4,0); \draw[-{Stealth}, mspigray] (0,-1.25) -- (0,1.3);
+  \draw[mspigray] (0,0) circle (1);
+  \foreach \a/\col/\lab in {72/mspiA/{\frac{2\pi}{5}}, 144/mspiB/{\frac{4\pi}{5}}, -72/mspiA/{-\frac{2\pi}{5}},
+                            -144/mspiB/{-\frac{4\pi}{5}}} {
+    \draw[\col!85!black, line width=0.6pt] (0,0) -- (\a:1);
+    \fill[\col!85!black] (\a:1) circle (0.035);
+    \draw[\col!85!black, line width=1.3pt] ({cos(\a)},0) -- (\a:1);
+    \node[font=\scriptsize, \col!85!black] at (\a:1.22) {$\lab$};
+  }
+  \node[font=\scriptsize, anchor=west, text width=6.3cm] at (1.55,0.2)
+    {I tratti spessi verticali sono i seni. Si vede che
+     $\sin\frac{2\pi}{5} \approx 0{,}951$ ($72^\circ$) è più alto di $\sin\frac{4\pi}{5} \approx 0{,}588$ ($144^\circ$), e che il
+     seno di un angolo negativo è l'opposto: $\sin(-\theta) = -\sin\theta$ (il punto si riflette sotto l'asse
+     orizzontale).};
+\end{tikzpicture}
+\end{center}
+\end{richiamo}
+
+Calcoliamo i quattro valori di $Y_2$, usando $\sin(-\theta) = -\sin\theta$:
+\[
+\begin{aligned}
+  X = -2 &: \quad 3 \sin\left(-\tfrac{4\pi}{5}\right) = -3 \sin\tfrac{4\pi}{5} \approx -1{,}763 = \alpha_1 , &
+  X = -1 &: \quad 3 \sin\left(-\tfrac{2\pi}{5}\right) = -3 \sin\tfrac{2\pi}{5} \approx -2{,}853 = \alpha_2 , \\
+  X = 0 &: \quad 3 \sin 0 = 0 = \alpha_3 , &
+  X = 2 &: \quad 3 \sin\tfrac{4\pi}{5} \approx 1{,}763 = \alpha_4 .
+\end{aligned}
+\]
+I quattro valori sono tutti diversi: $\card{\mathcal{Y}_2} = 4 = \card{\mathcal{X}}$, la funzione è biunivoca su
+$\mathcal{X}$, e c'è solo una ridenominazione:
+\[ p_{Y_2}(\alpha_i) = \frac14 , \qquad i = 1, 2, 3, 4 . \]
+La variabile aleatoria $Y_2$ assume uniformemente i quattro valori di $\mathcal{Y}_2$. La sua media, con il teorema
+fondamentale, è $E[Y_2] = \frac14 (-1{,}763 - 2{,}853 + 0 + 1{,}763) = -\frac{2{,}853}{4} \approx -0{,}713$: i due
+valori $\pm 1{,}763$ si cancellano.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[quaderno, width=10cm, height=6cm, xmin=-2.8, xmax=2.8, ymin=-3.4, ymax=3.4,
+  xtick={-2,-1,1,2}, ytick={-3,3}, xlabel=$x$, ylabel={$g(x)$}]
+  \addplot[mspigray, domain=-2.6:2.6, samples=120, line width=0.9pt] {3*sin(deg(2*pi*x/5))};
+  \draw[mspiB, dashed] (axis cs:-2,0) -- (axis cs:-2,-1.7634) -- (axis cs:0,-1.7634);
+  \draw[mspiB, dashed] (axis cs:-1,0) -- (axis cs:-1,-2.8532) -- (axis cs:0,-2.8532);
+  \draw[mspiB, dashed] (axis cs:2,0) -- (axis cs:2,1.7634) -- (axis cs:0,1.7634);
+  \addplot[only marks, mark=*, mark size=2.2pt, mspiB] coordinates {(-2,-1.7634) (-1,-2.8532) (0,0) (2,1.7634)};
+  \addplot[only marks, mark=*, mark size=2.2pt, mspiA] coordinates {(-2,0) (-1,0) (0,0) (2,0)};
+  \node[font=\scriptsize, mspiB!85!black, anchor=north east] at (axis cs:-2,-1.7634) {$-1{,}763$};
+  \node[font=\scriptsize, mspiB!85!black, anchor=north] at (axis cs:-1,-2.95) {$-2{,}853$};
+  \node[font=\scriptsize, mspiB!85!black, anchor=south west] at (axis cs:2,1.7634) {$1{,}763$};
+\end{axis}
+\end{tikzpicture}
+\caption{La funzione $g(x) = 3 \sin\left(\frac{2\pi}{5} x\right)$: i quattro valori dell'alfabeto di $X$ (in blu
+sull'asse orizzontale) vanno in quattro valori diversi (in arancione), quindi $Y_2$ è ancora uniforme.}
+\end{figure}
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item La \textbf{pmf condizionata} a un evento $A$ è $p_{X \mid A}(x) = P(\{X = x\} \cap A)/P(A)$: si scartano i
+        risultati fuori da $A$ e si «rialzano» gli altri in proporzione. È ancora una pmf.
+  \item \textbf{Probabilità totale per le pmf}: $p_X(x) = \sum_i p_{X \mid E_i}(x)\, P(E_i)$; utilissima quando i casi
+        $E_i$ descrivono qualcosa di ignoto che influenza $X$ (le due monete).
+  \item \textbf{Media condizionata}: $E[X \mid E] = \sum_x x\, p_{X \mid E}(x)$, e $E[X] = \sum_m P(E_m)\,
+        E[X \mid E_m]$.
+  \item Se $Y = g(X)$: $p_Y(y) = \sum_{x : g(x) = y} p_X(x)$. Se $g$ è biunivoca è una ridenominazione, altrimenti le
+        probabilità dei punti che vanno nello stesso valore si sommano.
+  \item \textbf{Teorema fondamentale}: $E[g(X)] = \sum_x g(x)\, p_X(x)$, senza bisogno della pmf di $Y$. In generale
+        $E[g(X)] \neq g(E[X])$.
+\end{itemize}
+}

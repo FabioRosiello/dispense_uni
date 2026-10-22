@@ -14,6 +14,12 @@ Questa cartella contiene i sorgenti LaTeX di `DispensaMSPI.pdf`.
     disposizioni, permutazioni, combinazioni, binomio di Newton, stringhe binarie (slide 14-24)
   - `chapters/chapter_3.tex` — Dalla frequenza alla probabilità: limite della frequenza, spazi equiprobabili, poker,
     dado truccato, proprietà, probabilità condizionata e composta, probabilità totale, indipendenza (slide 25-39)
+  - `chapters/chapter_4.tex` — L'approccio assiomatico: algebre e sigma-algebre, assiomi di Kolmogorov, serie
+    (richiamo), proprietà dimostrate dagli assiomi, teorema di Bayes, monotonia (slide 40-48)
+  - `chapters/chapter_5.tex` — Variabili aleatorie discrete: pmf, notazioni, media campionaria e statistica, binomiale,
+    uniforme, Poisson (con il numero e e la Poisson come limite della binomiale) (slide 49-61)
+  - `chapters/chapter_6.tex` — Pmf condizionate e funzioni di variabili aleatorie: pmf e medie condizionate,
+    probabilità totale per le pmf, funzioni di v.a., teorema fondamentale per il calcolo della media (slide 62-73)
 - `Slides_Metodi_statistici_parte_*.pdf` — le slide del corso
 - `unina_doc_class.cls`, `fonts/`, `sources/` — template Unina Docs (lo stesso delle altre dispense)
 - `Images/` — eventuali immagini
