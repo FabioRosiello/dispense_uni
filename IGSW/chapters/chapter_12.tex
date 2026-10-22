@@ -226,6 +226,42 @@ i nodi di calcolo: il \term{load balancer} (bilanciatore del carico). Le strateg
 \end{minipage}
 
 % ============================================================
+\begin{esempio}{Round robin in Java, e un load balancer vero}
+La strategia round robin sta in poche righe. Il contatore è atomico perché le richieste arrivano da più thread insieme:
+con un \code{int} normale due richieste potrebbero leggere lo stesso valore e finire sullo stesso nodo.
+\begin{lstlisting}[style=java, name=RoundRobin.java]
+public class RoundRobin {
+  private final List<URI> nodi;
+  private final AtomicInteger prossimo = new AtomicInteger();
+
+  public RoundRobin(List<URI> nodi) {
+    this.nodi = nodi;
+  }
+
+  public URI scegli() {                       // n1, n2, n3, n1, n2...
+    return nodi.get(Math.floorMod(prossimo.getAndIncrement(), nodi.size()));
+  }
+}
+\end{lstlisting}
+Nella pratica non lo si scrive: si configura un load balancer esistente, come nginx. La strategia è una riga, e il nodo
+di riserva realizza il fail-over della prossima sezione.
+\begin{lstlisting}[style=conf, name=nginx.conf]
+upstream negozio {
+    least_conn;                      # il nodo meno carico (senza questa riga: round robin)
+    server 10.0.0.11:8080;
+    server 10.0.0.12:8080;
+    server 10.0.0.13:8080 backup;    # usato solo se gli altri sono giu'
+}
+
+server {
+    listen 80;
+    location / {
+        proxy_pass http://negozio;   # ogni richiesta va a uno dei nodi del gruppo
+    }
+}
+\end{lstlisting}
+\end{esempio}
+
 \section{Disponibilità}
 
 \dfn{Disponibilità}{
@@ -307,6 +343,38 @@ guasta, le altre si fanno carico anche della sua parte.
   \node[note, anchor=west] at (3.0,-0.55) {lavora anche lei};
 \end{tikzpicture}}
 \end{minipage}
+
+\begin{esempio}{Un fail-over attivo-passivo con il battito cardiaco}
+Il primario manda un segnale di vita (\textit{heartbeat}) ogni secondo; una sentinella controlla periodicamente quando è
+arrivato l'ultimo e, se tace da troppo, promuove il secondario.
+\begin{lstlisting}[style=java, name=Sentinella.java]
+public class Sentinella {
+  private static final Duration TOLLERANZA = Duration.ofSeconds(3);
+  private volatile Instant ultimoBattito = Instant.now();
+  private final Nodo primario, secondario;
+  private volatile Nodo attivo;
+
+  public Sentinella(Nodo primario, Nodo secondario) {
+    this.primario = primario;
+    this.secondario = secondario;
+    this.attivo = primario;
+  }
+
+  public void battito() {                      // chiamato dal primario ogni secondo
+    ultimoBattito = Instant.now();
+  }
+
+  public void controlla() {                    // eseguito periodicamente
+    if (attivo == primario && Instant.now().isAfter(ultimoBattito.plus(TOLLERANZA))) {
+      attivo = secondario;                     // fail-over
+      allarme.notifica("primario muto da 3 secondi: attivato il secondario");
+    }
+  }
+}
+\end{lstlisting}
+Tre secondi sono un compromesso: con una tolleranza più corta si scatta per un rallentamento passeggero, con una più lunga
+si resta fermi più a lungo prima di reagire.
+\end{esempio}
 
 \subsection{Osservabilità e monitoraggio}
 
@@ -477,6 +545,25 @@ un altro. Gli svantaggi:
   \draw[fr] (lb) -- (s1); \draw[fr, line width=1.2pt, draw=swred] (lb) -- (s2);
 \end{tikzpicture}
 \end{minipage}
+
+\begin{esempio}{La logica di instradamento dello sharding}
+«La logica applicativa deve sapere dove sta ogni dato»: in pratica, una funzione che dalla chiave sceglie lo shard.
+\begin{lstlisting}[style=java, name=Shard.java]
+// per intervalli: semplice da capire, ma gli shard si sbilanciano
+public DataSource shardPer(String cognome) {
+  char iniziale = Character.toUpperCase(cognome.charAt(0));
+  return iniziale <= 'M' ? shardAM : shardNZ;
+}
+
+// per hash: le chiavi si distribuiscono in modo uniforme sugli shard
+public DataSource shardPer(long idUtente) {
+  return shard.get(Math.floorMod(Long.hashCode(idUtente), shard.size()));
+}
+\end{lstlisting}
+Lo sharding per hash risolve lo sbilanciamento ma ne crea un altro problema: se si aggiunge uno shard, cambia
+\code{shard.size()} e quasi tutte le chiavi cambiano destinazione, quindi vanno spostate. Per questo i sistemi reali usano
+varianti come il \textit{consistent hashing}, in cui aggiungere uno shard sposta solo una piccola parte dei dati.
+\end{esempio}
 
 \subsection{Denormalizzazione}
 
@@ -663,6 +750,46 @@ Fra i \term{message broker} open source più diffusi ci sono RabbitMQ, Apache Ac
   consegnato a \textbf{più di un} consumatore. Bisogna valutare con attenzione questi aspetti rispetto al problema da
   risolvere: un messaggio consegnato due volte, ad esempio, non deve far addebitare due volte un pagamento.
 }
+
+\begin{esempio}{Produttore e consumatori, in miniatura}
+Dentro un solo programma Java una coda di messaggi si può simulare con una \code{BlockingQueue}: l'applicazione web
+pubblica il compito lento e risponde subito, mentre alcuni worker lo svolgono in background.
+\begin{lstlisting}[style=java, name=Ordini.java]
+BlockingQueue<Ordine> coda = new LinkedBlockingQueue<>();
+
+// produttore: risponde all'utente senza aspettare PDF ed e-mail
+public String conferma(Ordine ordine) {
+  coda.offer(ordine);
+  return "Ordine ricevuto: riceverai una e-mail di conferma";
+}
+
+// consumatore: lo stesso codice gira in quattro worker
+Runnable worker = () -> {
+  try {
+    while (true) {
+      Ordine ordine = coda.take();            // aspetta il prossimo messaggio
+      generaFatturaPdf(ordine);
+      inviaEmail(ordine.cliente(), "Ordine confermato");
+    }
+  } catch (InterruptedException e) {
+    Thread.currentThread().interrupt();       // il worker viene fermato
+  }
+};
+ExecutorService pool = Executors.newFixedThreadPool(4);
+for (int i = 0; i < 4; i++) {
+  pool.submit(worker);
+}
+\end{lstlisting}
+Un message broker come RabbitMQ porta la coda \textbf{fuori} dal programma: produttori e consumatori possono stare su
+macchine diverse, scalare in modo indipendente, e i messaggi sopravvivono al riavvio di entrambi. Resta il problema della
+consegna doppia: un consumatore che riceve due volte lo stesso messaggio deve accorgersene (deve essere
+\textit{idempotente}).
+\begin{lstlisting}[style=java, name=ConsumatorePagamenti.java]
+if (pagamentiGiaRegistrati.add(messaggio.id())) {   // add restituisce false se l'id c'era gia'
+  addebita(messaggio.carta(), messaggio.importo());
+}
+\end{lstlisting}
+\end{esempio}
 
 \subsection{Un altro scenario: lo stesso utente su più dispositivi}
 
@@ -981,6 +1108,25 @@ gestiscono i fermi.
   $A = 0{,}999^{10} \approx 99{,}0\%$: si passa da circa 9 ore a circa 3 giorni e mezzo di fermo all'anno. Il fermo
   complessivo è quindi circa la \textbf{somma} dei fermi, non il prodotto.
 }
+
+\begin{esempio}{Una chiamata sincrona che sa gestire il fermo}
+Un servizio che ne chiama un altro in modo sincrono non deve aspettarlo per sempre, né propagare il suo fermo a chi lo
+ha chiamato. Due difese minime: un \textbf{timeout} e una \textbf{risposta degradata}.
+\begin{lstlisting}[style=java, name=ClientCatalogo.java]
+public Prodotto prodotto(long id) throws InterruptedException {
+  HttpRequest richiesta = HttpRequest.newBuilder(URI.create("http://catalogo/prodotti/" + id))
+      .timeout(Duration.ofMillis(300))         // un servizio lento conta come un servizio fermo
+      .GET()
+      .build();
+  try {
+    HttpResponse<String> risposta = client.send(richiesta, HttpResponse.BodyHandlers.ofString());
+    return Prodotto.daJson(risposta.body());
+  } catch (IOException e) {                    // timeout, connessione rifiutata...
+    return cache.ultimoNoto(id);               // meglio un prezzo di ieri che una pagina d'errore
+  }
+}
+\end{lstlisting}
+\end{esempio}
 
 \subsection{La gestione dei dati}
 

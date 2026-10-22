@@ -47,7 +47,7 @@ Questa è l'implementazione della radice quadrata inversa ($1/\sqrt{x}$) contenu
 attribuita a John Carmack. Il calcolo di $1/\sqrt{x}$ è usatissimo in computer grafica (ad esempio per calcolare angoli di
 incidenza e riflessione della luce).
 
-\Needspace{22\baselineskip}\begin{lstlisting}[language=C]
+\Needspace{22\baselineskip}\begin{lstlisting}[style=c]
 float Q_rsqrt(float number) {
     long i;
     float x2, y;
@@ -265,6 +265,39 @@ Disponibilità & Interruzione massima in un anno & In pratica\ldots \\
 }
 
 % ------------------------------------------------------------
+\begin{esempio}{Dal difetto al malfunzionamento, e come tollerarlo}
+Il metodo somma le righe di una fattura. Il difetto è un \code{<} al posto di \code{<=} (o, che è lo stesso, un
+\code{- 1} di troppo):
+\begin{lstlisting}[style=java, name=Fattura.java]
+/** Somma gli importi delle righe di una fattura. */
+public static double totale(double[] importi) {
+  double totale = 0;
+  for (int i = 0; i < importi.length - 1; i++) {   // difetto: l'ultima riga resta fuori
+    totale += importi[i];
+  }
+  return totale;
+}
+\end{lstlisting}
+Il difetto c'è sempre, ma diventa un \textbf{errore} solo quando il ciclo gira (lo stato interno \code{totale} è
+sbagliato) e un \textbf{malfunzionamento} solo quando quel totale arriva all'utente: \code{totale(\{10, 20, 5\})}
+restituisce 30 invece di 35, e una fattura con una sola riga da 99,90 euro risulta di 0 euro.
+
+La tolleranza ai guasti, invece, si progetta: qui un servizio esterno che può non rispondere viene interrogato fino a tre
+volte e, se non risponde, si ripiega su un valore in cache invece di propagare il guasto all'utente.
+\begin{lstlisting}[style=java, name=ServizioQuotazioni.java]
+public Quotazione leggiQuotazione(String titolo) {
+  for (int tentativo = 1; tentativo <= 3; tentativo++) {
+    try {
+      return borsa.quotazione(titolo);              // servizio remoto, puo' fallire
+    } catch (IOException e) {
+      log.warn("tentativo " + tentativo + " fallito: " + e.getMessage());
+    }
+  }
+  return cache.ultimaQuotazioneNota(titolo);        // degrado controllato, non un crash
+}
+\end{lstlisting}
+\end{esempio}
+
 \Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Performance Efficiency}
 
 \qualitybox{q3}{Performance Efficiency}{Efficienza prestazionale}{Risponde in fretta, senza sprecare risorse?}{
@@ -286,6 +319,30 @@ Disponibilità & Interruzione massima in un anno & In pratica\ldots \\
 \end{table}
 
 % ------------------------------------------------------------
+\begin{esempio}{Stesso risultato, comportamento temporale molto diverso}
+Ogni ordine del giorno va confrontato con l'elenco degli utenti bloccati. Le due versioni sono \textbf{funzionalmente
+identiche}: rifiutano esattamente gli stessi ordini.
+\begin{lstlisting}[style=java, name=ControlloOrdini.java]
+// Versione 1: un milione di email in una lista
+List<String> bloccati = caricaUtentiBloccati();
+for (Ordine ordine : ordiniDiOggi) {                 // centomila ordini
+  if (bloccati.contains(ordine.email())) {           // scorre la lista: fino a un milione di confronti
+    rifiuta(ordine);
+  }
+}
+
+// Versione 2: le stesse email in un insieme basato su hash
+Set<String> bloccati = new HashSet<>(caricaUtentiBloccati());
+for (Ordine ordine : ordiniDiOggi) {
+  if (bloccati.contains(ordine.email())) {           // un solo accesso, in media
+    rifiuta(ordine);
+  }
+}
+\end{lstlisting}
+Nel caso peggiore la prima versione fa $10^5 \times 10^6 = 10^{11}$ confronti, la seconda circa $10^5$ accessi: la
+differenza fra minuti e millisecondi. La correttezza funzionale non dice nulla sull'efficienza: è una caratteristica a sé.
+\end{esempio}
+
 \Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Usability}
 
 \qualitybox{q4}{Usability}{Usabilità}{Gli utenti riescono a usarlo senza fatica e senza sbagliare?}{
@@ -340,6 +397,25 @@ di un prodotto e, in alcuni contesti (dispositivi medici, cabine di pilotaggio, 
 \end{table}
 
 % ------------------------------------------------------------
+\begin{esempio}{Una falla di riservatezza in una riga}
+L'applicazione cerca i referti di un paziente costruendo la query SQL concatenando il codice fiscale scritto
+dall'utente:
+\begin{lstlisting}[style=java, name=ArchivioReferti.java]
+// VULNERABILE: il testo dell'utente diventa parte del comando SQL
+String sql = "SELECT * FROM referti WHERE paziente = '" + codiceFiscale + "'";
+ResultSet referti = connessione.createStatement().executeQuery(sql);
+\end{lstlisting}
+Se qualcuno scrive come codice fiscale \code{' OR '1'='1}, la condizione diventa sempre vera e la query restituisce
+\textbf{i referti di tutti}: la riservatezza è persa (è la \textit{SQL injection}). La versione corretta passa il valore
+come parametro, che il database tratta sempre come un dato e mai come codice:
+\begin{lstlisting}[style=java, name=ArchivioReferti.java]
+PreparedStatement query = connessione.prepareStatement("SELECT * FROM referti WHERE paziente = ?");
+query.setString(1, codiceFiscale);
+ResultSet referti = query.executeQuery();
+log.info("referti di " + codiceFiscale + " consultati da " + operatore);   // accountability
+\end{lstlisting}
+\end{esempio}
+
 \Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Compatibility}
 
 \qualitybox{q6}{Compatibility}{Compatibilità}{Convive e dialoga con gli altri sistemi?}{
@@ -360,6 +436,25 @@ di un prodotto e, in alcuni contesti (dispositivi medici, cabine di pilotaggio, 
 \end{table}
 
 % ------------------------------------------------------------
+\begin{esempio}{Interoperabilità attraverso un formato standard}
+L'app universitaria non deve conoscere i calendari di Google, Apple o Microsoft: le basta esportare gli esami nel formato
+standard iCalendar (RFC 5545), che tutti sanno leggere.
+\begin{lstlisting}[style=plain, name=esame.ics]
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Universita//App Esami//IT
+BEGIN:VEVENT
+UID:esame-igsw-20270115@app-esami.example.it
+DTSTAMP:20261020T100000Z
+DTSTART:20270115T090000Z
+DTEND:20270115T120000Z
+SUMMARY:Esame di Ingegneria del Software
+LOCATION:Aula T1
+END:VEVENT
+END:VCALENDAR
+\end{lstlisting}
+\end{esempio}
+
 \Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Maintainability}
 
 \qualitybox{q7}{Maintainability}{Manutenibilità}{Si può modificare facilmente, senza rompere nulla?}{
@@ -388,6 +483,41 @@ di un prodotto e, in alcuni contesti (dispositivi medici, cabine di pilotaggio, 
 }
 
 % ------------------------------------------------------------
+\begin{esempio}{Modularità e testabilità in codice}
+«Cambiare il fornitore dei pagamenti richiede di modificare solo il modulo Pagamenti» si ottiene facendo dipendere la
+cassa da un'\textbf{interfaccia}, non da un fornitore.
+\begin{lstlisting}[style=java, name=Cassa.java]
+public interface GatewayPagamenti {
+  Ricevuta addebita(String carta, BigDecimal importo);
+}
+
+public class Cassa {
+  private final GatewayPagamenti gateway;     // un'interfaccia: Stripe, PayPal, un finto per i test...
+
+  public Cassa(GatewayPagamenti gateway) {
+    this.gateway = gateway;
+  }
+
+  public Ricevuta paga(Carrello carrello, String carta) {
+    return gateway.addebita(carta, carrello.totale());
+  }
+}
+\end{lstlisting}
+La stessa scelta rende la cassa \textbf{testabile} in isolamento: nel test le si passa un gateway finto che non addebita
+nulla e ricorda l'ultima richiesta.
+\begin{lstlisting}[style=java, name=CassaTest.java]
+@Test
+void addebitaIlTotaleDelCarrello() {
+  GatewayFinto finto = new GatewayFinto();
+  Cassa cassa = new Cassa(finto);
+
+  cassa.paga(carrelloDa("30.00"), "4111111111111111");
+
+  assertEquals(new BigDecimal("30.00"), finto.ultimoImporto());
+}
+\end{lstlisting}
+\end{esempio}
+
 \Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Flexibility}
 
 \qualitybox{q8}{Flexibility}{Flessibilità}{Si adatta a nuovi ambienti, carichi e contesti?}{
@@ -409,6 +539,17 @@ di un prodotto e, in alcuni contesti (dispositivi medici, cabine di pilotaggio, 
 \end{table}
 
 % ------------------------------------------------------------
+\begin{esempio}{Adattabilità: lo stesso percorso su tre sistemi operativi}
+\begin{lstlisting}[style=java, name=Configurazione.java]
+// Funziona solo su Windows: unita' C:, cartella Users, separatore "\"
+File config = new File("C:\\Users\\" + utente + "\\app\\config.txt");
+
+// Funziona ovunque: la cartella dell'utente e il separatore li sceglie la piattaforma
+Path config = Path.of(System.getProperty("user.home"), "app", "config.txt");
+\end{lstlisting}
+Il primo programma è corretto su Windows e inutilizzabile su macOS e Linux; il secondo gira identico sui tre.
+\end{esempio}
+
 \Needspace{12\baselineskip}\phantomsection\addcontentsline{toc}{subsection}{Safety}
 
 \qualitybox{q9}{Safety}{Sicurezza (incolumità)}{Può fare del male a persone, beni o ambiente?}{
@@ -427,6 +568,27 @@ di un prodotto e, in alcuni contesti (dispositivi medici, cabine di pilotaggio, 
 \bottomrule
 \end{tabularx}
 \end{table}
+
+\begin{esempio}{Fail safe: nel dubbio, lo stato sicuro}
+Il software di bordo di un treno riceve un segnale di controllo dalla linea. Se il segnale manca da più di due secondi non
+sa più se la via è libera, e l'unica scelta sicura è frenare.
+\begin{lstlisting}[style=java, name=ControlloMarcia.java]
+public class ControlloMarcia {
+  private static final long TIMEOUT_MS = 2000;
+  private volatile long ultimoSegnale = System.currentTimeMillis();
+
+  public void segnaleRicevuto() {             // chiamato a ogni segnale dalla linea
+    ultimoSegnale = System.currentTimeMillis();
+  }
+
+  public void ciclo() {                       // eseguito ogni 100 ms
+    if (System.currentTimeMillis() - ultimoSegnale > TIMEOUT_MS) {
+      freni.emergenza();                      // segnale perso: si va nello stato sicuro
+    }
+  }
+}
+\end{lstlisting}
+\end{esempio}
 
 \warning{Security e Safety: in italiano sono entrambe «sicurezza»}{
   In italiano usiamo una sola parola per due concetti ben distinti, e confonderli è un errore frequente:

@@ -151,6 +151,40 @@ ed entrano nel server da una porta, che li inoltra (freccia tratteggiata) al Tra
 Driver comunica con il sistema di contabilità esterno (\textbf{Accounting System}) attraverso una porta.
 \end{esempio}
 
+\begin{esempio}{Interfacce fornite e richieste in Java}
+La pallina e la presa fra Transaction Processor e Accounting Driver si traducono in un'interfaccia Java: chi la
+\textbf{implementa} la fornisce, chi la riceve nel costruttore la richiede.
+\begin{lstlisting}[style=java, name=Contabilita.java]
+public interface Contabilita {                                // l'interfaccia fra i due componenti
+  void registraVendita(Vendita vendita);
+}
+
+public class AccountingDriver implements Contabilita {        // pallina: la fornisce
+  @Override
+  public void registraVendita(Vendita vendita) {
+    sistemaContabile.invia(vendita.comeRecord());              // verso la porta del sistema esterno
+  }
+}
+
+public class TransactionProcessor {
+  private final Contabilita contabilita;                       // presa: la richiede
+
+  public TransactionProcessor(Contabilita contabilita) {
+    this.contabilita = contabilita;
+  }
+
+  public void elabora(Vendita vendita) {
+    // ... controlli, sconti, scontrino ...
+    contabilita.registraVendita(vendita);
+  }
+}
+\end{lstlisting}
+Il collegamento pallina-presa avviene quando si assemblano i componenti, ed è l'unico punto che conosce entrambi:
+\begin{lstlisting}[style=java, name=SalesServer.java]
+TransactionProcessor processore = new TransactionProcessor(new AccountingDriver());
+\end{lstlisting}
+\end{esempio}
+
 \subsection{Sottosistemi}
 
 Un componente che contiene altri componenti è un \textbf{sottosistema} (stereotipo «subsystem»). Le porte sul suo bordo collegano
@@ -425,7 +459,7 @@ Il metodo \texttt{flick()} fa salire il contatore fino a 10, poi lo fa scendere 
 
 \Needspace{16\baselineskip}
 \noindent\begin{minipage}[c]{0.44\textwidth}
-\begin{lstlisting}[language=Java]
+\begin{lstlisting}[style=java]
 public class Counter {
   private int count = 0;
   private String mode = "increment";
@@ -512,7 +546,8 @@ Leggiamolo seguendo un cliente.
 Un diagramma di stato a livello di dettaglio si può implementare con una catena di \textbf{\texttt{switch} annidati}: il primo sceglie
 lo stato corrente, il secondo l'evento arrivato.
 
-\begin{lstlisting}[language=Java]
+\Needspace{19\baselineskip}
+\begin{lstlisting}[style=java]
 switch (statoCorrente) {
   case STATO_1:
     switch (evento) {
@@ -561,7 +596,8 @@ Nei sistemi orientati agli oggetti c'è una soluzione migliore.
 \Needspace{24\baselineskip}
 Il contesto tiene lo stato corrente e il credito, e inoltra ogni evento allo stato corrente passandogli se stesso:
 
-\begin{lstlisting}[language=Java]
+\Needspace{24\baselineskip}
+\begin{lstlisting}[style=java]
 public class Distributore {
     private State stato;
     static State attesa = new Attesa();
@@ -587,7 +623,8 @@ public class Distributore {
 \Needspace{12\baselineskip}
 La classe generale degli stati non fa nulla: in uno stato, un evento non previsto viene semplicemente ignorato.
 
-\begin{lstlisting}[language=Java]
+\Needspace{12\baselineskip}
+\begin{lstlisting}[style=java]
 public class State {
     public void inserisciMoneta(Distributore distributore) {}
     public void richiestaRestituzione(Distributore distributore) {}
@@ -601,7 +638,8 @@ public class State {
 \Needspace{30\baselineskip}
 Ogni stato ridefinisce solo gli eventi che lo riguardano. Ecco lo stato \textbf{Attesa}:
 
-\begin{lstlisting}[language=Java]
+\Needspace{34\baselineskip}
+\begin{lstlisting}[style=java]
 public class Attesa extends State {
     @Override
     public void inserisciMoneta(Distributore distributore) {
@@ -1039,6 +1077,31 @@ quindi ha senso studiarlo a parte.
 Ricevuto l'ordine, due flussi procedono \textbf{in parallelo}: da una parte si prepara l'ordine e lo si spedisce (con consegna
 espressa se l'ordine è prioritario, normale altrimenti), dall'altra si invia la fattura e si riceve il pagamento. L'ordine si chiude
 solo quando \textbf{entrambi} i flussi sono terminati (join).
+\end{esempio}
+
+\begin{esempio}{Fork e join nel codice}
+Il diagramma della gestione di un ordine si traduce quasi riga per riga in Java: ogni ramo del fork è un compito
+eseguito in parallelo, il join è l'attesa che finiscano entrambi.
+\begin{lstlisting}[style=java, name=GestioneOrdini.java]
+public void gestisci(Ordine ordine) {
+  // fork: i due flussi partono insieme
+  CompletableFuture<Void> spedizione = CompletableFuture.runAsync(() -> {
+    prepara(ordine);
+    if (ordine.prioritario()) {               // branch [priority order]
+      spedizioneEspressa(ordine);
+    } else {                                  // [else]
+      spedizioneNormale(ordine);
+    }
+  });
+  CompletableFuture<Void> pagamento = CompletableFuture.runAsync(() -> {
+    inviaFattura(ordine);
+    riceviPagamento(ordine);
+  });
+  // join: si prosegue solo quando entrambi i flussi sono arrivati
+  CompletableFuture.allOf(spedizione, pagamento).join();
+  chiudi(ordine);
+}
+\end{lstlisting}
 \end{esempio}
 
 \subsection{Le swimlane}

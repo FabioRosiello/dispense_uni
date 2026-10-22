@@ -1,6 +1,6 @@
 # Sorgenti della dispensa di Ingegneria del Software
 
-Questa cartella contiene i sorgenti LaTeX di `../Dispensa.pdf`.
+Questa cartella contiene i sorgenti LaTeX di `DispensaIGSW.pdf`.
 
 ## Struttura
 - `main.tex` — preambolo (colori, stili TikZ, macro) e inclusione dei capitoli
@@ -17,6 +17,10 @@ Questa cartella contiene i sorgenti LaTeX di `../Dispensa.pdf`.
 - `chapters/chapter_10.tex` — System Design e buone pratiche di progettazione: obiettivi di progetto, scomposizione, coesione (tipi e livelli, God Class), accoppiamento, Legge di Demetra, schede CRC (L_09, L_11, L_12)
 - `chapters/chapter_11.tex` — Architetture software: definizione, livelli e partizioni, architettura chiusa e aperta, client/server, repository, a livelli, three-tier, multi-tier, SOA (L_13)
 - `chapters/chapter_12.tex` — Architetture software moderne: scalabilità e load balancing, disponibilità e fail-over, dati (ACID, replica, sharding, NoSQL e consistenza finale), code di messaggi (anche per più dispositivi dello stesso utente), microservizi e DDD, un caso reale con i suoi anti-pattern (scomposizione, interazione, sicurezza, organizzazione), legge di Conway (L_14, L_15)
+- `chapters/chapter_13.tex` — Virtualizzazione e cloud computing: CPU multi-core, data center tradizionale, macchine virtuali e hypervisor, alta disponibilità con SAN, live migration, consolidamento, cloud computing, scalabilità ed elasticità, provisioning dinamico, IaaS/PaaS/SaaS, cloud pubblico, privato e ibrido (Lecture 16)
+- `chapters/chapter_14.tex` — Il paradigma REST: API, HTTP (verbi, codici di stato), risorse e rappresentazioni (JSON, XML), progettazione degli URI, risorse annidate, filtri e ordinamenti, autenticazione a token, JWT e funzioni di hash, OpenAPI (Lecture 17)
+- `preamble/listati-vscode.tex` — aspetto dei listati: finestre di VS Code con il tema Dark+, come nella dispensa di Tecnologie Web
+- `preamble/nomi_listati.py` — genera `preamble/listati-nomi.tex`, l'elenco dei metodi e dei tipi usati nei listati Java (per colorarli come in VS Code); va rilanciato dopo aver aggiunto esempi
 - `unina_doc_class.cls`, `fonts/`, `sources/` — template Unina Docs (da `Materiale/Dispense.rar`)
 - `Images/` — immagini tratte dalle slide del corso
 
@@ -29,8 +33,9 @@ float tools xurl pdfpages eso-pic l3packages xcolor graphics geometry trimspaces
 pgfplots booktabs multirow colortbl`.
 
 ```bash
-lualatex -interaction=nonstopmode main.tex   # due volte, per l'indice
-cp main.pdf ../Dispensa.pdf
+python3 preamble/nomi_listati.py              # solo se sono cambiati i listati Java
+lualatex -interaction=nonstopmode main.tex    # tre volte, per l'indice e i riferimenti
+cp main.pdf DispensaIGSW.pdf
 ```
 
 ## Convenzioni usate
@@ -42,6 +47,11 @@ cp main.pdf ../Dispensa.pdf
   concetto si spezzi tra due pagine
 - gli `esempio` sono composti in una scatola: se stanno in una pagina non si
   spezzano mai (passano interi alla pagina successiva)
+- i listati si scrivono come `\begin{lstlisting}[style=java, name=Ordine.java]`: lo stile sceglie colori e icona
+  (`java`, `json`, `http`, `shell`, `yaml`, `docker`, `conf`, `xml`, `js`, `c`, `plain`), il nome compare nella
+  scheda in alto; senza `name` la scheda non c'è
 - nei listati le legature di FiraCode sono disattivate (`\FiraCodeNL`): `!=` e `>=` restano come nel sorgente
+- un listato dentro un riquadro richiede la forma ad ambiente (`\begin{infobox}{{Titolo}} ... \end{infobox}`),
+  perché i comandi `\info{...}{...}` non accettano testo verbatim
 - i titoli dei riquadri che contengono una virgola vanno racchiusi in doppie graffe:
   `\info{{Titolo, con virgola}}{...}`

@@ -1,0 +1,842 @@
+\chapter{Virtualizzazione e cloud computing}
+\emergencystretch=2.5em
+
+Nel capitolo precedente abbiamo visto le architetture che servono milioni di utenti: repliche, bilanciatori di carico,
+microservizi. Tutte presuppongono di avere a disposizione \textbf{molte macchine}, da accendere, spegnere e spostare con
+facilità. Questo capitolo racconta da dove vengono quelle macchine: la \textbf{virtualizzazione}, che trasforma un server
+fisico in tanti server «virtuali», e il \textbf{cloud computing}, che vende quelle risorse come un servizio. È il punto di
+vista del \textbf{deployment}: l'ultimo passo del System Design, in cui si decide su quale hardware e software gireranno
+i sottosistemi (il diagramma di deployment del Capitolo 9).
+
+% Stili delle figure di questo capitolo
+\tikzset{
+  strato/.style={rectangle, draw=#1!75!black, fill=#1!18, line width=0.7pt, font=\scriptsize\bfseries,
+                 align=center, minimum height=0.55cm, inner sep=2pt},
+  vmbox/.style={rectangle, rounded corners=2pt, draw=sworange!80!black, fill=sworange!10, line width=0.7pt},
+  san/.style={cylinder, shape border rotate=90, aspect=0.25, draw=swblue!70!black, fill=swblue!14, line width=0.8pt,
+              minimum width=1.3cm, minimum height=1.0cm, font=\scriptsize\bfseries, align=center},
+  fr/.style={-{Stealth[length=2.2mm]}, line width=0.8pt, draw=swgray},
+}
+% \torre{(x,y)}{nome}{etichetta}: un server fisico disegnato come una torre
+\newcommand{\torre}[3]{%
+  \begin{scope}[shift={#1}]
+    \draw[line width=0.6pt, draw=swgray!80!black, fill=swlight] (-0.3,-0.42) rectangle (0.3,0.42);
+    \foreach \yy in {0.28,0.17,0.06} \draw[swgray, line width=0.5pt] (-0.2,\yy) -- (0.2,\yy);
+    \fill[swgreen] (0.17,-0.3) circle (0.04);
+    \node[font=\tiny, anchor=north, align=center] at (0,-0.44) {#3};
+  \end{scope}
+  \coordinate (#2) at #1;}
+
+% ============================================================
+\section{Perché la virtualizzazione}
+
+\dfn{Virtualizzazione}{
+  La \term{virtualizzazione} consiste nel creare una versione \textbf{virtuale} di una risorsa che normalmente è fornita
+  fisicamente e appartiene a un sistema: un computer, un disco, una rete. È una tecnica per aumentare l'\textbf{efficacia}
+  e l'\textbf{efficienza} dei data center complessi.
+}
+
+L'idea è vecchia: risale agli anni Sessanta, ai mainframe IBM che andavano divisi fra molti utenti. È tornata di moda una
+quindicina di anni fa grazie a un cambiamento nei processori, che conviene raccontare dall'inizio.
+
+\subsection{L'evoluzione delle CPU}
+
+I microprocessori hanno sempre visto crescere rapidamente le prestazioni e calare i costi. Per decenni la strategia per
+aumentare le prestazioni è stata una sola: aumentare la \textbf{frequenza} del processore, cioè la sua «velocità».
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[c]{0.42\textwidth}
+\begin{itemize}
+  \item 1978: Intel 8086, 4 MHz;
+  \item 1985: Intel 386, 25 MHz (circa 6 volte tanto);
+  \item 1995: Intel Pentium Pro, 200 MHz (circa 8 volte);
+  \item 2005: Intel Pentium 4, 3,8 GHz (circa 19 volte);
+  \item 2020: Intel i9-10980XE, 3,0 GHz.
+\end{itemize}
+Nel 2005 la corsa si \textbf{ferma}: quindici anni dopo un processore di fascia alta ha una frequenza addirittura più
+bassa. Si erano raggiunti i limiti fisici del silicio (calore e consumi crescono troppo con la frequenza).
+\end{minipage}\hfill
+\begin{minipage}[c]{0.55\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{semilogyaxis}[width=7.6cm, height=5.0cm, xmin=1975, xmax=2023, ymin=2, ymax=10000,
+    xtick={1978,1985,1995,2005,2020}, xticklabel style={/pgf/number format/1000 sep={}, font=\tiny},
+    yticklabel style={font=\tiny}, ylabel={MHz}, ylabel style={font=\scriptsize},
+    grid=major, grid style={swgray!20}]
+  \addplot[line width=1.1pt, swblue, mark=*, mark options={fill=swblue}] coordinates
+    {(1978,4) (1985,25) (1995,200) (2005,3800) (2020,3000)};
+  \node[font=\tiny, anchor=south east, text=swred] at (axis cs:2005,3800) {stop nel 2005};
+  \node[font=\tiny, anchor=north, text=swgray] at (axis cs:2020,2500) {3,0 GHz};
+\end{semilogyaxis}
+\end{tikzpicture}
+\end{minipage}
+
+La soluzione è stata \textbf{moltiplicare le unità di calcolo}: invece di un processore più veloce, più processori (i
+\textbf{core}) sullo stesso chip. Nel 2020 l'Intel i9-10980XE a 3,0 GHz ha 18 unità di calcolo, l'AMD Ryzen Threadripper
+3970X a 3,7 GHz ne ha 32.
+
+\subsection{Il problema dei multi-core}
+
+Tradizionalmente i programmi sono stati scritti per girare su un computer con \textbf{una sola CPU}, e la grande
+maggioranza delle applicazioni è fatta di programmi \textbf{sequenziali}. Un programma sequenziale usa un core alla
+volta, per quanti ne abbia la macchina. Come si sfruttano allora più unità in parallelo?
+
+\begin{esempio}{Un programma sequenziale non usa i core in più}
+Il programma somma i resti di tre miliardi di numeri due volte: la prima con uno \textit{stream} normale, la seconda con
+uno \textit{stream} parallelo, che divide il lavoro fra tutti i core disponibili.
+
+\begin{lstlisting}[style=java, name=Somma.java]
+import java.util.stream.LongStream;
+
+public class Somma {
+  public static void main(String[] args) {
+    int core = Runtime.getRuntime().availableProcessors();
+    System.out.println("Unità di calcolo disponibili: " + core);
+
+    long n = 3_000_000_000L;
+    long t0 = System.nanoTime();
+    long s1 = LongStream.rangeClosed(1, n).map(x -> x % 7).sum();            // un solo core
+    long t1 = System.nanoTime();
+    long s2 = LongStream.rangeClosed(1, n).parallel().map(x -> x % 7).sum(); // tutti i core
+    long t2 = System.nanoTime();
+
+    System.out.println("Stesso risultato: " + (s1 == s2));
+    System.out.printf("Sequenziale: %d ms%n", (t1 - t0) / 1_000_000);
+    System.out.printf("Parallelo:   %d ms%n", (t2 - t1) / 1_000_000);
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ java Somma.java
+Unità di calcolo disponibili: 4
+Stesso risultato: true
+Sequenziale: 5888 ms
+Parallelo:   1301 ms
+\end{lstlisting}
+Su una macchina con 4 core la versione parallela è circa quattro volte più veloce. Ma la differenza l'ha fatta il
+\textbf{programmatore}, che ha dovuto riscrivere il calcolo; la prima versione, quella che si scrive di solito, lascia tre
+core su quattro a guardare.
+\end{esempio}
+
+Riscrivere ogni applicazione in forma parallela non è realistico. La virtualizzazione prende la strada opposta: invece di
+dividere \textbf{un} programma su più core, fa girare sulla stessa macchina \textbf{tanti sistemi indipendenti}, ciascuno
+con i propri programmi sequenziali. Per capire perché questo sia utile bisogna guardare com'era fatto un data center.
+
+% ============================================================
+\section{Il data center tradizionale}
+
+Nel data center tradizionale ogni server offre \textbf{un solo servizio} o una sola applicazione (\textit{one workload,
+one box}): un server per l'applicazione, uno per il dominio (l'autenticazione degli utenti), uno per il database, uno
+per la posta, uno per il terminal server, uno per il fax. Un nuovo servizio significa un \textbf{nuovo server}, con il suo
+storage.
+
+\begin{center}
+\begin{tikzpicture}
+  \foreach \x/\nome/\cpu [count=\i] in {0/Application/12, 2.3/Dominio/8, 4.6/Database/15, 6.9/Posta/6,
+                                       9.2/Terminal/10, 11.5/Fax/5} {
+    \torre{(\x,0)}{s\i}{Server\\ \nome};
+    \draw[swgray!70, line width=0.4pt] (\x+0.45,-0.42) rectangle (\x+0.65,0.42);
+    \fill[swred!70] (\x+0.45,-0.42) rectangle (\x+0.65,-0.42+0.84*\cpu/100);
+    \node[font=\tiny, anchor=west, text=swred] at (\x+0.66,-0.42+0.84*\cpu/100) {\cpu\%};
+  }
+  \node[note, anchor=west] at (-0.4,1.0) {ogni server consuma corrente, scalda, occupa spazio e va gestito fisicamente;
+    la barra rossa è l'uso medio della CPU};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Le conseguenze}
+
+\begin{itemize}
+  \item \textbf{Risorse sottoutilizzate}. La maggior parte dei server usa in media fra il \textbf{5\% e il 15\%} della
+        propria capacità di calcolo. Per i servizi critici serve inoltre la \textbf{ridondanza}: computer di riserva che
+        normalmente non lavorano affatto.
+  \item \textbf{Costi di installazione e gestione elevati}. Ogni server consuma molta elettricità, emette calore, occupa
+        spazio e va gestito fisicamente; gli aggiornamenti su larga scala costano molto, e i backup vanno fatti
+        macchina per macchina.
+  \item \textbf{Servizi intrinsecamente interconnessi}. Il server di dominio, che autentica gli utenti, viene interrogato
+        da tutti gli altri servizi. Che cosa succede se si guasta?
+\end{itemize}
+
+\Needspace{14\baselineskip}
+\noindent\begin{minipage}[c]{0.5\textwidth}
+\centering
+\begin{tikzpicture}
+  \torre{(0,1.6)}{a}{Application}
+  \torre{(2.2,1.6)}{d}{Dominio}
+  \torre{(4.4,1.6)}{b}{Database}
+  \torre{(0,-0.4)}{p}{Posta}
+  \torre{(2.2,-0.4)}{t}{Terminal}
+  \torre{(4.4,-0.4)}{f}{Fax}
+  \foreach \n in {a,b,p,t,f} \draw[fr, {Stealth[length=2mm]}-{Stealth[length=2mm]}, shorten <=0.45cm,
+    shorten >=0.45cm] (\n) -- (d);
+  \draw[swred, line width=1.6pt] ($(d)+(-0.4,-0.45)$) -- ($(d)+(0.4,0.45)$);
+  \draw[swred, line width=1.6pt] ($(d)+(-0.4,0.45)$) -- ($(d)+(0.4,-0.45)$);
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.47\textwidth}
+Se un server si guasta, può bloccare i servizi degli altri server che comunicano con lui. Ne derivano:
+\begin{itemize}
+  \item l'interruzione delle operazioni legate a quel servizio;
+  \item nei casi più gravi, l'interruzione di \textbf{tutte} le attività dell'azienda;
+  \item costi in più (il fermo e il ripristino);
+  \item fermi non sempre prevedibili.
+\end{itemize}
+\end{minipage}
+
+% ============================================================
+\section{Le macchine virtuali}
+
+\subsection{L'idea}
+
+Un server fisico è fatto di una serie di \textbf{risorse hardware}, di un \textbf{sistema operativo} e di uno o più
+\textbf{programmi applicativi}. L'idea: se la CPU del server ha più unità di calcolo parallele, possiamo «simulare»
+l'esistenza di \textbf{più computer}, indipendenti dall'hardware «reale» sottostante? Ciascuno avrebbe il suo sistema
+operativo e i suoi programmi, e le unità di calcolo verrebbero finalmente usate.
+
+\begin{center}
+\begin{tikzpicture}
+  % server fisico
+  \node[font=\scriptsize\bfseries] at (1.5,3.15) {Server fisico};
+  \node[strato=swgray, minimum width=3cm] (hw1) at (1.5,0) {Hardware (CPU, RAM, disco, rete)};
+  \node[strato=swblue, minimum width=3cm] at (1.5,0.6) {Sistema operativo};
+  \node[strato=sworange, minimum width=3cm, minimum height=1.5cm] at (1.5,1.77) {Applicazione};
+  % server virtualizzato
+  \node[font=\scriptsize\bfseries] at (8.2,3.15) {Server virtualizzato};
+  \node[strato=swgray, minimum width=6.4cm] at (8.2,0) {Hardware (CPU, RAM, disco, rete)};
+  \node[strato=swred, minimum width=6.4cm] at (8.2,0.6) {Hypervisor (livello di virtualizzazione)};
+  \foreach \x/\so [count=\k] in {6.1/Linux, 8.2/Windows, 10.3/Linux} {
+    \draw[vmbox] (\x-1.0,0.95) rectangle (\x+1.0,2.95);
+    \node[font=\tiny\bfseries, text=sworange!70!black] at (\x,2.75) {VM \k};
+    \node[strato=swblue, minimum width=1.8cm] at (\x,1.25) {\so};
+    \node[strato=sworange, minimum width=0.55cm, font=\tiny] at (\x-0.6,1.95) {App};
+    \node[strato=sworange, minimum width=0.55cm, font=\tiny] at (\x,1.95) {App};
+    \node[strato=sworange, minimum width=0.55cm, font=\tiny] at (\x+0.6,1.95) {App};
+  }
+  \draw[fr, line width=1.2pt] (3.4,1.4) -- node[above, note]{virtualizzazione} (4.6,1.4);
+\end{tikzpicture}
+\end{center}
+
+\dfn{Hypervisor}{
+  L'\term{hypervisor} è un nuovo strato software che gira \textbf{prima} del sistema operativo, direttamente sopra
+  l'hardware. Simula l'esistenza di più computer «virtuali» su un unico computer fisico: fornisce loro le risorse fisiche
+  e le gestisce in modo concorrente a beneficio delle \term{macchine virtuali} (VM).
+}
+
+Su ogni computer virtualizzato si installa un sistema operativo \textbf{normale}, che non ha modo di sapere se sta girando
+su un computer «vero» o virtuale. Dal suo punto di vista vede una CPU, della memoria, un disco e una scheda di rete: sono
+risorse virtuali, ritagliate dall'hypervisor da quelle fisiche.
+
+\subsection{Le proprietà di una macchina virtuale}
+
+\begin{itemize}
+  \item \textbf{Indipendenza dall'hardware}. L'hypervisor simula una configurazione di server \textbf{standard}, nascondendo
+        l'hardware fisico reale. Di conseguenza le VM possono girare su server fisici diversi senza bisogno di essere
+        riconfigurate.
+  \item \textbf{Una VM è un file}. Una macchina virtuale è un file che contiene il sistema operativo, le applicazioni, i
+        dati e la rappresentazione della memoria del server. Il file conserva lo stato del server virtuale e permette di
+        copiarlo su un numero qualsiasi di server fisici. Esistono strumenti commerciali che trasformano il contenuto di un
+        server fisico in una VM.
+  \item \textbf{Isolamento}. Ogni VM è completamente isolata dalle altre VM che girano sullo stesso server fisico: se una
+        subisce un attacco o va in crash, le altre non ne risentono.
+  \item \textbf{Gestione centralizzata}. Tutte le VM di un data center si gestiscono da \textbf{un'unica finestra}: la
+        gestione dell'intero data center è centralizzata, e l'amministrazione si semplifica molto.
+\end{itemize}
+
+\begin{esempio}{Creare e gestire una VM dalla riga di comando}
+Con VirtualBox, un hypervisor gratuito che si può installare sul proprio portatile, una VM si crea e si configura con il
+comando \code{VBoxManage}. Le risorse che le diamo sono numeri in un file di configurazione, non pezzi di hardware.
+
+\begin{lstlisting}[style=shell, name=crea-vm.sh]
+# crea e registra una nuova macchina virtuale
+VBoxManage createvm --name web01 --ostype Ubuntu_64 --register
+# le assegna 2 CPU virtuali e 4 GB di RAM, presi da quelli del server fisico
+VBoxManage modifyvm web01 --cpus 2 --memory 4096
+# crea il disco virtuale: un file che puo' crescere fino a 20 GB
+DISCO="$HOME/VirtualBox VMs/web01/web01.vdi"
+VBoxManage createmedium disk --filename "$DISCO" --size 20480
+VBoxManage storagectl web01 --name SATA --add sata
+VBoxManage storageattach web01 --storagectl SATA --port 0 --type hdd --medium "$DISCO"
+# la avvia senza finestra, come si fa su un server
+VBoxManage startvm web01 --type headless
+\end{lstlisting}
+
+Che una VM sia «un file» si vede guardando la sua cartella:
+\begin{lstlisting}[style=shell, name=Terminale]
+$ ls -lh ~/"VirtualBox VMs/web01/"
+-rw------- 1 anna anna 6.1G web01.vdi     # il disco: occupa solo lo spazio usato davvero
+-rw------- 1 anna anna 9.4K web01.vbox    # la configurazione (CPU, RAM, schede di rete), in XML
+\end{lstlisting}
+Copiare questi due file su un altro computer con VirtualBox significa \textbf{spostare il server}.
+\end{esempio}
+
+% ============================================================
+\section{La virtualizzazione in esercizio}
+
+\subsection{Un server o un'infrastruttura}
+
+Nella virtualizzazione di un \textbf{singolo server} le macchine virtuali risiedono nello storage del server fisico: dal
+basso verso l'alto ci sono il server fisico, l'hypervisor, le VM e, dentro ciascuna, il sistema operativo (Microsoft,
+Linux\ldots) e le applicazioni (gestionali, office, database\ldots). Se però il server si guasta, si fermano tutte le sue
+VM insieme: abbiamo concentrato in una macchina sola i rischi di sei.
+
+\dfn{Virtualizzazione enterprise ad alta disponibilità}{
+  Un data center enterprise deve avere almeno \textbf{due server fisici} e un'unità disco condivisa, la
+  \term{SAN} (\textit{Storage Area Network}), collegati fra loro ad altissima velocità (fibra ottica o iSCSI). Nella
+  virtualizzazione enterprise le macchine virtuali risiedono nello storage \textbf{SAN}, non nei server.
+}
+
+\Needspace{16\baselineskip}
+\begin{center}
+\begin{tikzpicture}
+  \foreach \x/\n/\lab in {0/s1/Server 1, 4.6/s2/Server 2} {
+    \draw[line width=0.8pt, draw=swgray!80!black, fill=swlight] (\x-1.4,0) rectangle (\x+1.4,1.6);
+    \node[font=\scriptsize\bfseries, anchor=north] at (\x,-0.02) {\lab};
+    \node[strato=swred, minimum width=2.6cm, font=\tiny\bfseries] at (\x,0.3) {hypervisor};
+    \coordinate (\n) at (\x,0);
+  }
+  \foreach \x in {-0.9,0,0.9} \node[vmbox, minimum width=0.7cm, minimum height=0.75cm, font=\tiny] at (\x,1.05) {VM};
+  \foreach \x in {3.7,4.6,5.5} \node[vmbox, minimum width=0.7cm, minimum height=0.75cm, font=\tiny] at (\x,1.05) {VM};
+  \node[san] (san) at (2.3,-2.0) {SAN};
+  \draw[line width=1.4pt, swteal] (s1) ++(0,-0.35) -- (san.north west);
+  \draw[line width=1.4pt, swteal] (s2) ++(0,-0.35) -- (san.north east);
+  \node[note, text=swteal] at (2.3,-0.85) {fibra o iSCSI};
+  \node[note, anchor=west, text width=5.6cm] at (7.1,0.55) {I file delle VM stanno nella SAN, visibile a entrambi i
+    server. Ogni server può quindi avviare \textbf{qualunque} VM: per eseguirla basta avere il suo file.};
+\end{tikzpicture}
+\end{center}
+
+La migrazione da un data center tradizionale avviene \textbf{dal fisico al virtuale} (P2V, \textit{physical to virtual}):
+i sei server della figura iniziale diventano sei VM sui due server dell'infrastruttura, con i loro dischi nella SAN.
+
+\subsection{Come funziona l'alta disponibilità}
+
+La virtualizzazione garantisce la \textbf{continuità operativa} grazie alla funzione di \term{alta disponibilità} (HA,
+\textit{High Availability}): se un server si guasta, le sue macchine virtuali vengono \textbf{migrate immediatamente} sugli
+altri server disponibili e riavviate. Il fermo si riduce al tempo necessario a riavviare le VM.
+
+Le tecnologie più recenti offrono anche la \term{fault tolerance} (FT), che garantisce la \textbf{continuità} del
+funzionamento di una VM dopo il guasto di un server, eliminando del tutto il fermo: è attualmente la soluzione migliore
+per la continuità operativa. È il fail-over del Capitolo 12, applicato alle macchine invece che ai processi.
+
+\subsection{La migrazione a caldo}
+
+\dfn{Live migration}{
+  La migrazione «a caldo» (\term{live migration}) sposta una VM \textbf{in esecuzione} da un server fisico a un altro,
+  senza spegnerla. Permette di fare manutenzione su un server o di bilanciare il carico fra i server mantenendo operativi
+  i server virtuali.
+}
+
+\begin{esempio}{Una migrazione a caldo con libvirt}
+Su Linux l'hypervisor KVM si gestisce con \code{virsh}, il client di \textit{libvirt}. Dovendo spegnere \code{server1}
+per manutenzione, si spostano le sue VM su \code{server2} mentre lavorano:
+\begin{lstlisting}[style=shell, name=Terminale]
+$ virsh list
+ Id   Name     State
+-----------------------
+ 1    web01    running
+ 2    db01     running
+
+$ virsh migrate --live --persistent web01 qemu+ssh://server2/system
+$ virsh migrate --live --persistent db01  qemu+ssh://server2/system
+\end{lstlisting}
+Durante la migrazione la memoria della VM viene copiata sull'altro server mentre la VM continua a girare; alla fine la VM
+si ferma per una frazione di secondo, giusto il tempo di copiare le ultime pagine modificate. Il disco non va copiato:
+sta nella SAN, che entrambi i server vedono.
+\end{esempio}
+
+% ============================================================
+\section{I vantaggi della virtualizzazione}
+
+\subsection{Il consolidamento}
+
+Con la virtualizzazione si parla di \term{consolidamento} del data center: sfruttando al massimo le risorse di calcolo
+parallele dei processori moderni, si riduce in modo significativo il numero di server necessari a fornire i servizi IT di
+un'organizzazione.
+
+\begin{itemize}
+  \item \textbf{Ottimizzazione dell'hardware}. Sistemi operativi diversi girano contemporaneamente su una sola macchina, e
+        la CPU passa dal 5--15\% di un server dedicato a un uso molto più alto.
+  \item \textbf{Ottimizzazione dello spazio su disco}. A una VM viene allocato solo lo spazio disco di cui ha
+        strettamente bisogno; il resto del volume resta disponibile per nuove VM.
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[width=12cm, height=3.6cm, xmin=0, xmax=48, ymin=0, ymax=100, ytick={0,50,100},
+    yticklabel={\pgfmathprintnumber{\tick}\%}, yticklabel style={font=\tiny}, xtick=\empty,
+    xlabel={tempo (una giornata)}, xlabel style={font=\scriptsize}, legend style={font=\tiny, at={(0.99,0.97)},
+    anchor=north east, draw=none, fill=white, fill opacity=0.8, text opacity=1}, legend cell align=left]
+  \addplot[swgray, line width=0.9pt, domain=0:48, samples=97] {9 + 5*sin(deg(x/3)) + 3*sin(deg(x*1.7))};
+  \addlegendentry{server fisico dedicato}
+  \addplot[swred, line width=0.9pt, domain=0:48, samples=97] {62 + 12*sin(deg(x/3)) + 6*sin(deg(x*1.3))};
+  \addlegendentry{lo stesso server, con molte VM}
+\end{axis}
+\end{tikzpicture}
+\end{center}
+
+\subsection{Semplificazione e costi}
+
+\begin{itemize}
+  \item \textbf{Backup e disaster recovery}. L'intero server (sistema operativo, applicazioni, dati, dispositivi e stato)
+        non è altro che un file: fare copie di sicurezza per il disaster recovery diventa facile.
+  \item \textbf{Indipendenza dall'hardware}, come visto sopra.
+  \item \textbf{Rilasci semplificati}. Si possono \textbf{clonare} le VM «a caldo» per fare test e aggiornamenti senza
+        compromettere l'integrità dell'originale.
+  \item \textbf{Riduzione dei costi IT}. Meno server significa risparmiare energia, condizionamento e spazio fisico del
+        data center.
+  \item \textbf{Riduzione dei costi del personale}. Con la gestione centralizzata, da un'unica interfaccia di
+        amministrazione, il reparto IT è più produttivo.
+\end{itemize}
+
+\begin{esempio}{Provare un aggiornamento senza rischi}
+Prima di aggiornare il sistema operativo del server web, si fotografa lo stato della VM e se ne fa un clone su cui
+provare l'aggiornamento. Se qualcosa va storto, si torna indietro in pochi secondi.
+\begin{lstlisting}[style=shell, name=aggiornamento.sh]
+# una "fotografia" dello stato attuale (disco e configurazione)
+VBoxManage snapshot web01 take prima-dell-aggiornamento
+# un clone indipendente su cui provare l'aggiornamento
+VBoxManage clonevm web01 --name web01-test --register
+VBoxManage startvm web01-test --type headless
+# ... l'aggiornamento sul clone rompe qualcosa? Si butta via il clone:
+VBoxManage unregistervm web01-test --delete
+# e se l'avessimo fatto sull'originale, si torna alla fotografia
+VBoxManage snapshot web01 restore prima-dell-aggiornamento
+# il backup per il disaster recovery e' un file da copiare altrove
+VBoxManage export web01 --output web01-backup.ova
+\end{lstlisting}
+\end{esempio}
+
+\begin{esempio}{Il data center di una pubblica amministrazione a Napoli}
+\begin{itemize}
+  \item Circa \textbf{800 macchine virtuali} in esecuzione in parallelo, con bilanciamento del carico;
+  \item circa \textbf{30 server fisici};
+  \item \textbf{2 SAN}, con circa 500 TB di spazio;
+  \item la gestione di 800 macchine da \textbf{2 console} di amministrazione.
+\end{itemize}
+Il rapporto di consolidamento è di circa $800/30 \approx 27$ VM per server fisico. Senza virtualizzazione sarebbero serviti
+centinaia di server, ciascuno usato al 5--15\%.
+\end{esempio}
+
+\Needspace{18\baselineskip}
+\begin{infobox}{{Macchine virtuali e container}}
+  Il Capitolo 12 ha mostrato un'applicazione a microservizi in cui ogni servizio è un \textbf{container} Docker. Un
+  container non è una VM: non contiene un sistema operativo intero, ma solo l'applicazione con le sue librerie, e
+  \textbf{condivide il kernel} del sistema che lo ospita. È più leggero (si avvia in un secondo, pesa decine di MB invece
+  di GB) e meno isolato. Le due tecniche convivono: nel cloud i container girano quasi sempre dentro macchine virtuali.
+\begin{lstlisting}[style=docker, name=Dockerfile]
+# si parte da un'immagine con Java gia' installato
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+# si aggiunge solo l'applicazione: niente sistema operativo
+COPY target/negozio.jar app.jar
+EXPOSE 8080
+CMD ["java", "-jar", "app.jar"]
+\end{lstlisting}
+\end{infobox}
+
+% ============================================================
+\section{Il cloud computing}
+
+\dfn{Cloud computing}{
+  Nel \term{cloud computing} le risorse IT sono fornite \textbf{come un servizio}: potenza di calcolo, storage, database,
+  code di messaggi. Si usano quando servono e si pagano per quanto si usano.
+}
+
+\begin{itemize}
+  \item I cloud sfruttano le \textbf{economie di scala} dell'hardware di largo consumo: storage economico, reti ad alta
+        banda, processori multicore.
+  \item I data center sono \textbf{distribuiti geograficamente}.
+  \item Le offerte principali sono quelle di Microsoft, Amazon, Google e pochi altri.
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[cloud, cloud puffs=14, cloud puff arc=110, aspect=2.1, draw=swblue!60, fill=swblue!5, line width=0.8pt,
+        minimum width=9cm, minimum height=4.2cm] (c) at (0,0) {};
+  \node[chip=sworange, minimum width=5.6cm] at (0,0.95) {Application: monitoraggio, contenuti, collaborazione, finanza};
+  \node[chip=swteal, minimum width=5.6cm] at (0,0.15) {Platform: identità, runtime, code, database};
+  \node[chip=swblue, minimum width=5.6cm] at (0,-0.65) {Infrastructure: calcolo, storage a blocchi, rete};
+  \foreach \ang/\dev in {150/portatili, 30/desktop, 205/telefoni, 335/tablet, 90/server} {
+    \node[font=\tiny, text=swgray] at ($(c.center)+(\ang:5.4cm and 2.6cm)$) {\dev};
+  }
+\end{tikzpicture}
+\end{center}
+
+La virtualizzazione è la tecnica che rende possibile il cloud: un fornitore con centinaia di migliaia di server fisici li
+divide in milioni di VM e le affitta. A cambiare, per chi le usa, è il \textbf{modello economico}: non si comprano server,
+si noleggia capacità.
+
+% ============================================================
+\section{Scalabilità ed elasticità}
+
+\dfn{Scalabilità ed elasticità}{
+  \begin{itemize}
+    \item La \term{scalabilità} è la capacità di un sistema, di una rete o di un processo di gestire quantità di lavoro
+          crescenti in modo armonioso, o di essere ingrandito facilmente.
+    \item L'\term{elasticità} è la capacità di far \textbf{crescere o ridurre} dinamicamente le risorse
+          dell'infrastruttura secondo il bisogno, per adattarsi ai cambiamenti del carico in modo \textbf{autonomo},
+          massimizzando l'uso delle risorse.
+  \end{itemize}
+}
+
+La scalabilità (Capitolo 12) dice che \textbf{si può} crescere; l'elasticità aggiunge che si cresce e si \textbf{decresce}
+da soli, seguendo il carico. Le due proprietà si ottengono con il \textbf{provisioning dinamico} e con un progetto
+\textbf{multi-tenant}, in cui più clienti (\textit{tenant}) condividono la stessa infrastruttura restando separati.
+
+\subsection{Il provisioning dinamico}
+
+\dfn{Provisioning dinamico}{
+  Nel \term{provisioning dinamico} le istanze di calcolo vengono allocate o rilasciate (\textit{provisioned}) da una
+  console di amministrazione o da un'applicazione client, dall'amministratore dei server o della rete o da qualunque
+  altro utente abilitato, invece di essere acquistate e installate.
+}
+
+Nel modello tradizionale la capacità si decide \textbf{in anticipo}, e si sbaglia in uno dei due modi:
+
+\Needspace{14\baselineskip}
+\begin{center}
+\begin{tikzpicture}
+\pgfplotsset{prov/.style={width=5.4cm, height=3.6cm, xmin=0, xmax=12, ymin=0, ymax=10, xtick=\empty, ytick=\empty,
+  xlabel={tempo}, ylabel={risorse}, xlabel style={font=\tiny}, ylabel style={font=\tiny},
+  title style={font=\scriptsize\bfseries}}}
+\begin{axis}[prov, title={Sotto-provisioning}]
+  \addplot[name path=dmax, draw=none, domain=0:12, samples=100] {max(5 + 3.5*sin(deg(x*1.05)), 6)};
+  \addplot[name path=cap, swred, dashed, line width=1pt] coordinates {(0,6) (12,6)};
+  \addplot[swred!35] fill between[of=dmax and cap];
+  \addplot[swblue, line width=1pt, domain=0:12, samples=100] {5 + 3.5*sin(deg(x*1.05))};
+  \node[font=\tiny, text=swred] at (axis cs:3.0,9.3) {domanda persa};
+\end{axis}
+\begin{axis}[prov, title={Sovra-provisioning}, xshift=5.6cm]
+  \addplot[name path=dom, swblue, line width=1pt, domain=0:12, samples=100] {5 + 3.5*sin(deg(x*1.05))};
+  \addplot[name path=cap, swred, dashed, line width=1pt] coordinates {(0,9.2) (12,9.2)};
+  \addplot[swgray!30] fill between[of=dom and cap];
+  \node[font=\tiny, text=swgray!80!black] at (axis cs:6.4,7.5) {risorse inutilizzate};
+\end{axis}
+\begin{axis}[prov, title={Provisioning dinamico}, xshift=11.2cm]
+  \addplot[swblue, line width=1pt, domain=0:12, samples=100] {5 + 3.5*sin(deg(x*1.05))};
+  \addplot[swred, dashed, line width=1pt, const plot] coordinates
+    {(0,6) (0.5,8) (1.0,9) (2.0,8) (2.5,6) (3.0,3) (3.8,2) (4.6,3) (5.2,6) (5.8,8.5) (7.0,9) (7.6,7) (8.2,4) (9,2)
+     (10,3) (10.8,6) (11.4,8.5) (12,8.5)};
+\end{axis}
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item Chi \textbf{sottostima} l'uso del sistema compra troppo poco (\textit{under-provisioning}): nei picchi la domanda
+        supera la capacità, e si perdono ricavi; se succede spesso, gli utenti se ne vanno e la domanda stessa cala
+        (si perdono gli \textbf{utenti}).
+  \item Chi lo \textbf{sovrastima} compra troppo (\textit{over-provisioning}): la capacità copre sempre i picchi, ma per
+        la maggior parte del tempo le risorse restano inutilizzate (e pagate).
+\end{itemize}
+
+La soluzione è allocare le risorse \textbf{dinamicamente}, per seguire le variazioni stagionali della domanda, le
+differenze fra settori diversi e i picchi improvvisi dovuti a eventi straordinari (un saldo, una diretta, un esame con
+mille iscritti che si prenotano nello stesso minuto).
+
+\begin{esempio}{Una regola di elasticità, in codice e in configurazione}
+Un \textit{autoscaler} misura periodicamente l'uso medio della CPU delle istanze e ne calcola il numero adatto. La
+regola di Kubernetes è semplice: se l'uso è il doppio dell'obiettivo, servono il doppio delle istanze.
+\begin{lstlisting}[style=java, name=Autoscaler.java]
+public class Autoscaler {
+  private final int min, max;           // limiti decisi da chi paga
+  private final double cpuObiettivo;    // per esempio 60%
+
+  public Autoscaler(int min, int max, double cpuObiettivo) {
+    this.min = min;
+    this.max = max;
+    this.cpuObiettivo = cpuObiettivo;
+  }
+
+  /** Quante istanze servono perche' l'uso medio della CPU torni all'obiettivo. */
+  public int istanzeDesiderate(int istanzeAttuali, double cpuMedia) {
+    int desiderate = (int) Math.ceil(istanzeAttuali * cpuMedia / cpuObiettivo);
+    return Math.max(min, Math.min(max, desiderate));
+  }
+}
+\end{lstlisting}
+Con \code{new Autoscaler(2, 20, 60)}: di giorno 4 istanze al 90\% diventano $\lceil 4 \cdot 90/60 \rceil = 6$; di notte
+6 istanze al 15\% diventerebbero $\lceil 6 \cdot 15/60 \rceil = 2$, il minimo. In un cloud non si scrive questo codice: lo
+si \textbf{dichiara}, e il fornitore lo esegue.
+\begin{lstlisting}[style=yaml, name=autoscaler.yaml]
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: negozio-web
+spec:
+  scaleTargetRef:            # che cosa scalare: il servizio web del negozio
+    apiVersion: apps/v1
+    kind: Deployment
+    name: negozio-web
+  minReplicas: 2             # mai meno di due, per la disponibilita'
+  maxReplicas: 20            # mai piu' di venti, per il conto a fine mese
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+\end{lstlisting}
+\end{esempio}
+
+% ============================================================
+\section{I modelli di servizio}
+
+Il cloud si offre a tre livelli, impilati uno sull'altro: l'infrastruttura (\textbf{IaaS}), la piattaforma
+(\textbf{PaaS}) e il software (\textbf{SaaS}). Salendo, il fornitore si prende cura di una parte sempre più grande della
+pila, e il cliente di una parte sempre più piccola.
+
+\Needspace{16\baselineskip}
+\begin{center}
+\begin{tikzpicture}[x=2.55cm, y=0.44cm]
+  \foreach \nome [count=\i] in {Applicazioni, Dati, Runtime, Middleware, Sistema operativo, Virtualizzazione, Server,
+                                 Storage, Rete} {
+    \node[font=\scriptsize, anchor=east] at (0.05,-\i) {\nome};
+  }
+  % colonne: in sede, IaaS, PaaS, SaaS; numero di strati gestiti dal cliente
+  \foreach \col/\tit/\cli [count=\c] in {0/In sede/9, 1/IaaS/5, 2/PaaS/2, 3/SaaS/0} {
+    \node[font=\scriptsize\bfseries] at (\col+0.6,0) {\tit};
+    \foreach \i in {1,...,9} {
+      \ifnum\i>\cli
+        \fill[swblue!55] (\col+0.12,-\i+0.42) rectangle (\col+1.08,-\i-0.42);
+      \else
+        \fill[sworange!70] (\col+0.12,-\i+0.42) rectangle (\col+1.08,-\i-0.42);
+      \fi
+    }
+  }
+  \fill[sworange!70] (0.2,-10.6) rectangle (0.4,-10.2); \node[font=\scriptsize, anchor=west] at (0.42,-10.4) {gestito dal cliente};
+  \fill[swblue!55] (1.9,-10.6) rectangle (2.1,-10.2); \node[font=\scriptsize, anchor=west] at (2.12,-10.4) {gestito dal fornitore};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Infrastructure as a Service (IaaS)}
+
+\dfn{IaaS}{
+  Al cliente viene data la possibilità di allocare \textbf{elaborazione, storage, reti} e altre risorse di calcolo
+  fondamentali, su cui può installare ed eseguire software arbitrario, compresi sistemi operativi e applicazioni. Il
+  cliente non gestisce né controlla l'infrastruttura cloud sottostante, ma ha il controllo dei \textbf{sistemi operativi},
+  dello storage, delle applicazioni installate ed eventualmente un controllo limitato di alcuni componenti di rete.
+}
+Esempi: Amazon EC2, Eucalyptus, OpenNebula.
+
+\begin{center}
+\begin{tikzpicture}[bx/.style={line width=0.7pt, draw=#1!75!black, fill=#1!18}, tx/.style={font=\scriptsize\bfseries, align=center}]
+  \draw[bx=sworange] (-4,1.0) rectangle node[tx]{Resource Management\\ Interface} (-0.1,1.75);
+  \draw[bx=sworange] (0.1,1.0) rectangle node[tx]{System Monitoring\\ Interface} (4,1.75);
+  \draw[bx=swred] (-4,0.35) rectangle node[tx]{Virtualization Layer} (4,0.85);
+  \draw[bx=swgray] (-4,-0.55) rectangle node[tx]{Computing\\ System} (-1.4,0.2);
+  \draw[bx=swgray] (-1.25,-0.55) rectangle node[tx]{Network\\ System} (1.25,0.2);
+  \draw[bx=swgray] (1.4,-0.55) rectangle node[tx]{Storage\\ System} (4,0.2);
+  \node[rotate=90, font=\tiny\bfseries, text=swblue] at (4.3,0.6) {Infrastructure};
+\end{tikzpicture}
+\end{center}
+
+La tecnica che rende possibile l'IaaS è la \textbf{virtualizzazione}: un'astrazione delle risorse logiche rispetto alle
+risorse fisiche sottostanti. Sposta il sistema operativo sopra l'hypervisor; più sistemi operativi condividono
+l'hardware fisico e offrono servizi diversi, migliorando utilizzo, disponibilità, sicurezza e comodità. È esattamente la
+figura del server virtualizzato vista all'inizio del capitolo: l'IaaS affitta le VM.
+
+\begin{esempio}{Due VM in affitto}
+Con la riga di comando di AWS si noleggiano due macchine virtuali EC2. Scegliamo noi l'immagine del sistema operativo e
+la taglia; da lì in poi il sistema operativo è nostro: aggiornamenti, Java, sicurezza.
+\begin{lstlisting}[style=shell, name=Terminale]
+# due VM con 2 vCPU e 2 GB di RAM, partendo da un'immagine Ubuntu
+$ aws ec2 run-instances --image-id ami-0abcdef1234567890 \
+      --instance-type t3.small --count 2 --key-name chiave-ssh
+# ci si collega come a un server qualsiasi, e si installa cio' che serve
+$ ssh ubuntu@203.0.113.10 'sudo apt install -y openjdk-21-jre'
+# quando non servono piu' si restituiscono, e si smette di pagare
+$ aws ec2 terminate-instances --instance-ids i-0a1b2c3d4e5f60718 i-0f1e2d3c4b5a69788
+\end{lstlisting}
+\end{esempio}
+
+\subsection{Platform as a Service (PaaS)}
+
+\dfn{PaaS}{
+  Al cliente viene data la possibilità di installare (\textit{deploy}) sull'infrastruttura cloud applicazioni create da
+  lui o acquistate, scritte con i linguaggi e gli strumenti supportati dal fornitore. Il cliente non gestisce né
+  controlla l'infrastruttura sottostante (rete, server, sistemi operativi, storage), ma ha il controllo delle
+  \textbf{applicazioni} installate ed eventualmente della configurazione dell'ambiente che le ospita.
+}
+Esempi: Microsoft Azure, Google App Engine, Hadoop.
+
+\begin{center}
+\begin{tikzpicture}[bx/.style={line width=0.7pt, draw=#1!75!black, fill=#1!18}, tx/.style={font=\scriptsize\bfseries, align=center}]
+  \draw[bx=sworange] (-4.5,1.05) rectangle (0.5,2.05);
+  \node[tx] at (-2.0,1.83) {Programming IDE};
+  \draw[bx=sworange, fill=white] (-4.4,1.15) rectangle node[font=\tiny\bfseries]{Programming APIs} (-2.05,1.6);
+  \draw[bx=sworange, fill=white] (-1.95,1.15) rectangle node[font=\tiny\bfseries]{Development Tools} (0.4,1.6);
+  \draw[bx=sworange] (0.7,1.05) rectangle (4.5,2.05);
+  \node[tx] at (2.6,1.7) {System Control Interface};
+  \node[font=\tiny] at (2.6,1.33) {policy, workflow};
+  \draw[bx=swred] (-4.5,-0.3) rectangle (4.5,0.9);
+  \node[tx, text=swred!60!black] at (0,0.7) {Runtime Environment};
+  \foreach \x/\t in {-3.4/Scalability\\Elasticity, -1.15/Availability\\Reliability, 1.15/Performance\\Optimization,
+                    3.4/Manageability\\Interoperability}
+    \node[ellipse, draw=swred!70, fill=white, font=\tiny, align=center, inner sep=0.3pt, minimum width=2.05cm] at (\x,0.18) {\t};
+  \draw[bx=swgray] (-4.5,-1.0) rectangle node[tx]{Computing} (-1.6,-0.45);
+  \draw[bx=swgray] (-1.45,-1.0) rectangle node[tx]{Network} (1.45,-0.45);
+  \draw[bx=swgray] (1.6,-1.0) rectangle node[tx]{Storage} (4.5,-0.45);
+  \node[rotate=90, font=\tiny\bfseries, text=swteal] at (4.8,0.52) {Platform};
+\end{tikzpicture}
+\end{center}
+
+La tecnica che rende possibile il PaaS è il progetto dell'\textbf{ambiente di esecuzione} (\textit{runtime environment}):
+l'insieme dei servizi software disponibili, di solito realizzato da una collezione di librerie. Le sue proprietà tipiche
+sono la gestibilità e l'interoperabilità, le prestazioni e l'ottimizzazione, la disponibilità e l'affidabilità, la
+scalabilità e l'elasticità. Gli utenti sviluppano i propri servizi con un \textbf{IDE} che deve integrare tutte le
+funzionalità dell'ambiente di esecuzione e offrire strumenti di sviluppo come profiler, debugger e ambienti di test. Le
+API di programmazione cambiano da un fornitore all'altro, ma le operazioni comuni restano: calcolo, storage e
+comunicazione.
+
+\begin{esempio}{Consegnare il codice, non le macchine}
+Con Google App Engine non si noleggiano VM: si consegna l'applicazione e un file che descrive l'ambiente che le serve.
+Sistema operativo, Java, bilanciamento del carico e numero di istanze sono affare del fornitore.
+\begin{lstlisting}[style=yaml, name=app.yaml]
+runtime: java21                  # l'ambiente di esecuzione lo fornisce la piattaforma
+instance_class: F2
+automatic_scaling:               # l'elasticita' si chiede, non si costruisce
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.65
+\end{lstlisting}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ mvn package                    # si compila l'applicazione, come sempre
+$ gcloud app deploy              # e la si consegna alla piattaforma
+\end{lstlisting}
+Rispetto all'esempio IaaS non c'è più nessun \code{ssh} né \code{apt install}: il confine fra ciò che gestiamo noi e ciò
+che gestisce il fornitore si è alzato di due strati.
+\end{esempio}
+
+\subsection{Software as a Service (SaaS)}
+
+\dfn{SaaS}{
+  Al cliente viene data la possibilità di usare le \textbf{applicazioni del fornitore}, che girano su un'infrastruttura
+  cloud. Le applicazioni sono accessibili da vari dispositivi attraverso un'interfaccia leggera, come un browser (per
+  esempio la posta via web). Il cliente non gestisce né controlla l'infrastruttura né le singole funzionalità
+  dell'applicazione, con l'eventuale eccezione di alcune impostazioni specifiche dell'utente.
+}
+Esempi: Google Apps (Gmail, Google Docs, Google Sites\ldots), Salesforce.com, EyeOS.
+
+Le applicazioni tradizionali devono portare la propria interfaccia su una piattaforma \textbf{web}. Si trovano SaaS in
+domini diversi:
+\begin{itemize}
+  \item applicazioni \textbf{generali}: suite per l'ufficio, multimedia, messaggistica istantanea;
+  \item applicazioni \textbf{aziendali}: ERP, CRM, sistemi di compravendita;
+  \item applicazioni \textbf{scientifiche}: simulazioni aerospaziali, simulazioni biochimiche;
+  \item applicazioni per la \textbf{pubblica amministrazione}: sistemi sanitari nazionali, servizi di trasporto pubblico.
+\end{itemize}
+
+Per l'utente un SaaS è solo un sito. Per lo sviluppatore che deve integrarlo nel proprio sistema è spesso una
+\textbf{API}: per esempio, il calendario di un utente si legge con una richiesta HTTP, senza installare nulla.
+\Needspace{6\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ curl -H "Authorization: Bearer $TOKEN" \
+       https://www.googleapis.com/calendar/v3/users/me/calendarList
+\end{lstlisting}
+Il prossimo capitolo spiega come sono fatte queste API, e che cos'è quel token.
+
+% ============================================================
+\section{I modelli di deployment}
+
+Come si dispiega un sistema cloud? Ci sono tre modelli principali: cloud \textbf{pubblico}, \textbf{privato} e
+\textbf{ibrido}. Ciascuno può avere le caratteristiche viste finora; si differenziano soprattutto per la
+\textbf{portata} e l'\textbf{accesso} ai servizi cloud, cioè per chi può usarli.
+
+\subsection{Cloud pubblico}
+
+\dfn{Cloud pubblico}{
+  L'infrastruttura cloud è messa a disposizione del \textbf{pubblico} o di un grande gruppo industriale, ed è di
+  proprietà di un'organizzazione che vende servizi cloud. È detto anche cloud esterno o \textit{multi-tenant}: un
+  ambiente accessibile apertamente.
+}
+Caratteristiche: infrastruttura omogenea, politiche comuni, risorse condivise e multi-tenant, infrastruttura presa in
+affitto, economie di scala.
+
+\subsection{Cloud privato}
+
+\dfn{Cloud privato}{
+  L'infrastruttura cloud è gestita \textbf{solo per un'organizzazione}. Può essere amministrata dall'organizzazione stessa
+  o da terzi, e trovarsi nella sede (\textit{on premise}) o altrove. Detto anche cloud interno, limita volutamente
+  l'accesso alle risorse a chi appartiene all'organizzazione che lo possiede.
+}
+Caratteristiche: infrastruttura eterogenea, politiche personalizzate, risorse dedicate, infrastruttura interna, controllo
+completo da un capo all'altro. Il data center della pubblica amministrazione di Napoli è, di fatto, un cloud privato.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{lll}
+\toprule
+ & \textbf{Cloud pubblico} & \textbf{Cloud privato} \\
+\midrule
+Infrastruttura & omogenea & eterogenea \\
+Politiche & definite in comune & personalizzate \\
+Risorse & condivise, multi-tenant & dedicate \\
+Costi & spesa operativa (si paga l'uso) & spesa in conto capitale (si compra) \\
+Economia & grandi economie di scala & controllo completo \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Cloud ibrido}
+
+\dfn{Cloud ibrido}{
+  L'infrastruttura è la \textbf{composizione} di due o più cloud (privati o pubblici) che restano entità distinte, ma sono
+  legati da una tecnologia, standard o proprietaria, che permette di spostare dati e applicazioni fra l'uno e l'altro.
+}
+
+L'esempio tipico è il \term{cloud bursting}: un'azienda serve il carico normale con il proprio cloud privato e, nei
+picchi, «trabocca» sul cloud pubblico, pagando la capacità in più solo quando serve. È il provisioning dinamico della
+sezione precedente, applicato fra due cloud.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[cloud, cloud puffs=11, aspect=1.9, draw=swblue!60, fill=swblue!8, line width=0.8pt, minimum width=3.6cm,
+        minimum height=1.6cm, font=\scriptsize\bfseries, text=swblue!70!black] (pub) at (5.2,1.1) {Cloud pubblico};
+  \node[ellipse, draw=swgreen!60!black, fill=swgreen!10, line width=0.8pt, minimum width=4.2cm, minimum height=1.7cm,
+        font=\scriptsize\bfseries, text=swgreen!50!black] (priv) at (0,0) {Cloud privato (azienda)};
+  \draw[fr, line width=1.1pt, dashed, sworange] (priv.north east) to[bend left=20]
+    node[above, note, text=sworange!80!black, align=center]{nei picchi: \textit{cloud bursting}} (pub.west);
+  \node[note, anchor=north] at (0,-0.95) {carico normale, dati riservati};
+  \node[note, anchor=north] at (5.2,0.25) {capacità in più, pagata a consumo};
+\end{tikzpicture}
+\end{center}
+
+\subsection{L'ecosistema del cloud}
+
+Mettendo insieme modelli di servizio e di deployment si ottiene la mappa del mercato: cloud pubblici, privati, ibridi e
+\textbf{di comunità} (condivisi da organizzazioni con esigenze comuni), e a ogni livello fornitori diversi.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{lP{10.5cm}}
+\toprule
+\textbf{Livello} & \textbf{Esempi di fornitori e prodotti} \\
+\midrule
+SaaS & Google Apps, Salesforce, Microsoft Dynamics CRM \\
+PaaS & Microsoft Azure, Google App Engine, Force.com, IBM, Hadoop \\
+IaaS & Amazon Web Services, Eucalyptus, GoGrid, Sun, AT\&T \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ============================================================
+\Needspace{24\baselineskip}
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item Dal 2005 le CPU non diventano più veloci ma \textbf{più numerose}: i programmi sequenziali non sfruttano i core
+        in più.
+  \item Il data center tradizionale (un servizio per server) spreca risorse (5--15\% di CPU), costa molto e ha servizi
+        interdipendenti: un guasto può fermare tutto.
+  \item La \textbf{virtualizzazione} introduce l'\textbf{hypervisor}, che simula più computer su uno fisico. Una VM è
+        indipendente dall'hardware, isolata, gestita centralmente, ed è \textbf{un file}.
+  \item Con due server e una \textbf{SAN} si ottengono alta disponibilità (riavvio delle VM su un altro server), fault
+        tolerance e \textbf{live migration}; con il consolidamento calano server, energia e personale.
+  \item Il \textbf{cloud computing} vende le risorse IT come servizio. L'\textbf{elasticità} (crescere e decrescere da soli)
+        si ottiene con il \textbf{provisioning dinamico}, contro il sotto- e il sovra-provisioning.
+  \item Modelli di servizio: \textbf{IaaS} (si affittano VM: il sistema operativo è del cliente), \textbf{PaaS} (si
+        consegna il codice), \textbf{SaaS} (si usa l'applicazione). Modelli di deployment: cloud \textbf{pubblico},
+        \textbf{privato}, \textbf{ibrido} (con il cloud bursting).
+\end{itemize}
+}

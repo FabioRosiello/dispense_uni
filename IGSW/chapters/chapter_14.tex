@@ -1,0 +1,731 @@
+\chapter{Il paradigma REST}
+\emergencystretch=2.5em
+
+Nei capitoli sulle architetture abbiamo diviso i sistemi in sottosistemi, servizi e microservizi che comunicano fra loro;
+nel capitolo sul cloud abbiamo visto che un SaaS, per uno sviluppatore, è spesso un'API. Resta da capire \textbf{come}
+comunicano: con quale protocollo, con quali messaggi, con quali regole. Oggi la risposta più diffusa è \textbf{REST}: un
+modo di usare il protocollo del Web, HTTP, per far dialogare programmi.
+
+% Stili delle figure di questo capitolo
+\tikzset{
+  cli/.style={rectangle, rounded corners=2pt, fill=swblue!80!black, text=white, font=\tiny\bfseries, align=center,
+              minimum width=1.35cm, minimum height=0.55cm, inner sep=1.5pt},
+  srv/.style={rectangle, rounded corners=2pt, fill=swred!85!black, text=white, font=\scriptsize\bfseries, align=center,
+              minimum width=2.2cm, minimum height=0.7cm},
+  dbs/.style={cylinder, shape border rotate=90, aspect=0.22, draw=swteal!70!black, fill=swteal!60, text=white,
+              line width=0.7pt, minimum width=1.1cm, minimum height=0.8cm, font=\tiny\bfseries},
+  fr/.style={-{Stealth[length=2.2mm]}, line width=0.8pt, draw=swgray},
+  campo/.style={rectangle, fill=#1, text=white, font=\scriptsize\bfseries, align=center, minimum height=0.55cm,
+                inner sep=2pt},
+}
+
+% ============================================================
+\section{Il contesto architetturale}
+
+Il software ha bisogno di comunicare attraverso Internet: secondo un rapporto di Akamai del 2019, l'\textbf{83\%} del
+traffico web è fatto di \textbf{chiamate ad API}, non di pagine richieste da persone. I client sono di tutti i tipi
+(app Android e iOS, applicazioni desktop in Java Swing, pagine web, app React, strumenti a riga di comando) e parlano con
+uno o più application server, ciascuno con il proprio database.
+
+\begin{center}
+\begin{tikzpicture}
+  \draw[rounded corners=3pt, swblue!70, line width=0.7pt] (-0.9,-2.0) rectangle (2.4,1.15);
+  \node[font=\scriptsize\bfseries, text=swblue!80!black] at (0.75,0.9) {Client};
+  \foreach \x/\y/\t in {0/0.35/Android\\App, 1.5/0.35/iOS App, 0/-0.45/Web\\Page, 1.5/-0.45/Java Swing\\App,
+                        0/-1.3/Command\\Line Tool, 1.5/-1.3/React\\App}
+    \node[cli] at (\x,\y) {\t};
+  \node[srv] (a) at (5.6,0.5) {Application\\Server A};
+  \node[srv] (b) at (5.6,-1.2) {Application\\Server B};
+  \node[dbs] (da) at (8.0,0.5) {DB};
+  \node[dbs] (db) at (8.0,-1.2) {DB};
+  \draw[fr] (2.45,0.6) -- node[above, note]{richiesta} (a.west |- 0,0.6);
+  \draw[fr, dashed] (a.west |- 0,0.35) -- node[below, note]{risposta} (2.45,0.35);
+  \draw[fr] (a.south) -- node[right, note]{richiesta} (b.north);
+  \draw[fr] (a) -- (da); \draw[fr] (b) -- (db);
+\end{tikzpicture}
+\end{center}
+
+Anche un server, quindi, può essere il client di un altro: è il caso dei microservizi del Capitolo 12.
+
+\subsection{Frontend e backend}
+
+Spesso un'applicazione è divisa in due componenti:
+\begin{itemize}
+  \item il \term{backend}, responsabile dei \textbf{dati} e della \textbf{logica di business}, sul lato server;
+  \item il \term{frontend}, responsabile dell'\textbf{interfaccia utente}, sul lato client. Può essere un'app nativa per
+        dispositivi mobili o desktop, oppure una pagina HTML «più furba», che costruisce un'interfaccia interattiva con
+        JavaScript (le \textit{Single Page Web App}).
+\end{itemize}
+I due componenti comunicano attraverso Internet. È l'architettura client/server del Capitolo 11, in cui il «protocollo»
+fra le due parti è proprio l'API.
+
+\subsection{Application Programming Interface}
+
+\dfn{API}{
+  Le \term{API} (\textit{Application Programming Interface}) sono i modi in cui i programmi comunicano fra loro.
+}
+
+Come si gestisce la comunicazione attraverso Internet? Le strade possibili sono tre.
+\begin{enumerate}
+  \item \textbf{Definire a mano un protocollo} sopra TCP o UDP, aprendo socket e così via. Non è molto conveniente e non è
+        \textbf{interoperabile}: per integrare $n$ API bisognerebbe imparare $n$ protocolli diversi.
+  \item Usare protocolli e architetture \textbf{dedicati}, come CORBA, Java RMI o SOAP. Esistono (o sono esistiti), ma
+        reinventano un'alternativa al Web.
+  \item Usare semplicemente \textbf{i protocolli del Web}: HTTP.
+\end{enumerate}
+
+% ============================================================
+\section{REST}
+
+\dfn{REST}{
+  \term{REST} (\textit{Representational State Transfer}) \textbf{non} è uno standard né un protocollo: è uno
+  \textbf{stile architetturale}, cioè un insieme di principi e linee guida che stabiliscono come usare gli standard del
+  Web nelle API. Si basa su \textbf{HTTP} e sugli \textbf{URI}, e offre un'interfaccia comune e coerente basata su un uso
+  «corretto» di HTTP.
+}
+
+È lo stile prevalente per le API web, con un tasso di adozione del \textbf{93,4\%}.
+
+\subsection{Un ripasso di HTTP}
+
+HTTP (\textit{HyperText Transfer Protocol}) ha due tipi di messaggi, la \textbf{richiesta} e la \textbf{risposta}. La prima
+riga della richiesta contiene il \textbf{verbo}, l'\textbf{URI} della risorsa e la versione di HTTP; quella della risposta
+la versione e lo \textbf{stato}. Seguono gli \textbf{header} e, se serve, il \textbf{corpo}.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[font=\scriptsize\bfseries] at (1.6,1.35) {Richiesta};
+  \node[campo=swteal!80!black, minimum width=1.0cm] at (0.5,0.75) {Verbo};
+  \node[campo=swteal!80!black, minimum width=1.0cm] at (1.6,0.75) {URI};
+  \node[campo=swteal!80!black, minimum width=1.0cm] at (2.7,0.75) {Versione};
+  \node[campo=swteal!80!black, minimum width=3.2cm] at (1.6,0.1) {Header della richiesta};
+  \node[campo=swteal!80!black, minimum width=3.2cm] at (1.6,-0.55) {Corpo della richiesta};
+  \node[font=\scriptsize\bfseries] at (6.6,1.35) {Risposta};
+  \node[campo=swgreen!80!black, minimum width=1.55cm] at (5.78,0.75) {Versione};
+  \node[campo=swgreen!80!black, minimum width=1.55cm] at (7.42,0.75) {Stato};
+  \node[campo=swgreen!80!black, minimum width=3.2cm] at (6.6,0.1) {Header della risposta};
+  \node[campo=swgreen!80!black, minimum width=3.2cm] at (6.6,-0.55) {Corpo della risposta};
+\end{tikzpicture}
+\end{center}
+
+\begin{esempio}{Una richiesta e una risposta, così come viaggiano}
+\begin{lstlisting}[style=http, name=richiesta]
+GET /todos/1 HTTP/1.1
+Host: api.example.com
+Accept: application/json
+\end{lstlisting}
+\begin{lstlisting}[style=http, name=risposta]
+HTTP/1.1 200 OK
+Content-Type: application/json
+Content-Length: 46
+
+{"id": 1, "todo": "Learn REST", "done": false}
+\end{lstlisting}
+La richiesta non ha corpo: chiede soltanto. La risposta porta nel corpo la rappresentazione della risorsa, in JSON, e
+nell'header \code{Content-Type} dice in che formato è.
+\end{esempio}
+
+\subsection{I verbi e i codici di stato}
+
+HTTP può chiedere tipi diversi di operazioni, i \textbf{verbi}; la risorsa su cui operare è identificata dall'URI. I
+verbi principali corrispondono alle quattro operazioni \term{CRUD} (\textit{Create, Retrieve, Update, Delete}).
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{lll}
+\toprule
+\textbf{Verbo} & \textbf{Operazione} & \textbf{Significato} \\
+\midrule
+\code{POST}   & Create   & «ecco dei dati nuovi: salvali e \textbf{crea} una nuova risorsa» \\
+\code{GET}    & Retrieve & «\textbf{dammi} le informazioni sulla risorsa» \\
+\code{PUT}    & Update   & «ecco le informazioni \textbf{aggiornate} sulla risorsa» \\
+\code{DELETE} & Delete   & «\textbf{elimina} questa risorsa» \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+I \textbf{codici di stato} della risposta informano sull'esito della richiesta.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{cl}
+\toprule
+\textbf{Codice} & \textbf{Significato} \\
+\midrule
+200 & la richiesta è stata gestita con successo \\
+201 & una risorsa è stata creata con successo \\
+400 & la richiesta non si capisce (\textit{Bad Request}) \\
+401 & autenticazione fallita, o non autorizzato \\
+404 & risorsa non trovata \\
+405 & metodo non supportato dalla risorsa \\
+500 & errore dell'applicazione \\
+\bottomrule
+\end{tabular}
+\end{center}
+La prima cifra dice già molto: 2 è un successo, 4 un errore \textbf{del client} (ha chiesto qualcosa di sbagliato), 5 un
+errore \textbf{del server} (la richiesta era giusta, ma il server non è riuscito a soddisfarla).
+
+% ============================================================
+\section{I fondamenti di REST}
+
+\begin{itemize}
+  \item Un'API REST permette di interagire con delle \term{risorse} usando HTTP.
+  \item Ogni risorsa è associata a un \textbf{URI unico}.
+  \item \textit{«Una risorsa è qualunque cosa sia abbastanza importante da essere citata come una cosa a sé»}
+        (Richardson e Ruby, \textit{RESTful Web Services}).
+  \item Le risorse corrispondono tipicamente, ma non necessariamente, agli \textbf{oggetti persistenti del dominio}: le
+        classi del modello di dominio del Capitolo 7.
+  \item Per leggere o modificare le risorse si usano i \textbf{verbi HTTP}.
+  \item Un'API REST dovrebbe essere \term{stateless}: per esempio, non usare sessioni lato server. Ogni richiesta porta
+        con sé tutto ciò che serve per servirla.
+\end{itemize}
+
+\info{Perché stateless vuol dire scalabile}{
+  Se il server non conserva nulla fra una richiesta e l'altra, \textbf{qualunque} replica può servire \textbf{qualunque}
+  richiesta. Il load balancer del Capitolo 12 può allora mandare ogni richiesta alla replica meno carica, si possono
+  aggiungere repliche quando il carico cresce (l'elasticità del Capitolo 13) e se una replica cade nessun utente perde la
+  propria «sessione». Con le sessioni lato server, invece, ogni utente resta legato alla replica che conosce la sua
+  sessione, o le sessioni vanno condivise fra tutte le repliche.
+}
+
+\subsection{Lo stato e le sue rappresentazioni}
+
+Il nome stesso dice come funziona REST: si \textbf{trasferisce} una \textbf{rappresentazione} dello \textbf{stato}.
+\begin{itemize}
+  \item Lo \textbf{stato dell'applicazione} sta sul \textbf{client} (che cosa sta facendo l'utente, che pagina vede).
+  \item Lo \textbf{stato delle risorse} sta sul \textbf{server} (quali to-do esistono, e se sono fatti).
+  \item Lo stato delle risorse viaggia usando \textbf{rappresentazioni} appropriate: JSON, XML\ldots
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[srv, fill=swblue!80!black, minimum height=1.6cm, minimum width=2.2cm] (c) at (0,0) {Client};
+  \node[srv, minimum height=1.6cm, minimum width=2.2cm] (s) at (8,0) {Server};
+  \draw[fr, line width=1.1pt, draw=swred] ([yshift=0.3cm]c.east) -- node[above, font=\scriptsize\ttfamily]{GET /todos \quad HTTP/1.1}
+    ([yshift=0.3cm]s.west);
+  \draw[fr, line width=1.1pt, dashed, draw=swblue] ([yshift=-0.3cm]s.west) --
+    node[below, font=\scriptsize\ttfamily]{[\{"todo": "A"\}, \{"todo": "B"\}, ...]} ([yshift=-0.3cm]c.east);
+\end{tikzpicture}
+\end{center}
+
+I formati più usati per lo scambio dei dati sono \textbf{JSON} e \textbf{XML}. Ecco la stessa lista di to-do nei due
+formati.
+
+\Needspace{18\baselineskip}
+\noindent\begin{minipage}[t]{0.42\textwidth}
+\begin{lstlisting}[style=json, name=todos.json]
+{
+  "todos": [{
+    "todo": "Learn REST",
+    "done": false
+  }, {
+    "todo": "Learn JavaScript",
+    "done": true
+  }]
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.55\textwidth}
+\begin{lstlisting}[style=xml, name=todos.xml]
+<?xml version="1.0" encoding="UTF-8" ?>
+<root>
+  <todos>
+    <todo>
+      <text>Learn REST</text>
+      <done>false</done>
+    </todo>
+    <todo>
+      <text>Learn JavaScript</text>
+      <done>true</done>
+    </todo>
+  </todos>
+</root>
+\end{lstlisting}
+\end{minipage}
+
+JSON è più compatto e si legge direttamente come un oggetto JavaScript; per questo è diventato il formato prevalente. Il
+client sceglie il formato che preferisce con l'header \code{Accept}, il server dichiara quello che usa con
+\code{Content-Type}.
+
+% ============================================================
+\section{Progettare un'API REST}
+
+\subsection{Le risorse e i loro URI}
+
+L'esempio classico è un'API per una lista di cose da fare. La risorsa è il \textbf{to-do}; la collezione dei to-do sta
+all'URI \code{/todos}, e il to-do con identificativo \code{ID} all'URI \code{/todos/ID}.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{lP{10.6cm}}
+\toprule
+\textbf{Verbo e URI} & \textbf{Significato} \\
+\midrule
+\code{GET /todos}          & legge la lista di tutti i to-do salvati \\
+\code{GET /todos/<ID>}     & legge solo il to-do con identificativo \code{<ID>} \\
+\code{POST /todos}         & salva un nuovo to-do; i suoi dati sono nel corpo della richiesta \\
+\code{PUT /todos/<ID>}     & sostituisce (o crea) il to-do con identificativo \code{<ID>}, con i dati del corpo \\
+\code{DELETE /todos/<ID>}  & elimina il to-do con identificativo \code{<ID>} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Gli URI contengono solo \textbf{nomi} (le risorse); i \textbf{verbi} sono quelli di HTTP. Un URI come \code{/getTodos}
+o \code{/deleteTodo?id=3} mette l'operazione nel posto sbagliato.
+
+\begin{esempio}{L'API dei to-do, una richiesta alla volta}
+Con \code{curl} si possono fare a mano le richieste che farebbe un frontend. L'opzione \code{-i} mostra anche la riga di
+stato e gli header della risposta.
+\begin{lstlisting}[style=shell, name=Terminale]
+$ curl -i -X POST https://api.example.com/todos \
+       -H "Content-Type: application/json" \
+       -d '{"todo": "Learn REST", "done": false}'
+HTTP/1.1 201 Created
+Location: /todos/3
+Content-Type: application/json
+
+{"id": 3, "todo": "Learn REST", "done": false}
+
+$ curl -i https://api.example.com/todos/3
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"id": 3, "todo": "Learn REST", "done": false}
+
+$ curl -i -X PUT https://api.example.com/todos/3 \
+       -H "Content-Type: application/json" \
+       -d '{"todo": "Learn REST", "done": true}'
+HTTP/1.1 200 OK
+
+$ curl -i -X DELETE https://api.example.com/todos/3
+HTTP/1.1 204 No Content
+
+$ curl -i https://api.example.com/todos/3
+HTTP/1.1 404 Not Found
+\end{lstlisting}
+La creazione risponde \textbf{201} e dice nell'header \code{Location} l'URI della nuova risorsa; dopo la cancellazione
+la stessa richiesta \code{GET} risponde \textbf{404}. Il codice 204 è un altro successo: «fatto, e non c'è nulla da
+restituire».
+\end{esempio}
+
+\begin{esempio}{Lo stesso contratto, lato server}
+Nel backend ogni riga della tabella diventa un metodo. Con Spring Boot, il framework più diffuso per i servizi REST in
+Java, il verbo e l'URI si dichiarano con delle annotazioni, e il framework converte da solo gli oggetti Java in JSON e
+viceversa.
+\begin{lstlisting}[style=java, name=TodoController.java]
+@RestController
+@RequestMapping("/todos")
+public class TodoController {
+  private final TodoRepository repository;
+
+  public TodoController(TodoRepository repository) {
+    this.repository = repository;
+  }
+
+  @GetMapping                                    // GET /todos
+  public List<Todo> list() {
+    return repository.findAll();
+  }
+
+  @GetMapping("/{id}")                           // GET /todos/3
+  public ResponseEntity<Todo> get(@PathVariable long id) {
+    return repository.findById(id)
+        .map(ResponseEntity::ok)                 // 200, con il to-do nel corpo
+        .orElse(ResponseEntity.notFound().build());   // 404
+  }
+
+  @PostMapping                                   // POST /todos
+  public ResponseEntity<Todo> create(@RequestBody Todo nuovo) {
+    Todo salvato = repository.save(nuovo);
+    return ResponseEntity.created(URI.create("/todos/" + salvato.id()))   // 201 + Location
+        .body(salvato);
+  }
+
+  @PutMapping("/{id}")                           // PUT /todos/3
+  public Todo replace(@PathVariable long id, @RequestBody Todo todo) {
+    return repository.save(new Todo(id, todo.todo(), todo.done()));
+  }
+
+  @DeleteMapping("/{id}")                        // DELETE /todos/3
+  public ResponseEntity<Void> delete(@PathVariable long id) {
+    repository.deleteById(id);
+    return ResponseEntity.noContent().build();   // 204
+  }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=Todo.java]
+public record Todo(Long id, String todo, boolean done) { }
+\end{lstlisting}
+Il controller sta nel livello di presentazione dell'architettura a livelli (Capitolo 11): riceve le richieste, delega i
+dati al \code{TodoRepository} e traduce i risultati in codici di stato. Non contiene logica di business.
+\end{esempio}
+
+\subsection{Le risorse annidate}
+
+A volte fra le risorse c'è una \textbf{gerarchia}: un'azienda ha da zero a molti dipartimenti, ciascuno con da zero a
+molti dipendenti. Progettando un'API si possono definire \textbf{risorse annidate}: \code{GET /listings/\{id\}/reviews}
+elenca tutte le recensioni di un dato annuncio. Va però tenuto presente che \textbf{ogni risorsa dovrebbe avere un solo
+URI}: se una recensione si raggiunge come \code{/listings/7/reviews/12}, non dovrebbe essere raggiungibile anche come
+\code{/reviews/12}.
+
+\Needspace{12\baselineskip}
+\begin{lstlisting}[style=java, name=ReviewController.java]
+@RestController
+public class ReviewController {
+  // ...
+  @GetMapping("/listings/{id}/reviews")          // le recensioni dell'annuncio {id}
+  public List<Review> reviewsOf(@PathVariable long id) {
+    return reviews.findByListing(id);
+  }
+}
+\end{lstlisting}
+
+\subsection{Filtrare e ordinare}
+
+Spesso i client devono leggere una lista di risorse con un certo filtro o un certo ordinamento (per esempio gli annunci
+ordinati per prezzo). Si è tentati di aggiungere nuovi percorsi:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{lP{9.6cm}}
+\toprule
+\textbf{Verbo e URI} & \textbf{Significato} \\
+\midrule
+\code{GET /todos}            & legge la lista di tutti i to-do \\
+\rowcolor{swred!8}\code{GET /todosSortedAsc}   & legge i to-do in ordine alfabetico crescente \\
+\rowcolor{swred!8}\code{GET /todos/filter/key} & legge i to-do che contengono la parola «key» \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\warning{Non è REST}{
+  Le risorse vanno raggiunte con \textbf{un solo percorso}: \code{/todosSortedAsc} e \code{/todos/filter/key} sono altri
+  URI per la stessa collezione. E l'API diventa presto complicata e difficile da usare: si pensi a tutte le combinazioni
+  di ordinamenti e filtri che potrebbero servire, ciascuna con il suo percorso.
+}
+
+La soluzione è non aggiungere percorsi ma usare i \term{parametri di query}:
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{lP{8.6cm}}
+\toprule
+\textbf{Verbo e URI} & \textbf{Significato} \\
+\midrule
+\code{GET /todos}                      & legge la lista di tutti i to-do \\
+\code{GET /todos?sort=title\&mode=asc} & legge i to-do ordinati per titolo, in ordine crescente \\
+\code{GET /todos?q=key}                & legge i to-do che contengono la parola «key» \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\Needspace{10\baselineskip}
+\begin{lstlisting}[style=java, name=TodoController.java]
+@GetMapping                                      // GET /todos?q=...&sort=...&mode=...
+public List<Todo> list(@RequestParam(required = false) String q,
+                       @RequestParam(defaultValue = "id") String sort,
+                       @RequestParam(defaultValue = "asc") String mode) {
+  return repository.search(q, sort, mode);       // un solo URI, infinite combinazioni
+}
+\end{lstlisting}
+I parametri sono facoltativi: senza parametri la richiesta resta la \code{GET /todos} di prima.
+
+\begin{esempio}{Un client Java}
+Dal lato client, Java ha un client HTTP nella libreria standard. Il programma crea un to-do e poi cerca quelli che
+contengono «REST», presentando a ogni richiesta il token di autenticazione (la prossima sezione spiega da dove viene).
+\begin{lstlisting}[style=java, name=TodoClient.java]
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+public class TodoClient {
+  private static final String API = "http://localhost:8080/todos";
+
+  public static void main(String[] args) throws Exception {
+    HttpClient client = HttpClient.newHttpClient();
+    String token = args[0];                       // ottenuto con POST /auth
+
+    // POST /todos: crea un nuovo to-do, descritto in JSON nel corpo
+    HttpRequest crea = HttpRequest.newBuilder(URI.create(API))
+        .header("Content-Type", "application/json")
+        .header("Authorization", "Bearer " + token)
+        .POST(HttpRequest.BodyPublishers.ofString("{\"todo\": \"Studiare REST\", \"done\": false}"))
+        .build();
+    HttpResponse<String> creato = client.send(crea, HttpResponse.BodyHandlers.ofString());
+    System.out.println(creato.statusCode() + " " + creato.headers().firstValue("Location").orElse("?"));
+
+    // GET /todos?q=REST: la ricerca e' un parametro, non un nuovo percorso
+    HttpRequest cerca = HttpRequest.newBuilder(URI.create(API + "?q=REST"))
+        .header("Authorization", "Bearer " + token)
+        .GET()
+        .build();
+    HttpResponse<String> trovati = client.send(cerca, HttpResponse.BodyHandlers.ofString());
+    System.out.println(trovati.statusCode() + " " + trovati.body());
+  }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ java TodoClient.java eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+201 /todos/3
+200 [{"id":3,"todo":"Studiare REST","done":false}]
+\end{lstlisting}
+\end{esempio}
+
+% ============================================================
+\section{Proteggere un'API REST}
+
+Un'API REST permette di \textbf{manipolare} le risorse, e nella maggior parte dei casi non vogliamo che chiunque possa
+farlo.
+\begin{itemize}
+  \item \term{Autenticazione}: vogliamo che solo gli utenti legittimi possano accedere alle risorse (\textit{chi sei?}).
+  \item \term{Autorizzazione}: possiamo anche volere che certi utenti accedano solo a certe risorse
+        (\textit{che cosa puoi fare?}): un dipendente, per esempio, non dovrebbe poter aggiornare il proprio stipendio.
+\end{itemize}
+
+\subsection{L'autenticazione basata su token}
+
+Uno schema di autenticazione molto diffuso si basa sui \textbf{token}.
+\begin{enumerate}
+  \item Il client invia all'API una richiesta con nome utente e password.
+  \item L'API verifica nome utente e password e genera un \textbf{token}.
+  \item Il token, una stringa, viene restituito al client.
+  \item A ogni richiesta successiva che richiede autenticazione, il client deve ripresentare il token all'API,
+        nell'header \code{Authorization}.
+  \item L'API verifica il token prima di rispondere.
+\end{enumerate}
+
+\Needspace{20\baselineskip}
+\begin{center}
+\begin{tikzpicture}
+  \node[partec, minimum width=1.8cm] (c) at (0,0) {Client};
+  \node[partec, minimum width=1.8cm] (a) at (8,0) {REST API};
+  \draw[vita] (c.south) -- (0,-7.1);
+  \draw[vita] (a.south) -- (8,-7.1);
+  % senza token
+  \draw[sinc] (0.08,-0.9) -- node[msgl]{\texttt{GET /todos}} (7.92,-0.9);
+  \attiv{8}{-0.9}{-1.75}
+  \draw[sinc] (8.08,-1.1) -- ++(0.6,0) -- ++(0,-0.25) -- (8.24,-1.35);
+  \node[font=\tiny, anchor=west] at (8.72,-1.22) {verifyToken(null)};
+  \draw[ritorno] (7.92,-1.75) -- node[msgl]{\texttt{401 Unauthorized}} (0.08,-1.75);
+  % autenticazione
+  \draw[sinc] (0.08,-2.7) -- node[msgl]{\texttt{POST /auth \{"usr": "luigi", "pwd": "..."\}}} (7.92,-2.7);
+  \attiv{8}{-2.7}{-3.55}
+  \draw[sinc] (8.08,-2.9) -- ++(0.6,0) -- ++(0,-0.25) -- (8.24,-3.15);
+  \node[font=\tiny, anchor=west] at (8.72,-3.02) {issueToken()};
+  \draw[ritorno] (7.92,-3.55) -- node[msgl]{\texttt{200 OK \{"token": "eyJh...4h1"\}}} (0.08,-3.55);
+  % con token
+  \draw[sinc] (0.08,-4.5) -- node[msgl]{\texttt{GET /todos} \quad \texttt{Authorization: Bearer eyJh...4h1}} (7.92,-4.5);
+  \attiv{8}{-4.5}{-5.35}
+  \draw[sinc] (8.08,-4.7) -- ++(0.6,0) -- ++(0,-0.25) -- (8.24,-4.95);
+  \node[font=\tiny, anchor=west] at (8.72,-4.82) {verifyToken("eyJh...4h1")};
+  \draw[ritorno] (7.92,-5.35) -- node[msgl]{\texttt{200 OK [\{"todo": "Learn REST"\}]}} (0.08,-5.35);
+  % etichette
+  \begin{scope}[every node/.style={rectangle, draw=q5!70!black, fill=q5!12, font=\tiny, align=center, text width=2.2cm}]
+    \node at (-1.9,-1.3) {richiesta senza token nell'header};
+    \node at (-1.9,-3.1) {richiesta di autenticazione};
+    \node at (-1.9,-4.9) {richiesta con un token valido};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+
+Il token rende l'autenticazione \textbf{stateless}: il server non deve ricordare chi ha fatto login, perché ogni richiesta
+porta con sé la prova di chi è il mittente. Resta da capire come il server faccia a fidarsi di un token che gli arriva
+dal client.
+
+\subsection{JSON Web Token (JWT)}
+
+\dfn{JSON Web Token}{
+  Il \term{JWT} (\textit{JSON Web Token}) è uno standard aperto molto diffuso (RFC 7519) che permette di condividere in
+  modo sicuro delle \textbf{asserzioni} (\textit{claim}) fra due parti. Un JWT è una stringa fatta di tre parti separate da
+  un punto: \textbf{Header.Payload.Signature}.
+}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[font=\ttfamily\small, align=left, inner sep=0pt] {%
+    \textcolor{swblue}{eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9}.\\
+    \textcolor{sworange!90!black}{eyJuYW1lIjoibHVpZ2kiLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE2NzAzOTg0MzJ9}.\\
+    \textcolor{swred}{fopBYrax8wcB7rnPjCcOMc62IT2lJdvyOdyixMWMZAQ}};
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item L'\textcolor{swblue}{\textbf{header}} contiene, in formato JSON, il tipo di token e la funzione di hash usata per
+        firmarlo. È codificato con la \textbf{codifica Base64Url}.
+  \item Il \textcolor{sworange!90!black}{\textbf{payload}} è un oggetto JSON che contiene le \textbf{asserzioni}. Alcune
+        asserzioni \textbf{registrate} sono raccomandate (per esempio \code{exp}, la data di scadenza del token); le
+        altre sono libere: nel payload si può scrivere qualunque asserzione. Anche il payload è in Base64Url.
+  \item La \textcolor{swred}{\textbf{firma}} garantisce che il token non sia stato manomesso o falsificato.
+\end{itemize}
+
+\Needspace{14\baselineskip}
+\begin{warningbox}{{Codificato non vuol dire cifrato}}
+  Base64Url è soltanto una \textbf{codifica}, non una cifratura: si inverte facilmente, e chiunque abbia il token può
+  leggerne header e payload. In un JWT non si mettono mai password o altri segreti.
+  \begin{lstlisting}[style=shell, name=Terminale]
+$ echo eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9 | base64 -d
+{"alg":"HS256","typ":"JWT"}
+$ echo eyJuYW1lIjoibHVpZ2kiLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE2NzAzOTg0MzJ9 | base64 -d
+{"name":"luigi","role":"admin","exp":1670398432}
+\end{lstlisting}
+  Il valore di \code{exp} è un istante in secondi dal 1° gennaio 1970: 1670398432 è il 7 dicembre 2022 alle 7:33 UTC.
+\end{warningbox}
+
+\subsection{La firma e le funzioni di hash crittografiche}
+
+\dfn{Funzione di hash crittografica}{
+  Una \term{funzione di hash crittografica} associa a una stringa binaria arbitraria (l'input) una stringa binaria di
+  lunghezza fissa (il \textbf{digest} o \textbf{hash}). Le funzioni sicure hanno proprietà interessanti:
+  \begin{itemize}
+    \item sono praticamente \textbf{prive di collisioni}: è di fatto impossibile trovare due input diversi con lo stesso
+          digest;
+    \item si calcolano facilmente ma \textbf{non si invertono}: dato un input è facile calcolarne il digest, ma dato un
+          digest è impraticabile ricavare l'input che l'ha generato.
+  \end{itemize}
+}
+
+Basta un carattere in più per cambiare completamente il digest:
+\Needspace{8\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ echo -n "Web Technologies" | sha256sum
+72bdf1226df1010dfb47cffaed85f5b35ae15ec9b482388691fa7a662a114113  -
+$ echo -n "Web Technologies!" | sha256sum
+1a6791a2eab52c7c71d3e1225632d866b48a3abad91df15b2d44ab6004877993  -
+\end{lstlisting}
+
+La firma di un JWT si ottiene applicando una funzione di hash crittografica alla stringa ottenuta concatenando l'header
+del token, il payload e una \textbf{chiave segreta} nota solo al server che emette il token:
+\begin{center}
+\code{HMACSHA256( base64UrlEncode(header) + "." + base64UrlEncode(payload), chiave\_segreta )}
+\end{center}
+In realtà le firme dei JWT sono un po' più complesse di una concatenazione: \textbf{HS256} usa un HMAC, mentre
+\textbf{RS256} usa la crittografia asimmetrica (firma con una chiave privata, verifica con quella pubblica). L'idea però è
+quella: senza la chiave nessuno può calcolare la firma giusta per un payload, quindi nessuno può cambiare il payload
+(trasformarsi da \code{user} in \code{admin}, o spostare la scadenza) senza che il server se ne accorga.
+
+\begin{esempio}{Emettere e verificare un JWT}
+La classe crea e verifica token HS256 usando solo la libreria standard di Java. Nei progetti veri si usa una libreria
+(come jjwt o Nimbus), ma il meccanismo è esattamente questo.
+\begin{lstlisting}[style=java, name=Jwt.java]
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+public class Jwt {
+  private static final Base64.Encoder B64 = Base64.getUrlEncoder().withoutPadding();
+  private final byte[] chiave;                       // nota solo al server
+
+  public Jwt(String chiaveSegreta) {
+    this.chiave = chiaveSegreta.getBytes(StandardCharsets.UTF_8);
+  }
+
+  /** Crea un token header.payload.firma che scade fra durataSecondi. */
+  public String issueToken(String nome, String ruolo, long durataSecondi) {
+    long exp = Instant.now().getEpochSecond() + durataSecondi;
+    String header  = encode("{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
+    String payload = encode("{\"name\":\"" + nome + "\",\"role\":\"" + ruolo + "\",\"exp\":" + exp + "}");
+    return header + "." + payload + "." + firma(header + "." + payload);
+  }
+
+  /** Il token è valido se la firma torna e non è scaduto. */
+  public boolean verifyToken(String token) {
+    String[] parti = token.split("\\.");
+    if (parti.length != 3) return false;
+    byte[] attesa   = firma(parti[0] + "." + parti[1]).getBytes(StandardCharsets.US_ASCII);
+    byte[] ricevuta = parti[2].getBytes(StandardCharsets.US_ASCII);
+    if (!MessageDigest.isEqual(attesa, ricevuta)) return false;   // manomesso o falso
+    String json = new String(Base64.getUrlDecoder().decode(parti[1]), StandardCharsets.UTF_8);
+    Matcher m = Pattern.compile("\"exp\":(\\d+)").matcher(json);
+    return m.find() && Long.parseLong(m.group(1)) > Instant.now().getEpochSecond();
+  }
+
+  private static String encode(String json) {
+    return B64.encodeToString(json.getBytes(StandardCharsets.UTF_8));
+  }
+
+  private String firma(String dati) {
+    try {
+      Mac mac = Mac.getInstance("HmacSHA256");
+      mac.init(new SecretKeySpec(chiave, "HmacSHA256"));
+      return B64.encodeToString(mac.doFinal(dati.getBytes(StandardCharsets.UTF_8)));
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
+  }
+}
+\end{lstlisting}
+Una prova: si emette un token per l'utente \code{luigi} con ruolo \code{user}, poi lo si manomette cambiando il ruolo in
+\code{admin} senza toccare la firma, lo si verifica con un'altra chiave e se ne emette uno già scaduto.
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac Jwt.java ProvaJwt.java && java ProvaJwt
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoibHVpZ2kiLCJyb2xlIjoidXNlciIsImV4cCI6MTc5MjY2MTUyOH0.1o9UHIA4gyXYcdzhMFUG5FhNAgRgYD2PRSTcEKv-6hg
+valido: true
+manomesso: false
+altra chiave: false
+scaduto: false
+\end{lstlisting}
+L'header del token è identico a quello dell'esempio sopra: stesso JSON, stessa codifica. Il confronto della firma usa
+\code{MessageDigest.isEqual}, che impiega lo stesso tempo qualunque sia il punto in cui le stringhe differiscono, per non
+dare a un attaccante indizi sulla firma giusta.
+\end{esempio}
+
+% ============================================================
+\section{Documentare un'API: OpenAPI}
+
+Un'API vale quanto la sua documentazione: chi scrive un client deve sapere quali risorse esistono, con quali verbi, quali
+parametri e quali risposte. \term{OpenAPI} è lo standard per \textbf{descrivere} un'API REST in un file (YAML o JSON)
+leggibile sia dalle persone sia dai programmi. È nato per non affidare la descrizione di un'API a documenti scritti a
+mano, che invecchiano appena il codice cambia; dallo stesso file si generano la documentazione interattiva (come Swagger
+UI), il codice dei client e dei server e i test. Non serve saper scrivere a memoria una specifica OpenAPI, ma conviene
+saperne leggere una.
+
+\Needspace{25\baselineskip}
+\begin{lstlisting}[style=yaml, name=openapi.yaml]
+openapi: 3.1.0
+info:
+  title: To-do API
+  version: 1.0.0
+paths:
+  /todos/{id}:
+    get:
+      summary: Legge un to-do
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Il to-do richiesto
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Todo" }
+        "404":
+          description: Nessun to-do con quell'identificativo
+\end{lstlisting}
+
+% ============================================================
+\Needspace{24\baselineskip}
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item Il software comunica via Internet attraverso le \textbf{API}; invece di protocolli ad hoc (socket, CORBA, RMI,
+        SOAP) si usa HTTP.
+  \item \textbf{REST} è uno \textbf{stile architetturale}, non un protocollo: le \textbf{risorse} hanno un URI unico e si
+        manipolano con i verbi HTTP (\code{POST}, \code{GET}, \code{PUT}, \code{DELETE}: le operazioni CRUD); l'esito è
+        nel \textbf{codice di stato} (200, 201, 400, 401, 404, 405, 500).
+  \item Un'API REST è \textbf{stateless}: ogni richiesta è autosufficiente, quindi qualunque replica può servirla.
+  \item Lo stato delle risorse viaggia come \textbf{rappresentazione}, di solito JSON (o XML).
+  \item Ogni risorsa ha un solo URI; le gerarchie si esprimono con le \textbf{risorse annidate}, filtri e ordinamenti con
+        i \textbf{parametri di query}, non con nuovi percorsi.
+  \item \textbf{Autenticazione} (chi sei) e \textbf{autorizzazione} (che cosa puoi fare) si realizzano spesso con un
+        \textbf{token} da presentare nell'header \code{Authorization}.
+  \item Un \textbf{JWT} è \code{header.payload.firma}: header e payload sono solo codificati in Base64Url (leggibili da
+        tutti), la firma, calcolata con una chiave segreta del server, impedisce di manometterli.
+  \item \textbf{OpenAPI} descrive un'API in un file da cui si generano documentazione, client e test.
+\end{itemize}
+}
