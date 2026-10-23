@@ -1,0 +1,374 @@
+\chapter{Stima bayesiana: MMSE e MAP}
+
+Nei due capitoli precedenti il parametro da scoprire poteva assumere pochi valori, uno per ipotesi, e il problema era
+\textbf{decidere}. Spesso invece il parametro è una grandezza continua (la probabilità che una moneta dia testa, la
+distanza di un bersaglio, la temperatura di un forno) e il problema è \textbf{stimarlo}: dare un numero il più vicino
+possibile a quello vero. Ci sono due approcci. In quello \textbf{bayesiano}, di questo capitolo, il parametro è a sua
+volta una variabile aleatoria, di cui si conosce la densità a priori. In quello \textbf{classico}, del prossimo
+capitolo, è una quantità non nota ma deterministica.
+
+% ============================================================
+\section{Il problema della stima}
+% ============================================================
+
+Si abbia un insieme di dati $\vett{x} \in \mathcal{X}^n$, realizzazione di un vettore aleatorio $\vett{X}$ la cui
+distribuzione appartiene a una famiglia di pmf $p_{\vett{X} \mid \Theta}(\vett{x} \mid \theta)$ o di PDF
+$f_{\vett{X} \mid \Theta}(\vett{x} \mid \theta)$, dove il valore di $\theta$ non è noto. Tipicamente $\theta$ è un
+parametro continuo, che può essere
+\begin{itemize}
+  \item la realizzazione di una variabile aleatoria continua $\Theta$, con una densità marginale $f_\Theta(\theta)$ nota
+        (\textbf{approccio bayesiano}): la densità \term{a priori}, che descrive che cosa si sa del parametro prima di
+        guardare i dati;
+  \item una quantità non nota e deterministica, che assume valori in un insieme continuo (\textbf{approccio classico}).
+\end{itemize}
+Domanda: come si stima $\theta$ sulla base del campione osservato?
+
+Nell'approccio bayesiano i dati aggiornano quello che si sa del parametro. Per la legge di Bayes (con le densità del
+Capitolo~14), la densità \term{a posteriori} del parametro, sapendo i dati, è
+\[ f_{\Theta \mid \vett{X}}(\theta \mid \vett{x}) = \begin{cases} \dfrac{p_{\vett{X} \mid \Theta}(\vett{x} \mid
+   \theta)\, f_\Theta(\theta)}{\int p_{\vett{X} \mid \Theta}(\vett{x} \mid \theta)\, f_\Theta(\theta) \dd\theta} &
+   \text{dati discreti,} \\[5mm] \dfrac{f_{\vett{X} \mid \Theta}(\vett{x} \mid \theta)\, f_\Theta(\theta)}{\int
+   f_{\vett{X} \mid \Theta}(\vett{x} \mid \theta)\, f_\Theta(\theta) \dd\theta} & \text{dati continui,} \end{cases} \]
+dove i denominatori sono la legge non condizionata dei dati, per la probabilità totale:
+\[ p_{\vett{X}}(\vett{x}) = \int p_{\vett{X} \mid \Theta}(\vett{x} \mid \theta)\, f_\Theta(\theta) \dd\theta , \qquad
+   f_{\vett{X}}(\vett{x}) = \int f_{\vett{X} \mid \Theta}(\vett{x} \mid \theta)\, f_\Theta(\theta) \dd\theta . \]
+(Se $\Theta$ fosse una variabile discreta, si ricadrebbe in un problema di classificazione come quelli del
+Capitolo~19.)
+
+\dfn{Stimatore}{
+  Uno \term{stimatore} del parametro $\theta$ è una variabile aleatoria $\hat\Theta(\vett{X})$, funzione dei dati, le
+  cui realizzazioni $\hat\theta(\vett{x})$ provano a «indovinare» il valore di $\theta$ sulla base di un'osservazione
+  $\vett{x} \in \mathcal{X}^n$. Il numero $\hat\theta(\vett{x})$ si chiama \term{stima}.
+}
+
+Il cappello $\hat{\ }$ si legge «stimato»: $\hat\theta$ è «theta stimato». Per progettare uno stimatore bisogna dire
+quanto costano gli errori, come per le decisioni.
+
+\dfn{Rischio bayesiano di uno stimatore}{
+  Data una \term{funzione di costo} $C(\cdot)$ dell'errore di stima, il \term{rischio medio bayesiano} dello stimatore
+  $\hat\Theta$ è il costo medio:
+  \[ R = E\left[ C\left( \hat\Theta(\vett{X}) - \Theta \right) \right] = E_{\vett{X}}\left[ E\left[ C\left(
+     \hat\Theta(\vett{X}) - \Theta \right) \Bigm| \vett{X} \right] \right] . \]
+  Uno \term{stimatore ottimo} è uno stimatore che minimizza il rischio bayesiano.
+}
+
+La seconda forma del rischio è il teorema della media condizionata (Capitoli~9 e~14): prima si fa la media sul
+parametro sapendo i dati, poi sui dati.
+
+\begin{richiamo}{arg min e arg max}
+Per una funzione $g(t)$, $\min_t g(t)$ è il \textbf{valore} minimo della funzione, mentre $\arg\min_t g(t)$
+(«l'argomento del minimo») è il \textbf{punto} $t$ in cui il minimo viene raggiunto. Per esempio, per $g(t) = (t -
+3)^2 + 5$ si ha $\min_t g(t) = 5$ ma $\arg\min_t g(t) = 3$. Allo stesso modo $\arg\max$ è il punto di massimo. Due
+osservazioni utili: moltiplicare $g$ per una costante positiva o sommarle una costante non sposta il punto di minimo
+(cambia solo il valore); e applicare a $g$ una funzione strettamente crescente, come il logaritmo, non sposta né il
+minimo né il massimo.
+\end{richiamo}
+
+\teorema[stimatoreottimo]{Lo stimatore bayesiano ottimo}{
+  Lo stimatore ottimo bayesiano che opera sul campione osservato $\vett{x}$ è
+  \[ \hat\theta(\vett{x})_{\text{opt}} = \arg\min_{\hat\theta} \int C\left( \hat\theta - \theta \right) f_{\Theta \mid
+     \vett{X}}(\theta \mid \vett{x}) \dd\theta : \]
+  per ogni $\vett{x}$ si sceglie il valore che rende minimo il costo medio \emph{a posteriori}.
+}
+
+\begin{dimostrazione}
+\passo{Il rischio come somma sui dati} Con dati discreti, scrivendo la media esterna sui dati:
+\[ E\left[ C\left( \hat\Theta(\vett{X}) - \Theta \right) \right] = \sum_{\vett{x} \in \mathcal{X}^n}
+   p_{\vett{X}}(\vett{x}) \int C\left( \hat\theta(\vett{x}) - \theta \right) f_{\Theta \mid \vett{X}}(\theta \mid
+   \vett{x}) \dd\theta . \]
+\passo{Si minimizza un addendo alla volta} La stima $\hat\theta(\vett{x})$ si può scegliere separatamente per ogni
+$\vett{x}$, e compare solo nel proprio addendo. Se per ogni $\vett{x}$ si prende il minimo dell'integrale, pesando con
+le quantità non negative $p_{\vett{X}}(\vett{x})$ e sommando si ottiene il minimo globale. (Con dati continui la somma è
+un integrale in $\dd\vett{x}$, e il ragionamento è lo stesso.)
+\end{dimostrazione}
+
+% ============================================================
+\section{Costo quadratico: lo stimatore MMSE}
+% ============================================================
+
+La scelta più comune è un costo \textbf{quadratico}, $C\left( \hat\Theta(\vett{X}) - \Theta \right) = \left(
+\hat\Theta(\vett{X}) - \Theta \right)^2$: gli errori piccoli costano poco, quelli grandi moltissimo. Il rischio è
+allora l'errore quadratico medio, e lo stimatore ottimo si chiama \term{stimatore MMSE} (\emph{Minimum Mean Square
+Error}, a minimo errore quadratico medio).
+
+\begin{richiamo}{derivare sotto il segno di integrale}
+Se una funzione integranda dipende, oltre che dalla variabile di integrazione $\theta$, da un parametro $a$, anche
+l'integrale è una funzione di $a$: $F(a) = \int g(a, \theta) \dd\theta$. Per le funzioni regolari che incontreremo, la
+derivata dell'integrale è l'integrale della derivata parziale:
+\[ \frac{\dd F}{\dd a} = \int \frac{\partial g(a, \theta)}{\partial a} \dd\theta . \]
+Il motivo è che l'integrale è un limite di somme (Capitolo~10), e la derivata di una somma è la somma delle derivate.
+Per esempio, con $g = (a - \theta)^2$ su $[0, 1]$: $F(a) = a^2 - a + \frac13$, e infatti $F'(a) = 2a - 1 = \int_0^1 2(a
+- \theta) \dd\theta$.
+\end{richiamo}
+
+\teorema[mmse]{Lo stimatore MMSE è la media condizionata}{
+  Con il costo quadratico, lo stimatore bayesiano ottimo è la media a posteriori del parametro:
+  \[ \hat\theta_{\text{MMSE}}(\vett{x}) = \int \theta\, f_{\Theta \mid \vett{X}}(\theta \mid \vett{x}) \dd\theta =
+     E\left[ \Theta \mid \vett{X} = \vett{x} \right] . \]
+}
+
+\begin{dimostrazione}[si annulla la derivata]
+\passo{La condizione di minimo} Per il Teorema~\ref{teo:stimatoreottimo} bisogna rendere minima, rispetto a
+$\hat\theta(\vett{x})$, la funzione $\int \left( \hat\theta(\vett{x}) - \theta \right)^2 f_{\Theta \mid \vett{X}}(\theta
+\mid \vett{x}) \dd\theta$. Si annulla la sua derivata, portandola sotto il segno di integrale:
+\[ \frac{\partial}{\partial \hat\theta(\vett{x})} \int \left( \hat\theta(\vett{x}) - \theta \right)^2 f_{\Theta \mid
+   \vett{X}}(\theta \mid \vett{x}) \dd\theta = 2 \int \left( \hat\theta(\vett{x}) - \theta \right) f_{\Theta \mid
+   \vett{X}}(\theta \mid \vett{x}) \dd\theta = 0 . \]
+\passo{Si separano i due termini}
+\[ \int \hat\theta(\vett{x})\, f_{\Theta \mid \vett{X}}(\theta \mid \vett{x}) \dd\theta = \int \theta\, f_{\Theta \mid
+   \vett{X}}(\theta \mid \vett{x}) \dd\theta . \]
+\passo{Si conclude} $\hat\theta(\vett{x})$ non dipende da $\theta$ ed esce dall'integrale, e l'integrale della densità
+condizionata vale 1: resta $\hat\theta(\vett{x}) = \int \theta f_{\Theta \mid \vett{X}}(\theta \mid \vett{x})
+\dd\theta = E[\Theta \mid \vett{X} = \vett{x}]$, la media condizionata di $\Theta$ all'evento $\{\vett{X} =
+\vett{x}\}$.
+\passo{È proprio un minimo} Sviluppando il quadrato, la funzione da minimizzare è $\hat\theta^2 - 2\hat\theta\,
+E[\Theta \mid \vett{x}] + E[\Theta^2 \mid \vett{x}]$: una parabola in $\hat\theta$ con la concavità verso l'alto (il
+costo quadratico è convesso), il cui unico punto a derivata nulla è il vertice, cioè il minimo.
+\end{dimostrazione}
+
+% ============================================================
+\section{Costo «tutto o niente»: lo stimatore MAP}
+% ============================================================
+
+Si consideri ora un costo che non distingue fra errori grandi e piccoli: un errore è gratis se è minore di una
+tolleranza piccolissima, e costa 1 altrimenti. Con la funzione rettangolo del Capitolo~11,
+\[ C\left( \hat\Theta(\vett{X}) - \Theta \right) = \overline{\Pi}\left( \frac{\hat\Theta(\vett{X}) - \Theta}{\epsilon}
+   \right) = \begin{cases} 0 & \abs*{\hat\Theta(\vett{X}) - \Theta} < \frac{\epsilon}{2} , \\ 1 & \text{altrove,}
+   \end{cases} \]
+dove $\overline{\Pi} = 1 - \mathrm{rect}$ è il complemento del rettangolo: una «tacca» larga $\epsilon$ attorno allo
+zero.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=1.6cm}, width=7cm, height=4.4cm, quaderno,
+  xmin=-2.2, xmax=2.3, ymin=0, ymax=1.5, xlabel={$\hat\theta - \theta$}, xtick={-1,1}, ytick={1}]
+\nextgroupplot[title={costo quadratico (MMSE)}]
+  \addplot[mspiA, domain=-1.2:1.2, samples=60] {x^2};
+\nextgroupplot[title={costo a tacca (MAP)}, xtick={-0.3,0.3}, xticklabels={$-\frac{\epsilon}{2}$,$\frac{\epsilon}{2}$}]
+  \addplot[mspiB, line width=1.1pt] coordinates {(-2.1,1) (-0.3,1)};
+  \addplot[mspiB, line width=1.1pt] coordinates {(-0.3,0) (0.3,0)};
+  \addplot[mspiB, line width=1.1pt] coordinates {(0.3,1) (2.1,1)};
+  \draw[mspiB, densely dotted] (axis cs:-0.3,0) -- (axis cs:-0.3,1) (axis cs:0.3,0) -- (axis cs:0.3,1);
+\end{groupplot}
+\end{tikzpicture}
+\caption{Le due funzioni di costo dell'errore di stima. Quella quadratica punisce molto gli errori grandi; quella a
+tacca considera giusta una stima entro $\frac{\epsilon}{2}$ da $\theta$ e sbagliata ogni altra, comunque lontana.}
+\end{figure}
+
+\teorema[map]{Lo stimatore MAP}{
+  Con il costo a tacca, per $\epsilon$ arbitrariamente piccolo, lo stimatore bayesiano ottimo è il punto di massimo
+  della densità a posteriori:
+  \[ \hat\theta_{\text{MAP}}(\vett{x}) = \arg\max_{\theta} f_{\Theta \mid \vett{X}}(\theta \mid \vett{x}) . \]
+  Si chiama \term{stima del massimo a posteriori} (MAP).
+}
+
+\begin{dimostrazione}
+\passo{Il costo medio a posteriori} Il costo vale 1 dappertutto tranne che nella tacca, dove vale 0; quindi il suo
+integrale contro la densità a posteriori è 1 meno l'area della densità sulla tacca:
+\[ \int C\left( \hat\theta - \theta \right) f_{\Theta \mid \vett{X}}(\theta \mid \vett{x}) \dd\theta = 1 - \int_{\hat\theta
+   - \epsilon/2}^{\hat\theta + \epsilon/2} f_{\Theta \mid \vett{X}}(\theta \mid \vett{x}) \dd\theta \simeq 1 -
+   \epsilon\, f_{\Theta \mid \vett{X}}(\hat\theta \mid \vett{x}) , \]
+perché per $\epsilon$ piccolissimo l'area su un intervallino è base per altezza (Capitolo~10).
+\passo{Il minimo} Il costo è minimo quando $f_{\Theta \mid \vett{X}}(\hat\theta \mid \vett{x})$ è massima: si sceglie
+$\hat\theta$ nel punto più alto della densità a posteriori.
+\end{dimostrazione}
+
+Il rischio bayesiano corrispondente è
+\[ R = \sum_{\vett{x} \in \mathcal{X}^n} p_{\vett{X}}(\vett{x}) \int C\left( \hat\theta(\vett{x}) - \theta \right)
+   f_{\Theta \mid \vett{X}}(\theta \mid \vett{x}) \dd\theta \qquad\text{o, nel caso continuo,}\qquad R = \iint
+   f_{\vett{X}}(\vett{x})\, C\left( \hat\theta(\vett{x}) - \theta \right) f_{\Theta \mid \vett{X}}(\theta \mid \vett{x})
+   \dd\theta \dd\vett{x} . \]
+I due stimatori guardano la stessa densità a posteriori in due modi diversi: l'MMSE ne prende il \textbf{baricentro}
+(la media), il MAP il \textbf{picco} (la moda). Se la densità a posteriori è simmetrica e con un solo picco, come una
+gaussiana, i due coincidono.
+
+% ============================================================
+\section{Esempio: la moneta misteriosa}
+% ============================================================
+
+Una moneta dà testa con una probabilità $\beta$ che non conosciamo affatto: la modelliamo come la realizzazione di una
+variabile aleatoria $B \sim \mathcal{U}(0, 1)$, uniforme (nessun valore è a priori più plausibile di un altro). Si lancia
+la moneta $n$ volte: i risultati $\vett{X} \in \{0, 1\}^n$ (1 per testa) sono, \emph{sapendo} che $B = \beta$, variabili
+di Bernoulli i.i.d. con parametro $\beta$. È il modello \term{Bernoulli composito}. Come nel Capitolo~19, con il peso
+di Hamming $w(\vett{x})$ (il numero di «1»):
+\[ p_{\vett{X} \mid B}(\vett{x} \mid \beta) = \beta^{w(\vett{x})}\, (1 - \beta)^{n - w(\vett{x})} . \]
+Per trovare la densità a posteriori serve l'integrale di questa espressione in $\beta$.
+
+\begin{richiamo}{l'integrale di Eulero e la funzione Gamma}
+Per $a$ e $b$ interi non negativi vale
+\[ \int_0^1 t^{a} (1 - t)^{b} \dd t = \frac{a!\, b!}{(a + b + 1)!} . \]
+\textbf{Perché.} Si chiama $I(a, b)$ l'integrale e lo si calcola per parti (Capitolo~11), derivando $(1 - t)^b$ e
+integrando $t^a$:
+\[ I(a, b) = \left[ (1 - t)^b \frac{t^{a + 1}}{a + 1} \right]_0^1 + \frac{b}{a + 1} \int_0^1 t^{a + 1} (1 - t)^{b - 1}
+   \dd t = \frac{b}{a + 1}\, I(a + 1, b - 1) , \]
+perché il termine fra parentesi quadre vale 0 in entrambi gli estremi (se $b \geq 1$). Ogni passo sposta un'unità da
+$b$ ad $a$; dopo $b$ passi
+\[ I(a, b) = \frac{b}{a + 1} \cdot \frac{b - 1}{a + 2} \cdots \frac{1}{a + b}\; I(a + b, 0) = \frac{b!\, a!}{(a + b)!}
+   \cdot \frac{1}{a + b + 1} = \frac{a!\, b!}{(a + b + 1)!} , \]
+dove si è usato $I(a + b, 0) = \int_0^1 t^{a+b} \dd t = \frac{1}{a + b + 1}$. Per esempio $\int_0^1 t (1 - t) \dd t =
+\frac12 - \frac13 = \frac16 = \frac{1!\, 1!}{3!}$.
+
+\textbf{La funzione Gamma.} Le slide scrivono la stessa formula con la \term{funzione Gamma di Eulero} $\Gamma(x)$,
+che estende il fattoriale ai numeri non interi: per gli interi $\Gamma(m) = (m - 1)!$, e in generale $\Gamma(x + 1) =
+x\, \Gamma(x)$ (come $m! = m \cdot (m - 1)!$). La \term{funzione Beta} di Eulero è
+\[ B(m, k) = \int_0^1 t^{m - 1} (1 - t)^{k - 1} \dd t = \frac{\Gamma(m)\, \Gamma(k)}{\Gamma(m + k)} , \]
+che con $m = a + 1$ e $k = b + 1$ è proprio la formula di sopra.
+\end{richiamo}
+
+\teorema[bernoullicomposito]{Le stime della moneta misteriosa}{
+  Con $B \sim \mathcal{U}(0, 1)$ e $w = w(\vett{x})$ teste in $n$ lanci:
+  \begin{enumerate}[label=\alph*)]
+    \item la densità a posteriori è $f_{B \mid \vett{X}}(\beta \mid \vett{x}) = \dfrac{(n + 1)!}{w!\, (n - w)!}\,
+          \beta^{w} (1 - \beta)^{n - w}$, per $0 \leq \beta \leq 1$;
+    \item la stima MMSE è $\hat\beta_{\text{MMSE}}(\vett{x}) = \dfrac{w + 1}{n + 2}$;
+    \item la stima MAP è $\hat\beta_{\text{MAP}}(\vett{x}) = \dfrac{w}{n}$.
+  \end{enumerate}
+}
+
+\begin{dimostrazione}
+\passo{La legge dei dati} Mediando sulla variabile $B$, che ha densità 1 su $[0, 1]$, e usando il richiamo con $a = w$
+e $b = n - w$:
+\[ p_{\vett{X}}(\vett{x}) = \int_0^1 \beta^{w} (1 - \beta)^{n - w}\, f_B(\beta) \dd\beta = \frac{w!\, (n - w)!}{(n +
+   1)!} = \frac{\Gamma(w + 1)\, \Gamma(n - w + 1)}{\Gamma(n + 2)} . \]
+\passo{a) La densità a posteriori} Per la legge di Bayes, $f_{B \mid \vett{X}}(\beta \mid \vett{x}) =
+\frac{p_{\vett{X} \mid B}(\vett{x} \mid \beta)\, f_B(\beta)}{p_{\vett{X}}(\vett{x})}$, con $f_B = 1$.
+\passo{b) La media a posteriori} Per il Teorema~\ref{teo:mmse}, usando di nuovo il richiamo, ora con $a = w + 1$:
+\[ \hat\beta_{\text{MMSE}}(\vett{x}) = \int_0^1 \beta\, f_{B \mid \vett{X}}(\beta \mid \vett{x}) \dd\beta =
+   \frac{(n + 1)!}{w!\, (n - w)!} \int_0^1 \beta^{w + 1} (1 - \beta)^{n - w} \dd\beta = \frac{(n + 1)!}{w!\, (n - w)!}
+   \cdot \frac{(w + 1)!\, (n - w)!}{(n + 2)!} = \frac{w + 1}{n + 2} , \]
+perché $\frac{(w + 1)!}{w!} = w + 1$ e $\frac{(n + 1)!}{(n + 2)!} = \frac{1}{n + 2}$ (sono le proprietà
+$\Gamma(x + 1) = x\,\Gamma(x)$ usate nelle slide).
+\passo{c) Il massimo a posteriori} Il fattore costante $\frac{(n + 1)!}{w!(n - w)!}$ è positivo e non dipende da
+$\beta$: non sposta il punto di massimo, che è lo stesso di $\beta^{w} (1 - \beta)^{n - w}$, e anche del suo logaritmo
+(richiamo su $\arg\max$). Si annulla la derivata:
+\[ \frac{\dd}{\dd\beta} \left[ w \ln \beta + (n - w) \ln (1 - \beta) \right] = \frac{w}{\beta} - \frac{n - w}{1 - \beta} =
+   0 \quad\iff\quad (1 - \beta)\, w = \beta\, (n - w) \quad\iff\quad w = \beta n , \]
+nell'ipotesi $\beta \neq 0, 1$ (se $w = 0$ o $w = n$ il massimo è in un estremo, e vale ancora $\beta = \frac{w}{n}$).
+\end{dimostrazione}
+
+La stima MAP è la frequenza delle teste: la risposta più spontanea. La stima MMSE è leggermente diversa: è come se ai
+lanci veri si aggiungessero una testa e una croce immaginarie, che rappresentano la densità a priori uniforme (centrata
+in $\frac12$). Con pochi dati la differenza conta: dopo 3 teste in 3 lanci il MAP dice $\hat\beta = 1$, cioè «la moneta
+dà sempre testa», mentre l'MMSE dice, più prudente, $\frac{4}{5}$. È la \term{regola di successione di Laplace}, che il
+matematico usò per il famoso problema dell'alba: avendo visto sorgere il sole $n$ giorni di fila, la probabilità che
+sorga domani è $\frac{n + 1}{n + 2}$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=14cm, height=6cm, xmin=0, xmax=1, ymin=0, ymax=6.8, xtick={0,0.2,0.4,0.5,0.6,0.8,1},
+  xticklabels={$0$,$0{,}2$,$0{,}4$,$0{,}5$,$0{,}6$,$0{,}8$,$1$}, ytick={2,4,6}, xlabel=$\beta$,
+  ylabel={$f_{B \mid \vett{X}}(\beta \mid \vett{x})$}, axis lines=left, tick label style={font=\scriptsize},
+  label style={font=\small}, grid=major, grid style={mspigray!20},
+  legend style={font=\scriptsize, at={(0.02,0.98)}, anchor=north west}]
+  \addplot[mspigray, line width=1pt] coordinates {(0,1) (1,1)};
+  \addplot[mspiC, line width=1.1pt] coordinates {(0.000,0.0000) (0.005,0.0000) (0.010,0.0000) (0.015,0.0000) (0.020,0.0000) (0.025,0.0001) (0.030,0.0001) (0.035,0.0002) (0.040,0.0003) (0.045,0.0004) (0.050,0.0005) (0.055,0.0007) (0.060,0.0009) (0.065,0.0011) (0.070,0.0014) (0.075,0.0017) (0.080,0.0020) (0.085,0.0025) (0.090,0.0029) (0.095,0.0034) (0.100,0.0040) (0.105,0.0046) (0.110,0.0053) (0.115,0.0061) (0.120,0.0069) (0.125,0.0078) (0.130,0.0088) (0.135,0.0098) (0.140,0.0110) (0.145,0.0122) (0.150,0.0135) (0.155,0.0149) (0.160,0.0164) (0.165,0.0180) (0.170,0.0197) (0.175,0.0214) (0.180,0.0233) (0.185,0.0253) (0.190,0.0274) (0.195,0.0297) (0.200,0.0320) (0.205,0.0345) (0.210,0.0370) (0.215,0.0398) (0.220,0.0426) (0.225,0.0456) (0.230,0.0487) (0.235,0.0519) (0.240,0.0553) (0.245,0.0588) (0.250,0.0625) (0.255,0.0663) (0.260,0.0703) (0.265,0.0744) (0.270,0.0787) (0.275,0.0832) (0.280,0.0878) (0.285,0.0926) (0.290,0.0976) (0.295,0.1027) (0.300,0.1080) (0.305,0.1135) (0.310,0.1192) (0.315,0.1250) (0.320,0.1311) (0.325,0.1373) (0.330,0.1437) (0.335,0.1504) (0.340,0.1572) (0.345,0.1643) (0.350,0.1715) (0.355,0.1790) (0.360,0.1866) (0.365,0.1945) (0.370,0.2026) (0.375,0.2109) (0.380,0.2195) (0.385,0.2283) (0.390,0.2373) (0.395,0.2465) (0.400,0.2560) (0.405,0.2657) (0.410,0.2757) (0.415,0.2859) (0.420,0.2964) (0.425,0.3071) (0.430,0.3180) (0.435,0.3293) (0.440,0.3407) (0.445,0.3525) (0.450,0.3645) (0.455,0.3768) (0.460,0.3893) (0.465,0.4022) (0.470,0.4153) (0.475,0.4287) (0.480,0.4424) (0.485,0.4563) (0.490,0.4706) (0.495,0.4851) (0.500,0.5000) (0.505,0.5152) (0.510,0.5306) (0.515,0.5464) (0.520,0.5624) (0.525,0.5788) (0.530,0.5955) (0.535,0.6125) (0.540,0.6299) (0.545,0.6475) (0.550,0.6655) (0.555,0.6838) (0.560,0.7025) (0.565,0.7214) (0.570,0.7408) (0.575,0.7604) (0.580,0.7804) (0.585,0.8008) (0.590,0.8215) (0.595,0.8426) (0.600,0.8640) (0.605,0.8858) (0.610,0.9079) (0.615,0.9304) (0.620,0.9533) (0.625,0.9766) (0.630,1.0002) (0.635,1.0242) (0.640,1.0486) (0.645,1.0733) (0.650,1.0985) (0.655,1.1240) (0.660,1.1500) (0.665,1.1763) (0.670,1.2031) (0.675,1.2302) (0.680,1.2577) (0.685,1.2857) (0.690,1.3140) (0.695,1.3428) (0.700,1.3720) (0.705,1.4016) (0.710,1.4316) (0.715,1.4621) (0.720,1.4930) (0.725,1.5243) (0.730,1.5561) (0.735,1.5883) (0.740,1.6209) (0.745,1.6540) (0.750,1.6875) (0.755,1.7215) (0.760,1.7559) (0.765,1.7908) (0.770,1.8261) (0.775,1.8619) (0.780,1.8982) (0.785,1.9349) (0.790,1.9722) (0.795,2.0098) (0.800,2.0480) (0.805,2.0866) (0.810,2.1258) (0.815,2.1654) (0.820,2.2055) (0.825,2.2461) (0.830,2.2871) (0.835,2.3287) (0.840,2.3708) (0.845,2.4134) (0.850,2.4565) (0.855,2.5001) (0.860,2.5442) (0.865,2.5889) (0.870,2.6340) (0.875,2.6797) (0.880,2.7259) (0.885,2.7726) (0.890,2.8199) (0.895,2.8677) (0.900,2.9160) (0.905,2.9649) (0.910,3.0143) (0.915,3.0642) (0.920,3.1148) (0.925,3.1658) (0.930,3.2174) (0.935,3.2696) (0.940,3.3223) (0.945,3.3756) (0.950,3.4295) (0.955,3.4839) (0.960,3.5389) (0.965,3.5945) (0.970,3.6507) (0.975,3.7074) (0.980,3.7648) (0.985,3.8227) (0.990,3.8812) (0.995,3.9403) (1.000,4.0000)};
+  \addplot[mspiA, line width=1.1pt] coordinates {(0.000,0.0000) (0.005,0.0000) (0.010,0.0000) (0.015,0.0000) (0.020,0.0000) (0.025,0.0000) (0.030,0.0000) (0.035,0.0000) (0.040,0.0000) (0.045,0.0000) (0.050,0.0000) (0.055,0.0000) (0.060,0.0000) (0.065,0.0000) (0.070,0.0000) (0.075,0.0000) (0.080,0.0000) (0.085,0.0000) (0.090,0.0000) (0.095,0.0001) (0.100,0.0001) (0.105,0.0001) (0.110,0.0002) (0.115,0.0002) (0.120,0.0003) (0.125,0.0004) (0.130,0.0005) (0.135,0.0007) (0.140,0.0009) (0.145,0.0011) (0.150,0.0014) (0.155,0.0017) (0.160,0.0021) (0.165,0.0026) (0.170,0.0031) (0.175,0.0037) (0.180,0.0045) (0.185,0.0053) (0.190,0.0063) (0.195,0.0074) (0.200,0.0087) (0.205,0.0101) (0.210,0.0117) (0.215,0.0136) (0.220,0.0156) (0.225,0.0179) (0.230,0.0205) (0.235,0.0234) (0.240,0.0266) (0.245,0.0301) (0.250,0.0340) (0.255,0.0383) (0.260,0.0430) (0.265,0.0481) (0.270,0.0537) (0.275,0.0598) (0.280,0.0665) (0.285,0.0737) (0.290,0.0815) (0.295,0.0899) (0.300,0.0990) (0.305,0.1088) (0.310,0.1193) (0.315,0.1306) (0.320,0.1426) (0.325,0.1555) (0.330,0.1692) (0.335,0.1838) (0.340,0.1993) (0.345,0.2158) (0.350,0.2332) (0.355,0.2517) (0.360,0.2712) (0.365,0.2917) (0.370,0.3133) (0.375,0.3361) (0.380,0.3599) (0.385,0.3850) (0.390,0.4112) (0.395,0.4386) (0.400,0.4671) (0.405,0.4969) (0.410,0.5280) (0.415,0.5602) (0.420,0.5937) (0.425,0.6285) (0.430,0.6645) (0.435,0.7017) (0.440,0.7401) (0.445,0.7798) (0.450,0.8206) (0.455,0.8627) (0.460,0.9059) (0.465,0.9502) (0.470,0.9956) (0.475,1.0421) (0.480,1.0896) (0.485,1.1381) (0.490,1.1876) (0.495,1.2379) (0.500,1.2891) (0.505,1.3410) (0.510,1.3936) (0.515,1.4469) (0.520,1.5008) (0.525,1.5551) (0.530,1.6099) (0.535,1.6650) (0.540,1.7203) (0.545,1.7758) (0.550,1.8313) (0.555,1.8867) (0.560,1.9420) (0.565,1.9970) (0.570,2.0517) (0.575,2.1058) (0.580,2.1593) (0.585,2.2121) (0.590,2.2641) (0.595,2.3150) (0.600,2.3649) (0.605,2.4135) (0.610,2.4608) (0.615,2.5066) (0.620,2.5507) (0.625,2.5932) (0.630,2.6337) (0.635,2.6722) (0.640,2.7086) (0.645,2.7427) (0.650,2.7744) (0.655,2.8036) (0.660,2.8302) (0.665,2.8540) (0.670,2.8750) (0.675,2.8930) (0.680,2.9079) (0.685,2.9197) (0.690,2.9282) (0.695,2.9334) (0.700,2.9351) (0.705,2.9333) (0.710,2.9280) (0.715,2.9191) (0.720,2.9065) (0.725,2.8903) (0.730,2.8703) (0.735,2.8466) (0.740,2.8191) (0.745,2.7880) (0.750,2.7531) (0.755,2.7146) (0.760,2.6724) (0.765,2.6267) (0.770,2.5775) (0.775,2.5248) (0.780,2.4689) (0.785,2.4098) (0.790,2.3476) (0.795,2.2825) (0.800,2.2146) (0.805,2.1441) (0.810,2.0712) (0.815,1.9961) (0.820,1.9191) (0.825,1.8402) (0.830,1.7598) (0.835,1.6782) (0.840,1.5955) (0.845,1.5120) (0.850,1.4282) (0.855,1.3441) (0.860,1.2602) (0.865,1.1768) (0.870,1.0941) (0.875,1.0124) (0.880,0.9322) (0.885,0.8536) (0.890,0.7771) (0.895,0.7029) (0.900,0.6314) (0.905,0.5627) (0.910,0.4973) (0.915,0.4353) (0.920,0.3770) (0.925,0.3227) (0.930,0.2724) (0.935,0.2265) (0.940,0.1849) (0.945,0.1478) (0.950,0.1152) (0.955,0.0871) (0.960,0.0635) (0.965,0.0441) (0.970,0.0288) (0.975,0.0173) (0.980,0.0092) (0.985,0.0040) (0.990,0.0012) (0.995,0.0002) (1.000,0.0000)};
+  \addplot[mspiB, line width=1.1pt] coordinates {(0.000,0.0000) (0.005,0.0000) (0.010,0.0000) (0.015,0.0000) (0.020,0.0000) (0.025,0.0000) (0.030,0.0000) (0.035,0.0000) (0.040,0.0000) (0.045,0.0000) (0.050,0.0000) (0.055,0.0000) (0.060,0.0000) (0.065,0.0000) (0.070,0.0000) (0.075,0.0000) (0.080,0.0000) (0.085,0.0000) (0.090,0.0000) (0.095,0.0000) (0.100,0.0000) (0.105,0.0000) (0.110,0.0000) (0.115,0.0000) (0.120,0.0000) (0.125,0.0000) (0.130,0.0000) (0.135,0.0000) (0.140,0.0000) (0.145,0.0000) (0.150,0.0000) (0.155,0.0000) (0.160,0.0000) (0.165,0.0000) (0.170,0.0000) (0.175,0.0000) (0.180,0.0000) (0.185,0.0000) (0.190,0.0000) (0.195,0.0000) (0.200,0.0000) (0.205,0.0000) (0.210,0.0000) (0.215,0.0000) (0.220,0.0000) (0.225,0.0000) (0.230,0.0000) (0.235,0.0000) (0.240,0.0000) (0.245,0.0000) (0.250,0.0000) (0.255,0.0000) (0.260,0.0000) (0.265,0.0000) (0.270,0.0000) (0.275,0.0000) (0.280,0.0000) (0.285,0.0000) (0.290,0.0000) (0.295,0.0000) (0.300,0.0000) (0.305,0.0000) (0.310,0.0000) (0.315,0.0000) (0.320,0.0000) (0.325,0.0000) (0.330,0.0000) (0.335,0.0000) (0.340,0.0000) (0.345,0.0000) (0.350,0.0000) (0.355,0.0000) (0.360,0.0000) (0.365,0.0001) (0.370,0.0001) (0.375,0.0001) (0.380,0.0002) (0.385,0.0002) (0.390,0.0003) (0.395,0.0005) (0.400,0.0006) (0.405,0.0009) (0.410,0.0012) (0.415,0.0016) (0.420,0.0021) (0.425,0.0028) (0.430,0.0037) (0.435,0.0049) (0.440,0.0064) (0.445,0.0083) (0.450,0.0107) (0.455,0.0137) (0.460,0.0175) (0.465,0.0222) (0.470,0.0280) (0.475,0.0352) (0.480,0.0440) (0.485,0.0547) (0.490,0.0677) (0.495,0.0833) (0.500,0.1020) (0.505,0.1242) (0.510,0.1506) (0.515,0.1817) (0.520,0.2181) (0.525,0.2606) (0.530,0.3098) (0.535,0.3665) (0.540,0.4316) (0.545,0.5058) (0.550,0.5899) (0.555,0.6848) (0.560,0.7912) (0.565,0.9098) (0.570,1.0413) (0.575,1.1861) (0.580,1.3447) (0.585,1.5174) (0.590,1.7041) (0.595,1.9047) (0.600,2.1189) (0.605,2.3459) (0.610,2.5848) (0.615,2.8343) (0.620,3.0930) (0.625,3.3588) (0.630,3.6296) (0.635,3.9029) (0.640,4.1759) (0.645,4.4456) (0.650,4.7087) (0.655,4.9619) (0.660,5.2016) (0.665,5.4243) (0.670,5.6265) (0.675,5.8049) (0.680,5.9563) (0.685,6.0777) (0.690,6.1668) (0.695,6.2213) (0.700,6.2397) (0.705,6.2210) (0.710,6.1649) (0.715,6.0715) (0.720,5.9418) (0.725,5.7774) (0.730,5.5805) (0.735,5.3537) (0.740,5.1006) (0.745,4.8249) (0.750,4.5306) (0.755,4.2223) (0.760,3.9044) (0.765,3.5816) (0.770,3.2584) (0.775,2.9391) (0.780,2.6276) (0.785,2.3277) (0.790,2.0424) (0.795,1.7745) (0.800,1.5259) (0.805,1.2980) (0.810,1.0919) (0.815,0.9078) (0.820,0.7456) (0.825,0.6045) (0.830,0.4835) (0.835,0.3812) (0.840,0.2961) (0.845,0.2264) (0.850,0.1702) (0.855,0.1257) (0.860,0.0910) (0.865,0.0646) (0.870,0.0449) (0.875,0.0305) (0.880,0.0202) (0.885,0.0130) (0.890,0.0081) (0.895,0.0049) (0.900,0.0029) (0.905,0.0016) (0.910,0.0009) (0.915,0.0004) (0.920,0.0002) (0.925,0.0001) (0.930,0.0000) (0.935,0.0000) (0.940,0.0000) (0.945,0.0000) (0.950,0.0000) (0.955,0.0000) (0.960,0.0000) (0.965,0.0000) (0.970,0.0000) (0.975,0.0000) (0.980,0.0000) (0.985,0.0000) (0.990,0.0000) (0.995,0.0000) (1.000,0.0000)};
+  \legend{{a priori, $\mathcal{U}(0, 1)$}, {$n = 3$, $w = 3$}, {$n = 10$, $w = 7$}, {$n = 50$, $w = 35$}}
+  \draw[mspiA, dashed] (axis cs:0.6667,0) -- (axis cs:0.6667,2.52);
+  \draw[mspiA, densely dotted, line width=0.9pt] (axis cs:0.7,0) -- (axis cs:0.7,2.935);
+  \draw[-{Stealth}, mspiA!80!black] (axis cs:0.45,4.3) node[above, font=\scriptsize] {stima MMSE, $\frac{8}{12}$}
+    -- (axis cs:0.655,2.6);
+  \draw[-{Stealth}, mspiA!80!black] (axis cs:0.9,4.3) node[above, font=\scriptsize] {stima MAP, $0{,}7$}
+    -- (axis cs:0.712,3.0);
+\end{axis}
+\end{tikzpicture}
+\caption{Le densità a posteriori della probabilità di testa. Partendo dalla densità uniforme, i dati la spostano e la
+stringono: con 35 teste su 50 lanci il parametro è quasi certamente fra $0{,}55$ e $0{,}85$. Per $n = 10$ e $w = 7$ sono
+segnate la media (stima MMSE, $\frac{8}{12} \approx 0{,}667$) e il picco (stima MAP, $0{,}7$).}
+\end{figure}
+
+% ============================================================
+\section{Le prestazioni dei due stimatori}
+% ============================================================
+
+Quale dei due stimatori sbaglia meno, in media? Calcoliamo media ed errore quadratico medio di entrambi, mediando sia
+sui dati sia sul parametro. Servono alcuni momenti, che si calcolano tutti con il teorema della media condizionata:
+prima si media sapendo $B = \beta$ (e allora $w(\vett{X})$ è binomiale con parametri $n$ e $\beta$), poi su $B$.
+\begin{itemize}
+  \item Per la variabile uniforme: $E[B] = \int_0^1 \beta \dd\beta = \frac12$, $E[B^2] = \int_0^1 \beta^2 \dd\beta =
+        \left[ \frac{\beta^3}{3} \right]_0^1 = \frac13$, e $\sigma_B^2 = \frac13 - \frac14 = \frac{1}{12}$.
+  \item La media del peso: $E[w(\vett{X})] = E_B\left[ E[w(\vett{X}) \mid B] \right] = E_B[nB] = \frac{n}{2}$.
+  \item Il valore quadratico medio del peso: sapendo $B$, la binomiale ha varianza $nB(1 - B)$ e media $nB$, e il valore
+        quadratico medio è varianza più quadrato della media:
+        \[ E\left[ w^2(\vett{X}) \right] = E_B\left[ nB(1 - B) + n^2 B^2 \right] = n \left( \frac12 - \frac13 \right) +
+           \frac{n^2}{3} = \frac{n}{6} + \frac{n^2}{3} , \]
+        e quindi la varianza (non condizionata) del peso è $\sigma_{w}^2 = \frac{n}{6} + \frac{n^2}{3} - \frac{n^2}{4} =
+        \frac{n}{6} + \frac{n^2}{12}$.
+  \item Il prodotto: $E[w(\vett{X})\, B] = E_B\left[ B\, E[w(\vett{X}) \mid B] \right] = E_B[n B^2] = \frac{n}{3}$.
+\end{itemize}
+
+\teorema[prestazioni]{Media ed errore quadratico medio dei due stimatori}{
+  Entrambi gli stimatori hanno media $\frac12$, come il parametro: $E\left[ \hat\beta_{\text{MMSE}}(\vett{X}) \right] =
+  E\left[ \hat\beta_{\text{MAP}}(\vett{X}) \right] = \frac12$. I loro errori quadratici medi sono
+  \[ E\left[ \left( \hat\beta_{\text{MMSE}}(\vett{X}) - B \right)^2 \right] = \frac{1}{6(n + 2)} , \qquad E\left[
+     \left( \hat\beta_{\text{MAP}}(\vett{X}) - B \right)^2 \right] = \frac{1}{6n} . \]
+}
+
+\begin{dimostrazione}
+\passo{Le medie} Per la linearità: $E\left[ \frac{w + 1}{n + 2} \right] = \frac{n/2 + 1}{n + 2} = \frac{(n + 2)/2}{n +
+2} = \frac12$ e $E\left[ \frac{w}{n} \right] = \frac{n/2}{n} = \frac12$.
+\passo{L'errore quadratico in tre pezzi} Per entrambi gli stimatori, sviluppando il quadrato,
+$E[(\hat\beta - B)^2] = E[\hat\beta^2] + E[B^2] - 2E[\hat\beta B]$, con $E[B^2] = \frac13$.
+\passo{MMSE} Con i momenti calcolati sopra:
+\[ E\left[ \hat\beta_{\text{MMSE}}^2 \right] = \frac{E[w^2] + 2E[w] + 1}{(n + 2)^2} = \frac{\frac{n}{6} + \frac{n^2}{3}
+   + n + 1}{(n + 2)^2} = \frac{2n^2 + 7n + 6}{6(n + 2)^2} = \frac{(2n + 3)(n + 2)}{6(n + 2)^2} = \frac{2n + 3}{6(n +
+   2)} , \]
+\[ E\left[ \hat\beta_{\text{MMSE}}\, B \right] = \frac{E[wB] + E[B]}{n + 2} = \frac{\frac{n}{3} + \frac12}{n + 2} =
+   \frac{2n + 3}{6(n + 2)} . \]
+Quindi l'errore è $\frac{2n + 3}{6(n + 2)} + \frac13 - 2 \cdot \frac{2n + 3}{6(n + 2)} = \frac13 - \frac{2n + 3}{6(n +
+2)} = \frac{2(n + 2) - (2n + 3)}{6(n + 2)} = \frac{1}{6(n + 2)}$.
+\passo{MAP}
+\[ E\left[ \hat\beta_{\text{MAP}}^2 \right] = \frac{E[w^2]}{n^2} = \frac{1}{6n} + \frac13 , \qquad E\left[
+   \hat\beta_{\text{MAP}}\, B \right] = \frac{E[wB]}{n} = \frac13 , \]
+e l'errore è $\frac{1}{6n} + \frac13 + \frac13 - \frac23 = \frac{1}{6n}$.
+\end{dimostrazione}
+
+Le slide arrivano agli stessi risultati con passaggi più lunghi (slide 64--73), sviluppando $(n + 2)^2$ e i prodotti.
+Come c'era da aspettarsi, per ogni valore di $n$ l'errore quadratico medio dello stimatore MMSE è minore di quello del
+MAP: è il migliore possibile, per costruzione. La differenza è grande con pochi dati e sparisce quando i dati sono
+tanti:
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}c|ccccc@{}}
+  $n$ & 1 & 2 & 5 & 10 & 100 \\ \hline
+  errore MMSE, $\frac{1}{6(n+2)}$ & $0{,}056$ & $0{,}042$ & $0{,}024$ & $0{,}0139$ & $0{,}00163$ \\
+  errore MAP, $\frac{1}{6n}$ & $0{,}167$ & $0{,}083$ & $0{,}033$ & $0{,}0167$ & $0{,}00167$
+\end{tabular}
+\end{center}
+
+\dfn{Consistenza di uno stimatore}{
+  Uno stimatore $\hat B_n(\vett{X})$, calcolato da $n$ dati, si dice
+  \begin{itemize}
+    \item \term{consistente in media quadratica} (\emph{MS-consistent}) se il suo errore quadratico medio tende a zero
+          per $n \to \infty$;
+    \item \term{consistente} (in senso debole) se tende al parametro in probabilità: per ogni $\epsilon > 0$,
+          $\lim_{n \to \infty} P\left\{ \abs*{\hat B_n(\vett{X}) - B} > \epsilon \right\} = 0$.
+  \end{itemize}
+}
+
+Entrambi gli stimatori della moneta sono consistenti in media quadratica, perché $\frac{1}{6(n+2)}$ e $\frac{1}{6n}$
+tendono a zero. E quindi sono anche consistenti in senso debole: per la disuguaglianza di Markov, come nel
+Capitolo~18,
+\[ P\left\{ \abs*{\hat B_n(\vett{X}) - B} > \epsilon \right\} = P\left\{ \left( \hat B_n(\vett{X}) - B \right)^2 >
+   \epsilon^2 \right\} \leq \frac{E\left[ \left( \hat B_n(\vett{X}) - B \right)^2 \right]}{\epsilon^2} =
+   \frac{\mathrm{MSE}\left( \hat B_n \right)}{\epsilon^2} \;\xrightarrow{\;n \to \infty\;}\; 0 , \]
+dove $\mathrm{MSE}$ (\emph{Mean Square Error}) indica l'errore quadratico medio: al crescere di $n$ il secondo membro
+tende a zero, e il primo, che è una probabilità, non è negativo.
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item \textbf{Stima bayesiana}: il parametro è una variabile $\Theta$ con densità a priori $f_\Theta$; i dati la
+        trasformano nella densità a posteriori $f_{\Theta \mid \vett{X}}$ (legge di Bayes).
+  \item Lo \textbf{stimatore ottimo} minimizza il costo medio a posteriori, per ogni $\vett{x}$:
+        $\hat\theta = \arg\min \int C(\hat\theta - \theta) f_{\Theta \mid \vett{X}}(\theta \mid \vett{x}) \dd\theta$.
+  \item Costo quadratico: \textbf{MMSE} $= E[\Theta \mid \vett{X} = \vett{x}]$, il baricentro della densità a posteriori.
+        Costo a tacca: \textbf{MAP} $= \arg\max f_{\Theta \mid \vett{X}}(\theta \mid \vett{x})$, il suo picco.
+  \item Moneta con $B \sim \mathcal{U}(0,1)$ e $w$ teste in $n$ lanci: $\hat\beta_{\text{MMSE}} = \frac{w + 1}{n + 2}$,
+        $\hat\beta_{\text{MAP}} = \frac{w}{n}$; errori quadratici $\frac{1}{6(n+2)} < \frac{1}{6n}$, entrambi $\to 0$:
+        stimatori consistenti.
+  \item $\int_0^1 t^a (1 - t)^b \dd t = \frac{a!\, b!}{(a + b + 1)!}$ (funzioni Beta e Gamma di Eulero).
+\end{itemize}
+}
