@@ -1,0 +1,282 @@
+\chapter{Stima lineare MMSE e gradiente}
+
+Lo stimatore MMSE del Capitolo~21, la media condizionata $E[\Theta \mid \vett{X} = \vett{x}]$, è il migliore possibile,
+ma per calcolarlo serve tutta la densità a posteriori, che spesso non si conosce o è troppo complicata. Una via molto
+più pratica è accontentarsi del miglior stimatore \textbf{lineare}: una combinazione lineare dei dati più una costante.
+Vedremo che per trovarlo bastano medie e covarianze, cioè la caratterizzazione sintetica del Capitolo~16. Poi
+risolveremo lo stesso problema in modo iterativo, scendendo «a valle» lungo la superficie dell'errore: è l'algoritmo
+del gradiente, alla base di moltissimi metodi di apprendimento automatico.
+
+% ============================================================
+\section{Il gradiente}
+% ============================================================
+
+\begin{richiamo}{il gradiente di forme lineari e quadratiche}
+Per una funzione di più variabili $g(\vett{w})$, con $\vett{w} = [w_1, \ldots, w_n]^T$, il \term{gradiente} è il vettore
+delle derivate parziali (Capitolo~14):
+\[ \nabla_{\vett{w}}\, g = \left[ \frac{\partial g}{\partial w_1}, \frac{\partial g}{\partial w_2}, \ldots, \frac{\partial
+   g}{\partial w_n} \right]^T . \]
+Indica la direzione in cui $g$ cresce più rapidamente; nel punto di minimo di una funzione regolare è il vettore nullo,
+come la derivata nel minimo di una funzione di una variabile. Due formule ci serviranno.
+\begin{itemize}
+  \item \textbf{Forma lineare}: $\nabla_{\vett{w}} \left( \vett{u}^T \vett{w} \right) = \nabla_{\vett{w}} \left(
+        \vett{w}^T \vett{u} \right) = \vett{u}$. Infatti $\vett{u}^T \vett{w} = u_1 w_1 + \cdots + u_n w_n$, e la
+        derivata rispetto a $w_k$ è $u_k$: è la versione vettoriale di $\frac{\dd}{\dd w}(uw) = u$.
+  \item \textbf{Forma quadratica}: $\nabla_{\vett{w}} \left( \vett{w}^T \matr{A} \vett{w} \right) = 2 \matr{A}
+        \vett{w}$, se $\matr{A}$ è simmetrica. Infatti $\vett{w}^T \matr{A} \vett{w} = \sum_i \sum_j w_i\, a_{ij}\, w_j$, e
+        $w_k$ compare nei termini con $i = k$ e in quelli con $j = k$:
+        \[ \frac{\partial}{\partial w_k} \vett{w}^T \matr{A} \vett{w} = \sum_j a_{kj} w_j + \sum_i w_i a_{ik} =
+           (\matr{A}\vett{w})_k + (\matr{A}^T \vett{w})_k = 2 (\matr{A}\vett{w})_k . \]
+        È la versione vettoriale di $\frac{\dd}{\dd w}(a w^2) = 2aw$.
+\end{itemize}
+\end{richiamo}
+
+% ============================================================
+\section{Lo stimatore lineare MMSE}
+% ============================================================
+
+Il campione osservato $\vett{x}$ è la realizzazione di un vettore aleatorio $\vett{X}$; si vuole stimare un parametro
+aleatorio $\Theta$, distribuito secondo una legge nota, con uno stimatore della forma
+\[ \hat\Theta(\vett{X}) = \vett{a}^T \vett{X} + b , \qquad \vett{a} \in \R^n , \quad b \in \R . \]
+Per alleggerire la notazione, d'ora in poi si omette il pedice $\vett{X}$ nelle matrici di correlazione e di
+covarianza: $\matr{R} = E[\vett{X}\vett{X}^T]$ è la matrice di correlazione e $\matr{M} = E[(\vett{X} -
+E[\vett{X}])(\vett{X} - E[\vett{X}])^T]$ la matrice di covarianza dei dati.
+
+\dfn{Stimatore lineare MMSE}{
+  Lo \term{stimatore lineare MMSE} (LMMSE) usa il vettore $\vett{a}$ e la costante $b$ che rendono minimo l'errore
+  quadratico medio
+  \[ E\left[ \left( \hat\Theta(\vett{X}) - \Theta \right)^2 \right] = E\left[ \left( \vett{a}^T \vett{X} + b - \Theta
+     \right)^2 \right] . \]
+}
+
+\teorema[lmmse]{Lo stimatore lineare MMSE}{
+  I coefficienti ottimi sono
+  \[ \vett{a}_{\text{LMMSE}} = \matr{M}^{-1} \vett{s} , \qquad b_{\text{LMMSE}} = E[\Theta] - \vett{a}_{\text{LMMSE}}^T
+     E[\vett{X}] , \]
+  dove $\vett{s} = E[\Theta\vett{X}] - E[\Theta]\, E[\vett{X}] = E\left[ (\vett{X} - E[\vett{X}])(\Theta - E[\Theta])
+  \right]$ è il vettore delle covarianze fra i dati e il parametro. In modo equivalente,
+  \[ \hat\Theta_{\text{LMMSE}}(\vett{X}) = E[\Theta] + \vett{s}^T \matr{M}^{-1} \left( \vett{X} - E[\vett{X}] \right) . \]
+}
+
+\begin{dimostrazione}
+\passo{Si sviluppa il quadrato} Un numero è uguale al suo trasposto (Capitolo~16), quindi si può scrivere il quadrato
+come prodotto per il trasposto: $\left( \vett{a}^T \vett{X} + b - \Theta \right)^2 = \left( \vett{a}^T \vett{X} + b -
+\Theta \right) \left( \vett{X}^T \vett{a} + b - \Theta \right)$. Moltiplicando e facendo la media:
+\[ E\left[ \left( \vett{a}^T \vett{X} + b - \Theta \right)^2 \right] = \vett{a}^T \matr{R}\, \vett{a} + b^2 +
+   E[\Theta^2] + 2b\, \vett{a}^T E[\vett{X}] - 2b\, E[\Theta] - 2\vett{a}^T E[\Theta \vett{X}] , \]
+dove $E[\vett{a}^T \vett{X}\vett{X}^T \vett{a}] = \vett{a}^T \matr{R}\, \vett{a}$, perché $\vett{a}$ è costante.
+\passo{Il gradiente rispetto ad $\vett{a}$} Con le due formule del richiamo ($\matr{R}$ è simmetrica):
+\[ \nabla_{\vett{a}}\, E\left[ \left( \vett{a}^T \vett{X} + b - \Theta \right)^2 \right] = 2\matr{R}\, \vett{a} + 2b\,
+   E[\vett{X}] - 2E[\Theta \vett{X}] = \vett{0} . \]
+\passo{La derivata rispetto a $b$}
+\[ \frac{\partial}{\partial b}\, E\left[ \left( \vett{a}^T \vett{X} + b - \Theta \right)^2 \right] = 2b + 2\vett{a}^T
+   E[\vett{X}] - 2E[\Theta] = 0 \quad\Longrightarrow\quad b = E[\Theta] - \vett{a}^T E[\vett{X}] = E[\Theta] -
+   E[\vett{X}]^T \vett{a} . \]
+\passo{Si sostituisce $b$} Nella prima equazione:
+$\matr{R}\, \vett{a} + \left( E[\Theta] - E[\vett{X}]^T \vett{a} \right) E[\vett{X}] - E[\Theta \vett{X}] = \vett{0}$.
+Il numero $E[\vett{X}]^T \vett{a}$ può stare a destra o a sinistra del vettore $E[\vett{X}]$, e per la proprietà
+associativa del prodotto fra matrici $E[\vett{X}] \left( E[\vett{X}]^T \vett{a} \right) = \left( E[\vett{X}]
+E[\vett{X}]^T \right) \vett{a}$. Quindi
+\[ \left( \matr{R} - E[\vett{X}]\, E[\vett{X}]^T \right) \vett{a} + E[\Theta]\, E[\vett{X}] - E[\Theta \vett{X}] =
+   \vett{0} . \]
+\passo{Compaiono le covarianze} La matrice fra parentesi è la matrice di covarianza, $\matr{M} = \matr{R} -
+E[\vett{X}]E[\vett{X}]^T$ (Capitolo~16), e $E[\Theta\vett{X}] - E[\Theta] E[\vett{X}] = \vett{s}$ è la covarianza fra
+dati e parametro, calcolata come nel Capitolo~9 componente per componente. L'equazione diventa $\matr{M}\vett{a} =
+\vett{s}$, da cui $\vett{a}_{\text{LMMSE}} = \matr{M}^{-1}\vett{s}$.
+\passo{La forma equivalente} $\vett{a}^T \vett{X} + b = E[\Theta] + \vett{a}^T (\vett{X} - E[\vett{X}])$, e
+$\vett{a}^T = \vett{s}^T (\matr{M}^{-1})^T = \vett{s}^T \matr{M}^{-1}$, perché l'inversa di una matrice simmetrica è
+simmetrica.
+\end{dimostrazione}
+
+La forma equivalente ha un significato chiaro: senza dati la stima migliore sarebbe la media a priori $E[\Theta]$; i
+dati la correggono, in proporzione a quanto si discostano dalla loro media e a quanto sono correlati con il parametro.
+L'errore quadratico medio è una funzione di secondo grado dei coefficienti a forma di «scodella», perché la matrice di
+covarianza è definita non negativa (Capitolo~16): il punto in cui il gradiente si annulla è il fondo della scodella,
+cioè il minimo. Sostituendo i coefficienti ottimi si trova anche il valore minimo:
+\[ E\left[ \left( \hat\Theta_{\text{LMMSE}} - \Theta \right)^2 \right] = \sigma_\Theta^2 - \vett{s}^T \matr{M}^{-1}
+   \vett{s} , \]
+cioè la varianza a priori del parametro, diminuita di quanto spiegano i dati. (Basta scrivere l'errore come $\vett{a}^T
+(\vett{X} - E[\vett{X}]) - (\Theta - E[\Theta])$, calcolarne il quadrato medio, $\vett{a}^T \matr{M}\vett{a} -
+2\vett{a}^T \vett{s} + \sigma_\Theta^2$, e porre $\vett{a} = \matr{M}^{-1}\vett{s}$.)
+
+\info{Quando il lineare è anche il migliore in assoluto}{
+  Se $\vett{X}$ e $\Theta$ sono congiuntamente gaussiani, la media condizionata $E[\Theta \mid \vett{X} = \vett{x}]$ è
+  una funzione lineare dei dati (nel Capitolo~16, per due variabili standard, era $\rho x_1$): lo stimatore lineare MMSE
+  coincide allora con lo stimatore MMSE, il migliore fra tutti. Per dati non gaussiani lo stimatore lineare è solo il
+  migliore fra quelli lineari.
+}
+
+\begin{esempio}{Una misura rumorosa}
+Un parametro $\Theta$ ha media $\mu_\Theta$ e varianza $\sigma_\Theta^2$, e lo si misura una volta con uno strumento
+rumoroso: $X = \Theta + N$, con il rumore $N$ indipendente da $\Theta$, a media nulla e varianza $\sigma_N^2$. È il caso
+$n = 1$: la matrice di covarianza è il numero $M = \sigma_X^2 = \sigma_\Theta^2 + \sigma_N^2$ (le varianze di variabili
+indipendenti si sommano) e il vettore $\vett{s}$ è il numero $COV(X, \Theta) = COV(\Theta + N, \Theta) = \sigma_\Theta^2$.
+Quindi
+\[ a = \frac{\sigma_\Theta^2}{\sigma_\Theta^2 + \sigma_N^2} , \qquad b = \mu_\Theta - a\, \mu_X = (1 - a)\, \mu_\Theta ,
+   \qquad \hat\Theta = a\, X + (1 - a)\, \mu_\Theta . \]
+La stima è una \textbf{media pesata} fra la misura e la media a priori. Se il rumore è piccolo ($\sigma_N \ll
+\sigma_\Theta$) il peso $a$ è vicino a 1 e ci si fida della misura; se il rumore è grande ci si fida di più di ciò che
+si sapeva prima. L'errore quadratico medio è $\sigma_\Theta^2 - \frac{\sigma_\Theta^4}{\sigma_\Theta^2 + \sigma_N^2} =
+\frac{\sigma_\Theta^2 \sigma_N^2}{\sigma_\Theta^2 + \sigma_N^2}$, minore sia di $\sigma_N^2$ (l'errore che si commette
+usando la misura così com'è) sia di $\sigma_\Theta^2$ (l'errore che si commette ignorandola).
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[width=11cm, height=7.2cm, xmin=-1.2, xmax=5.2, ymin=-0.8, ymax=4.8, xtick={-1,0,1,2,3,4,5},
+  ytick={-0.5,0,1,2,3,4}, yticklabels={,$0$,$1$,$2$,$3$,$4$}, xlabel={misura $x$}, ylabel={parametro $\theta$},
+  axis lines=left, tick label style={font=\scriptsize}, label style={font=\small}, grid=major,
+  grid style={mspigray!20}, legend style={font=\scriptsize, at={(0.02,0.98)}, anchor=north west}]
+  \addplot[only marks, mark=*, mark size=1pt, mspiA!70] coordinates {(3.39,4.17) (2.14,2.33) (0.72,1.12) (1.41,1.48) (3.10,2.39) (2.96,2.20) (2.46,2.42) (1.03,1.74) (0.29,0.38) (1.97,1.78) (1.36,2.28) (0.42,1.24) (2.81,2.93) (1.39,2.06) (0.23,0.68) (2.11,1.83) (0.61,0.43) (0.67,1.08) (1.26,1.60) (2.94,2.38) (1.84,2.27) (2.55,2.34) (2.92,2.78) (-0.24,0.34) (2.12,1.53) (2.38,1.80) (1.35,2.22) (2.31,1.97) (1.26,2.33) (1.89,2.35) (-0.59,-0.15) (-0.94,-0.01) (5.00,3.35) (3.22,2.97) (3.99,3.80) (-0.78,0.96) (1.22,2.83) (-1.39,-0.89) (1.35,1.99) (2.85,2.96) (2.40,2.14) (1.45,1.35) (3.55,4.24) (2.42,2.10) (1.32,1.40) (-0.11,0.24) (2.71,1.98) (2.44,2.88) (2.07,0.84) (1.46,2.83) (0.94,1.61) (0.11,1.34) (1.13,1.53) (2.40,1.71) (1.29,2.17) (-0.18,0.22) (3.72,3.10) (2.14,1.37) (1.93,2.39) (2.30,2.39) (0.51,0.84) (3.01,2.12) (1.07,0.93) (1.92,1.98) (1.60,0.74) (4.36,3.26) (3.45,2.43) (3.18,2.51) (1.77,1.63) (0.88,1.64) (0.73,1.53) (0.56,0.85) (2.80,1.37) (4.49,3.75) (2.15,2.77) (1.22,2.25) (0.99,1.34) (2.19,1.61) (2.86,1.18) (2.04,1.46) (1.01,0.39) (0.87,0.74) (2.54,1.97) (2.85,2.59) (3.19,1.83) (1.51,1.52) (1.59,1.51) (0.71,1.01) (2.07,2.49) (2.02,2.45) (3.30,3.41) (4.09,3.75) (2.50,1.85) (4.22,3.15) (4.00,3.38) (1.45,0.80) (2.16,1.89) (2.74,3.26) (5.00,3.32) (2.31,2.54) (3.48,3.36) (3.91,3.04) (0.67,0.46) (-0.06,0.45) (1.73,2.59) (0.91,1.25) (2.52,2.29) (2.05,2.42) (1.49,1.22) (0.51,1.10) (2.10,2.68) (1.84,1.06) (0.33,1.93) (2.56,1.21) (4.59,4.82) (3.17,2.67) (0.98,2.28) (3.14,2.97) (0.56,1.73) (1.22,1.33) (1.84,1.71) (2.25,1.58) (1.75,2.59) (1.62,1.35) (2.36,1.41) (1.56,1.42) (1.75,2.57) (3.04,3.21) (0.73,1.24) (-0.73,0.26) (3.34,3.46) (1.78,1.67) (1.95,2.54) (1.91,1.75) (3.12,2.97) (3.44,3.62) (0.61,1.62) (2.33,1.91) (1.56,1.71) (0.54,0.98) (1.42,1.51) (3.36,3.03) (3.67,2.87) (2.40,1.49) (1.05,2.00) (1.26,1.35) (2.00,0.42) (2.47,1.90) (0.78,0.74) (1.65,2.21)};
+  \addplot[mspiB, line width=1.2pt, domain=-1.2:5.2] {0.6711*x + 0.6577};
+  \addplot[black, dashed, line width=0.8pt, domain=-0.8:4.8] {x};
+  \legend{{coppie simulate $(x, \theta)$}, {stima LMMSE $0{,}67\,x + 0{,}66$}, {$\hat\theta = x$ (si usa la misura)}}
+\end{axis}
+\end{tikzpicture}
+\end{center}
+Nella simulazione $\mu_\Theta = 2$, $\sigma_\Theta = 1$ e $\sigma_N = 0{,}7$: la retta LMMSE ha pendenza $a \approx
+0{,}67$ e passa per il centro della nuvola, ed è meno ripida della bisettrice. L'errore quadratico medio scende da
+$\sigma_N^2 = 0{,}49$ a $0{,}33$.
+\end{esempio}
+
+% ============================================================
+\section{L'algoritmo del gradiente}
+% ============================================================
+
+Calcolare $\matr{M}^{-1}\vett{s}$ richiede di invertire una matrice $n \times n$, che per $n$ grande è costoso; inoltre,
+se le statistiche cambiano nel tempo, bisognerebbe rifare il conto ogni volta. Un'alternativa è risolvere il problema
+in modo iterativo. Sostituendo l'espressione ottima di $b$ nel gradiente, il gradiente dell'errore quadratico medio
+rispetto ad $\vett{a}$ risulta
+\[ 2\matr{M}\vett{a} - 2\vett{s} , \]
+dove supponiamo noto il vettore $\vett{s}$. Il gradiente indica la direzione in cui l'errore cresce più rapidamente:
+per scendere verso il minimo basta fare un piccolo passo nella direzione opposta, e ripetere.
+
+\dfn{Algoritmo del gradiente}{
+  L'\term{algoritmo del gradiente} per lo stimatore lineare MMSE parte da un vettore iniziale $\vett{a}^{(1)}$ e calcola
+  \[ \vett{a}^{(k+1)} = \vett{a}^{(k)} - \gamma \left( \matr{M}\vett{a}^{(k)} - \vett{s} \right) , \qquad k = 1, 2,
+     \ldots \]
+  dove $\gamma > 0$ è il \term{passo} (il fattore 2 del gradiente è assorbito in $\gamma$).
+}
+
+Le slide indicano l'iterazione con l'apice $n$; qui usiamo $k$, per non confonderla con la dimensione $n$ dei dati. Si
+noti che $\matr{M}\vett{a}^{(k)} - \vett{s} = \matr{M} \left( \vett{a}^{(k)} - \matr{M}^{-1}\vett{s} \right) =
+\matr{M} \left( \vett{a}^{(k)} - \vett{a}_{\text{LMMSE}} \right)$: il passo è proporzionale alla distanza dalla
+soluzione, «vista» attraverso la matrice $\matr{M}$. Per capire se l'algoritmo converge servono gli autovalori.
+
+\begin{richiamo}{autovalori, autovettori e decomposizione spettrale}
+Un vettore $\vett{v} \neq \vett{0}$ è un \term{autovettore} della matrice quadrata $\matr{S}$, con \term{autovalore}
+$\lambda$, se $\matr{S}\vett{v} = \lambda\vett{v}$: la matrice non lo ruota, lo allunga soltanto (o lo accorcia, o lo
+ribalta) di un fattore $\lambda$. Per esempio $\begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix} \begin{bmatrix} 1 \\ 1
+\end{bmatrix} = 3 \begin{bmatrix} 1 \\ 1 \end{bmatrix}$ e $\begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix} \begin{bmatrix}
+1 \\ -1 \end{bmatrix} = 1 \cdot \begin{bmatrix} 1 \\ -1 \end{bmatrix}$: autovalori 3 e 1.
+
+Una matrice reale \textbf{simmetrica} ha tutti gli autovalori reali, e autovettori (corrispondenti ad autovalori
+distinti) ortogonali fra loro. Normalizzandoli (lunghezza 1) e mettendoli come colonne di una matrice $\matr{U}$, si
+ottiene una matrice \term{ortogonale}, con $\matr{U}^T \matr{U} = \matr{I}$, cioè $\matr{U}^T = \matr{U}^{-1}$, e vale la
+\term{decomposizione spettrale}
+\[ \matr{S} = \matr{U}\, \matr{\Lambda}_S\, \matr{U}^T , \]
+dove $\matr{\Lambda}_S$ è la matrice diagonale degli autovalori. La decomposizione rende facili le potenze: nel prodotto
+$\matr{S}\matr{S} = \matr{U}\matr{\Lambda}_S \matr{U}^T \matr{U} \matr{\Lambda}_S \matr{U}^T$ le due $\matr{U}$ centrali
+si annullano ($\matr{U}^T\matr{U} = \matr{I}$), e iterando
+\[ \matr{S}^k = \matr{U}\, \matr{\Lambda}_S^k\, \matr{U}^T , \]
+dove la potenza $k$-esima di una matrice diagonale è la matrice diagonale delle potenze $k$-esime degli elementi.
+\end{richiamo}
+
+\teorema[gradiente]{Convergenza dell'algoritmo del gradiente}{
+  Sia $\vett{\epsilon}^{(k)} = \vett{a}^{(k)} - \vett{a}_{\text{LMMSE}}$ l'errore al passo $k$. Allora
+  \[ \vett{\epsilon}^{(k+1)} = \left( \matr{I} - \gamma \matr{M} \right)^k \vett{\epsilon}^{(1)} , \]
+  e l'errore converge a zero, qualunque sia il punto di partenza, se e solo se
+  \[ 0 < \gamma < \frac{2}{\lambda_{\text{MAX}}} , \]
+  dove $\lambda_{\text{MAX}}$ è il più grande autovalore della matrice di covarianza $\matr{M}$.
+}
+
+\begin{dimostrazione}
+\passo{Un passo dell'errore} Sottraendo $\vett{a}_{\text{LMMSE}}$ ai due membri dell'algoritmo e usando
+$\matr{M}\vett{a}^{(k)} - \vett{s} = \matr{M}\vett{\epsilon}^{(k)}$:
+\[ \vett{\epsilon}^{(k+1)} = \vett{\epsilon}^{(k)} - \gamma\matr{M}\vett{\epsilon}^{(k)} = \left( \matr{I} - \gamma
+   \matr{M} \right) \vett{\epsilon}^{(k)} . \]
+\passo{Si itera} $\vett{\epsilon}^{(k+1)} = (\matr{I} - \gamma\matr{M})(\matr{I} - \gamma\matr{M})\vett{\epsilon}^{(k-1)}
+= \cdots = (\matr{I} - \gamma\matr{M})^k \vett{\epsilon}^{(1)}$.
+\passo{Gli autovalori di $\matr{S} = \matr{I} - \gamma\matr{M}$} $\matr{S}$ è simmetrica, come $\matr{M}$. Se
+$\matr{M}\vett{v} = \lambda\vett{v}$, allora $\matr{S}\vett{v} = \vett{v} - \gamma\lambda\vett{v} = (1 -
+\gamma\lambda)\vett{v}$: $\matr{S}$ ha gli stessi autovettori di $\matr{M}$, e autovalori $1 - \gamma\lambda_i$. Quindi
+$\matr{\Lambda}_S = \matr{I} - \gamma\matr{\Lambda}_M$, dove $\matr{\Lambda}_M$ è la matrice diagonale degli autovalori
+della matrice di covarianza.
+\passo{Le potenze} Con la decomposizione spettrale,
+\[ \vett{\epsilon}^{(k+1)} = \matr{U} \left( \matr{I} - \gamma\matr{\Lambda}_M \right)^k \matr{U}^T
+   \vett{\epsilon}^{(1)} , \]
+e sulla diagonale di $\left( \matr{I} - \gamma\matr{\Lambda}_M \right)^k$ ci sono i numeri $(1 - \gamma\lambda_i)^k$.
+Lungo ciascun autovettore l'errore viene moltiplicato, a ogni passo, per $1 - \gamma\lambda_i$.
+\passo{La condizione} Le potenze $(1 - \gamma\lambda_i)^k$ tendono a zero se e solo se $\abs{1 - \gamma\lambda_i} < 1$,
+cioè $0 < \gamma\lambda_i < 2$. Gli autovalori di una matrice di covarianza invertibile sono positivi (è definita non
+negativa, Capitolo~16), quindi la condizione vale per tutti gli autovalori se e solo se vale per il più grande:
+$0 < \gamma < \frac{2}{\lambda_{\text{MAX}}}$.
+\end{dimostrazione}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=13cm, height=4.6cm, xmin=-0.5, xmax=12.5, ymin=-2.4, ymax=2.4, xtick={0,2,4,6,8,10,12},
+  ytick={-2,-1,0,1,2}, xlabel={passo $k$}, ylabel={errore}, axis lines=left, tick label style={font=\scriptsize},
+  label style={font=\small}, grid=major, grid style={mspigray!20}, legend style={font=\scriptsize, at={(0.99,0.98)},
+  anchor=north east}, legend columns=3]
+  \addplot[mspiA, line width=1pt, mark=*, mark size=1.4pt] coordinates {(0,1.0000) (1,0.5000) (2,0.2500) (3,0.1250) (4,0.0625) (5,0.0312) (6,0.0156) (7,0.0078) (8,0.0039) (9,0.0020) (10,0.0010) (11,0.0005) (12,0.0002)};
+  \addplot[mspiC, line width=1pt, mark=*, mark size=1.4pt] coordinates {(0,1.0000) (1,-0.6000) (2,0.3600) (3,-0.2160) (4,0.1296) (5,-0.0778) (6,0.0467) (7,-0.0280) (8,0.0168) (9,-0.0101) (10,0.0060) (11,-0.0036) (12,0.0022)};
+  \addplot[mspiB, line width=1pt, mark=*, mark size=1.4pt] coordinates {(0,1.0000) (1,-1.1500) (2,1.3225) (3,-1.5209) (4,1.7490) (5,-2.0114) (6,2.3131) (7,-2.6600) (8,3.0590) (9,-3.5179) (10,4.0456) (11,-4.6524) (12,5.3503)};
+  \legend{{$\gamma\lambda = 0{,}5$}, {$\gamma\lambda = 1{,}6$}, {$\gamma\lambda = 2{,}15$}}
+\end{axis}
+\end{tikzpicture}
+\caption{Il caso scalare: a ogni passo l'errore viene moltiplicato per $1 - \gamma\lambda$. Con $\gamma\lambda = 0{,}5$
+dimezza a ogni passo; con $\gamma\lambda = 1{,}6$ cambia segno e si riduce (il fattore è $-0{,}6$); con $\gamma\lambda =
+2{,}15$ il fattore è $-1{,}15$, troppo grande in modulo, e l'algoritmo diverge.}
+\end{figure}
+
+\begin{esempio}{Due coefficienti}
+Con $\matr{M} = \begin{bmatrix} 2 & 0{,}9 \\ 0{,}9 & 1 \end{bmatrix}$ e $\vett{s} = [2{,}9;\ 1{,}9]^T$ la soluzione è
+$\vett{a}_{\text{LMMSE}} = [1, 1]^T$ (si verifica moltiplicando). Gli autovalori di $\matr{M}$ sono $\lambda_{\text{MAX}}
+\approx 2{,}53$ e $\lambda_{\text{min}} \approx 0{,}47$ (le radici di $\det(\matr{M} - \lambda\matr{I}) = (2 -
+\lambda)(1 - \lambda) - 0{,}81 = 0$), quindi l'algoritmo converge per $0 < \gamma < \frac{2}{2{,}53} \approx 0{,}79$.
+La figura mostra le curve di livello dell'errore quadratico medio, ellissi centrate nella soluzione con gli assi lungo
+gli autovettori, e i primi passi dell'algoritmo per due valori del passo.
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[width=9cm, height=8.4cm, xmin=-1.6, xmax=3.1, ymin=-0.9, ymax=3.2, axis equal image,
+  xtick={-1,0,1,2,3}, ytick={0,1,2,3}, xlabel=$a_1$, ylabel=$a_2$, axis lines=left, tick label style={font=\scriptsize},
+  label style={font=\small}, legend style={font=\scriptsize, at={(0.99,0.99)}, anchor=north east}]
+  \addplot[mspigray!70, line width=0.5pt, forget plot] coordinates {(1.271,1.159) (1.302,1.104) (1.331,1.048) (1.357,0.991) (1.381,0.935) (1.402,0.879) (1.419,0.824) (1.434,0.770) (1.445,0.718) (1.453,0.668) (1.457,0.621) (1.458,0.577) (1.456,0.536) (1.450,0.498) (1.440,0.464) (1.427,0.434) (1.411,0.409) (1.392,0.388) (1.370,0.372) (1.345,0.360) (1.317,0.354) (1.287,0.352) (1.255,0.355) (1.221,0.363) (1.185,0.376) (1.147,0.394) (1.109,0.416) (1.070,0.443) (1.030,0.474) (0.990,0.509) (0.950,0.548) (0.911,0.590) (0.872,0.635) (0.834,0.683) (0.797,0.734) (0.762,0.786) (0.729,0.841) (0.698,0.896) (0.669,0.952) (0.643,1.009) (0.619,1.065) (0.598,1.121) (0.581,1.176) (0.566,1.230) (0.555,1.282) (0.547,1.332) (0.543,1.379) (0.542,1.423) (0.544,1.464) (0.550,1.502) (0.560,1.536) (0.573,1.566) (0.589,1.591) (0.608,1.612) (0.630,1.628) (0.655,1.640) (0.683,1.646) (0.713,1.648) (0.745,1.645) (0.779,1.637) (0.815,1.624) (0.853,1.606) (0.891,1.584) (0.930,1.557) (0.970,1.526) (1.010,1.491) (1.050,1.452) (1.089,1.410) (1.128,1.365) (1.166,1.317) (1.203,1.266) (1.238,1.214) (1.271,1.159)};
+  \addplot[mspigray!70, line width=0.5pt, forget plot] coordinates {(1.542,1.319) (1.604,1.208) (1.662,1.096) (1.715,0.983) (1.762,0.870) (1.804,0.758) (1.839,0.648) (1.868,0.540) (1.890,0.437) (1.906,0.337) (1.915,0.242) (1.916,0.154) (1.911,0.071) (1.899,-0.004) (1.880,-0.072) (1.854,-0.131) (1.822,-0.182) (1.784,-0.224) (1.739,-0.257) (1.689,-0.280) (1.634,-0.293) (1.574,-0.296) (1.509,-0.290) (1.441,-0.274) (1.369,-0.248) (1.295,-0.212) (1.218,-0.168) (1.140,-0.114) (1.060,-0.052) (0.980,0.018) (0.900,0.096) (0.821,0.180) (0.744,0.271) (0.668,0.367) (0.595,0.468) (0.525,0.573) (0.458,0.681) (0.396,0.792) (0.338,0.904) (0.285,1.017) (0.238,1.130) (0.196,1.242) (0.161,1.352) (0.132,1.460) (0.110,1.563) (0.094,1.663) (0.085,1.758) (0.084,1.846) (0.089,1.929) (0.101,2.004) (0.120,2.072) (0.146,2.131) (0.178,2.182) (0.216,2.224) (0.261,2.257) (0.311,2.280) (0.366,2.293) (0.426,2.296) (0.491,2.290) (0.559,2.274) (0.631,2.248) (0.705,2.212) (0.782,2.168) (0.860,2.114) (0.940,2.052) (1.020,1.982) (1.100,1.904) (1.179,1.820) (1.256,1.729) (1.332,1.633) (1.405,1.532) (1.475,1.427) (1.542,1.319)};
+  \addplot[mspigray!70, line width=0.5pt, forget plot] coordinates {(1.813,1.478) (1.906,1.312) (1.993,1.144) (2.072,0.974) (2.143,0.805) (2.205,0.637) (2.258,0.472) (2.302,0.311) (2.336,0.155) (2.359,0.005) (2.372,-0.136) (2.375,-0.270) (2.367,-0.393) (2.349,-0.506) (2.320,-0.608) (2.282,-0.697) (2.233,-0.773) (2.176,-0.836) (2.109,-0.885) (2.034,-0.919) (1.951,-0.939) (1.861,-0.944) (1.764,-0.935) (1.662,-0.910) (1.554,-0.871) (1.442,-0.818) (1.327,-0.751) (1.209,-0.671) (1.090,-0.578) (0.970,-0.473) (0.851,-0.357) (0.732,-0.230) (0.615,-0.094) (0.502,0.050) (0.392,0.202) (0.287,0.359) (0.187,0.522) (0.094,0.688) (0.007,0.856) (-0.072,1.026) (-0.143,1.195) (-0.205,1.363) (-0.258,1.528) (-0.302,1.689) (-0.336,1.845) (-0.359,1.995) (-0.372,2.136) (-0.375,2.270) (-0.367,2.393) (-0.349,2.506) (-0.320,2.608) (-0.282,2.697) (-0.233,2.773) (-0.176,2.836) (-0.109,2.885) (-0.034,2.919) (0.049,2.939) (0.139,2.944) (0.236,2.935) (0.338,2.910) (0.446,2.871) (0.558,2.818) (0.673,2.751) (0.791,2.671) (0.910,2.578) (1.030,2.473) (1.149,2.357) (1.268,2.230) (1.385,2.094) (1.498,1.950) (1.608,1.798) (1.713,1.641) (1.813,1.478)};
+  \addplot[mspigray!70, line width=0.5pt, forget plot] coordinates {(2.084,1.638) (2.209,1.416) (2.324,1.192) (2.430,0.966) (2.524,0.740) (2.607,0.516) (2.678,0.296) (2.736,0.081) (2.781,-0.127) (2.812,-0.326) (2.829,-0.515) (2.833,-0.693) (2.823,-0.858) (2.798,-1.008) (2.760,-1.143) (2.709,-1.262) (2.644,-1.364) (2.568,-1.448) (2.479,-1.513) (2.379,-1.559) (2.268,-1.586) (2.148,-1.593) (2.019,-1.580) (1.882,-1.547) (1.739,-1.495) (1.590,-1.424) (1.436,-1.335) (1.279,-1.228) (1.120,-1.104) (0.960,-0.964) (0.801,-0.809) (0.643,-0.640) (0.487,-0.459) (0.336,-0.266) (0.189,-0.064) (0.049,0.146) (-0.084,0.362) (-0.209,0.584) (-0.324,0.808) (-0.430,1.034) (-0.524,1.260) (-0.607,1.484) (-0.678,1.704) (-0.736,1.919) (-0.781,2.127) (-0.812,2.326) (-0.829,2.515) (-0.833,2.693) (-0.823,2.858) (-0.798,3.008) (-0.760,3.143) (-0.709,3.262) (-0.644,3.364) (-0.568,3.448) (-0.479,3.513) (-0.379,3.559) (-0.268,3.586) (-0.148,3.593) (-0.019,3.580) (0.118,3.547) (0.261,3.495) (0.410,3.424) (0.564,3.335) (0.721,3.228) (0.880,3.104) (1.040,2.964) (1.199,2.809) (1.357,2.640) (1.513,2.459) (1.664,2.266) (1.811,2.064) (1.951,1.854) (2.084,1.638)};
+  \addplot[mspigray!70, line width=0.5pt, forget plot] coordinates {(2.355,1.797) (2.511,1.520) (2.655,1.240) (2.787,0.957) (2.905,0.675) (3.009,0.395) (3.097,0.120) (3.170,-0.149) (3.226,-0.409) (3.265,-0.658) (3.287,-0.894) (3.291,-1.116) (3.278,-1.322) (3.248,-1.510) (3.200,-1.679) (3.136,-1.828) (3.056,-1.955) (2.959,-2.060) (2.848,-2.141) (2.723,-2.199) (2.585,-2.232) (2.435,-2.241) (2.274,-2.225) (2.103,-2.184) (1.923,-2.119) (1.737,-2.031) (1.545,-1.919) (1.349,-1.785) (1.150,-1.630) (0.950,-1.455) (0.751,-1.261) (0.553,-1.050) (0.359,-0.824) (0.170,-0.583) (-0.013,-0.331) (-0.188,-0.068) (-0.355,0.203) (-0.511,0.480) (-0.655,0.760) (-0.787,1.043) (-0.905,1.325) (-1.009,1.605) (-1.097,1.880) (-1.170,2.149) (-1.226,2.409) (-1.265,2.658) (-1.287,2.894) (-1.291,3.116) (-1.278,3.322) (-1.248,3.510) (-1.200,3.679) (-1.136,3.828) (-1.056,3.955) (-0.959,4.060) (-0.848,4.141) (-0.723,4.199) (-0.585,4.232) (-0.435,4.241) (-0.274,4.225) (-0.103,4.184) (0.077,4.119) (0.263,4.031) (0.455,3.919) (0.651,3.785) (0.850,3.630) (1.050,3.455) (1.249,3.261) (1.447,3.050) (1.641,2.824) (1.830,2.583) (2.013,2.331) (2.188,2.068) (2.355,1.797)};
+  \addplot[mspiA, line width=0.9pt, mark=*, mark size=1.3pt] coordinates {(-1.000,2.600) (-0.360,2.650) (-0.051,2.543) (0.127,2.394) (0.250,2.242) (0.345,2.100) (0.425,1.972) (0.494,1.859) (0.554,1.758) (0.606,1.669) (0.653,1.590) (0.694,1.521) (0.730,1.460) (0.761,1.406) (0.789,1.358) (0.814,1.316)};
+  \addplot[mspiB, line width=0.9pt, mark=*, mark size=1.3pt] coordinates {(-1.000,2.600) (0.843,2.744) (-0.061,1.590) (1.085,1.853) (0.410,1.184) (1.140,1.434) (0.657,1.031) (1.131,1.231) (0.793,0.980) (1.104,1.129) (0.871,0.968) (1.077,1.075) (0.917,0.971) (1.055,1.045) (0.946,0.977) (1.039,1.028)};
+  \addplot[only marks, mark=x, mark size=4pt, black, line width=1pt, forget plot] coordinates {(1,1)};
+  \legend{{$\gamma = 0{,}25$}, {$\gamma = 0{,}72$}}
+\end{axis}
+\end{tikzpicture}
+\hspace{0.3cm}
+\begin{minipage}[b]{5.6cm}\small
+Partendo da $[-1;\ 2{,}6]^T$, con il passo piccolo ($\gamma = 0{,}25$) l'algoritmo scende con prudenza, perpendicolare
+alle curve di livello, ma nella direzione dell'autovalore piccolo avanza lentamente (a ogni passo l'errore si riduce
+solo del 12\%). Con il passo grande ($\gamma = 0{,}72$, vicino al limite $0{,}79$) lungo l'autovalore grande il fattore
+è $1 - 0{,}72 \cdot 2{,}53 \approx -0{,}82$: l'algoritmo rimbalza da una parte all'altra della valle, a zig-zag, mentre
+nell'altra direzione arriva più in fretta.
+\vspace{0.4cm}
+\end{minipage}
+\end{center}
+Quando gli autovalori sono molto diversi fra loro, nessun passo va bene per tutte le direzioni: il passo deve essere
+piccolo per l'autovalore grande, e allora è lentissimo per quello piccolo. È il motivo per cui la convergenza del
+gradiente è lenta quando le ellissi sono molto schiacciate.
+\end{esempio}
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item Gradiente: $\nabla_{\vett{w}} (\vett{u}^T\vett{w}) = \vett{u}$; $\nabla_{\vett{w}} (\vett{w}^T \matr{A}\vett{w})
+        = 2\matr{A}\vett{w}$ per $\matr{A}$ simmetrica.
+  \item \textbf{Stimatore lineare MMSE}: $\hat\Theta = \vett{a}^T\vett{X} + b$ con $\vett{a} = \matr{M}^{-1}\vett{s}$ e
+        $b = E[\Theta] - \vett{a}^T E[\vett{X}]$, cioè $\hat\Theta = E[\Theta] + \vett{s}^T\matr{M}^{-1}(\vett{X} -
+        E[\vett{X}])$; servono solo medie e covarianze. Errore minimo $\sigma_\Theta^2 - \vett{s}^T\matr{M}^{-1}\vett{s}$.
+        Per dati gaussiani coincide con lo stimatore MMSE.
+  \item \textbf{Algoritmo del gradiente}: $\vett{a}^{(k+1)} = \vett{a}^{(k)} - \gamma(\matr{M}\vett{a}^{(k)} - \vett{s})$;
+        l'errore evolve come $(\matr{I} - \gamma\matr{M})^k$ e, con la decomposizione spettrale, si riduce lungo ogni
+        autovettore del fattore $1 - \gamma\lambda_i$. Converge se e solo se $0 < \gamma < \frac{2}{\lambda_{\text{MAX}}}$.
+\end{itemize}
+}

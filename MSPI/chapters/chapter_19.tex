@@ -1,0 +1,355 @@
+\chapter{Decisioni bayesiane e classificazione binaria}
+
+L'idea principale della statistica inferenziale è che, osservato un campione sufficientemente ampio di una popolazione,
+si possono dedurre alcune caratteristiche che devono essere rispettate da qualsiasi altro campione. Spesso si ha anche
+una certa conoscenza a priori: per esempio si sa che il campione proviene da una popolazione la cui distribuzione è nota
+a meno di un insieme di parametri, cioè da una \textbf{famiglia di distribuzioni} indicizzate da un parametro $\theta$.
+La domanda diventa: come si elaborano i dati per dedurre il valore del parametro?
+
+Se il parametro può assumere solo un numero finito di valori, la domanda è una \textbf{decisione}: quale fra $M$
+spiegazioni dei dati è quella vera? È il problema di un ricevitore che deve capire quale simbolo è stato trasmesso, di
+un filtro che deve classificare un messaggio come posta indesiderata o no, di un test medico. In questo capitolo lo
+risolviamo nel caso \textbf{bayesiano}, in cui si conoscono le probabilità a priori delle varie spiegazioni.
+
+% ============================================================
+\section{Regole di decisione e rischio bayesiano}
+% ============================================================
+
+Si abbia un insieme di dati $\vett{x} \in \mathcal{X}^n$, realizzazione di un vettore aleatorio $\vett{X}$. I dati
+possono seguire una fra $M$ diverse leggi di probabilità: c'è un insieme di $M$ \textbf{ipotesi} mutuamente esclusive
+$\{H_i\}_{i=1}^{M}$, ciascuna delle quali definisce una diversa legge condizionata per i dati,
+\[ p_{\vett{X}}(\vett{x} \mid H_i) , \qquad i = 1, 2, \ldots, M . \]
+In altre parole $\vett{X}$ ha una distribuzione che appartiene a una famiglia di pmf $p_{\vett{X}}(\vett{x} \mid
+\theta)$, dove il valore del parametro $\theta$ (qui, l'indice $i$ dell'ipotesi) non è noto. Si suppone inoltre di
+conoscere le \textbf{probabilità a priori} $\{P(H_i)\}_{i=1}^{M}$ di questi «stati della natura».
+
+\dfn{Regola di decisione}{
+  Una \term{regola di decisione} è una corrispondenza
+  \[ D : \vett{x} \in \mathcal{X}^n \;\longmapsto\; D(\vett{x}) \in \{1, 2, \ldots, M\} \]
+  che, osservati i dati, decide quale dei possibili stati della natura è quello effettivamente attivo.
+}
+
+Dare una regola di decisione equivale a dividere l'insieme di tutti i dati possibili in $M$ \term{regioni di
+decisione} $\Omega_i = \{\vett{x} : D(\vett{x}) = i\}$: se i dati cadono in $\Omega_i$ si decide per l'ipotesi $H_i$.
+Le regioni sono una partizione di $\mathcal{X}^n$ (Capitolo~1): non si sovrappongono e lo ricoprono tutto, perché per
+ogni dato si prende una e una sola decisione.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \fill[mspiA!12] (0,0) -- (3.4,0) .. controls (3.0,1.2) and (4.6,2.0) .. (4.0,3.2) -- (0,3.2) -- cycle;
+  \fill[mspiB!14] (3.4,0) .. controls (3.0,1.2) and (4.6,2.0) .. (4.0,3.2) -- (7.6,3.2) -- (7.6,0) -- cycle;
+  \draw[mspigray, line width=0.6pt] (0,0) rectangle (7.6,3.2);
+  \draw[black, line width=1pt] (3.4,0) .. controls (3.0,1.2) and (4.6,2.0) .. (4.0,3.2);
+  \node[font=\small] at (1.7,2.5) {$\Omega_1$: si decide $H_1$};
+  \node[font=\small] at (6.0,2.5) {$\Omega_2$: si decide $H_2$};
+  \foreach \p in {(0.8,0.9), (1.5,1.6), (2.4,0.6), (2.9,2.0), (1.2,2.0)} \fill[mspiA] \p circle (1.6pt);
+  \foreach \p in {(5.0,0.8), (6.3,1.5), (4.7,1.9), (6.8,0.5), (5.6,2.0)} \fill[mspiB] \p circle (1.6pt);
+  \node[font=\scriptsize, mspigray] at (7.25,0.25) {$\mathcal{X}^n$};
+  \node[font=\small, anchor=west, text width=6.4cm] at (8.2,1.6) {L'insieme $\mathcal{X}^n$ di tutti i dati possibili
+    è diviso in due regioni. Progettare la regola di decisione vuol dire scegliere da che parte mettere ogni
+    possibile $\vett{x}$, cioè dove tracciare il confine.};
+\end{tikzpicture}
+\caption{Una regola di decisione fra due ipotesi è una partizione dei dati in due regioni.}
+\end{figure}
+
+Per scegliere la regola migliore bisogna dire quanto costano gli errori. Non tutti gli errori sono uguali: scambiare
+un messaggio importante per posta indesiderata è peggio del contrario.
+
+\dfn{Matrice dei costi}{
+  La \term{matrice dei costi} è la matrice $M \times M$
+  \[ \matr{C} = \begin{bmatrix} C_{11} & C_{12} & \cdots & C_{1M} \\ C_{21} & C_{22} & \cdots & C_{2M} \\ \vdots &
+     \vdots & \ddots & \vdots \\ C_{M1} & C_{M2} & \cdots & C_{MM} \end{bmatrix} , \]
+  dove $C_{ij}$ è il costo associato all'evento «si prende la decisione per l'ipotesi $i$, $D(\vett{x}) = i$, e lo
+  stato della natura è $H_j$», cioè l'ipotesi vera è la $j$.
+}
+
+\dfn{Rischio medio bayesiano}{
+  Il \term{rischio medio bayesiano} di una regola di decisione $D$ è il costo medio:
+  \[ R = \sum_{i=1}^{M} \sum_{j=1}^{M} C_{ij}\, P\{D(\vett{X}) = i,\ H = H_j\} . \]
+  Data una matrice dei costi $\matr{C}$, una \term{regola di decisione ottima} è una corrispondenza $D(\vett{x})$ che
+  minimizza il rischio bayesiano.
+}
+
+Il rischio è la media di una variabile aleatoria, il costo: il costo $C_{ij}$ si paga con la probabilità che si decida
+$i$ quando è vera $j$. Il caso più comune è quello in cui le decisioni giuste non costano nulla e quelle sbagliate
+costano tutte allo stesso modo.
+
+\teorema[rischioerrore]{Costi uniformi: il rischio è la probabilità di errore}{
+  Se $C_{ii} = 0$ per $i = 1, 2, \ldots, M$ e $C_{ij} = 1$ per ogni $i \neq j$, allora il rischio medio bayesiano
+  coincide con la probabilità di commettere un errore nella classificazione:
+  \[ R = \sum_{i=1}^{M} \sum_{\substack{j=1 \\ j \neq i}}^{M} P\{D(\vett{X}) = i,\ H = H_j\} = P(e) . \]
+}
+
+\begin{dimostrazione}
+\passo{} I termini con $i = j$ hanno costo zero e spariscono; gli altri hanno costo 1 e restano con la loro
+probabilità. Gli eventi $\{D(\vett{X}) = i, H = H_j\}$ con $i \neq j$ sono incompatibili (in ogni prova si prende una
+sola decisione ed è vera una sola ipotesi), e la loro unione è l'evento «la decisione è sbagliata»: per l'additività la
+somma delle loro probabilità è $P(e)$.
+\end{dimostrazione}
+
+% ============================================================
+\section{La classificazione binaria a minima probabilità di errore}
+% ============================================================
+
+Supponiamo ora $M = 2$, $C_{11} = C_{22} = 0$ e $C_{12} = C_{21} = 1$. Per il teorema precedente
+\[ R = P\{D(\vett{X}) = 2,\ H_1\} + P\{D(\vett{X}) = 1,\ H_2\} = P(e) . \]
+Progettare una regola di decisione vuol dire determinare una partizione di $\mathcal{X}^n$ in due sottoinsiemi
+$\Omega_1$ e $\Omega_2$, con
+\[ D(\vett{x}) = \begin{cases} 1 & \text{se } \vett{x} \in \Omega_1 , \\ 2 & \text{se } \vett{x} \in \Omega_2 ,
+   \end{cases} \qquad\text{e quindi}\qquad P(e) = P\{\vett{X} \in \Omega_1,\ H_2\} + P\{\vett{X} \in \Omega_2,\ H_1\} . \]
+Cerchiamo la regola ottima, cioè quella con la minima probabilità di errore. Supponiamo prima che le osservazioni siano
+un vettore aleatorio \textbf{discreto}, con pmf condizionate $p_{\vett{X}}(\vett{x} \mid H_i)$ note.
+
+\teorema[mapbinario]{Regola a minima probabilità di errore}{
+  La regola di decisione che minimizza la probabilità di errore è
+  \[ \vett{x} \in \Omega_1 \iff p_{\vett{X}}(\vett{x} \mid H_1)\, P(H_1) > p_{\vett{X}}(\vett{x} \mid H_2)\, P(H_2) , \]
+  o, in modo equivalente,
+  \[ L(\vett{x}) = \frac{p_{\vett{X}}(\vett{x} \mid H_1)}{p_{\vett{X}}(\vett{x} \mid H_2)} \decidi{H_1}{H_2}
+     \frac{P(H_2)}{P(H_1)} = \eta , \]
+  dove il simbolo $\decidi{H_1}{H_2}$ si legge: «se vale $>$ si decide $H_1$, se vale $<$ si decide $H_2$». La
+  quantità $L(\vett{x})$ si chiama \term{rapporto di verosimiglianza} (\emph{likelihood ratio}) fra le due ipotesi.
+}
+
+\begin{dimostrazione}[la probabilità di errore è il complemento di quella di decisione corretta]
+\passo{Si scrivono le due probabilità congiunte} Per la probabilità composta,
+\[ P\{\vett{X} \in \Omega_1,\ H_2\} = \sum_{\vett{x} \in \Omega_1} P\{\vett{X} = \vett{x} \mid H_2\}\, P(H_2) , \qquad
+   P\{\vett{X} \in \Omega_2,\ H_1\} = \sum_{\vett{x} \in \Omega_2} P\{\vett{X} = \vett{x} \mid H_1\}\, P(H_1) . \]
+\passo{Si passa al complemento} Le due regioni si spartiscono tutti i dati, e la somma di una pmf su tutti i dati vale
+1: quindi $\sum_{\vett{x} \in \Omega_1} p_{\vett{X}}(\vett{x} \mid H_2) = 1 - \sum_{\vett{x} \in \Omega_2}
+p_{\vett{X}}(\vett{x} \mid H_2)$, e lo stesso per $H_1$. Sostituendo e usando $P(H_1) + P(H_2) = 1$:
+\[ P(e) = 1 - \left[ \sum_{\vett{x} \in \Omega_1} p_{\vett{X}}(\vett{x} \mid H_1)\, P(H_1) + \sum_{\vett{x} \in
+   \Omega_2} p_{\vett{X}}(\vett{x} \mid H_2)\, P(H_2) \right] . \]
+La quantità fra parentesi quadre è la probabilità di una decisione corretta.
+\passo{Si massimizza un dato alla volta} $P(e)$ è minima quando la parentesi quadra è massima. Ogni vettore $\vett{x}$
+va messo o in $\Omega_1$ o in $\Omega_2$, non in entrambe: se va in $\Omega_1$ contribuisce alla parentesi con
+$p_{\vett{X}}(\vett{x} \mid H_1) P(H_1)$, se va in $\Omega_2$ con $p_{\vett{X}}(\vett{x} \mid H_2) P(H_2)$. La scelta
+migliore è metterlo dove il suo contributo è più grande: è la regola dell'enunciato.
+\passo{Il rapporto} Dividendo i due membri della disuguaglianza per le quantità positive $p_{\vett{X}}(\vett{x} \mid
+H_2)$ e $P(H_1)$ si ottiene la forma con il rapporto di verosimiglianza. (Se i due membri sono uguali, le due decisioni
+danno lo stesso contributo e si può scegliere a piacere.)
+\end{dimostrazione}
+
+La stessa regola si legge anche in un altro modo, che le dà il nome. Per la legge di Bayes
+\[ P\{H_i \mid \vett{X} = \vett{x}\} = \frac{P\{\vett{X} = \vett{x} \mid H_i\}\, P(H_i)}{P\{\vett{X} = \vett{x}\}} =
+   \frac{p_{\vett{X}}(\vett{x} \mid H_i)\, P(H_i)}{p_{\vett{X}}(\vett{x})} , \]
+e il denominatore è lo stesso per le due ipotesi: confrontare $p_{\vett{X}}(\vett{x} \mid H_i) P(H_i)$ equivale a
+confrontare le probabilità a posteriori.
+
+\dfn{Regola MAP e regola ML}{
+  La regola a minima probabilità di errore si chiama anche \term{regola MAP} (\emph{Massima probabilità A
+  Posteriori}): decide per l'ipotesi la cui probabilità a posteriori, dati i dati osservati, è massima. Se le due
+  ipotesi sono a priori equiprobabili, la soglia vale $\eta = 1$ e la regola diventa la \term{regola a massima
+  verosimiglianza}, o \term{regola ML} (\emph{Maximum Likelihood}): decide per l'ipotesi che rende più probabili i dati
+  osservati.
+}
+
+Le probabilità a priori spostano la soglia: se $H_2$ è a priori molto più probabile di $H_1$, la soglia $\eta$ è grande,
+e per decidere $H_1$ servono dati che la favoriscano nettamente. Le \textbf{probabilità di errore condizionate} sono
+\[ P(e \mid H_1) = P\{L(\vett{X}) < \eta \mid H_1\} , \qquad P(e \mid H_2) = P\{L(\vett{X}) > \eta \mid H_2\} , \]
+e per la legge della probabilità totale
+\[ P(e) = P(H_1)\, P(e \mid H_1) + P(H_2)\, P(e \mid H_2) . \]
+
+% ============================================================
+\section{Esempio: da quale sorgente vengono i bit?}
+% ============================================================
+
+Le osservazioni sono $n$ variabili binarie i.i.d., estratte con la stessa probabilità da una sorgente con
+$P\{X_i = 1\} = p_1$ (ipotesi $H_1$) o da una sorgente con $P\{X_i = 1\} = p_2$ (ipotesi $H_2$), con $p_1 > p_2$.
+Una sequenza precisa con $w$ uni e $n - w$ zeri ha probabilità $p_i^{w} (1 - p_i)^{n - w}$ (i bit sono indipendenti),
+quindi
+\[ p_{\vett{X}}(\vett{x} \mid H_i) = p_i^{w_H(\vett{x})}\, (1 - p_i)^{n - w_H(\vett{x})} , \]
+dove $w_H(\vett{x})$ è il \term{peso di Hamming} della sequenza binaria osservata, cioè il numero dei suoi «1».
+
+\teorema[testhamming]{Il test sul peso di Hamming}{
+  Con ipotesi equiprobabili, il test a minima probabilità di errore fra le due sorgenti è
+  \[ w_H(\vett{x}) \decidi{H_1}{H_2} \eta_1 = n\, \frac{\ln \dfrac{1 - p_2}{1 - p_1}}{\ln \dfrac{p_1 (1 - p_2)}{p_2 (1 -
+     p_1)}} : \]
+  si decide per la sorgente con più uni se la sequenza ha abbastanza uni.
+}
+
+\begin{dimostrazione}
+\passo{Il rapporto di verosimiglianza} Con $P(H_1) = P(H_2) = \frac12$ la soglia è $\eta = 1$, e raccogliendo le
+potenze con lo stesso esponente:
+\[ L(\vett{x}) = \frac{p_1^{w_H(\vett{x})} (1 - p_1)^{n - w_H(\vett{x})}}{p_2^{w_H(\vett{x})} (1 - p_2)^{n -
+   w_H(\vett{x})}} = \left( \frac{p_1}{p_2} \right)^{w_H(\vett{x})} \left( \frac{1 - p_1}{1 - p_2} \right)^{n -
+   w_H(\vett{x})} \decidi{H_1}{H_2} 1 . \]
+\passo{Il logaritmo} Il logaritmo è una funzione crescente: applicato a entrambi i membri non cambia il verso della
+disuguaglianza, e trasforma le potenze in prodotti ($\ln a^b = b \ln a$) e il prodotto in somma. Con $w = w_H(\vett{x})$:
+\[ w \ln \frac{p_1}{p_2} + (n - w) \ln \frac{1 - p_1}{1 - p_2} \decidi{H_1}{H_2} 0 \quad\iff\quad w \left[ \ln
+   \frac{p_1}{p_2} - \ln \frac{1 - p_1}{1 - p_2} \right] \decidi{H_1}{H_2} n \ln \frac{1 - p_2}{1 - p_1} , \]
+dove si è usato $-\ln \frac{1 - p_1}{1 - p_2} = \ln \frac{1 - p_2}{1 - p_1}$.
+\passo{Si isola il peso} La differenza di logaritmi è il logaritmo del quoziente:
+$w \ln \frac{p_1 (1 - p_2)}{p_2 (1 - p_1)} \decidi{H_1}{H_2} n \ln \frac{1 - p_2}{1 - p_1}$. Siccome $p_1 > p_2$, si ha
+$\frac{p_1}{p_2} > 1$ e $\frac{1 - p_2}{1 - p_1} > 1$: tutti i logaritmi sono positivi, e dividendo per il
+coefficiente di $w$ il verso non cambia.
+\end{dimostrazione}
+
+Si noti una cosa importante: per decidere non serve conoscere tutta la sequenza, ma solo quanti uni contiene. Una
+quantità calcolata dai dati che contiene tutto ciò che serve per la decisione si chiama, nel gergo della statistica
+inferenziale, \term{statistica sufficiente}: qui è $w_H(\vett{x})$.
+
+Per le prestazioni, si osservi che sotto l'ipotesi $H_i$ il peso $w_H(\vett{X})$ conta i successi in $n$ prove
+indipendenti con probabilità $p_i$: è \textbf{binomiale} $\mathcal{B}(n, p_i)$ (Capitolo~5). Se $\eta_1$ non è intero,
+\[ P(e \mid H_1) = P\{w_H(\vett{X}) < \eta_1 \mid H_1\} = \sum_{i=0}^{\lfloor \eta_1 \rfloor} \binom{n}{i} p_1^i (1 -
+   p_1)^{n - i} , \qquad P(e \mid H_2) = P\{w_H(\vett{X}) > \eta_1 \mid H_2\} = \sum_{i = \lfloor \eta_1 \rfloor +
+   1}^{n} \binom{n}{i} p_2^i (1 - p_2)^{n - i} , \]
+dove $\lfloor \eta_1 \rfloor$ è la \term{parte intera} di $\eta_1$ (il più grande intero che non la supera), e
+\[ P(e) = P(e \mid H_1)\, P(H_1) + P(e \mid H_2)\, P(H_2) = \frac12 P(e \mid H_1) + \frac12 P(e \mid H_2) . \]
+
+\begin{esempio}{Dieci bit, sorgenti con $p_1 = 0{,}6$ e $p_2 = 0{,}2$}
+La soglia è
+\[ \eta_1 = 10\, \frac{\ln (0{,}8/0{,}4)}{\ln \frac{0{,}6 \cdot 0{,}8}{0{,}2 \cdot 0{,}4}} = 10\, \frac{\ln 2}{\ln 6} =
+   10 \cdot \frac{0{,}693}{1{,}792} \approx 3{,}87 : \]
+si decide $H_1$ se la sequenza contiene almeno 4 uni. Le probabilità di errore sono $P(e \mid H_1) = P\{w \leq 3 \mid
+p = 0{,}6\} \approx 0{,}055$ e $P(e \mid H_2) = P\{w \geq 4 \mid p = 0{,}2\} \approx 0{,}121$, quindi $P(e) \approx
+0{,}088$. Nella figura, per ogni peso $w$, le due barre sono $\frac12 P(w \mid H_1)$ e $\frac12 P(w \mid H_2)$: la
+regola ottima sceglie, per ogni $w$, la barra più alta, e l'errore è la somma delle barre più basse.
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[width=14cm, height=5.6cm, ybar, bar width=8pt, xmin=-0.7, xmax=10.7, ymin=0, ymax=0.175,
+  xtick={0,1,...,10}, ytick={0.05,0.1,0.15}, yticklabels={$0{,}05$,$0{,}1$,$0{,}15$}, xlabel={peso di Hamming $w$},
+  axis lines=left, tick label style={font=\scriptsize}, label style={font=\small}, grid=major, grid style={mspigray!20},
+  legend style={font=\scriptsize, at={(0.99,0.98)}, anchor=north east}, clip=false]
+  \addplot[fill=mspiA!60, draw=mspiA!80!black] coordinates {(0,0.0001) (1,0.0008) (2,0.0053) (3,0.0212) (4,0.0557)
+    (5,0.1003) (6,0.1254) (7,0.1075) (8,0.0605) (9,0.0202) (10,0.0030)};
+  \addplot[fill=mspiB!60, draw=mspiB!80!black] coordinates {(0,0.0537) (1,0.1342) (2,0.1510) (3,0.1007) (4,0.0440)
+    (5,0.0132) (6,0.0028) (7,0.0004) (8,0.0000) (9,0.0000) (10,0.0000)};
+  \draw[black, dashed, line width=1pt] (axis cs:3.87,0) -- (axis cs:3.87,0.165);
+  \node[font=\small, anchor=east] at (axis cs:3.7,0.165) {si decide $H_2$};
+  \node[font=\small, anchor=west] at (axis cs:4.05,0.165) {si decide $H_1$};
+  \legend{{$\frac12 P(w \mid H_1)$}, {$\frac12 P(w \mid H_2)$}}
+\end{axis}
+\end{tikzpicture}
+\end{center}
+Che la soglia 4 sia la migliore si può verificare provando tutte le soglie possibili («si decide $H_1$ se $w \geq t$»):
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}c|ccccccc@{}}
+  soglia $t$ & 1 & 2 & 3 & \textbf{4} & 5 & 6 & 7 \\ \hline
+  $P(e)$ & 0,446 & 0,313 & 0,167 & \textbf{0,088} & 0,100 & 0,187 & 0,309
+\end{tabular}
+\end{center}
+\end{esempio}
+
+% ============================================================
+\section{Dati continui}
+% ============================================================
+
+Se i dati sono estratti da una fra $M$ leggi continue, con densità condizionate $\{f_{\vett{X} \mid H_i}(\vett{x} \mid
+H_i)\}_{i=1}^{M}$, l'unica differenza è che le somme sulle regioni diventano integrali; per esempio, con $M = 2$,
+\[ P\{\vett{X} \in \Omega_1 \mid H_1\} = \int_{\Omega_1} f_{\vett{X} \mid H_1}(\vett{x} \mid H_1) \dd\vett{x} , \qquad
+   P\{\vett{X} \in \Omega_2 \mid H_2\} = \int_{\Omega_2} f_{\vett{X} \mid H_2}(\vett{x} \mid H_2) \dd\vett{x} , \]
+dove $\dd\vett{x}$ indica un integrale multiplo, su tutte le $n$ componenti.
+
+\teorema[mapcontinuo]{Regola a minima probabilità di errore per dati continui}{
+  \[ \vett{x} \in \Omega_1 \iff f_{\vett{X} \mid H_1}(\vett{x} \mid H_1)\, P(H_1) > f_{\vett{X} \mid H_2}(\vett{x} \mid
+     H_2)\, P(H_2) , \qquad\text{cioè}\qquad L(\vett{x}) = \frac{f_{\vett{X} \mid H_1}(\vett{x} \mid H_1)}{f_{\vett{X}
+     \mid H_2}(\vett{x} \mid H_2)} \decidi{H_1}{H_2} \frac{P(H_2)}{P(H_1)} . \]
+  La quantità $L(\vett{x})$ è ancora il rapporto di verosimiglianza fra le due ipotesi.
+}
+
+\begin{dimostrazione}
+\passo{} È lo stesso ragionamento del caso discreto, con gli integrali al posto delle somme:
+\[ P(e) = 1 - \left[ \int_{\Omega_1} f_{\vett{X} \mid H_1}(\vett{x} \mid H_1)\, P(H_1) \dd\vett{x} + \int_{\Omega_2}
+   f_{\vett{X} \mid H_2}(\vett{x} \mid H_2)\, P(H_2) \dd\vett{x} \right] , \]
+e la parentesi è massima se ogni $\vett{x}$ viene messo nella regione in cui la funzione integranda è più grande.
+\end{dimostrazione}
+
+% ============================================================
+\section{Esempio: la media di una popolazione gaussiana}
+% ============================================================
+
+I dati, con la stessa probabilità, sono la realizzazione di un vettore gaussiano con componenti indipendenti, tutte con
+la stessa varianza $\sigma^2$, e medie $\mu_1$ (ipotesi $H_1$) oppure $\mu_2 < \mu_1$ (ipotesi $H_2$). Per esempio, $n$
+misure rumorose di una tensione che può valere $\mu_1$ o $\mu_2$. La densità dei dati (Capitolo~16) è
+\[ f_{\vett{X} \mid H_i}(\vett{x} \mid H_i) = \prod_{k=1}^{n} \frac{1}{\sqrt{2\pi\sigma^2}}\, e^{-\frac{(x_k -
+   \mu_i)^2}{2\sigma^2}} . \]
+
+\teorema[testmedia]{Il test sulla media}{
+  Il test a minima probabilità di errore confronta la media campione con il punto di mezzo fra le due medie:
+  \[ \frac{1}{n} \sum_{k=1}^{n} x_k \decidi{H_1}{H_2} \frac{\mu_1 + \mu_2}{2} , \]
+  e la sua probabilità di errore è
+  \[ P(e) = Q\left( \sqrt{n}\, \frac{\mu_1 - \mu_2}{2\sigma} \right) \;\xrightarrow{\;n \to \infty\;}\; 0 . \]
+}
+
+\begin{dimostrazione}
+\passo{Il rapporto di verosimiglianza} Con ipotesi equiprobabili la soglia è 1. Il prodotto delle costanti si
+semplifica, e il quoziente di esponenziali è l'esponenziale della differenza:
+\[ L(\vett{x}) = \frac{f_{\vett{X} \mid H_1}(\vett{x} \mid H_1)}{f_{\vett{X} \mid H_2}(\vett{x} \mid H_2)} =
+   e^{\sum_{k=1}^{n} \frac{(x_k - \mu_2)^2 - (x_k - \mu_1)^2}{2\sigma^2}} \decidi{H_1}{H_2} 1 . \]
+\passo{Il logaritmo} Prendendo il logaritmo naturale e moltiplicando per $2\sigma^2 > 0$ (il verso non cambia):
+\[ \sum_{k=1}^{n} \left[ (x_k - \mu_2)^2 - (x_k - \mu_1)^2 \right] \decidi{H_1}{H_2} 0 . \]
+\passo{Si sviluppano i quadrati} I termini $x_k^2$ si cancellano:
+\[ \sum_{k=1}^{n} \left[ x_k^2 + \mu_2^2 - 2 x_k \mu_2 - x_k^2 - \mu_1^2 + 2 x_k \mu_1 \right] = 2(\mu_1 - \mu_2)
+   \sum_{k=1}^{n} x_k + n(\mu_2^2 - \mu_1^2) \decidi{H_1}{H_2} 0 . \]
+\passo{Si isola la somma} Con $\mu_1^2 - \mu_2^2 = (\mu_1 + \mu_2)(\mu_1 - \mu_2)$:
+$2(\mu_1 - \mu_2) \sum_k x_k \decidi{H_1}{H_2} n (\mu_1 + \mu_2)(\mu_1 - \mu_2)$. Siccome $\mu_1 - \mu_2 > 0$, si può
+dividere per $2n(\mu_1 - \mu_2)$ senza cambiare il verso: è il test dell'enunciato.
+\passo{La statistica del test} Sotto $H_i$, $Z_n = \frac{1}{n}\sum_k X_k$ è una combinazione lineare di gaussiane
+indipendenti, quindi gaussiana (Capitolo~16), con media e varianza (Capitolo~18)
+\[ E[Z_n \mid H_i] = \frac{1}{n} \sum_{k=1}^{n} \mu_i = \mu_i , \qquad \mathrm{VAR}[Z_n \mid H_i] = \frac{1}{n^2}
+   \sum_{k=1}^{n} \sigma^2 = \frac{\sigma^2}{n} . \]
+\passo{L'errore sotto $H_1$} Con la soglia $\eta = \frac{\mu_1 + \mu_2}{2}$, si standardizza e si usa la funzione $Q$
+(Capitolo~15):
+\[ P(e \mid H_1) = P\{Z_n < \eta \mid H_1\} = 1 - Q\left( \frac{\eta - \mu_1}{\sigma / \sqrt{n}} \right) = 1 - Q\left(
+   \sqrt{n}\, \frac{\mu_2 - \mu_1}{2\sigma} \right) = Q\left( \sqrt{n}\, \frac{\mu_1 - \mu_2}{2\sigma} \right) , \]
+perché $\eta - \mu_1 = \frac{\mu_2 - \mu_1}{2} < 0$ e $Q(-x) = 1 - Q(x)$.
+\passo{L'errore sotto $H_2$}
+\[ P(e \mid H_2) = P\{Z_n > \eta \mid H_2\} = Q\left( \frac{\eta - \mu_2}{\sigma / \sqrt{n}} \right) = Q\left( \sqrt{n}\,
+   \frac{\mu_1 - \mu_2}{2\sigma} \right) . \]
+\passo{L'errore totale} Le due probabilità condizionate sono uguali, quindi anche la loro media pesata, $P(e) =
+P(H_1) P(e \mid H_1) + P(H_2) P(e \mid H_2)$, vale $Q\left( \sqrt{n} \frac{\mu_1 - \mu_2}{2\sigma} \right)$. Per $n \to
+\infty$ l'argomento di $Q$ diverge, perché $\mu_1 - \mu_2 > 0$ e $\sigma > 0$, e $Q(+\infty) = 0$.
+\end{dimostrazione}
+
+Il risultato è molto intuitivo: si fa la media delle misure e si guarda se è più vicina a $\mu_1$ o a $\mu_2$. Anche qui
+la statistica sufficiente è una sola, $\sum_k x_k$ (o la media campione): delle $n$ misure conta solo la somma. Le
+slide indicano con $\eta_{Z_n}$ la media di $Z_n$; qui la chiamiamo $\mu_i$ per non confonderla con la soglia $\eta$.
+Con $n = 1$, $\mu_1 = A$ e $\mu_2 = -A$ si ritrova la trasmissione binaria del Capitolo~15: soglia 0 e $P_e =
+Q\left(\frac{A}{\sigma}\right)$. Ripetere la misura $n$ volte equivale a moltiplicare per $\sqrt{n}$ il rapporto fra la
+distanza delle medie e la deviazione standard.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=1.2cm}, width=8cm, height=5cm, quaderno,
+  axis y line=none, xmin=-1.6, xmax=2.6, ymin=0, ymax=1.75, xtick={0,0.5,1}, xticklabels={$\mu_2$,$\eta$,$\mu_1$},
+  xlabel=$z$, legend style={font=\scriptsize, at={(0.99,0.99)}, anchor=north east}]
+\nextgroupplot[title={$n = 1$: $P(e) = Q(0{,}5) \approx 0{,}31$}]
+  \addplot[fill=mspiB!35, draw=none, domain=0.5:2.6, samples=40, forget plot] {exp(-x^2/2)/sqrt(2*pi)} \closedcycle;
+  \addplot[fill=mspiA!35, draw=none, domain=-1.6:0.5, samples=40, forget plot] {exp(-(x-1)^2/2)/sqrt(2*pi)} \closedcycle;
+  \addplot[mspiA, domain=-1.6:2.6, samples=101] {exp(-(x-1)^2/2)/sqrt(2*pi)};
+  \addplot[mspiB, domain=-1.6:2.6, samples=101] {exp(-x^2/2)/sqrt(2*pi)};
+  \draw[black, dashed] (axis cs:0.5,0) -- (axis cs:0.5,1.55);
+  \legend{{$f_{Z_n \mid H_1}$}, {$f_{Z_n \mid H_2}$}}
+\nextgroupplot[title={$n = 16$: $P(e) = Q(2) \approx 0{,}023$}]
+  \addplot[fill=mspiB!35, draw=none, domain=0.5:2.6, samples=60, forget plot] {4*exp(-8*x^2)/sqrt(2*pi)} \closedcycle;
+  \addplot[fill=mspiA!35, draw=none, domain=-1.6:0.5, samples=60, forget plot] {4*exp(-8*(x-1)^2)/sqrt(2*pi)} \closedcycle;
+  \addplot[mspiA, domain=-1.6:2.6, samples=161] {4*exp(-8*(x-1)^2)/sqrt(2*pi)};
+  \addplot[mspiB, domain=-1.6:2.6, samples=161] {4*exp(-8*x^2)/sqrt(2*pi)};
+  \draw[black, dashed] (axis cs:0.5,0) -- (axis cs:0.5,1.55);
+  \legend{{$f_{Z_n \mid H_1}$}, {$f_{Z_n \mid H_2}$}}
+\end{groupplot}
+\end{tikzpicture}
+\caption{Le densità della media campione $Z_n$ sotto le due ipotesi, con $\mu_1 = 1$, $\mu_2 = 0$ e $\sigma = 1$; le
+code colorate oltre la soglia $\eta = \frac12$ sono gli errori. Con 16 misure le campane sono quattro volte più
+strette (la deviazione standard è $\frac{\sigma}{\sqrt{n}}$) e si sovrappongono molto meno.}
+\end{figure}
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item Una \textbf{regola di decisione} $D(\vett{x}) \in \{1, \ldots, M\}$ è una partizione dei dati in regioni
+        $\Omega_i$. Il \textbf{rischio bayesiano} $R = \sum_{i,j} C_{ij} P\{D = i, H_j\}$ pesa le decisioni con i costi;
+        con costi 0 (giusto) e 1 (sbagliato) è la probabilità di errore.
+  \item \textbf{Regola MAP} (minima $P(e)$): $L(\vett{x}) = \frac{p(\vett{x} \mid H_1)}{p(\vett{x} \mid H_2)}
+        \decidi{H_1}{H_2} \frac{P(H_2)}{P(H_1)}$, cioè si decide per la massima probabilità a posteriori. Con ipotesi
+        equiprobabili è la \textbf{regola ML}. Per dati continui si usano le densità.
+  \item $P(e) = P(H_1) P(e \mid H_1) + P(H_2) P(e \mid H_2)$.
+  \item Due sorgenti binarie: si confronta il \textbf{peso di Hamming} con una soglia; le probabilità di errore sono
+        code di binomiali.
+  \item Media gaussiana: si confronta la \textbf{media campione} con $\frac{\mu_1 + \mu_2}{2}$; $P(e) = Q\left(
+        \sqrt{n} \frac{\mu_1 - \mu_2}{2\sigma} \right) \to 0$. Peso di Hamming e somma dei dati sono
+        \textbf{statistiche sufficienti}.
+\end{itemize}
+}

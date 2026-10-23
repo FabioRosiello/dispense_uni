@@ -51,6 +51,28 @@ Questa cartella contiene i sorgenti LaTeX di `DispensaMSPI.pdf`.
   - `chapters/chapter_17.tex` — Processi aleatori: regola della catena per i vettori, processi a tempo discreto,
     stazionarietà del primo e del secondo ordine e in senso stretto, processi indipendenti, Bernoulli e quaternario,
     processi SSL e autocorrelazione, matrici di Toeplitz, media mobile, passeggiata aleatoria (slide 87-106)
+- **Parte III — Statistica inferenziale e misura dell'informazione** (terzo pacchetto di slide,
+  `Slides_Metodi_statistici_parte_III.pdf`)
+  - `chapters/chapter_18.tex` — La legge dei grandi numeri e il teorema centrale del limite: inferenza e statistica
+    descrittiva, media campione, legge debole (con Chebyshev), frequenze e probabilità, tipi di convergenza, teorema
+    centrale del limite con l'idea della dimostrazione, somme di uniformi, binomiale e gaussiana (slide 2-12)
+  - `chapters/chapter_19.tex` — Decisioni bayesiane e classificazione binaria: regole di decisione, matrice dei costi,
+    rischio bayesiano, regola MAP e ML, rapporto di verosimiglianza, test sul peso di Hamming, test sulla media gaussiana,
+    statistiche sufficienti (slide 13-35)
+  - `chapters/chapter_20.tex` — Test di ipotesi: il test di Neyman-Pearson: errori di prima e seconda specie, potenza,
+    lemma di Neyman-Pearson (con dimostrazione), test sulla media gaussiana, curve ROC (slide 36-47)
+  - `chapters/chapter_21.tex` — Stima bayesiana: MMSE e MAP: rischio bayesiano di uno stimatore, media e moda a
+    posteriori, la moneta misteriosa (Bernoulli composito, integrali di Eulero), prestazioni e consistenza (slide 48-74)
+  - `chapters/chapter_22.tex` — Stima classica e limite di Cramér-Rao: verosimiglianza, stimatore ML, polarizzazione,
+    MSE = varianza + bias², informazione di Fisher, limite di Cramér-Rao, efficienza (slide 75-95)
+  - `chapters/chapter_23.tex` — Stima lineare MMSE e gradiente: gradienti (richiamo), stimatore lineare MMSE,
+    autovalori e decomposizione spettrale (richiamo), convergenza dell'algoritmo del gradiente (slide 96-108)
+  - `chapters/chapter_24.tex` — Minimi quadrati e stima ricorsiva: modello lineare, equazioni normali, formula di
+    Sherman-Morrison, aggiornamento ricorsivo (slide 109-125)
+  - `chapters/chapter_25.tex` — Informazione ed entropia: sorgente quaternaria, informazione di un evento, entropia,
+    entropia binaria, disuguaglianza di Jensen, entropia massima (slide 126-138)
+  - `chapters/chapter_26.tex` — La codifica di sorgente: codici univocamente decifrabili e a prefisso, disuguaglianza di
+    Kraft, codice di Shannon, limite entropico, codici di Huffman (slide 139-151)
 - `Slides_Metodi_statistici_parte_*.pdf` — le slide del corso
 - `unina_doc_class.cls`, `fonts/`, `sources/` — template Unina Docs (lo stesso delle altre dispense)
 - `Images/` — eventuali immagini
@@ -78,6 +100,7 @@ cp main.pdf DispensaMSPI.pdf
   lo stile `bastoncini` le distribuzioni discrete, lo stile `realizzazione` le realizzazioni dei processi aleatori
   (bastoncini che partono dalla linea dello zero)
 - vettori e matrici come nelle slide: `\vett{X}` sottolinea una volta (vettore), `\matr{A}` due volte (matrice)
+- test fra due ipotesi: `\decidi{H_1}{H_2}` scrive il simbolo «maggiore o minore» con le due ipotesi sopra e sotto
 - i riquadri (`richiamo`, `dimostrazione`, `\info`, `\warning`, `\gbox`) vengono prima misurati: se stanno in una
   pagina passano interi alla pagina successiva invece di spezzarsi. Per questo al loro interno non si mettono `\label`
 - disegni ricorrenti: `\venn{riempimenti}{didascalia}` e `\venntre{...}{...}` (diagrammi di Venn con le forme
