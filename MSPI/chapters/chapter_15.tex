@@ -1,0 +1,378 @@
+\chapter{La variabile gaussiana e la funzione \texorpdfstring{$Q$}{Q}}
+
+Fra tutte le variabili continue ce n'è una che compare ovunque: il rumore termico di un resistore, gli errori di
+misura, le altezze delle persone, il rumore che disturba un segnale radio. È la \textbf{gaussiana} (o \textbf{normale}),
+con la sua densità a forma di campana. Il motivo della sua onnipresenza lo vedremo nel terzo pacchetto di slide, con il
+teorema centrale del limite: quando una grandezza è la somma di tantissimi piccoli contributi indipendenti (come il
+rumore termico, somma degli effetti di miliardi di elettroni), la sua densità diventa gaussiana. In questo capitolo ne
+studiamo la densità, la media e la varianza, e la funzione $Q$, che serve a calcolarne le probabilità. Alla fine
+useremo tutto per calcolare quanti bit sbaglia un ricevitore disturbato dal rumore.
+
+% ============================================================
+\section{La gaussiana standard}
+% ============================================================
+
+\dfn{Gaussiana standard}{
+  Una variabile aleatoria $X_0$, con alfabeto $\mathcal{X} = \R$, si dice \term{gaussiana} (o \term{normale})
+  \term{standard}, in breve $X_0 \sim \mathcal{N}(0, 1)$, se ha densità
+  \[ f_{X_0}(x_0) = \frac{1}{\sqrt{2\pi}}\, e^{-\frac{x_0^2}{2}} , \qquad x_0 \in \R . \]
+}
+
+La densità è una campana simmetrica attorno a 0, con il massimo $\frac{1}{\sqrt{2\pi}} \approx 0{,}399$ nell'origine.
+Le code scendono velocissime: l'esponente $-\frac{x^2}{2}$ cresce in valore assoluto con il quadrato di $x$, e già a
+$x = 4$ la densità è circa tremila volte più bassa del massimo ($e^{-8} \approx \frac{1}{3000}$). Il fattore $\frac{1}{\sqrt{2\pi}}$ non è scelto a caso: è
+l'unico che rende l'area uguale a 1. Per dimostrarlo serve uno dei calcoli più belli della matematica, che passa per il
+piano e per le coordinate polari.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[quaderno, axis lines=left, width=11cm, height=5cm, xmin=-4.2, xmax=4.4, ymin=0, ymax=0.47,
+  xtick={-3,-2,-1,0,1,2,3}, ytick={0.2,0.399}, yticklabels={$0{,}2$,$\frac{1}{\sqrt{2\pi}}$}, xlabel=$x_0$,
+  ylabel={$f_{X_0}(x_0)$}]
+  \addplot[mspiA, domain=-4:4, samples=121] {exp(-x^2/2)/sqrt(2*pi)};
+  \draw[mspigray, dashed] (axis cs:-4.2,0.399) -- (axis cs:0,0.399);
+  \draw[mspigray, dashed] (axis cs:-1,0) -- (axis cs:-1,0.242);
+  \draw[mspigray, dashed] (axis cs:1,0) -- (axis cs:1,0.242);
+  \node[font=\scriptsize, anchor=west, align=left] at (axis cs:1.1,0.3) {in $\pm 1$ la curva cambia\\ concavità (flessi)};
+\end{axis}
+\end{tikzpicture}
+\caption{La densità gaussiana standard: la «curva a campana».}
+\end{figure}
+
+\begin{richiamo}{le coordinate polari}
+Un punto del piano si può individuare con le coordinate cartesiane $(x, y)$ oppure con le \term{coordinate polari}
+$(r, \theta)$: la distanza $r$ dall'origine e l'angolo $\theta$ che il segmento dall'origine al punto forma con l'asse
+$x$. Il legame è $x = r\cos\theta$, $y = r\sin\theta$, e per Pitagora $x^2 + y^2 = r^2$.
+
+Per calcolare un integrale doppio in coordinate polari si divide il piano in «rettangolini polari»: le zone fra due
+circonferenze di raggi $r$ e $r + \mathrm{d}r$ e fra due semirette di angoli $\theta$ e $\theta + \mathrm{d}\theta$.
+Un rettangolino polare è quasi un rettangolo con un lato lungo $\mathrm{d}r$ (in direzione radiale) e l'altro lungo
+$r\,\mathrm{d}\theta$ (un arco di circonferenza di raggio $r$: la lunghezza di un arco è raggio per angolo, in
+radianti). La sua area è quindi
+\[ \mathrm{d}A = r \dd r \dd\theta , \]
+con quel fattore $r$ in più: i rettangolini lontani dall'origine sono più larghi.
+\begin{center}
+\begin{tikzpicture}[scale=1.4]
+  \draw[-{Stealth}, mspigray] (-0.3,0) -- (2.6,0) node[below, font=\small, black] {$x$};
+  \draw[-{Stealth}, mspigray] (0,-0.3) -- (0,2.3) node[left, font=\small, black] {$y$};
+  \fill[evid] (25:1.5) arc (25:40:1.5) -- (40:1.9) arc (40:25:1.9) -- cycle;
+  \draw[mspiric] (25:1.5) arc (25:40:1.5) -- (40:1.9) arc (40:25:1.9) -- cycle;
+  \draw[mspigray, dashed] (0,0) -- (25:2.3); \draw[mspigray, dashed] (0,0) -- (40:2.3);
+  \draw[mspigray, dashed] (1.5,0) arc (0:60:1.5); \draw[mspigray, dashed] (1.9,0) arc (0:60:1.9);
+  \draw (0.5,0) arc (0:25:0.5); \node[font=\scriptsize] at (12:0.7) {$\theta$};
+  \draw (0.85,0) arc (0:40:0.85); \node[font=\scriptsize, anchor=south east] at (40:0.85) {$\theta + \mathrm{d}\theta$};
+  \node[font=\scriptsize, below] at (1.5,0) {$r$}; \node[font=\scriptsize, below] at (1.95,0) {$r + \mathrm{d}r$};
+  \node[font=\small, anchor=west, text width=6.6cm] at (2.9,1.1)
+    {Il rettangolino polare giallo ha i lati circa $\mathrm{d}r$ e $r\,\mathrm{d}\theta$: area $r\,\mathrm{d}r\,\mathrm{d}\theta$.
+     Coprendo tutto il piano, $r$ va da 0 a $\infty$ e $\theta$ da 0 a $2\pi$.};
+\end{tikzpicture}
+\end{center}
+\end{richiamo}
+
+\teorema[gaussintegrale]{L'integrale di Gauss}{
+  \[ \int_{-\infty}^{\infty} e^{-\frac{x^2}{2}} \dd x = \sqrt{2\pi} , \qquad\text{quindi}\qquad
+     \int_{-\infty}^{\infty} \frac{1}{\sqrt{2\pi}}\, e^{-\frac{x^2}{2}} \dd x = 1 . \]
+}
+
+\begin{dimostrazione}[passando al quadrato e nel piano]
+\passo{Il problema} La funzione $e^{-x^2/2}$ non ha una primitiva che si possa scrivere con le funzioni elementari
+(polinomi, esponenziali, logaritmi, seni\ldots): l'integrale non si può calcolare direttamente. Il trucco è calcolarne il
+quadrato. Sia $I = \int_{-\infty}^{\infty} e^{-x^2/2} \dd x$.
+\passo{Il quadrato è un integrale doppio} Il nome della variabile di integrazione non conta, quindi
+\[ I^2 = \int_{-\infty}^{\infty} e^{-\frac{x^2}{2}} \dd x \cdot \int_{-\infty}^{\infty} e^{-\frac{y^2}{2}} \dd y =
+   \iint_{\R^2} e^{-\frac{x^2 + y^2}{2}} \dd x \dd y , \]
+perché il prodotto di due integrali in variabili diverse è l'integrale doppio del prodotto (Capitolo~14), ed
+$e^{-x^2/2}\, e^{-y^2/2} = e^{-(x^2 + y^2)/2}$.
+\passo{Coordinate polari} La funzione dipende solo da $x^2 + y^2 = r^2$, la distanza dall'origine: è una campana a
+simmetria circolare. In coordinate polari:
+\[ I^2 = \int_0^{2\pi} \int_0^{\infty} e^{-\frac{r^2}{2}}\, r \dd r \dd\theta . \]
+\passo{Ora l'integrale si fa} Grazie al fattore $r$ la primitiva c'è: per la regola della catena
+$\frac{\mathrm{d}}{\mathrm{d}r}\left( -e^{-r^2/2} \right) = r\, e^{-r^2/2}$. Quindi
+\[ \int_0^{\infty} e^{-\frac{r^2}{2}}\, r \dd r = \left[ -e^{-\frac{r^2}{2}} \right]_0^{\infty} = 0 - (-1) = 1 , \qquad
+   I^2 = \int_0^{2\pi} 1 \dd\theta = 2\pi . \]
+\passo{Conclusione} $I > 0$ (è l'integrale di una funzione positiva), quindi $I = \sqrt{2\pi}$.
+\end{dimostrazione}
+
+\teorema[gaussmomenti]{Media e varianza della gaussiana standard}{
+  Se $X_0 \sim \mathcal{N}(0, 1)$: \qquad $E[X_0] = \mu_{X_0} = 0$, \qquad $\sigma_{X_0}^2 = E[X_0^2] = 1$.
+}
+
+\begin{dimostrazione}
+\passo{La media} L'integrando $x\, \frac{1}{\sqrt{2\pi}} e^{-x^2/2}$ è dispari, e le due metà sono finite:
+$\int_0^{\infty} x\, e^{-x^2/2} \dd x = \left[ -e^{-x^2/2} \right]_0^{\infty} = 1$. Quindi la media è 0.
+\passo{Il valore quadratico medio, per parti} Si scrive $x^2 e^{-x^2/2} = x \cdot \left( x\, e^{-x^2/2} \right)$, con
+$f(x) = x$ (derivata 1) e $g'(x) = x\, e^{-x^2/2}$ (primitiva $g(x) = -e^{-x^2/2}$):
+\[ E[X_0^2] = \frac{1}{\sqrt{2\pi}} \int_{-\infty}^{\infty} x^2 e^{-\frac{x^2}{2}} \dd x = \frac{1}{\sqrt{2\pi}} \left\{ \Big[
+   -x\, e^{-\frac{x^2}{2}} \Big]_{-\infty}^{\infty} + \int_{-\infty}^{\infty} e^{-\frac{x^2}{2}} \dd x \right\} . \]
+\passo{Si conclude} Il termine di bordo è nullo (l'esponenziale batte la potenza), e l'integrale rimasto è $\sqrt{2\pi}$:
+$E[X_0^2] = \frac{\sqrt{2\pi}}{\sqrt{2\pi}} = 1$. Siccome la media è 0, la varianza coincide con il valore quadratico medio.
+\end{dimostrazione}
+
+% ============================================================
+\section{La gaussiana generica}
+% ============================================================
+
+Tutte le altre gaussiane si ottengono dalla standard spostandola e allargandola.
+
+\teorema[gaussgenerica]{Densità della gaussiana generica}{
+  Sia $X_0 \sim \mathcal{N}(0, 1)$ e sia $X = \sigma_X X_0 + \mu_X$, con $\sigma_X > 0$ e $\mu_X \in \R$. Allora
+  \[ f_X(x) = \frac{1}{\sqrt{2\pi\sigma_X^2}}\, e^{-\frac{(x - \mu_X)^2}{2\sigma_X^2}} , \qquad x \in \R , \]
+  e $E[X] = \mu_X$, $\mathrm{VAR}(X) = \sigma_X^2$. Si scrive $X \sim \mathcal{N}(\mu_X, \sigma_X^2)$.
+}
+
+\begin{dimostrazione}
+\passo{La densità} È la trasformazione lineare $g(x) = \sigma_X x + \mu_X$, crescente. Con la formula del
+Capitolo~12, $f_X(x) = \frac{1}{\sigma_X} f_{X_0}\left( \frac{x - \mu_X}{\sigma_X} \right)$:
+\[ f_X(x) = \frac{1}{\sigma_X}\, \frac{1}{\sqrt{2\pi}}\, e^{-\frac{1}{2}\left( \frac{x - \mu_X}{\sigma_X} \right)^2} =
+   \frac{1}{\sqrt{2\pi\sigma_X^2}}\, e^{-\frac{(x - \mu_X)^2}{2\sigma_X^2}} . \]
+\passo{La media} Per la linearità: $E[X] = E[\sigma_X X_0 + \mu_X] = \sigma_X E[X_0] + \mu_X = 0 \cdot \sigma_X + \mu_X =
+\mu_X$.
+\passo{La varianza}
+\[ \mathrm{VAR}(X) = E[(X - \mu_X)^2] = E[(\sigma_X X_0 + \mu_X - \mu_X)^2] = E[(\sigma_X X_0)^2] = \sigma_X^2\, E[X_0^2] =
+   \sigma_X^2 . \]
+\end{dimostrazione}
+
+I due parametri hanno quindi un significato diretto: $\mu_X$ è il centro della campana (e la sua media), $\sigma_X$ la
+sua larghezza (e la sua deviazione standard). Una gaussiana è completamente determinata dalla coppia
+$(\mu_X, \sigma_X^2)$. Il procedimento si può anche rovesciare: se $X \sim \mathcal{N}(\mu_X, \sigma_X^2)$, la variabile
+\textbf{standardizzata} $X_0 = \frac{X - \mu_X}{\sigma_X}$ è una gaussiana standard.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[quaderno, axis lines=left, width=12cm, height=5.2cm, xmin=-4.4, xmax=6.4, ymin=0, ymax=0.85,
+  xtick={-3,-2,-1,0,1,2,3,4,5}, ytick={0.4,0.8}, yticklabels={$0{,}4$,$0{,}8$}, xlabel=$x$, ylabel={$f_X(x)$},
+  legend style={font=\small, at={(0.99,0.98)}, anchor=north east}]
+  \addplot[mspiA, domain=-4.2:6.2, samples=161] {exp(-x^2/2)/sqrt(2*pi)};
+  \addplot[mspiB, domain=-4.2:6.2, samples=161] {exp(-x^2/(2*0.25))/sqrt(2*pi*0.25)};
+  \addplot[mspiC, domain=-4.2:6.2, samples=161] {exp(-(x-2)^2/(2*2.25))/sqrt(2*pi*2.25)};
+  \legend{{$\mathcal{N}(0, 1)$}, {$\mathcal{N}(0;\ 0{,}25)$}, {$\mathcal{N}(2;\ 2{,}25)$}}
+\end{axis}
+\end{tikzpicture}
+\caption{Tre gaussiane. Con $\sigma = 0{,}5$ la campana è stretta e alta, con $\sigma = 1{,}5$ larga e bassa: l'area resta
+sempre 1. La media $\mu$ sposta il centro.}
+\end{figure}
+
+% ============================================================
+\section{La funzione \texorpdfstring{$Q$}{Q}}
+% ============================================================
+
+Per calcolare la probabilità che una gaussiana cada in un intervallo servirebbe la sua CDF. Ma né la CDF né la CCDF di
+$X_0 \sim \mathcal{N}(0, 1)$ sono note in forma esplicita, perché $e^{-\gamma x^2}$ non ammette primitive elementari
+(è lo stesso ostacolo incontrato con l'integrale di Gauss, ma ora l'integrale non è su tutta la retta, e il trucco del
+quadrato non funziona). Si dà allora un nome alla funzione che serve, e se ne tabulano i valori.
+
+\dfn{Funzione Q}{
+  La \term{funzione $Q$} è la CCDF della gaussiana standard, cioè la probabilità che $X_0 \sim \mathcal{N}(0, 1)$
+  superi il valore $x$:
+  \[ Q(x) \stackrel{\triangle}{=} P(X_0 > x) = 1 - F_{X_0}(x) = \frac{1}{\sqrt{2\pi}} \int_x^{+\infty} e^{-\frac{t^2}{2}} \dd t . \]
+}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[quaderno, axis y line=none, width=10cm, height=4.8cm, xmin=-4.2, xmax=4.4, ymin=0, ymax=0.47,
+  xtick={-3,-2,-1,0,1.3,2,3}, xticklabels={$-3$,$-2$,$-1$,$0$,$x$,$2$,$3$}, ytick=\empty, xlabel=$t$]
+  \addplot[fill=evid, draw=none, domain=1.3:4, samples=40] {exp(-x^2/2)/sqrt(2*pi)} \closedcycle;
+  \addplot[mspiA, domain=-4:4, samples=121] {exp(-x^2/2)/sqrt(2*pi)};
+  \node[font=\small, align=center] at (axis cs:-0.25,0.13) {$F_{X_0}(x)$\\ $= 1 - Q(x)$};
+  \draw[-{Stealth}] (axis cs:2.6,0.2) node[above, font=\small] {$Q(x)$} -- (axis cs:1.75,0.05);
+\end{axis}
+\end{tikzpicture}
+\caption{$Q(x)$ è l'area della coda destra della gaussiana standard, oltre $x$.}
+\end{figure}
+
+Con la funzione $Q$ si calcola qualsiasi probabilità gaussiana. Per la standard, $F_{X_0}(x) = 1 - Q(x)$ e la probabilità
+di un intervallino è
+\[ P_{X_0}(x; \Delta x) = Q\left( x - \frac{\Delta x}{2} \right) - Q\left( x + \frac{\Delta x}{2} \right) . \]
+Per una gaussiana qualsiasi si standardizza.
+
+\teorema[qgenerica]{Le code di una gaussiana qualsiasi}{
+  Se $X \sim \mathcal{N}(\mu_X, \sigma_X^2)$:
+  \[ P(X > x) = 1 - F_X(x) = Q\left( \frac{x - \mu_X}{\sigma_X} \right) . \]
+}
+
+\begin{dimostrazione}
+\passo{} Si scrive $X = X_0 \sigma_X + \mu_X$ e si isola $X_0$ (dividere per $\sigma_X > 0$ non cambia il verso della
+disuguaglianza):
+\[ P(X > x) = P(X_0 \sigma_X + \mu_X > x) = P\left( X_0 > \frac{x - \mu_X}{\sigma_X} \right) =
+   \int_{\frac{x - \mu_X}{\sigma_X}}^{+\infty} \frac{1}{\sqrt{2\pi}}\, e^{-\frac{t^2}{2}} \dd t = Q\left( \frac{x -
+   \mu_X}{\sigma_X} \right) . \]
+\end{dimostrazione}
+
+La quantità $\frac{x - \mu_X}{\sigma_X}$ dice \textbf{di quante deviazioni standard} il valore $x$ si trova sopra la media:
+è tutto quello che conta.
+
+\subsection{Le proprietà della funzione \texorpdfstring{$Q$}{Q}}
+
+\teorema[qproprieta]{Proprietà della funzione Q}{
+  \begin{enumerate}[label=\alph*)]
+    \item $Q(-\infty) = 1$, \quad $Q(0) = \frac12$, \quad $Q(+\infty) = 0$;
+    \item $\dfrac{\dd Q(x)}{\dd x} = -\dfrac{1}{\sqrt{2\pi}}\, e^{-\frac{x^2}{2}} < 0$ per ogni $x$: $Q$ è decrescente;
+    \item simmetria: $Q(-x) = 1 - Q(x)$;
+    \item se $X \sim \mathcal{N}(\mu_X, \sigma_X^2)$: $P(X \geq \eta) = Q\left( \frac{\eta - \mu_X}{\sigma_X} \right)$.
+  \end{enumerate}
+}
+
+\begin{dimostrazione}
+\passo{a)} $Q(-\infty)$ è l'area sotto tutta la campana, cioè 1; $Q(0)$ è metà dell'area, per la simmetria; $Q(+\infty)$
+è l'area di una coda vuota.
+\passo{b)} Si scrive $Q(x) = 1 - \int_{-\infty}^{x} \frac{1}{\sqrt{2\pi}} e^{-t^2/2} \dd t$ e si deriva con il teorema
+fondamentale del calcolo integrale: la derivata della funzione integrale è l'integrando calcolato in $x$, con il segno
+meno. Spostando $x$ a destra, la coda si accorcia.
+\passo{c)} Per la parità della funzione integranda, la coda sinistra oltre $-x$ è uguale alla coda destra oltre $x$:
+$\int_{-\infty}^{-x} \frac{1}{\sqrt{2\pi}} e^{-t^2/2} \dd t = \int_{x}^{\infty} \frac{1}{\sqrt{2\pi}} e^{-t^2/2} \dd t = Q(x)$.
+Quindi
+\[ Q(-x) = \int_{-x}^{+\infty} \frac{1}{\sqrt{2\pi}} e^{-\frac{t^2}{2}} \dd t = 1 - \underbrace{\int_{-\infty}^{-x}
+   \frac{1}{\sqrt{2\pi}} e^{-\frac{t^2}{2}} \dd t}_{Q(x)} = 1 - Q(x) . \]
+\passo{d)} È il teorema precedente: per una variabile continua $P(X \geq \eta) = P(X > \eta)$.
+\end{dimostrazione}
+
+Grazie alla simmetria basta tabulare $Q(x)$ per $x \geq 0$. Ecco alcuni valori:
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}c|cccccccc@{}}
+  $x$ & 0 & 0,5 & 1 & 1,5 & 2 & 2,5 & 3 & 4 \\ \hline
+  $Q(x)$ & 0,5 & 0,309 & 0,159 & 0,0668 & 0,0228 & 0,00621 & 0,00135 & $3{,}17 \cdot 10^{-5}$
+\end{tabular}
+\end{center}
+
+\teorema[qmaggiorazione]{Una maggiorazione della funzione Q}{
+  Per ogni $x > 0$:
+  \[ Q(x) < \frac{1}{x\sqrt{2\pi}}\, e^{-\frac{x^2}{2}} , \]
+  e per $x$ grande il secondo membro è anche una buona approssimazione: $Q(x) \simeq \frac{1}{x\sqrt{2\pi}}
+  e^{-\frac{x^2}{2}}$. In particolare, per $x > \frac{1}{\sqrt{2\pi}} \approx 0{,}4$, $Q(x) < e^{-\frac{x^2}{2}}$.
+}
+
+\begin{dimostrazione}[lo stesso trucco della disuguaglianza di Markov]
+\passo{Si moltiplica per un numero maggiore di 1} Nella coda $t > x > 0$, quindi $\frac{t}{x} > 1$:
+\[ Q(x) = \frac{1}{\sqrt{2\pi}} \int_x^{\infty} e^{-\frac{t^2}{2}} \dd t < \frac{1}{\sqrt{2\pi}} \int_x^{\infty}
+   \frac{t}{x}\, e^{-\frac{t^2}{2}} \dd t . \]
+\passo{Ora la primitiva c'è} Come nell'integrale di Gauss, $t\, e^{-t^2/2}$ ha primitiva $-e^{-t^2/2}$:
+\[ \frac{1}{x\sqrt{2\pi}} \int_x^{\infty} t\, e^{-\frac{t^2}{2}} \dd t = \frac{1}{x\sqrt{2\pi}} \left[ -e^{-\frac{t^2}{2}}
+   \right]_x^{\infty} = \frac{1}{x\sqrt{2\pi}}\, e^{-\frac{x^2}{2}} . \]
+\passo{Perché per $x$ grande è anche un'approssimazione} Il fattore $\frac{t}{x}$ è vicino a 1 nella parte della coda
+che conta, appena oltre $x$; più in là la densità è trascurabile. Quindi la maggiorazione esagera di poco. Infine, se
+$x\sqrt{2\pi} > 1$, il fattore $\frac{1}{x\sqrt{2\pi}}$ è minore di 1.
+\end{dimostrazione}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=11cm, height=5.6cm, ymode=log, xmin=0, xmax=5, ymin=1e-7, ymax=1.5, xtick={0,1,2,3,4,5},
+  xlabel=$x$, tick label style={font=\scriptsize}, label style={font=\small}, axis lines=left,
+  grid=major, grid style={mspigray!20}, legend style={font=\scriptsize, at={(0.02,0.03)}, anchor=south west}]
+  \addplot[mspiA, line width=1.2pt] coordinates {(0.00,5.0000e-01) (0.25,4.0129e-01) (0.50,3.0854e-01) (0.75,2.2663e-01) (1.00,1.5866e-01) (1.25,1.0565e-01) (1.50,6.6807e-02) (1.75,4.0059e-02) (2.00,2.2750e-02) (2.25,1.2224e-02) (2.50,6.2097e-03) (2.75,2.9798e-03) (3.00,1.3499e-03) (3.25,5.7703e-04) (3.50,2.3263e-04) (3.75,8.8417e-05) (4.00,3.1671e-05) (4.25,1.0689e-05) (4.50,3.3977e-06) (4.75,1.0171e-06) (5.00,2.8665e-07)};
+  \addplot[mspiB, dashed, line width=1pt, domain=0.3:5, samples=60] {exp(-x^2/2)/(x*sqrt(2*pi))};
+  \addplot[mspiC, dotted, line width=1.2pt, domain=0:5, samples=60] {exp(-x^2/2)};
+  \legend{$Q(x)$, $\frac{1}{x\sqrt{2\pi}} e^{-x^2/2}$, $e^{-x^2/2}$}
+\end{axis}
+\end{tikzpicture}
+\caption{La funzione $Q$ in scala logaritmica (ogni tacca verticale è un fattore 10) e le due maggiorazioni. Da $x
+\approx 2$ in poi la prima è quasi indistinguibile da $Q(x)$; la seconda è più grossolana ma più semplice.}
+\end{figure}
+
+\subsection{La regola delle tre sigma}
+
+Quanto spesso una gaussiana si allontana dalla sua media di più di $k$ deviazioni standard? Standardizzando e usando la
+simmetria (le due code sono uguali):
+\[ P(\abs{X - \mu_X} > k\,\sigma_X) = P(\abs{X_0} > k) = 2\,Q(k) , \qquad P(\abs{X - \mu_X} \leq k\,\sigma_X) = 1 - 2\,Q(k) . \]
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[quaderno, axis y line=none, width=12cm, height=5.6cm, xmin=-4.2, xmax=4.4, ymin=0, ymax=0.52,
+  xtick={-3,-2,-1,0,1,2,3}, xticklabels={$\mu-3\sigma$,$\mu-2\sigma$,$\mu-\sigma$,$\mu$,$\mu+\sigma$,$\mu+2\sigma$,$\mu+3\sigma$},
+  ytick=\empty, xticklabel style={font=\tiny}]
+  \addplot[fill=mspiA!12, draw=none, domain=-3:3, samples=60] {exp(-x^2/2)/sqrt(2*pi)} \closedcycle;
+  \addplot[fill=mspiA!25, draw=none, domain=-2:2, samples=60] {exp(-x^2/2)/sqrt(2*pi)} \closedcycle;
+  \addplot[fill=mspiA!45, draw=none, domain=-1:1, samples=60] {exp(-x^2/2)/sqrt(2*pi)} \closedcycle;
+  \addplot[mspiA, domain=-4:4, samples=121] {exp(-x^2/2)/sqrt(2*pi)};
+  \node[font=\scriptsize, align=center] at (axis cs:0,0.15) {68,3\%};
+  \draw[mspigray, densely dotted, line width=0.5pt] (axis cs:-2,0) -- (axis cs:-2,0.43) (axis cs:2,0) -- (axis cs:2,0.43)
+    (axis cs:-3,0) -- (axis cs:-3,0.5) (axis cs:3,0) -- (axis cs:3,0.5);
+  \draw[{Stealth}-{Stealth}, mspigray, line width=0.6pt] (axis cs:-2,0.43) -- (axis cs:2,0.43)
+    node[pos=0.75, above, font=\scriptsize, text=black] {95,4\%};
+  \draw[{Stealth}-{Stealth}, mspigray, line width=0.6pt] (axis cs:-3,0.5) -- (axis cs:3,0.5)
+    node[pos=0.8, above, font=\scriptsize, text=black] {99,7\%};
+\end{axis}
+\end{tikzpicture}
+\caption{La regola 68--95--99,7: le probabilità che una gaussiana cada entro una, due e tre deviazioni standard dalla
+media.}
+\end{figure}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}c|ccc@{}}
+  $k$ & 1 & 2 & 3 \\ \hline
+  $P(\abs{X - \mu_X} \leq k\sigma_X)$ per la gaussiana: $1 - 2Q(k)$ & 0,683 & 0,954 & 0,997 \\
+  minimo garantito per qualsiasi densità (Chebyshev): $1 - \frac{1}{k^2}$ & 0 & 0,75 & 0,889
+\end{tabular}
+\end{center}
+
+Una gaussiana esce dalla fascia $\mu \pm 3\sigma$ solo 3 volte su mille: in pratica, un valore a più di tre deviazioni
+standard dalla media è un evento eccezionale. Ma attenzione: vale per la gaussiana, non per ogni variabile (per una
+densità qualsiasi, Chebyshev garantisce solo l'89\%).
+
+% ============================================================
+\section{Un'applicazione: bit sbagliati per colpa del rumore}
+% ============================================================
+
+\begin{esempio}{La probabilità di errore di una trasmissione binaria}
+Un trasmettitore invia un bit codificandolo come una tensione: $+A$ per l'1, $-A$ per lo 0, con i due bit
+equiprobabili. Il canale aggiunge un rumore gaussiano $N \sim \mathcal{N}(0, \sigma^2)$, indipendente dal bit, e il
+ricevitore osserva $Y = X + N$. Decide «1» se $Y > 0$ e «0» se $Y \leq 0$. Con che probabilità sbaglia?
+\begin{itemize}
+  \item Se è stato trasmesso l'1, $Y = A + N$: per la trasformazione lineare $Y \sim \mathcal{N}(A, \sigma^2)$. Il
+        ricevitore sbaglia se $Y \leq 0$:
+        \[ P(\text{errore} \mid X = A) = P(A + N \leq 0) = P(N \leq -A) = P(N \geq A) = Q\left( \frac{A}{\sigma} \right) , \]
+        dove si è usata la simmetria del rumore (le code sono uguali) e la proprietà d) della funzione $Q$.
+  \item Se è stato trasmesso lo 0, per simmetria l'errore ($Y > 0$) ha la stessa probabilità.
+  \item Per la probabilità totale: $P_e = \frac12 Q\left(\frac{A}{\sigma}\right) + \frac12 Q\left(\frac{A}{\sigma}\right) =
+        Q\left(\frac{A}{\sigma}\right)$.
+\end{itemize}
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[quaderno, axis y line=none, width=11cm, height=4.8cm, xmin=-4.6, xmax=4.8, ymin=0, ymax=0.47,
+  xtick={-1.5,0,1.5}, xticklabels={$-A$,$0$,$A$}, ytick=\empty, xlabel=$y$, legend style={font=\small,
+  at={(0.99,0.98)}, anchor=north east}]
+  \addplot[fill=mspiB!35, draw=none, domain=-4.4:0, samples=50, forget plot] {exp(-(x-1.5)^2/2)/sqrt(2*pi)} \closedcycle;
+  \addplot[fill=mspiA!35, draw=none, domain=0:4.4, samples=50, forget plot] {exp(-(x+1.5)^2/2)/sqrt(2*pi)} \closedcycle;
+  \addplot[mspiA, domain=-4.4:4.4, samples=121] {exp(-(x+1.5)^2/2)/sqrt(2*pi)};
+  \addplot[mspiB, domain=-4.4:4.4, samples=121] {exp(-(x-1.5)^2/2)/sqrt(2*pi)};
+  \draw[black, dashed] (axis cs:0,0) -- (axis cs:0,0.44) node[above, font=\scriptsize] {soglia};
+  \legend{$f_{Y \mid X = -A}$, $f_{Y \mid X = A}$}
+\end{axis}
+\end{tikzpicture}
+\end{center}
+Le due campane sono le densità di $Y$ sapendo quale bit è stato trasmesso; le code colorate che oltrepassano la soglia
+sono gli errori. Più le campane sono lontane in rapporto alla loro larghezza, cioè più è grande $\frac{A}{\sigma}$, meno
+si sbaglia:
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}c|ccccc@{}}
+  $A/\sigma$ & 1 & 2 & 3 & 4 & 5 \\ \hline
+  $P_e = Q(A/\sigma)$ & 0,16 & 0,023 & 0,0013 & $3{,}2 \cdot 10^{-5}$ & $2{,}9 \cdot 10^{-7}$
+\end{tabular}
+\end{center}
+Raddoppiare l'ampiezza da $\sigma$ a $2\sigma$ divide gli errori per 7; passare da $2\sigma$ a $4\sigma$ li divide per
+700: la coda gaussiana crolla come $e^{-x^2/2}$. Il rapporto $A/\sigma$ è legato al \emph{rapporto segnale-rumore}, e
+decidere nel modo migliore che cosa è stato trasmesso è il problema della teoria della decisione, che affronteremo nel
+terzo pacchetto di slide.
+\end{esempio}
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item \textbf{Gaussiana standard} $\mathcal{N}(0, 1)$: $f(x) = \frac{1}{\sqrt{2\pi}} e^{-x^2/2}$; l'area 1 segue
+        dall'integrale di Gauss $\int e^{-x^2/2} = \sqrt{2\pi}$ (in coordinate polari); media 0, varianza 1.
+  \item \textbf{Gaussiana generica} $X = \sigma_X X_0 + \mu_X \sim \mathcal{N}(\mu_X, \sigma_X^2)$:
+        $f_X(x) = \frac{1}{\sqrt{2\pi\sigma_X^2}} e^{-(x - \mu_X)^2/(2\sigma_X^2)}$, determinata da media e varianza;
+        standardizzando, $\frac{X - \mu_X}{\sigma_X} \sim \mathcal{N}(0, 1)$.
+  \item \textbf{Funzione $Q$}: $Q(x) = P(X_0 > x)$, la coda della standard; $P(X > x) = Q\left(\frac{x -
+        \mu_X}{\sigma_X}\right)$. È decrescente, $Q(0) = \frac12$, $Q(-x) = 1 - Q(x)$, e
+        $Q(x) < \frac{1}{x\sqrt{2\pi}} e^{-x^2/2}$ per $x > 0$.
+  \item Regola 68--95--99,7: $P(\abs{X - \mu} \leq k\sigma) = 1 - 2Q(k)$.
+  \item Trasmissione binaria $\pm A$ con rumore gaussiano: $P_e = Q(A/\sigma)$.
+\end{itemize}
+}

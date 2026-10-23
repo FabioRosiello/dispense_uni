@@ -1,0 +1,753 @@
+\chapter{Vettori aleatori e vettori gaussiani}
+
+Nel Capitolo~14 abbiamo studiato coppie e $m$-ple di variabili continue. Quando le variabili diventano molte (i
+campioni di un segnale in istanti successivi, le tensioni su $n$ antenne, i pixel di un'immagine) scrivere ogni media e
+ogni covarianza con i suoi indici diventa pesantissimo. L'algebra lineare offre un modo compatto per farlo: si
+raccolgono le variabili in un \textbf{vettore}, le loro medie in un altro vettore e le covarianze di tutte le coppie in
+una \textbf{matrice}, e le formule tornano corte come quelle di una sola variabile. Con questa notazione studieremo la
+famiglia più importante di tutte, i \textbf{vettori gaussiani}: $n$ variabili gaussiane legate fra loro, descritte da una
+sola formula e con una proprietà preziosa: restano gaussiane quando passano attraverso un sistema lineare.
+
+Come nelle slide, i vettori si indicano con una sottolineatura ($\vett{X}$, $\vett{x}$, $\vett{\mu}$) e le matrici
+con due ($\matr{A}$, $\matr{C}$).
+
+% ============================================================
+\section{Vettori e matrici: il minimo indispensabile}
+% ============================================================
+
+Per leggere questo capitolo bastano poche operazioni fra vettori e matrici. Le raccogliamo qui, partendo da zero; chi
+le conosce già può passare direttamente ai vettori aleatori.
+
+\begin{richiamo}{vettori, matrici e trasposti}
+Un \term{vettore} di $n$ numeri si scrive come una \term{colonna}:
+\[ \vett{x} = \begin{bmatrix} x_1 \\ x_2 \\ \vdots \\ x_n \end{bmatrix} \qquad (n \times 1:\ n \text{ righe e una
+   colonna}) . \]
+Il suo \term{trasposto} $\vett{x}^T = [x_1, x_2, \ldots, x_n]$ contiene gli stessi numeri disposti in riga
+($1 \times n$). Per risparmiare spazio, un vettore colonna si scrive spesso come il trasposto di una riga:
+$\vett{x} = [x_1, x_2, \ldots, x_n]^T$.
+
+Una \term{matrice} $m \times n$ è una tabella di numeri con $m$ righe e $n$ colonne; l'elemento $a_{ij}$ sta nella riga
+$i$ e nella colonna $j$. La \term{trasposta} $\matr{A}^T$ si ottiene scambiando le righe con le colonne: l'elemento di
+posto $(i, j)$ di $\matr{A}^T$ è $a_{ji}$. Per esempio
+\[ \matr{A} = \begin{bmatrix} 1 & 2 & 3 \\ 4 & 5 & 6 \end{bmatrix} \ (2 \times 3) , \qquad
+   \matr{A}^T = \begin{bmatrix} 1 & 4 \\ 2 & 5 \\ 3 & 6 \end{bmatrix} \ (3 \times 2) . \]
+Una matrice quadrata ($n \times n$) è \term{simmetrica} se $\matr{A}^T = \matr{A}$, cioè se $a_{ij} = a_{ji}$: è uguale
+alla sua immagine allo specchio rispetto alla \term{diagonale principale}, quella che va dall'angolo in alto a sinistra
+all'angolo in basso a destra. È \term{diagonale} se tutti gli elementi fuori dalla diagonale principale sono nulli.
+\end{richiamo}
+
+\begin{richiamo}{i prodotti «riga per colonna»}
+Tutti i prodotti fra matrici e vettori seguono una sola regola, \textbf{riga per colonna}: si prende una riga del primo
+fattore e una colonna del secondo, si moltiplicano gli elementi a due a due e si sommano i risultati.
+\begin{itemize}
+  \item \textbf{Riga per colonna} (prodotto scalare): $\vett{x}^T \vett{y} = x_1 y_1 + x_2 y_2 + \cdots + x_n y_n$. Il
+        risultato è un \textbf{numero} ($1 \times n$ per $n \times 1$ dà $1 \times 1$). Per esempio
+        $\vett{x}^T \vett{x} = \sum_i x_i^2$ è il quadrato della lunghezza del vettore (per Pitagora).
+  \item \textbf{Matrice per vettore}: $\matr{A}\vett{x}$ è il vettore che ha per elemento $i$-esimo il prodotto della
+        riga $i$ di $\matr{A}$ per $\vett{x}$: $(\matr{A}\vett{x})_i = \sum_j a_{ij} x_j$. Ogni elemento del risultato è
+        una \textbf{combinazione lineare} delle $x_j$ (figura qui sotto).
+  \item \textbf{Matrice per matrice}: l'elemento $(i, j)$ di $\matr{A}\matr{B}$ è la riga $i$ di $\matr{A}$ per la
+        colonna $j$ di $\matr{B}$. Le dimensioni «interne» devono coincidere e spariscono:
+        $(m \times n)(n \times p) = m \times p$. Attenzione: in generale $\matr{A}\matr{B} \neq \matr{B}\matr{A}$,
+        l'ordine dei fattori conta.
+  \item \textbf{Colonna per riga}: $\vett{x}\vett{y}^T$ ($n \times 1$ per $1 \times n$) è una \textbf{matrice}
+        $n \times n$, con elemento $(i, j)$ uguale a $x_i y_j$. In particolare $\vett{x}\vett{x}^T$ contiene
+        \textbf{tutti i prodotti a due a due} $x_i x_j$:
+        \[ \vett{x}\vett{x}^T = \begin{bmatrix} x_1 \\ x_2 \end{bmatrix} [x_1, x_2] = \begin{bmatrix} x_1^2 & x_1 x_2
+           \\ x_2 x_1 & x_2^2 \end{bmatrix} . \]
+\end{itemize}
+\begin{center}
+\begin{tikzpicture}[ampersand replacement=\&, every left delimiter/.style={xshift=0.9ex},
+  every right delimiter/.style={xshift=-0.9ex}]
+  \matrix (A) [matrix of math nodes, left delimiter={[}, right delimiter={]},
+    nodes={minimum width=2.3em, minimum height=1.6em, font=\small}] {
+    a_{11} \& a_{12} \& a_{13} \\
+    a_{21} \& a_{22} \& a_{23} \\
+  };
+  \matrix (x) [matrix of math nodes, left delimiter={[}, right delimiter={]}, right=0.5cm of A,
+    nodes={minimum width=1.8em, minimum height=1.6em, font=\small}] {
+    x_1 \\ x_2 \\ x_3 \\
+  };
+  \node[right=0.35cm of x] (uguale) {$=$};
+  \matrix (y) [matrix of math nodes, left delimiter={[}, right delimiter={]}, right=0.35cm of uguale,
+    nodes={minimum height=1.6em, font=\small}] {
+    a_{11} x_1 + a_{12} x_2 + a_{13} x_3 \\
+    a_{21} x_1 + a_{22} x_2 + a_{23} x_3 \\
+  };
+  \begin{scope}[on background layer]
+    \node[fill=evid, rounded corners=2pt, inner sep=0pt, fit=(A-2-1)(A-2-3)] {};
+    \node[fill=evid, rounded corners=2pt, inner sep=0pt, fit=(x-1-1)(x-3-1)] {};
+    \node[fill=evid, rounded corners=2pt, inner sep=0pt, fit=(y-2-1)] {};
+  \end{scope}
+  \node[font=\scriptsize, anchor=north] at ([yshift=-2mm]A.south |- x.south) {$\matr{A}$ \ ($2 \times 3$)};
+  \node[font=\scriptsize, anchor=north] at ([yshift=-2mm]x.south) {$\vett{x}$ \ ($3 \times 1$)};
+  \node[font=\scriptsize, anchor=north] at ([yshift=-2mm]y.south |- x.south) {$\matr{A}\vett{x}$ \ ($2 \times 1$)};
+  \node[font=\small, anchor=west, text width=4.6cm] at ([xshift=0.6cm]y.east)
+    {La seconda riga di $\matr{A}$ per la colonna $\vett{x}$ dà il secondo elemento del risultato.};
+\end{tikzpicture}
+\end{center}
+\textbf{Il trasposto di un prodotto} si ottiene trasponendo i fattori e \textbf{invertendone l'ordine}:
+$(\matr{A}\matr{B})^T = \matr{B}^T \matr{A}^T$. Il perché: l'elemento $(i, j)$ di $(\matr{A}\matr{B})^T$ è l'elemento
+$(j, i)$ di $\matr{A}\matr{B}$, cioè la riga $j$ di $\matr{A}$ per la colonna $i$ di $\matr{B}$; ma la colonna $i$ di
+$\matr{B}$ è la riga $i$ di $\matr{B}^T$, e la riga $j$ di $\matr{A}$ è la colonna $j$ di $\matr{A}^T$. Per esempio
+$(\matr{A}\vett{x})^T = \vett{x}^T \matr{A}^T$. Infine, un numero è uguale al suo trasposto, quindi
+$\vett{x}^T \vett{y} = (\vett{x}^T \vett{y})^T = \vett{y}^T \vett{x}$.
+\end{richiamo}
+
+\begin{richiamo}{identità, inversa, determinante e forme quadratiche}
+\textbf{Identità e inversa.} La matrice \term{identità} $\matr{I}$ ha 1 sulla diagonale principale e 0 altrove: per ogni
+vettore $\matr{I}\vett{x} = \vett{x}$, come moltiplicare un numero per 1. L'\term{inversa} di una matrice quadrata
+$\matr{A}$ è la matrice $\matr{A}^{-1}$ tale che $\matr{A}^{-1}\matr{A} = \matr{A}\matr{A}^{-1} = \matr{I}$: disfa quello
+che fa $\matr{A}$, come $\frac{1}{a}$ disfa la moltiplicazione per $a$. Se $\vett{z} = \matr{A}\vett{x}$, allora
+$\vett{x} = \matr{A}^{-1}\vett{z}$. Per un prodotto l'ordine si inverte, come per il trasposto:
+$(\matr{A}\matr{B})^{-1} = \matr{B}^{-1}\matr{A}^{-1}$ (per disfare due operazioni si disfa prima l'ultima, come quando
+ci si toglie prima le scarpe e poi i calzini). Inoltre $(\matr{A}^T)^{-1} = (\matr{A}^{-1})^T$.
+
+\textbf{Determinante.} A ogni matrice quadrata si associa un numero, il \term{determinante}. Per una matrice $2 \times 2$:
+\[ \det \begin{bmatrix} a & b \\ c & d \end{bmatrix} = ad - bc , \qquad
+   \begin{bmatrix} a & b \\ c & d \end{bmatrix}^{-1} = \frac{1}{ad - bc} \begin{bmatrix} d & -b \\ -c & a \end{bmatrix} \]
+(per verificare la formula dell'inversa basta moltiplicare: si ottiene $\matr{I}$). Il significato geometrico:
+$\abs*{\det \matr{A}}$ è il \textbf{fattore per cui $\matr{A}$ moltiplica le aree} (i volumi, in $n$ dimensioni). La
+matrice è invertibile esattamente quando $\det \matr{A} \neq 0$: se il determinante è nullo, $\matr{A}$ schiaccia il
+piano su una retta e non si può più tornare indietro. Valgono $\det(\matr{A}\matr{B}) = \det\matr{A} \cdot \det\matr{B}$
+(le due dilatazioni si susseguono) e $\det \matr{A}^T = \det \matr{A}$. Per una matrice diagonale tutto è facile: il
+determinante è il prodotto degli elementi della diagonale, e l'inversa si ottiene invertendoli uno per uno.
+\begin{center}
+\begin{tikzpicture}[scale=0.95]
+  \draw[-{Stealth}, mspigray] (-0.3,0) -- (2,0) node[below, font=\scriptsize, black] {$x_1$};
+  \draw[-{Stealth}, mspigray] (0,-0.3) -- (0,2.1) node[left, font=\scriptsize, black] {$x_2$};
+  \fill[evid] (0,0) rectangle (1,1); \draw[mspiric, line width=0.8pt] (0,0) rectangle (1,1);
+  \node[font=\scriptsize] at (0.5,0.5) {area 1};
+  \node[font=\scriptsize, below] at (1,0) {1}; \node[font=\scriptsize, left] at (0,1) {1};
+  \draw[-{Stealth}, line width=0.8pt] (2.4,1) -- node[above, font=\small] {$\matr{A}$} (3.6,1);
+  \begin{scope}[xshift=4.3cm]
+    \draw[-{Stealth}, mspigray] (-0.3,0) -- (3.4,0) node[below, font=\scriptsize, black] {$z_1$};
+    \draw[-{Stealth}, mspigray] (0,-0.3) -- (0,2.3) node[left, font=\scriptsize, black] {$z_2$};
+    \fill[evid] (0,0) -- (2,0.5) -- (3,2) -- (1,1.5) -- cycle;
+    \draw[mspiric, line width=0.8pt] (0,0) -- (2,0.5) -- (3,2) -- (1,1.5) -- cycle;
+    \node[font=\scriptsize] at (1.5,1) {area $2{,}5$};
+    \draw[-{Stealth}, mspiA, line width=0.9pt] (0,0) -- (2,0.5) node[below right, font=\scriptsize] {$(2;\ 0{,}5)$};
+    \draw[-{Stealth}, mspiB, line width=0.9pt] (0,0) -- (1,1.5) node[above left, font=\scriptsize] {$(1;\ 1{,}5)$};
+  \end{scope}
+  \node[font=\small, anchor=west, text width=7.4cm] at (8.4,1)
+    {Con $\matr{A} = \begin{bmatrix} 2 & 1 \\ 0{,}5 & 1{,}5 \end{bmatrix}$ il quadrato di lato 1 diventa il
+     parallelogramma che ha per lati le colonne di $\matr{A}$; la sua area è
+     $\det\matr{A} = 2 \cdot 1{,}5 - 1 \cdot 0{,}5 = 2{,}5$.};
+\end{tikzpicture}
+\end{center}
+\textbf{Forme quadratiche.} Data una matrice quadrata $\matr{C}$, il numero
+$\vett{q}^T \matr{C} \vett{q} = \sum_i \sum_j q_i\, c_{ij}\, q_j$ si chiama \term{forma quadratica}: è un polinomio di
+secondo grado nelle $q_i$. Se $\matr{C}$ è diagonale, $\vett{q}^T \matr{C} \vett{q} = c_{11} q_1^2 + c_{22} q_2^2 + \cdots
++ c_{nn} q_n^2$: una somma di quadrati pesati.
+\end{richiamo}
+
+% ============================================================
+\section{Vettori aleatori: medie, correlazioni e covarianze}
+% ============================================================
+
+\dfn{Vettore aleatorio}{
+  Un \term{vettore aleatorio} $n$-dimensionale è la colonna di $n$ variabili aleatorie
+  \[ \vett{X} = [X_1, X_2, \ldots, X_n]^T . \]
+  La sua CDF e la sua PDF sono la CDF e la PDF congiunte delle $n$ variabili, scritte in forma vettoriale:
+  $F_{\vett{X}}(\vett{x}) = P(X_1 \leq x_1, \ldots, X_n \leq x_n)$ e
+  $f_{\vett{X}}(\vett{x}) = f_{X_1 \cdots X_n}(x_1, \ldots, x_n)$, con $\vett{x} = [x_1, \ldots, x_n]^T$.
+}
+
+Niente di nuovo, quindi: $f_{\vett{X}}(\vett{x})$ è la densità congiunta del Capitolo~14 con $n$ variabili, scritta in
+modo compatto. La novità è la caratterizzazione sintetica. La media di un vettore (o di una matrice) di variabili
+aleatorie si calcola \textbf{elemento per elemento}.
+
+\dfn{Vettore delle medie}{
+  Il \term{vettore valore medio} di $\vett{X}$ è il vettore colonna dei valori attesi delle $n$ variabili:
+  \[ \vett{\mu}_{\vett{X}} \stackrel{\triangle}{=} E[\vett{X}] = [\mu_{X_1}, \mu_{X_2}, \ldots, \mu_{X_n}]^T . \]
+}
+
+Le medie da sole non dicono come le variabili sono legate fra loro. Per questo si considerano anche la correlazione e
+la covarianza di tutte le coppie $(X_i, X_j)$ che si possono estrarre dal vettore, raccolte in una tabella $n \times n$,
+cioè in una matrice. Il modo per costruirla in un colpo solo è il prodotto colonna per riga $\vett{X}\vett{X}^T$, che
+contiene tutti i prodotti $X_i X_j$.
+
+\dfn{Matrice di correlazione}{
+  La \term{matrice di correlazione} del vettore $\vett{X}$ è la matrice $n \times n$
+  \[ \matr{R}_{\vett{X}} \stackrel{\triangle}{=} E\left[ \vett{X}\vett{X}^T \right] = \begin{bmatrix} R_{X_1 X_1} &
+     R_{X_1 X_2} & \cdots & R_{X_1 X_n} \\ R_{X_2 X_1} & R_{X_2 X_2} & \cdots & R_{X_2 X_n} \\ \vdots & \vdots & \ddots &
+     \vdots \\ R_{X_n X_1} & R_{X_n X_2} & \cdots & R_{X_n X_n} \end{bmatrix} , \qquad R_{X_i X_j} = E[X_i X_j] . \]
+}
+
+È \textbf{simmetrica}, perché $E[X_i X_j] = E[X_j X_i]$, e sulla diagonale principale ci sono i \textbf{valori quadratici
+medi} delle variabili, perché $E[X_i X_i] = E[X_i^2]$.
+
+\dfn{Matrice di covarianza}{
+  La \term{matrice di covarianza} del vettore $\vett{X}$ è la matrice $n \times n$
+  \[ \matr{C}_{\vett{X}} \stackrel{\triangle}{=} E\left[ \left( \vett{X} - \vett{\mu}_{\vett{X}} \right) \left( \vett{X}
+     - \vett{\mu}_{\vett{X}} \right)^T \right] = \begin{bmatrix} C_{X_1 X_1} & C_{X_1 X_2} & \cdots & C_{X_1 X_n} \\
+     C_{X_2 X_1} & C_{X_2 X_2} & \cdots & C_{X_2 X_n} \\ \vdots & \vdots & \ddots & \vdots \\ C_{X_n X_1} & C_{X_n X_2} &
+     \cdots & C_{X_n X_n} \end{bmatrix} , \qquad C_{X_i X_j} = COV(X_i, X_j) . \]
+}
+
+Anche questa è simmetrica, e l'elemento $i$-esimo della diagonale principale è
+$C_{X_i X_i} = E[(X_i - \mu_{X_i})(X_i - \mu_{X_i})] = \sigma_{X_i}^2$, la \textbf{varianza} di $X_i$. Fuori dalla
+diagonale ci sono le covarianze, che si possono scrivere con i coefficienti di correlazione:
+$C_{X_i X_j} = \rho_{X_i X_j}\, \sigma_{X_i} \sigma_{X_j}$. Per $n = 2$, scrivendo in breve $\sigma_i = \sigma_{X_i}$ e
+$\rho = \rho_{X_1 X_2}$:
+\[ \matr{C}_{\vett{X}} = \begin{bmatrix} \sigma_1^2 & \rho\, \sigma_1 \sigma_2 \\ \rho\, \sigma_1 \sigma_2 & \sigma_2^2
+   \end{bmatrix} . \]
+
+\teorema[covcorr]{Covarianza e correlazione}{
+  \[ \matr{C}_{\vett{X}} = \matr{R}_{\vett{X}} - \vett{\mu}_{\vett{X}} \vett{\mu}_{\vett{X}}^T . \]
+}
+
+\begin{dimostrazione}[come nel Capitolo~9, ma tutto insieme]
+\passo{Si sviluppa il prodotto} Scriviamo in breve $\vett{\mu}$ per $\vett{\mu}_{\vett{X}}$. Il prodotto fra matrici si
+sviluppa come quello fra numeri, facendo attenzione a non scambiare l'ordine dei fattori; inoltre
+$(\vett{X} - \vett{\mu})^T = \vett{X}^T - \vett{\mu}^T$:
+\[ (\vett{X} - \vett{\mu})(\vett{X} - \vett{\mu})^T = \vett{X}\vett{X}^T - \vett{X}\vett{\mu}^T -
+   \vett{\mu}\vett{X}^T + \vett{\mu}\vett{\mu}^T . \]
+\passo{Si fa la media} La media è lineare e si fa elemento per elemento; $\vett{\mu}$ è costante ed esce dalla media:
+$E[\vett{X}\vett{\mu}^T] = E[\vett{X}]\, \vett{\mu}^T = \vett{\mu}\vett{\mu}^T$, e allo stesso modo
+$E[\vett{\mu}\vett{X}^T] = \vett{\mu}\vett{\mu}^T$. Quindi
+\[ \matr{C}_{\vett{X}} = \matr{R}_{\vett{X}} - \vett{\mu}\vett{\mu}^T - \vett{\mu}\vett{\mu}^T + \vett{\mu}\vett{\mu}^T
+   = \matr{R}_{\vett{X}} - \vett{\mu}\vett{\mu}^T . \]
+Elemento per elemento è proprio la formula $COV(X_i, X_j) = E[X_i X_j] - \mu_{X_i} \mu_{X_j}$ del Capitolo~9.
+\end{dimostrazione}
+
+\subsection{La caratterizzazione sintetica}
+
+Per una sola variabile la coppia media-varianza $(\mu_X, \sigma_X^2)$ riassume spesso le informazioni più importanti;
+per una coppia, la «cinquina» $(\mu_X, \sigma_X^2, \mu_Y, \sigma_Y^2, COV(X, Y))$. Per un vettore aleatorio lo stesso
+ruolo è svolto dal vettore delle medie $\vett{\mu}_{\vett{X}}$ insieme alla matrice di covarianza $\matr{C}_{\vett{X}}$
+(o a quella di correlazione $\matr{R}_{\vett{X}}$, che per il Teorema~\ref{teo:covcorr} contiene la stessa
+informazione, noto $\vett{\mu}_{\vett{X}}$): è la \term{caratterizzazione statistica sintetica} del vettore. Per
+$n = 2$ si ritrova proprio la cinquina: due medie e, nella matrice $2 \times 2$ simmetrica, due varianze e una
+covarianza. In generale servono $n$ medie e $\frac{n(n+1)}{2}$ elementi della matrice (la diagonale e il triangolo sopra
+di essa; quello sotto è uguale per simmetria).
+
+La caratterizzazione sintetica è molto più povera di quella completa, la densità congiunta $f_{\vett{X}}$: dalla densità
+si calcolano medie e covarianze, ma in generale non si può tornare indietro, perché vettori con densità molto diverse
+possono avere le stesse medie e covarianze. Vedremo che per i vettori gaussiani, invece, si può.
+
+\begin{esempio}{Il vettore della densità $x + y$}
+Riprendiamo la coppia del Capitolo~14 (là si chiamavano $X$ e $Y$), con densità $f_{\vett{X}}(\vett{x}) = x_1 + x_2$ sul
+quadrato $[0, 1]^2$. Avevamo trovato $E[X_1] = E[X_2] = \frac{7}{12}$, $E[X_1^2] = E[X_2^2] = \frac{5}{12}$ e
+$E[X_1 X_2] = \frac13$. Quindi
+\[ \vett{\mu}_{\vett{X}} = \begin{bmatrix} 7/12 \\ 7/12 \end{bmatrix} , \qquad
+   \matr{R}_{\vett{X}} = \begin{bmatrix} 5/12 & 1/3 \\ 1/3 & 5/12 \end{bmatrix} = \frac{1}{144} \begin{bmatrix} 60 & 48
+   \\ 48 & 60 \end{bmatrix} , \qquad
+   \vett{\mu}_{\vett{X}} \vett{\mu}_{\vett{X}}^T = \frac{1}{144} \begin{bmatrix} 49 & 49 \\ 49 & 49 \end{bmatrix} , \]
+dove $\vett{\mu}_{\vett{X}} \vett{\mu}_{\vett{X}}^T$ è il prodotto colonna per riga, con tutti gli elementi uguali a
+$\frac{7}{12} \cdot \frac{7}{12} = \frac{49}{144}$. Per il Teorema~\ref{teo:covcorr}
+\[ \matr{C}_{\vett{X}} = \matr{R}_{\vett{X}} - \vett{\mu}_{\vett{X}} \vett{\mu}_{\vett{X}}^T = \frac{1}{144}
+   \begin{bmatrix} 11 & -1 \\ -1 & 11 \end{bmatrix} . \]
+Sulla diagonale ci sono le varianze $\frac{11}{144}$, fuori la covarianza $-\frac{1}{144}$: gli stessi valori del
+Capitolo~14, ottenuti tutti insieme.
+\end{esempio}
+
+% ============================================================
+\section{La matrice di covarianza è sempre definita non negativa}
+% ============================================================
+
+Una varianza non può essere negativa. Per una matrice di covarianza vale qualcosa di più forte, che riguarda tutte le
+combinazioni lineari delle variabili del vettore.
+
+\dfn{Matrice definita non negativa}{
+  Una matrice quadrata $\matr{C}$ di dimensioni $M \times M$ si dice \term{definita non negativa} se, per qualunque
+  vettore $\vett{q} \in \R^M$ (cioè $M \times 1$),
+  \[ \vett{q}^T \matr{C}\, \vett{q} \geq 0 . \]
+}
+
+\teorema[nonnegativa]{La matrice di covarianza è definita non negativa}{
+  La matrice di covarianza $\matr{C}_{\vett{X}}$ di qualunque vettore aleatorio $\vett{X}$ di dimensione $M$ è definita
+  non negativa: $\vett{q}^T \matr{C}_{\vett{X}}\, \vett{q} \geq 0$ per ogni $\vett{q} \in \R^M$.
+}
+
+\begin{dimostrazione}[la forma quadratica è una varianza]
+\passo{Una combinazione lineare} Fissato $\vett{q}$, la quantità $\vett{q}^T \vett{X} = q_1 X_1 + \cdots + q_M X_M$ è una
+variabile aleatoria scalare (riga per colonna dà un numero). Per la linearità della media,
+$E[\vett{q}^T \vett{X}] = \vett{q}^T \vett{\mu}_{\vett{X}}$.
+\passo{Il suo valore quadratico medio} Un numero è uguale al suo trasposto, quindi
+$\vett{q}^T \vett{X} = (\vett{q}^T \vett{X})^T = \vett{X}^T \vett{q}$ (trasposto di un prodotto, con l'ordine
+invertito). Allora
+\[ E[(\vett{q}^T \vett{X})^2] = E[(\vett{q}^T \vett{X})(\vett{X}^T \vett{q})] = E[\vett{q}^T \vett{X}\vett{X}^T
+   \vett{q}] = \vett{q}^T E[\vett{X}\vett{X}^T]\, \vett{q} , \]
+dove $\vett{q}$, che è costante, esce dalla media.
+\passo{La varianza non è negativa}
+\[ 0 \leq \mathrm{VAR}(\vett{q}^T \vett{X}) = E[(\vett{q}^T \vett{X})^2] - \left( E[\vett{q}^T \vett{X}] \right)^2 =
+   \vett{q}^T E[\vett{X}\vett{X}^T]\, \vett{q} - (\vett{q}^T \vett{\mu}_{\vett{X}})^2 . \]
+(Nella slide 77 manca il quadrato su $E[\vett{q}^T \vett{X}]$: la varianza è il valore quadratico medio meno il
+\emph{quadrato} della media.)
+\passo{Anche il quadrato della media è una forma quadratica} Con lo stesso trucco del passo 2,
+$(\vett{q}^T \vett{\mu}_{\vett{X}})^2 = (\vett{q}^T \vett{\mu}_{\vett{X}})(\vett{\mu}_{\vett{X}}^T \vett{q}) =
+\vett{q}^T \vett{\mu}_{\vett{X}} \vett{\mu}_{\vett{X}}^T \vett{q}$. Raccogliendo $\vett{q}^T$ a sinistra e $\vett{q}$ a
+destra:
+\[ 0 \leq \vett{q}^T \left( E[\vett{X}\vett{X}^T] - \vett{\mu}_{\vett{X}} \vett{\mu}_{\vett{X}}^T \right) \vett{q} =
+   \vett{q}^T \matr{C}_{\vett{X}}\, \vett{q} , \]
+per il Teorema~\ref{teo:covcorr}. E questo vale qualunque sia $\vett{q} \in \R^M$.
+\end{dimostrazione}
+
+Il significato è semplice: $\vett{q}^T \matr{C}_{\vett{X}} \vett{q}$ \textbf{è la varianza della combinazione lineare}
+$\vett{q}^T \vett{X}$, e una varianza non può essere negativa. Con $M = 2$, svolgendo i prodotti riga per colonna:
+\[ \vett{q}^T \matr{C}_{\vett{X}} \vett{q} = [q_1, q_2] \begin{bmatrix} \sigma_1^2 & \rho\sigma_1\sigma_2 \\
+   \rho\sigma_1\sigma_2 & \sigma_2^2 \end{bmatrix} \begin{bmatrix} q_1 \\ q_2 \end{bmatrix} = [q_1, q_2]
+   \begin{bmatrix} \sigma_1^2 q_1 + \rho\sigma_1\sigma_2 q_2 \\ \rho\sigma_1\sigma_2 q_1 + \sigma_2^2 q_2 \end{bmatrix}
+   = q_1^2 \sigma_1^2 + q_2^2 \sigma_2^2 + 2 q_1 q_2\, \rho\, \sigma_1 \sigma_2 , \]
+che è la formula della varianza di $q_1 X_1 + q_2 X_2$ del Capitolo~9 (Teorema~\ref{teo:varsomma}).
+
+\info{Un vecchio risultato in veste nuova}{
+  Scegliendo $\vett{q} = [1/\sigma_1, \pm 1/\sigma_2]^T$ la forma quadratica vale $1 + 1 \pm 2\rho$, e la condizione
+  $\geq 0$ diventa $\rho \geq -1$ (con il segno $+$) e $\rho \leq 1$ (con il segno $-$): è la dimostrazione di
+  $\abs{\rho} \leq 1$ del Capitolo~9. La non negatività della matrice di covarianza generalizza quel risultato a $M$
+  variabili: nessuna combinazione delle variabili può avere varianza negativa.
+}
+
+% ============================================================
+\section{Vettori gaussiani}
+% ============================================================
+
+\subsection{Si parte da \texorpdfstring{$n$}{n} gaussiane indipendenti}
+
+Il punto di partenza è il caso più semplice: $n$ variabili gaussiane statisticamente indipendenti,
+$X_i \sim \mathcal{N}(\mu_{X_i}, \sigma_{X_i}^2)$. La loro densità congiunta si può scrivere in una forma che usa solo il
+vettore delle medie e la matrice di covarianza.
+
+\teorema[gaussindip]{Densità di $n$ gaussiane indipendenti}{
+  Se $X_1, \ldots, X_n$ sono gaussiane indipendenti, la densità congiunta del vettore $\vett{X} = [X_1, \ldots, X_n]^T$ è
+  \[ f_{\vett{X}}(\vett{x}) = \frac{1}{\sqrt{(2\pi)^n \det \matr{C}_{\vett{X}}}}\; e^{-\frac12 \left( \vett{x} -
+     \vett{\mu}_{\vett{X}} \right)^T \matr{C}_{\vett{X}}^{-1} \left( \vett{x} - \vett{\mu}_{\vett{X}} \right)} . \]
+}
+
+\begin{dimostrazione}
+\passo{Il prodotto delle marginali} Per l'indipendenza la densità congiunta è il prodotto delle densità:
+\[ f_{\vett{X}}(\vett{x}) = \prod_{i=1}^{n} f_{X_i}(x_i) = \prod_{i=1}^{n} \frac{1}{\sqrt{2\pi\sigma_{X_i}^2}}\,
+   e^{-\frac{(x_i - \mu_{X_i})^2}{2\sigma_{X_i}^2}} = \frac{1}{\sqrt{(2\pi)^n \prod_{i=1}^{n} \sigma_{X_i}^2}}\;
+   e^{-\frac12 \sum_{i=1}^{n} \frac{(x_i - \mu_{X_i})^2}{\sigma_{X_i}^2}} . \]
+Si sono usate due regole: il prodotto delle radici è la radice del prodotto ($\sqrt{a}\sqrt{b} = \sqrt{ab}$), e il
+prodotto di esponenziali è l'esponenziale della somma ($e^a e^b = e^{a + b}$).
+\passo{La matrice di covarianza è diagonale} Le variabili sono indipendenti, quindi incorrelate a due a due: tutte le
+covarianze fuori dalla diagonale sono nulle. Per una matrice diagonale determinante e inversa sono immediati:
+\[ \matr{C}_{\vett{X}} = \begin{bmatrix} \sigma_{X_1}^2 & 0 & \cdots & 0 \\ 0 & \sigma_{X_2}^2 & \cdots & 0 \\ \vdots
+   & \vdots & \ddots & \vdots \\ 0 & 0 & \cdots & \sigma_{X_n}^2 \end{bmatrix} \quad\Longrightarrow\quad
+   \det \matr{C}_{\vett{X}} = \prod_{i=1}^{n} \sigma_{X_i}^2 , \qquad
+   \matr{C}_{\vett{X}}^{-1} = \begin{bmatrix} 1/\sigma_{X_1}^2 & \cdots & 0 \\ \vdots & \ddots & \vdots \\ 0 & \cdots &
+   1/\sigma_{X_n}^2 \end{bmatrix} . \]
+Il prodotto delle varianze sotto la radice è quindi $\det \matr{C}_{\vett{X}}$.
+\passo{L'esponente è una forma quadratica} La somma all'esponente è una somma di quadrati pesati con i pesi
+$\frac{1}{\sigma_{X_i}^2}$, cioè la forma quadratica della matrice diagonale $\matr{C}_{\vett{X}}^{-1}$ calcolata nel
+vettore $\vett{x} - \vett{\mu}_{\vett{X}}$:
+\[ \sum_{i=1}^{n} \frac{(x_i - \mu_{X_i})^2}{\sigma_{X_i}^2} = \left( \vett{x} - \vett{\mu}_{\vett{X}} \right)^T
+   \matr{C}_{\vett{X}}^{-1} \left( \vett{x} - \vett{\mu}_{\vett{X}} \right) . \]
+\end{dimostrazione}
+
+\subsection{La definizione generale}
+
+La formula appena trovata non contiene più le singole variabili: solo $\vett{\mu}_{\vett{X}}$ e $\matr{C}_{\vett{X}}$.
+L'idea è usarla anche quando la matrice di covarianza \textbf{non} è diagonale.
+
+\dfn{Vettore gaussiano}{
+  Un vettore aleatorio $\vett{X}$ si dice \term{gaussiano}, e si scrive
+  $\vett{X} \sim \mathcal{N}(\vett{\mu}_{\vett{X}}, \matr{C}_{\vett{X}})$, quando la sua densità congiunta ha la forma
+  \[ f_{\vett{X}}(\vett{x}) = \frac{1}{\sqrt{(2\pi)^n \det \matr{C}_{\vett{X}}}}\; e^{-\frac12 \left( \vett{x} -
+     \vett{\mu}_{\vett{X}} \right)^T \matr{C}_{\vett{X}}^{-1} \left( \vett{x} - \vett{\mu}_{\vett{X}} \right)} , \]
+  \textbf{anche se le componenti non sono indipendenti}, cioè anche se $\matr{C}_{\vett{X}}$ non è diagonale.
+  Equivalentemente, $n$ variabili aleatorie con una densità congiunta di questa forma si dicono
+  \term{congiuntamente gaussiane}.
+}
+
+Perché la formula abbia senso, $\matr{C}_{\vett{X}}$ deve essere invertibile ($\det \matr{C}_{\vett{X}} \neq 0$; per il
+Teorema~\ref{teo:nonnegativa}, anzi, $\det \matr{C}_{\vett{X}} > 0$). È la naturale generalizzazione della densità di una
+gaussiana: con $n = 1$ la matrice di covarianza è il numero $\sigma_X^2$, il suo determinante è $\sigma_X^2$ e la sua
+inversa è $\frac{1}{\sigma_X^2}$, e la formula ridà $\frac{1}{\sqrt{2\pi\sigma_X^2}}\, e^{-\frac{(x -
+\mu_X)^2}{2\sigma_X^2}}$.
+\begin{center}
+\renewcommand{\arraystretch}{1.6}
+\begin{tabular}{@{}lcc@{}}
+  \toprule
+  & una variabile, $\mathcal{N}(\mu_X, \sigma_X^2)$ & vettore di $n$ variabili, $\mathcal{N}(\vett{\mu}_{\vett{X}},
+  \matr{C}_{\vett{X}})$ \\ \midrule
+  centro & $\mu_X$ & $\vett{\mu}_{\vett{X}}$ \\
+  larghezza & $\sigma_X^2$ & $\matr{C}_{\vett{X}}$ \\
+  costante davanti & $\dfrac{1}{\sqrt{2\pi\, \sigma_X^2}}$ & $\dfrac{1}{\sqrt{(2\pi)^n \det \matr{C}_{\vett{X}}}}$ \\
+  esponente & $-\frac12\, (x - \mu_X)\, \frac{1}{\sigma_X^2}\, (x - \mu_X)$ & $-\frac12 (\vett{x} -
+  \vett{\mu}_{\vett{X}})^T\, \matr{C}_{\vett{X}}^{-1} (\vett{x} - \vett{\mu}_{\vett{X}})$ \\ \bottomrule
+\end{tabular}
+\end{center}
+La forma quadratica all'esponente misura quanto $\vett{x}$ è lontano dal centro $\vett{\mu}_{\vett{X}}$, tenendo conto
+delle larghezze e delle correlazioni: è il quadrato di una «distanza», e la densità è tanto più alta quanto più
+$\vett{x}$ è vicino al centro. I punti alla stessa distanza, cioè con la stessa densità, formano delle \textbf{ellissi}
+(in tre dimensioni, degli ellissoidi).
+
+\subsection{Il caso di due variabili}
+
+Con $n = 2$, $\vett{\mu}_{\vett{X}} = [\mu_1, \mu_2]^T$ e la matrice di covarianza scritta con il coefficiente di
+correlazione, la formula dell'inversa $2 \times 2$ del richiamo dà
+\[ \matr{C}_{\vett{X}} = \begin{bmatrix} \sigma_1^2 & \rho\sigma_1\sigma_2 \\ \rho\sigma_1\sigma_2 & \sigma_2^2
+   \end{bmatrix} , \quad \det \matr{C}_{\vett{X}} = \sigma_1^2 \sigma_2^2 (1 - \rho^2) , \quad
+   \matr{C}_{\vett{X}}^{-1} = \frac{1}{\sigma_1^2 \sigma_2^2 (1 - \rho^2)} \begin{bmatrix} \sigma_2^2 &
+   -\rho\sigma_1\sigma_2 \\ -\rho\sigma_1\sigma_2 & \sigma_1^2 \end{bmatrix} . \]
+Svolgendo i prodotti all'esponente (come per la forma quadratica della sezione precedente) si ottiene la
+\term{gaussiana bivariata}:
+\[ f_{X_1 X_2}(x_1, x_2) = \frac{1}{2\pi \sigma_1 \sigma_2 \sqrt{1 - \rho^2}}\, \exp\left\{ -\frac{1}{2(1 - \rho^2)}
+   \left[ \frac{(x_1 - \mu_1)^2}{\sigma_1^2} - 2\rho\, \frac{(x_1 - \mu_1)(x_2 - \mu_2)}{\sigma_1 \sigma_2} +
+   \frac{(x_2 - \mu_2)^2}{\sigma_2^2} \right] \right\} , \]
+dove $\exp\{a\}$ è un altro modo di scrivere $e^a$, comodo quando l'esponente è lungo. Serve $\abs{\rho} < 1$: con
+$\rho = \pm 1$ il determinante si annulla, la matrice non è invertibile e le due variabili sono legate da una relazione
+lineare esatta (tutta la probabilità sta su una retta, e una densità nel piano non esiste).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=1.6cm}, width=8cm, height=6.6cm, view={-35}{38},
+  xmin=-3, xmax=3, ymin=-3, ymax=3, zmin=0, zmax=0.27, xtick={-2,0,2}, ytick={-2,0,2}, ztick=\empty,
+  xlabel=$x_1$, ylabel=$x_2$, tick label style={font=\scriptsize}, label style={font=\small}, colormap/viridis]
+\nextgroupplot[title={$\rho = 0$}]
+  \addplot3[surf, shader=faceted, opacity=0.6, draw=black!30, line width=0.2pt, domain=-3:3, y domain=-3:3,
+    samples=31] {exp(-(x^2 + y^2)/2)/(2*pi)};
+\nextgroupplot[title={$\rho = 0{,}8$}]
+  \addplot3[surf, shader=faceted, opacity=0.6, draw=black!30, line width=0.2pt, domain=-3:3, y domain=-3:3,
+    samples=31] {exp(-(x^2 - 1.6*x*y + y^2)/(2*0.36))/(2*pi*0.6)};
+\end{groupplot}
+\end{tikzpicture}
+\caption{La gaussiana bivariata con $\mu_1 = \mu_2 = 0$ e $\sigma_1 = \sigma_2 = 1$. Con $\rho = 0$ la campana è
+rotonda; con $\rho = 0{,}8$ è allungata lungo la bisettrice $x_2 = x_1$, e più alta, perché il volume sotto la superficie
+resta 1.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=3 by 1, horizontal sep=0.45cm, yticklabels at=edge left}, width=6.6cm,
+  height=6.6cm, xmin=-3.3, xmax=3.3, ymin=-3.3, ymax=3.3, axis equal image, xtick={-2,0,2}, ytick={-2,0,2},
+  tick label style={font=\scriptsize}, label style={font=\small}, xlabel=$x_1$, grid=major, grid style={mspigray!20}]
+\nextgroupplot[title={$\rho = 0$}, ylabel=$x_2$]
+  \addplot[only marks, mark=*, mark size=0.7pt, mspiA!75] coordinates {(-0.74,0.87) (-0.94,0.54) (-1.23,0.79) (-0.08,1.42) (0.85,0.05) (-0.28,0.48) (-0.04,-0.86) (0.61,-2.43) (-0.05,2.12) (0.53,-1.39) (1.09,0.19) (-0.59,-0.60) (0.14,0.85) (-0.09,1.76) (-0.60,0.86) (-1.52,-1.91) (-0.08,0.29) (1.87,-0.31) (0.31,-1.18) (0.06,0.58) (-0.37,1.05) (1.42,0.62) (-0.02,-0.16) (0.64,-0.97) (0.99,-0.55) (0.31,-1.06) (-0.89,-0.77) (0.55,0.08) (0.11,1.01) (-0.85,0.91) (-0.54,-0.85) (-0.51,1.08) (1.67,-0.51) (-1.03,-1.53) (0.06,0.46) (0.42,0.28) (1.40,0.08) (0.43,-0.24) (-0.92,-2.19) (0.06,-0.57) (-0.50,-0.59) (0.07,0.13) (-2.21,-0.36) (0.45,0.34) (-0.21,0.18) (-1.58,0.36) (-0.27,0.07) (0.65,0.13) (-1.13,-1.97) (-0.47,-0.01) (0.22,1.01) (0.39,0.31) (-1.75,0.77) (0.16,2.06) (0.76,-0.75) (0.10,0.63) (-0.93,-1.62) (0.44,-0.53) (-0.19,0.09) (-0.28,0.79) (0.28,0.28) (0.85,-0.04) (-1.24,0.01) (-1.31,0.23) (-1.16,-0.02) (1.24,0.68) (-0.78,-1.40) (-0.43,1.03) (0.56,-1.51) (0.85,0.29) (0.75,1.39) (-0.81,0.57) (0.19,1.08) (-0.28,-1.38) (0.18,0.99) (-0.24,-0.24) (0.18,-0.12) (-0.40,-0.40) (1.48,-0.42) (0.20,1.17) (1.11,-1.62) (-0.74,-1.22) (-0.11,-2.22) (-1.38,-0.12) (0.36,-1.14) (0.26,1.29) (-0.92,1.28) (-0.03,-2.18) (0.17,0.13) (1.47,-0.68) (1.83,-0.03) (0.56,-0.17) (0.54,1.27) (0.02,-0.50) (0.68,-0.23) (0.31,1.03) (0.18,0.39) (0.23,0.12) (0.88,1.22) (0.32,-1.69) (-1.45,0.83) (1.50,1.32) (-0.43,0.27) (-0.49,0.44) (-0.04,-0.97) (0.65,0.07) (2.16,1.19) (-1.48,0.93) (-0.86,-0.57) (-0.14,-1.26) (3.08,0.86) (-0.85,1.18) (-2.22,1.28) (0.17,0.30) (0.98,0.27) (0.63,-0.89) (0.50,-0.23) (0.59,-0.13) (0.49,-0.44) (-1.20,-0.68) (1.01,-0.19) (0.18,-0.27) (0.97,-0.72) (-2.56,-0.61) (-0.54,1.27) (-0.73,-0.44) (0.64,0.84) (-0.28,1.34) (-0.35,0.23) (-0.84,-2.11) (-0.62,-0.56) (-0.82,2.38) (-1.51,0.55) (1.64,0.83) (0.61,-0.48) (-0.51,1.36) (1.68,-0.51) (0.49,0.07) (0.78,-0.65) (1.05,-0.32) (0.36,-0.60) (1.11,-0.25) (0.66,0.02) (0.91,0.52) (2.57,-0.71) (0.92,-0.45) (0.20,-1.64) (1.29,-2.30) (0.85,-1.48) (-0.25,0.56) (-0.72,0.41) (0.01,-0.58) (0.47,1.55) (0.41,0.10) (0.20,0.00) (1.34,0.95) (-0.06,0.47) (-0.94,0.01) (0.37,0.01) (-0.03,1.04) (0.77,0.70) (-2.28,0.23) (-0.66,-0.54) (0.11,0.63) (-1.88,1.62) (0.56,-0.11) (-1.04,-1.34) (1.50,-0.76) (-0.29,-0.32) (-0.21,2.36) (1.76,-1.11) (-0.91,1.49) (0.24,-0.98) (-0.57,0.95) (-0.19,-0.05) (-0.86,0.57) (-1.04,-0.65) (-0.40,-1.17) (0.30,0.04) (-0.08,0.94) (1.17,-0.10) (1.29,1.39) (-0.41,0.96) (-1.07,-1.18) (0.04,1.03) (2.33,0.14) (1.32,-1.30) (0.39,1.35) (-0.52,0.24) (0.47,1.97) (-1.05,-0.85) (0.87,1.00) (0.53,-0.42) (0.22,2.32) (-0.17,1.10) (1.42,-0.81) (-0.35,0.83) (0.01,0.29) (-0.56,-0.08) (-0.08,1.87) (0.30,0.28) (1.34,0.45) (0.02,0.79) (-1.61,-0.21) (0.34,-0.07) (-0.10,0.14) (-0.89,1.18) (-0.56,0.90) (-0.97,2.63) (0.77,-1.95) (-1.60,-1.39) (-0.27,-0.35) (1.66,1.81) (-1.55,-0.53) (-1.98,-0.77) (0.18,0.56) (0.32,1.59) (-1.01,-0.70) (0.30,1.01) (-0.11,0.44)};
+  \pgfplotsinvokeforeach{1,2,3}{
+    \addplot[mspiB, line width=0.9pt, domain=0:360, samples=73]
+      ({#1*(0.7071*cos(x) + 0.7071*sin(x))}, {#1*(0.7071*cos(x) - 0.7071*sin(x))});
+  }
+\nextgroupplot[title={$\rho = 0{,}8$}]
+  \addplot[only marks, mark=*, mark size=0.7pt, mspiA!75] coordinates {(1.72,1.07) (0.26,-0.35) (0.96,-0.16) (0.26,1.69) (0.12,-0.09) (0.34,0.43) (-0.28,-0.53) (0.16,0.25) (-0.79,-0.43) (-0.58,-0.61) (-0.44,-1.15) (-2.05,-0.69) (-1.05,-1.25) (0.07,0.56) (-0.19,-0.69) (0.81,1.04) (-0.55,-0.42) (0.09,1.44) (0.40,-0.28) (0.08,-0.80) (0.42,1.05) (1.25,1.33) (-0.45,-0.43) (-0.74,-0.64) (-1.61,-2.80) (0.13,-0.11) (-1.04,-1.26) (0.71,0.32) (0.79,0.96) (-1.03,0.15) (1.01,0.28) (0.07,-0.58) (-0.15,0.51) (-0.37,-0.78) (0.52,-0.17) (0.06,0.76) (0.64,0.09) (-0.48,0.27) (1.70,1.03) (-0.14,-0.56) (-1.14,-1.49) (-0.37,0.40) (1.20,2.08) (-0.71,-1.32) (0.70,-0.37) (-0.76,0.08) (1.07,1.50) (-0.85,-0.15) (0.40,-0.12) (0.67,1.53) (-0.54,0.82) (0.53,0.28) (-2.22,-2.31) (-0.83,-1.36) (0.69,1.04) (0.01,-0.01) (-0.21,-0.67) (-0.41,0.79) (-0.80,-0.12) (0.85,0.67) (0.85,0.55) (-0.28,-0.33) (1.11,0.79) (-2.56,-2.00) (-0.19,-0.09) (-0.11,0.02) (1.97,1.87) (0.35,-0.65) (-0.62,-0.95) (-0.76,-0.83) (-1.21,-1.72) (-0.58,-0.14) (-0.35,0.09) (1.67,0.80) (-0.17,0.13) (-1.68,-1.35) (-0.42,0.65) (-0.47,-0.09) (0.57,-0.43) (-1.19,-0.35) (-0.63,0.44) (-0.72,-1.22) (-0.48,0.41) (0.12,1.69) (-1.56,-1.62) (0.47,0.48) (-0.33,0.08) (-0.99,-0.23) (0.07,-0.24) (-0.26,-0.47) (0.07,-1.13) (-0.27,-0.75) (-0.93,0.04) (0.30,0.00) (-0.17,1.08) (0.12,-0.32) (0.18,0.30) (-0.42,0.80) (-0.56,-0.60) (0.26,0.44) (-0.41,-0.12) (1.00,1.27) (0.08,0.14) (1.69,1.60) (-0.07,-0.12) (1.90,1.19) (2.08,1.74) (0.70,0.56) (0.90,1.25) (-0.38,-0.66) (-1.49,-1.75) (0.56,0.59) (0.02,-0.04) (-0.23,0.27) (-0.14,-0.16) (1.36,1.10) (-0.06,-0.25) (-0.52,-0.69) (0.57,-0.35) (-0.52,-0.73) (-2.68,-1.73) (-1.48,-1.24) (0.07,-0.43) (-0.94,0.77) (-0.18,-0.50) (-0.86,-0.79) (-0.71,-1.36) (0.79,0.02) (0.81,1.19) (0.87,1.12) (-0.83,-0.38) (0.01,0.37) (-0.16,0.75) (0.56,1.05) (2.51,1.60) (0.03,-0.70) (-1.00,-1.14) (0.80,0.20) (1.97,1.99) (0.39,1.61) (0.63,0.19) (-0.05,1.16) (0.91,0.29) (0.95,1.18) (0.86,0.44) (-1.28,-2.04) (-0.89,-0.85) (-0.69,-0.81) (0.33,-0.10) (0.12,-0.63) (0.33,1.55) (0.53,0.31) (-1.12,0.18) (1.09,1.60) (-0.34,0.37) (-0.11,0.09) (-2.23,-1.76) (0.41,1.23) (1.61,2.11) (0.73,0.64) (0.03,0.87) (-1.48,-1.28) (-1.79,-1.95) (0.25,0.59) (-1.60,-1.68) (-2.02,-1.13) (0.02,1.26) (-1.61,-1.33) (2.11,1.52) (0.43,-0.53) (-0.94,0.03) (-1.01,-1.30) (1.47,2.06) (0.86,-0.65) (-0.90,-0.62) (-1.83,-2.14) (-0.67,-0.13) (-1.96,-3.28) (-1.30,-1.78) (-0.37,-0.22) (0.88,0.26) (-0.45,-0.78) (0.25,-0.11) (-2.12,-2.05) (-0.02,-0.23) (1.61,0.06) (0.69,0.39) (1.26,1.02) (-0.32,-0.52) (-0.33,-0.25) (1.83,2.23) (-0.61,-0.81) (-0.49,-0.55) (-0.98,-0.06) (-0.16,0.12) (0.43,0.26) (-0.80,-1.04) (-1.59,-1.50) (-0.10,0.57) (-0.49,0.18) (-0.72,-1.03) (0.31,-0.63) (-0.40,-0.87) (-0.35,0.47) (-0.75,-1.13) (0.65,0.50) (-2.67,-2.45) (-0.23,0.79) (-0.56,-1.72) (-0.64,-0.18) (-0.14,-1.11) (-0.92,-1.21) (0.98,1.13) (-0.95,0.06) (1.17,0.85) (0.44,-0.17) (-1.28,-0.59) (0.45,0.98) (0.88,0.89) (2.12,0.48)};
+  \pgfplotsinvokeforeach{1,2,3}{
+    \addplot[mspiB, line width=0.9pt, domain=0:360, samples=73]
+      ({#1*(0.9487*cos(x) + 0.3162*sin(x))}, {#1*(0.9487*cos(x) - 0.3162*sin(x))});
+  }
+\nextgroupplot[title={$\rho = -0{,}6$}]
+  \addplot[only marks, mark=*, mark size=0.7pt, mspiA!75] coordinates {(0.02,1.03) (-0.24,0.12) (0.81,0.50) (1.45,0.29) (0.69,-0.73) (0.39,-0.19) (1.82,-0.24) (-1.93,-0.54) (-1.06,-0.47) (-1.34,1.24) (0.53,-0.49) (0.23,-0.04) (-0.61,0.83) (-0.32,0.98) (-1.11,0.53) (-0.71,1.96) (0.73,0.82) (-0.07,-0.15) (-1.72,2.16) (-0.42,0.24) (0.12,-0.54) (-1.63,0.73) (2.88,-1.68) (0.16,-0.03) (-0.02,0.20) (-0.62,-0.32) (-1.31,0.70) (0.79,-0.07) (1.97,-1.70) (-1.11,0.37) (0.93,-2.16) (1.02,-0.44) (1.67,-1.01) (-0.87,-0.48) (1.47,-0.44) (-0.36,0.17) (0.45,0.13) (-0.43,0.71) (-0.93,-0.45) (0.50,-1.30) (-0.97,0.03) (-0.55,-0.87) (1.60,-0.30) (2.91,-1.83) (-0.21,0.67) (1.72,-1.57) (1.04,-0.12) (-0.30,-0.03) (0.67,-0.53) (0.47,-0.66) (0.69,-0.32) (1.47,-0.43) (-0.64,0.10) (0.23,-0.74) (-0.52,0.74) (-2.22,0.81) (0.50,-1.76) (0.96,-1.51) (-0.01,1.00) (-1.11,1.12) (-0.41,0.63) (1.00,-1.48) (-1.03,0.17) (0.80,0.20) (1.03,-0.41) (-0.73,1.18) (-0.39,-0.12) (0.41,0.03) (-0.27,1.33) (0.58,0.37) (1.86,-0.72) (1.58,-2.04) (0.23,-0.45) (-0.77,0.68) (-0.86,1.28) (1.39,-1.83) (0.98,0.30) (1.17,-1.20) (0.13,1.22) (0.59,-0.14) (0.91,-0.47) (-1.49,1.30) (0.02,0.28) (-0.43,0.14) (-0.02,-1.02) (-1.00,1.18) (1.22,-0.32) (-2.58,1.31) (2.11,-1.61) (0.69,-0.26) (2.20,-1.46) (1.46,-1.14) (0.48,0.37) (-1.32,1.82) (0.51,0.67) (-2.19,0.46) (0.40,-1.57) (0.05,-0.91) (-0.88,1.18) (0.63,1.43) (1.25,-0.57) (2.23,-2.14) (0.04,0.63) (0.37,2.32) (0.33,-0.95) (1.27,-0.88) (-0.36,1.33) (-1.68,0.09) (-0.59,2.49) (0.09,-0.64) (-0.02,0.37) (0.76,-1.03) (0.95,-1.37) (0.50,-0.20) (-0.28,-0.26) (1.47,-0.16) (1.00,-0.62) (3.22,-2.10) (-1.28,0.76) (-0.19,2.16) (1.43,-1.46) (-0.52,0.86) (2.31,-1.17) (-0.72,0.00) (1.26,-0.20) (1.83,-1.26) (1.14,0.14) (2.58,-1.25) (-0.14,-0.77) (-0.86,-0.07) (-1.33,0.74) (1.19,-1.41) (1.14,-0.80) (0.61,-1.42) (-0.06,-1.37) (-1.96,1.53) (-0.20,0.29) (2.53,-1.52) (-0.58,0.90) (0.41,-0.28) (-0.11,1.43) (-1.33,0.97) (1.63,-0.52) (0.66,0.36) (-2.88,1.77) (-0.37,0.76) (-0.92,1.04) (-0.53,-0.75) (1.01,-0.82) (0.91,-0.93) (0.46,0.72) (-0.55,0.71) (-0.87,-1.31) (-1.20,2.29) (-0.18,-0.52) (1.07,-0.56) (1.05,-1.23) (-1.67,1.48) (-1.31,-0.28) (-1.43,0.70) (-1.40,2.26) (0.45,-0.66) (-0.12,0.14) (2.13,-1.10) (0.86,-1.92) (-0.36,0.81) (1.20,-0.41) (-0.50,1.25) (-1.34,0.62) (-0.76,0.27) (-0.58,0.62) (-0.11,-0.49) (0.57,1.62) (2.34,-2.05) (-1.09,1.05) (-1.13,-0.17) (0.36,-1.38) (0.73,0.93) (-0.67,0.80) (-0.08,0.25) (0.36,-1.33) (-0.01,-1.15) (0.33,-0.02) (-0.42,-1.66) (-1.04,-0.33) (0.75,-0.55) (0.28,0.01) (0.47,-0.23) (0.42,1.40) (0.87,-1.24) (1.01,-0.26) (2.90,-3.10) (0.37,-0.14) (-0.50,1.18) (1.68,-0.77) (-0.59,1.03) (0.62,1.01) (-0.51,0.75) (-1.20,2.09) (1.02,-1.18) (0.67,-1.71) (-0.72,1.79) (-0.12,-0.81) (-0.66,1.24) (-1.23,0.21) (0.43,1.30) (0.39,0.01) (0.22,-0.15) (-1.05,0.16) (-1.12,-0.43) (-0.51,-1.25) (0.78,-0.16) (-0.62,-0.42) (1.33,-0.13) (0.05,-0.17) (0.61,-0.20) (1.39,-1.39) (1.77,-0.66) (0.72,-1.94) (-1.77,1.45)};
+  \pgfplotsinvokeforeach{1,2,3}{
+    \addplot[mspiB, line width=0.9pt, domain=0:360, samples=73]
+      ({#1*(0.4472*cos(x) + 0.8944*sin(x))}, {#1*(0.4472*cos(x) - 0.8944*sin(x))});
+  }
+\end{groupplot}
+\end{tikzpicture}
+\caption{220 punti estratti da tre gaussiane bivariate con medie nulle e varianze unitarie (simulazione), e le ellissi
+di uguale densità su cui la forma quadratica vale $1$, $4$ e $9$. Con $\rho = 0$ sono circonferenze; con $\rho > 0$ si
+allungano lungo $x_2 = x_1$, con $\rho < 0$ lungo $x_2 = -x_1$.}
+\end{figure}
+
+Qualunque sia $\rho$, le tre ellissi racchiudono una probabilità del 39\%, dell'86\% e del 99\%: con soli 220 punti le
+percentuali dei pannelli si avvicinano a questi valori, senza coincidere. Per $\rho = 0$ lo si verifica con le coordinate
+polari, come nell'integrale di Gauss del Capitolo~15: la probabilità di cadere nel cerchio di raggio $k$ è
+$\int_0^{2\pi} \int_0^k \frac{1}{2\pi} e^{-r^2/2}\, r \dd r \dd\theta = 1 - e^{-k^2/2}$, che per $k = 1, 2, 3$ vale
+$0{,}39$, $0{,}86$ e $0{,}99$.
+
+\subsection{Incorrelazione e indipendenza}
+
+Nel Capitolo~9 abbiamo visto che due variabili indipendenti sono sempre incorrelate, ma che il viceversa in generale è
+falso. Per le variabili congiuntamente gaussiane, invece, le due cose coincidono.
+
+\teorema[gaussincorr]{Per le congiuntamente gaussiane, incorrelate vuol dire indipendenti}{
+  Se $X_1, \ldots, X_n$ sono congiuntamente gaussiane e incorrelate a due a due, allora sono statisticamente
+  indipendenti.
+}
+
+\begin{dimostrazione}
+\passo{La matrice è diagonale} Se le variabili sono incorrelate, tutte le covarianze fuori dalla diagonale sono nulle e
+$\matr{C}_{\vett{X}}$ è diagonale.
+\passo{Si legge al contrario il Teorema~\ref{teo:gaussindip}} Con una matrice diagonale la forma quadratica è una somma
+di quadrati e il determinante è un prodotto di varianze; ripercorrendo all'indietro i passaggi di quella dimostrazione,
+la densità si spezza in un prodotto:
+\[ f_{\vett{X}}(\vett{x}) = \prod_{i=1}^{n} \frac{1}{\sqrt{2\pi\sigma_{X_i}^2}}\, e^{-\frac{(x_i - \mu_{X_i})^2}{2
+   \sigma_{X_i}^2}} . \]
+\passo{I fattori sono le marginali} Integrando rispetto a tutte le variabili tranne $x_i$, ogni altro fattore (una
+densità gaussiana, con area 1) dà 1: resta $f_{X_i}(x_i)$, che è quindi proprio l'$i$-esimo fattore. La densità
+congiunta è il prodotto delle marginali, cioè le variabili sono indipendenti.
+\end{dimostrazione}
+
+\warning{Gaussiane una per una non basta}{
+  Il teorema richiede che le variabili siano \emph{congiuntamente} gaussiane, non solo gaussiane una per una. Sia
+  $X_1 \sim \mathcal{N}(0, 1)$ e sia $X_2 = S\, X_1$, dove $S$ vale $+1$ o $-1$ con probabilità $\frac12$, indipendente da
+  $X_1$. Anche $X_2$ è $\mathcal{N}(0, 1)$: cambiare segno a caso a una campana simmetrica la lascia com'è. Le due
+  variabili sono incorrelate, perché $E[X_1 X_2] = E[S]\, E[X_1^2] = 0 \cdot 1 = 0$; eppure sono fortemente dipendenti,
+  perché $\abs{X_2} = \abs{X_1}$ sempre. Il vettore $[X_1, X_2]^T$ non è gaussiano: i suoi punti stanno tutti sulle due
+  bisettrici $x_2 = \pm x_1$, mentre la densità di un vettore gaussiano con $\abs{\rho} < 1$ è positiva in tutto il piano.
+}
+
+\subsection{Marginali e condizionate: si completa il quadrato}
+
+Le slide affermano che le marginali e le condizionate di un vettore gaussiano sono ancora gaussiane. Per due variabili
+lo si può verificare con un calcolo elementare. Prendiamo il caso standardizzato, $\mu_1 = \mu_2 = 0$ e
+$\sigma_1 = \sigma_2 = 1$ (quello generale si riconduce a questo standardizzando le due variabili), in cui
+\[ f_{X_1 X_2}(x_1, x_2) = \frac{1}{2\pi\sqrt{1 - \rho^2}}\, e^{-\frac{x_1^2 - 2\rho x_1 x_2 + x_2^2}{2(1 - \rho^2)}} . \]
+
+\teorema[gaussmarginale]{Marginale e condizionata della gaussiana bivariata}{
+  Nel caso standardizzato:
+  \begin{enumerate}[label=\alph*)]
+    \item la marginale è una gaussiana standard: $X_1 \sim \mathcal{N}(0, 1)$, e lo stesso vale per $X_2$;
+    \item la condizionata è gaussiana: sapendo che $X_1 = x_1$, si ha $X_2 \sim \mathcal{N}(\rho x_1,\ 1 - \rho^2)$, cioè
+          \[ f_{X_2 \mid X_1}(x_2 \mid x_1) = \frac{1}{\sqrt{2\pi(1 - \rho^2)}}\, e^{-\frac{(x_2 - \rho x_1)^2}{2(1 -
+             \rho^2)}} . \]
+  \end{enumerate}
+}
+
+\begin{dimostrazione}[completando il quadrato]
+\passo{Il quadrato} Come quando si risolve un'equazione di secondo grado, si raccolgono i termini che contengono $x_2$
+in un quadrato perfetto. Siccome $(x_2 - \rho x_1)^2 = x_2^2 - 2\rho x_1 x_2 + \rho^2 x_1^2$, basta aggiungere e togliere
+$\rho^2 x_1^2$:
+\[ x_1^2 - 2\rho x_1 x_2 + x_2^2 = (x_2 - \rho x_1)^2 + x_1^2 - \rho^2 x_1^2 = (x_2 - \rho x_1)^2 + (1 - \rho^2)\,
+   x_1^2 . \]
+\passo{La densità si spezza in due fattori} Dividendo per $2(1 - \rho^2)$, l'esponente diventa
+$-\frac{(x_2 - \rho x_1)^2}{2(1 - \rho^2)} - \frac{x_1^2}{2}$; inoltre $2\pi\sqrt{1 - \rho^2} = \sqrt{2\pi} \cdot
+\sqrt{2\pi(1 - \rho^2)}$. Quindi
+\[ f_{X_1 X_2}(x_1, x_2) = \underbrace{\frac{1}{\sqrt{2\pi}}\, e^{-\frac{x_1^2}{2}}}_{\mathcal{N}(0,\, 1) \text{ in }
+   x_1} \cdot \underbrace{\frac{1}{\sqrt{2\pi(1 - \rho^2)}}\, e^{-\frac{(x_2 - \rho x_1)^2}{2(1 -
+   \rho^2)}}}_{\mathcal{N}(\rho x_1,\, 1 - \rho^2) \text{ in } x_2} . \]
+\passo{La marginale} Per marginalizzare si integra rispetto a $x_2$. Il primo fattore non dipende da $x_2$ ed esce
+dall'integrale; il secondo, come funzione di $x_2$, è una densità gaussiana (di media $\rho x_1$), quindi ha area 1:
+\[ f_{X_1}(x_1) = \int_{-\infty}^{\infty} f_{X_1 X_2}(x_1, x_2) \dd x_2 = \frac{1}{\sqrt{2\pi}}\, e^{-\frac{x_1^2}{2}}
+   \cdot 1 . \]
+Per $X_2$ si ripete il calcolo scambiando i ruoli: l'espressione è simmetrica in $x_1$ e $x_2$.
+\passo{La condizionata} Per definizione $f_{X_2 \mid X_1}(x_2 \mid x_1) = \frac{f_{X_1 X_2}(x_1, x_2)}{f_{X_1}(x_1)}$:
+dividendo per il primo fattore resta il secondo.
+\end{dimostrazione}
+
+La densità condizionata dice due cose. La \textbf{media condizionata} $E[X_2 \mid X_1 = x_1] = \rho x_1$ è una retta:
+sapendo che $X_1$ è grande, ci si aspetta che anche $X_2$ lo sia (se $\rho > 0$), ma un po' meno, perché $\abs{\rho} <
+1$. La \textbf{varianza condizionata} $1 - \rho^2$ è più piccola della varianza 1 di $X_2$ e non dipende da $x_1$:
+conoscere $X_1$ riduce l'incertezza su $X_2$, tanto più quanto più $\abs{\rho}$ è vicino a 1. Con $\rho = 0$ la
+condizionata coincide con la marginale: conoscere $X_1$ non serve a niente, come deve essere per variabili indipendenti.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=2 by 1, horizontal sep=1.8cm}, height=6.2cm,
+  tick label style={font=\scriptsize}, label style={font=\small}]
+\nextgroupplot[width=6.6cm, xmin=-3.2, xmax=3.2, ymin=-3.2, ymax=3.2, axis equal image, xtick={-1.5,0,1.5},
+  xticklabels={$-1{,}5$,$0$,$1{,}5$}, ytick={-2,-1.2,0,1.2,2}, yticklabels={$-2$,$-1{,}2$,$0$,$1{,}2$,$2$},
+  xlabel=$x_1$, ylabel=$x_2$, grid=major, grid style={mspigray!20}, title={$\rho = 0{,}8$}]
+  \pgfplotsinvokeforeach{1,2}{
+    \addplot[mspiA, line width=0.8pt, domain=0:360, samples=73]
+      ({#1*(0.9487*cos(x) + 0.3162*sin(x))}, {#1*(0.9487*cos(x) - 0.3162*sin(x))});
+  }
+  \addplot[mspigray, dashed, line width=0.6pt, domain=-3.2:3.2] {x};
+  \addplot[black, line width=1.1pt, domain=-3.2:3.2] {0.8*x};
+  \draw[mspigray, densely dotted, line width=0.6pt] (axis cs:-1.5,-3.2) -- (axis cs:-1.5,3.2)
+    (axis cs:0,-3.2) -- (axis cs:0,3.2) (axis cs:1.5,-3.2) -- (axis cs:1.5,3.2);
+  \addplot[only marks, mark=*, mark size=1.9pt, mspiC] coordinates {(-1.5,-1.2)};
+  \addplot[only marks, mark=*, mark size=1.9pt, mspiA] coordinates {(0,0)};
+  \addplot[only marks, mark=*, mark size=1.9pt, mspiB] coordinates {(1.5,1.2)};
+  \node[font=\scriptsize, anchor=south east, fill=white, inner sep=1pt] at (axis cs:3.1,2.45) {$x_2 = 0{,}8\, x_1$};
+\nextgroupplot[width=8.6cm, xmin=-3.6, xmax=3.6, ymin=0, ymax=0.75, xtick={-1.2,0,1.2},
+  xticklabels={$-1{,}2$,$0$,$1{,}2$}, ytick=\empty, axis x line=bottom, axis y line=none, xlabel=$x_2$,
+  legend style={font=\scriptsize, at={(0.5,1.03)}, anchor=south, legend columns=2, draw=none},
+  every axis plot/.append style={line width=1.1pt}]
+  \addplot[mspiC, domain=-3.6:3.6, samples=121] {exp(-(x+1.2)^2/(2*0.36))/sqrt(2*pi*0.36)};
+  \addplot[mspiA, domain=-3.6:3.6, samples=121] {exp(-x^2/(2*0.36))/sqrt(2*pi*0.36)};
+  \addplot[mspiB, domain=-3.6:3.6, samples=121] {exp(-(x-1.2)^2/(2*0.36))/sqrt(2*pi*0.36)};
+  \addplot[black, dashed, domain=-3.6:3.6, samples=121] {exp(-x^2/2)/sqrt(2*pi)};
+  \legend{{$x_1 = -1{,}5$}, {$x_1 = 0$}, {$x_1 = 1{,}5$}, {marginale $f_{X_2}$}}
+\end{groupplot}
+\end{tikzpicture}
+\caption{A sinistra: le ellissi della gaussiana bivariata con $\rho = 0{,}8$ e la retta delle medie condizionate
+$x_2 = 0{,}8\, x_1$ (tratteggiata la bisettrice). A destra: le densità condizionate $f_{X_2 \mid X_1}(x_2 \mid x_1)$ per
+tre valori di $x_1$, tutte con varianza $1 - 0{,}8^2 = 0{,}36$ e centrate sulla retta, e la marginale $\mathcal{N}(0, 1)$,
+più larga.}
+\end{figure}
+
+\subsection{Le proprietà dei vettori gaussiani}
+
+Le slide elencano le proprietà che rendono i vettori gaussiani così comodi.
+\begin{enumerate}
+  \item \textbf{Bastano medie e covarianze.} Un vettore gaussiano è completamente caratterizzato dal vettore delle medie
+        e dalla matrice di covarianza: nella formula della densità non compare nient'altro. Per i vettori gaussiani,
+        quindi, la caratterizzazione sintetica implica quella completa; in generale è vero solo il contrario (dalla
+        densità si ricavano medie e covarianze, ma non viceversa).
+  \item \textbf{Chiusura rispetto alle trasformazioni lineari.} Qualsiasi trasformazione lineare di un vettore
+        gaussiano è ancora un vettore gaussiano, con opportuno vettore delle medie e opportuna matrice di covarianza.
+  \item \textbf{Calcoli facili.} Le medie e le covarianze dell'uscita di una trasformazione lineare si calcolano con due
+        formule semplici (le vediamo nella prossima sezione); grazie alla proprietà 2, per un vettore gaussiano questo
+        dà la caratterizzazione completa dell'uscita. Per vettori non gaussiani si ottiene con la stessa facilità solo la
+        caratterizzazione sintetica, mentre quella completa è spesso enormemente complicata.
+  \item \textbf{Sottoinsiemi.} Un qualsiasi sottoinsieme di variabili congiuntamente gaussiane è ancora un vettore
+        gaussiano. In particolare ogni singola componente $X_i$ è gaussiana, con media $\mu_{X_i}$ e varianza
+        $\sigma_{X_i}^2$ (per due variabili lo abbiamo appena dimostrato).
+  \item \textbf{Condizionamenti.} La densità di un sottoinsieme di variabili congiuntamente gaussiane, condizionata a un
+        qualsiasi sottoinsieme delle rimanenti, è ancora gaussiana, con opportune medie e covarianze condizionate (per
+        due variabili: $\mathcal{N}(\rho x_1, 1 - \rho^2)$).
+  \item \textbf{Incorrelazione e indipendenza coincidono} (Teorema~\ref{teo:gaussincorr}).
+\end{enumerate}
+
+% ============================================================
+\section{Trasformazioni lineari di vettori gaussiani}
+% ============================================================
+
+Cominciamo dal caso più semplice: una combinazione lineare di due variabili.
+
+\teorema[combinazione2]{Combinazione lineare di due variabili congiuntamente gaussiane}{
+  Siano $X_1$ e $X_2$ congiuntamente gaussiane, con medie $\mu_1$ e $\mu_2$, varianze $\sigma_1^2$ e $\sigma_2^2$ e
+  coefficiente di correlazione $\rho_{12}$, e sia $Z = a_1 X_1 + a_2 X_2$. Allora $Z \sim \mathcal{N}(\mu_Z, \sigma_Z^2)$,
+  con
+  \[ \mu_Z = a_1 \mu_1 + a_2 \mu_2 , \qquad \sigma_Z^2 = a_1^2 \sigma_1^2 + a_2^2 \sigma_2^2 + 2 a_1 a_2\, \sigma_1
+     \sigma_2\, \rho_{12} . \]
+}
+
+\begin{dimostrazione}
+\passo{La media} Per la linearità della media: $\mu_Z = E[a_1 X_1 + a_2 X_2] = a_1 \mu_1 + a_2 \mu_2$.
+\passo{La varianza} Si raccolgono gli scarti dalla media e si sviluppa il quadrato del binomio:
+\[ \begin{aligned}
+   \sigma_Z^2 &= E[(Z - \mu_Z)^2] = E\left[ (a_1 X_1 + a_2 X_2 - a_1 \mu_1 - a_2 \mu_2)^2 \right] =
+   E\left[ \left( a_1 (X_1 - \mu_1) + a_2 (X_2 - \mu_2) \right)^2 \right] \\
+   &= E\left[ a_1^2 (X_1 - \mu_1)^2 + a_2^2 (X_2 - \mu_2)^2 + 2 a_1 a_2 (X_1 - \mu_1)(X_2 - \mu_2) \right] \\
+   &= a_1^2 \sigma_1^2 + a_2^2 \sigma_2^2 + 2 a_1 a_2\, COV(X_1, X_2) = a_1^2 \sigma_1^2 + a_2^2 \sigma_2^2 + 2 a_1 a_2\,
+   \sigma_1 \sigma_2\, \rho_{12} .
+   \end{aligned} \]
+Fin qui non si è usato nulla di gaussiano: sono le formule del Capitolo~9, valide per qualsiasi coppia.
+\passo{La gaussianità} Che $Z$ sia gaussiana è la proprietà di chiusura; la dimostriamo alla fine della sezione, come
+conseguenza del teorema seguente.
+\end{dimostrazione}
+
+Il caso generale è una trasformazione lineare qualsiasi: $m$ combinazioni lineari delle $n$ variabili, più delle
+costanti.
+
+\teorema[trasflineare]{Trasformazione lineare di un vettore gaussiano}{
+  Sia $\vett{X} \sim \mathcal{N}(\vett{\mu}_{\vett{X}}, \matr{C}_{\vett{X}})$ un vettore gaussiano $n \times 1$, e sia
+  \[ \underbrace{\vett{Z}}_{m \times 1} = \underbrace{\matr{A}}_{m \times n}\, \underbrace{\vett{X}}_{n \times 1} +
+     \underbrace{\vett{b}}_{m \times 1} , \]
+  con $\matr{A}$ e $\vett{b}$ costanti. Allora $\vett{Z} \sim \mathcal{N}(\vett{\mu}_{\vett{Z}}, \matr{C}_{\vett{Z}})$,
+  con
+  \[ \underbrace{\vett{\mu}_{\vett{Z}}}_{m \times 1} = \underbrace{\matr{A}}_{m \times n}\,
+     \underbrace{\vett{\mu}_{\vett{X}}}_{n \times 1} + \underbrace{\vett{b}}_{m \times 1} , \qquad
+     \underbrace{\matr{C}_{\vett{Z}}}_{m \times m} = \underbrace{\matr{A}}_{m \times n}\,
+     \underbrace{\matr{C}_{\vett{X}}}_{n \times n}\, \underbrace{\matr{A}^T}_{n \times m} . \]
+  Le formule per $\vett{\mu}_{\vett{Z}}$ e $\matr{C}_{\vett{Z}}$ valgono per qualsiasi vettore aleatorio $\vett{X}$,
+  gaussiano o no.
+}
+
+\begin{dimostrazione}
+\passo{La media} Ogni componente di $\vett{Z}$ è una combinazione lineare delle $X_j$ più una costante,
+$Z_i = \sum_j a_{ij} X_j + b_i$. Per la linearità della media $E[Z_i] = \sum_j a_{ij} \mu_{X_j} + b_i$, cioè
+$\vett{\mu}_{\vett{Z}} = \matr{A}\vett{\mu}_{\vett{X}} + \vett{b}$.
+\passo{Lo scarto dalla media} La costante $\vett{b}$ si cancella:
+$\vett{Z} - \vett{\mu}_{\vett{Z}} = \matr{A}\vett{X} + \vett{b} - \matr{A}\vett{\mu}_{\vett{X}} - \vett{b} =
+\matr{A}(\vett{X} - \vett{\mu}_{\vett{X}})$.
+\passo{La covarianza} Per il trasposto di un prodotto,
+$\left( \matr{A}(\vett{X} - \vett{\mu}_{\vett{X}}) \right)^T = (\vett{X} - \vett{\mu}_{\vett{X}})^T \matr{A}^T$, e le
+matrici costanti escono dalla media (una a sinistra e una a destra):
+\[ \matr{C}_{\vett{Z}} = E\left[ (\vett{Z} - \vett{\mu}_{\vett{Z}})(\vett{Z} - \vett{\mu}_{\vett{Z}})^T \right] =
+   E\left[ \matr{A} (\vett{X} - \vett{\mu}_{\vett{X}}) (\vett{X} - \vett{\mu}_{\vett{X}})^T \matr{A}^T \right] =
+   \matr{A}\, E\left[ (\vett{X} - \vett{\mu}_{\vett{X}}) (\vett{X} - \vett{\mu}_{\vett{X}})^T \right] \matr{A}^T =
+   \matr{A} \matr{C}_{\vett{X}} \matr{A}^T . \]
+\passo{La gaussianità, con $m = n$ e $\matr{A}$ invertibile} Si ragiona come per $Y = aX + b$ nel Capitolo~12. Ogni
+$\vett{z}$ viene da un solo $\vett{x} = \matr{A}^{-1}(\vett{z} - \vett{b})$. Una scatolina attorno a $\vett{x}$ viene
+trasformata in una scatolina attorno a $\vett{z}$ con volume $\abs*{\det\matr{A}}$ volte più grande (richiamo), che
+contiene la stessa probabilità; quindi la densità, che è una probabilità per unità di volume, si divide per
+$\abs*{\det\matr{A}}$:
+\[ f_{\vett{Z}}(\vett{z}) = \frac{1}{\abs*{\det \matr{A}}}\, f_{\vett{X}}\left( \matr{A}^{-1}(\vett{z} - \vett{b})
+   \right) . \]
+Nell'esponente compare $\vett{x} - \vett{\mu}_{\vett{X}} = \matr{A}^{-1}(\vett{z} - \vett{b}) -
+\matr{A}^{-1}\matr{A}\vett{\mu}_{\vett{X}} = \matr{A}^{-1}(\vett{z} - \vett{\mu}_{\vett{Z}})$, e la forma quadratica
+diventa
+\[ (\vett{z} - \vett{\mu}_{\vett{Z}})^T (\matr{A}^{-1})^T \matr{C}_{\vett{X}}^{-1} \matr{A}^{-1} (\vett{z} -
+   \vett{\mu}_{\vett{Z}}) = (\vett{z} - \vett{\mu}_{\vett{Z}})^T \left( \matr{A} \matr{C}_{\vett{X}} \matr{A}^T
+   \right)^{-1} (\vett{z} - \vett{\mu}_{\vett{Z}}) = (\vett{z} - \vett{\mu}_{\vett{Z}})^T \matr{C}_{\vett{Z}}^{-1}
+   (\vett{z} - \vett{\mu}_{\vett{Z}}) , \]
+perché l'inversa di un prodotto è il prodotto delle inverse in ordine inverso:
+$(\matr{A}\matr{C}_{\vett{X}}\matr{A}^T)^{-1} = (\matr{A}^T)^{-1} \matr{C}_{\vett{X}}^{-1} \matr{A}^{-1}$. Infine
+$\det \matr{C}_{\vett{Z}} = \det\matr{A} \cdot \det\matr{C}_{\vett{X}} \cdot \det\matr{A}^T = (\det\matr{A})^2
+\det\matr{C}_{\vett{X}}$, quindi $\abs*{\det\matr{A}} \sqrt{(2\pi)^n \det\matr{C}_{\vett{X}}} = \sqrt{(2\pi)^n
+\det\matr{C}_{\vett{Z}}}$. Mettendo insieme, $f_{\vett{Z}}$ ha proprio la forma gaussiana, con media
+$\vett{\mu}_{\vett{Z}}$ e covarianza $\matr{C}_{\vett{Z}}$.
+\passo{Meno uscite che ingressi ($m < n$)} Si aggiungono ad $\matr{A}$ delle righe in modo da renderla quadrata e
+invertibile: il vettore allungato è gaussiano per il passo precedente, e $\vett{Z}$, che ne è un sottoinsieme, è
+gaussiano per la proprietà dei sottoinsiemi. (Se invece $m > n$, o $\matr{A}$ non è invertibile, si trova
+$\det\matr{C}_{\vett{Z}} = 0$: il vettore $\vett{Z}$ sta tutto su una retta o su un piano e una densità non si può
+scrivere. È un caso «degenere» che non ci servirà.)
+\end{dimostrazione}
+
+Ora possiamo completare la dimostrazione del Teorema~\ref{teo:combinazione2}. La combinazione $Z = a_1 X_1 + a_2 X_2$ è
+il caso $m = 1$, $n = 2$, $\matr{A} = [a_1, a_2]$, $\vett{b} = 0$, e la formula della covarianza ridà la varianza (è la
+forma quadratica della sezione precedente):
+\[ \sigma_Z^2 = [a_1, a_2] \begin{bmatrix} \sigma_1^2 & \rho_{12}\sigma_1\sigma_2 \\ \rho_{12}\sigma_1\sigma_2 &
+   \sigma_2^2 \end{bmatrix} \begin{bmatrix} a_1 \\ a_2 \end{bmatrix} = a_1^2 \sigma_1^2 + a_2^2 \sigma_2^2 + 2 a_1
+   a_2\, \sigma_1 \sigma_2\, \rho_{12} . \]
+Per la gaussianità, se $a_1 \neq 0$ si aggiunge la riga $[0, 1]$, che rende la matrice quadrata e invertibile:
+\[ \begin{bmatrix} Z \\ X_2 \end{bmatrix} = \begin{bmatrix} a_1 & a_2 \\ 0 & 1 \end{bmatrix} \begin{bmatrix} X_1 \\
+   X_2 \end{bmatrix} , \qquad \det \begin{bmatrix} a_1 & a_2 \\ 0 & 1 \end{bmatrix} = a_1 \cdot 1 - a_2 \cdot 0 = a_1
+   \neq 0 . \]
+Il vettore $[Z, X_2]^T$ è gaussiano (passo 4) e quindi $Z$, che ne è una componente, è gaussiana (lo garantisce il
+Teorema~\ref{teo:gaussmarginale}, dopo aver standardizzato). Se $a_1 = 0$, $Z = a_2 X_2$ è una gaussiana moltiplicata
+per una costante, che è gaussiana per il Capitolo~15.
+
+\begin{esempio}{Somma e differenza di due rumori indipendenti}
+Due campioni di rumore $X_1$ e $X_2$ sono gaussiani indipendenti, entrambi $\mathcal{N}(0, \sigma^2)$: il vettore
+$\vett{X}$ è gaussiano con $\vett{\mu}_{\vett{X}} = \vett{0}$ e $\matr{C}_{\vett{X}} = \sigma^2 \matr{I}$. Calcoliamo
+somma e differenza:
+\[ \vett{Z} = \begin{bmatrix} X_1 + X_2 \\ X_1 - X_2 \end{bmatrix} = \underbrace{\begin{bmatrix} 1 & 1 \\ 1 & -1
+   \end{bmatrix}}_{\matr{A}} \begin{bmatrix} X_1 \\ X_2 \end{bmatrix} , \qquad
+   \matr{C}_{\vett{Z}} = \matr{A}\, (\sigma^2 \matr{I})\, \matr{A}^T = \sigma^2 \matr{A}\matr{A}^T = \sigma^2
+   \begin{bmatrix} 1 \cdot 1 + 1 \cdot 1 & 1 \cdot 1 + 1 \cdot (-1) \\ 1 \cdot 1 + (-1) \cdot 1 & 1 \cdot 1 + (-1)(-1)
+   \end{bmatrix} = \begin{bmatrix} 2\sigma^2 & 0 \\ 0 & 2\sigma^2 \end{bmatrix} . \]
+La somma e la differenza sono gaussiane con varianza $2\sigma^2$ e sono \textbf{incorrelate}; essendo congiuntamente
+gaussiane (Teorema~\ref{teo:trasflineare}), sono anche \textbf{indipendenti} (Teorema~\ref{teo:gaussincorr}). Conoscere
+la somma dei due rumori non dice nulla sulla loro differenza! Geometricamente, $\matr{A}$ non deforma le figure: le
+ribalta come uno specchio (attorno a una retta inclinata) e le ingrandisce di $\sqrt{2}$. Una campana rotonda,
+ribaltata e ingrandita, resta rotonda. Con altre distribuzioni non succede: se $X_1$ e $X_2$
+sono uniformi su $[0, 1]$, somma e differenza sono ancora incorrelate (la covarianza è $\sigma_{X_1}^2 - \sigma_{X_2}^2
+= 0$), ma non indipendenti: se la somma è vicina a 0, entrambe le variabili sono vicine a 0, e anche la differenza lo è.
+\end{esempio}
+
+\begin{esempio}{Come si costruisce un vettore gaussiano correlato}
+Un calcolatore sa generare numeri gaussiani standard indipendenti, $W_1$ e $W_2$. Come si ottiene una coppia gaussiana
+con varianze unitarie e correlazione $\rho$ assegnata? Si prende
+\[ \begin{bmatrix} X_1 \\ X_2 \end{bmatrix} = \underbrace{\begin{bmatrix} 1 & 0 \\ \rho & \sqrt{1 - \rho^2}
+   \end{bmatrix}}_{\matr{A}} \begin{bmatrix} W_1 \\ W_2 \end{bmatrix} , \qquad\text{cioè}\qquad X_1 = W_1 , \quad X_2 =
+   \rho\, W_1 + \sqrt{1 - \rho^2}\, W_2 . \]
+Il vettore $\vett{X}$ è gaussiano (trasformazione lineare di un vettore gaussiano), con media nulla e
+\[ \matr{C}_{\vett{X}} = \matr{A}\, \matr{I}\, \matr{A}^T = \begin{bmatrix} 1 & 0 \\ \rho & \sqrt{1 - \rho^2}
+   \end{bmatrix} \begin{bmatrix} 1 & \rho \\ 0 & \sqrt{1 - \rho^2} \end{bmatrix} = \begin{bmatrix} 1 & \rho \\ \rho &
+   \rho^2 + 1 - \rho^2 \end{bmatrix} = \begin{bmatrix} 1 & \rho \\ \rho & 1 \end{bmatrix} , \]
+proprio la matrice voluta. È così che sono stati generati i punti delle figure di questo capitolo. Si ritrova anche la
+condizionata del Teorema~\ref{teo:gaussmarginale}: sapendo che $X_1 = W_1 = x_1$, si ha $X_2 = \rho x_1 + \sqrt{1 -
+\rho^2}\, W_2$, una gaussiana di media $\rho x_1$ e varianza $1 - \rho^2$ ($W_2$ è indipendente da $W_1$).
+\end{esempio}
+
+\begin{esempio}{La media di $n$ campioni di rumore}
+Siano $X_1, \ldots, X_n$ gaussiane indipendenti, tutte $\mathcal{N}(\mu, \sigma^2)$ (per esempio $n$ misure della stessa
+grandezza, disturbate da rumore). La loro media aritmetica è una trasformazione lineare con $m = 1$:
+\[ \bar{X} = \frac{X_1 + \cdots + X_n}{n} = \underbrace{\left[ \tfrac1n, \tfrac1n, \ldots, \tfrac1n
+   \right]}_{\matr{A}\ (1 \times n)} \vett{X} . \]
+Quindi $\bar{X}$ è gaussiana, con media $\matr{A}\vett{\mu}_{\vett{X}} = n \cdot \frac{\mu}{n} = \mu$ e varianza
+\[ \matr{A}\, (\sigma^2 \matr{I})\, \matr{A}^T = \sigma^2 \sum_{i=1}^{n} \frac{1}{n^2} = \frac{\sigma^2}{n} . \]
+Mediando $n$ misure la deviazione standard del rumore si divide per $\sqrt{n}$: con 100 misure l'errore tipico diventa
+dieci volte più piccolo. Ritroveremo questa media, la \emph{media campione}, all'inizio del terzo pacchetto di slide.
+\end{esempio}
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item Un \textbf{vettore aleatorio} $\vett{X} = [X_1, \ldots, X_n]^T$ ha vettore delle medie $\vett{\mu}_{\vett{X}} =
+        E[\vett{X}]$, matrice di correlazione $\matr{R}_{\vett{X}} = E[\vett{X}\vett{X}^T]$ e matrice di covarianza
+        $\matr{C}_{\vett{X}} = E[(\vett{X} - \vett{\mu}_{\vett{X}})(\vett{X} - \vett{\mu}_{\vett{X}})^T] =
+        \matr{R}_{\vett{X}} - \vett{\mu}_{\vett{X}}\vett{\mu}_{\vett{X}}^T$, entrambe simmetriche; sulla diagonale di
+        $\matr{C}_{\vett{X}}$ ci sono le varianze. $(\vett{\mu}_{\vett{X}}, \matr{C}_{\vett{X}})$ è la caratterizzazione
+        sintetica.
+  \item $\matr{C}_{\vett{X}}$ è \textbf{definita non negativa}: $\vett{q}^T \matr{C}_{\vett{X}} \vett{q} =
+        \mathrm{VAR}(\vett{q}^T \vett{X}) \geq 0$.
+  \item \textbf{Vettore gaussiano}, $\vett{X} \sim \mathcal{N}(\vett{\mu}_{\vett{X}}, \matr{C}_{\vett{X}})$:
+        \[ f_{\vett{X}}(\vett{x}) = \frac{1}{\sqrt{(2\pi)^n \det \matr{C}_{\vett{X}}}}\; e^{-\frac12 (\vett{x} -
+           \vett{\mu}_{\vett{X}})^T \matr{C}_{\vett{X}}^{-1} (\vett{x} - \vett{\mu}_{\vett{X}})} ; \]
+        con componenti indipendenti $\matr{C}_{\vett{X}}$ è diagonale. Le curve di uguale densità sono ellissi.
+  \item Per le congiuntamente gaussiane \textbf{incorrelate $\Leftrightarrow$ indipendenti}; marginali e condizionate
+        sono gaussiane (bivariata standard: $X_2 \mid X_1 = x_1 \sim \mathcal{N}(\rho x_1, 1 - \rho^2)$).
+  \item \textbf{Trasformazioni lineari}: $\vett{Z} = \matr{A}\vett{X} + \vett{b}$ ha $\vett{\mu}_{\vett{Z}} =
+        \matr{A}\vett{\mu}_{\vett{X}} + \vett{b}$ e $\matr{C}_{\vett{Z}} = \matr{A}\matr{C}_{\vett{X}}\matr{A}^T$, ed è
+        gaussiano se $\vett{X}$ lo è. Per due variabili: $\sigma_Z^2 = a_1^2\sigma_1^2 + a_2^2\sigma_2^2 +
+        2a_1a_2\sigma_1\sigma_2\rho_{12}$.
+\end{itemize}
+}
