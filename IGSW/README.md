@@ -19,6 +19,7 @@ Questa cartella contiene i sorgenti LaTeX di `DispensaIGSW.pdf`.
 - `chapters/chapter_12.tex` — Architetture software moderne: scalabilità e load balancing, disponibilità e fail-over, dati (ACID, replica, sharding, NoSQL e consistenza finale), code di messaggi (anche per più dispositivi dello stesso utente), microservizi e DDD, un caso reale con i suoi anti-pattern (scomposizione, interazione, sicurezza, organizzazione), legge di Conway (L_14, L_15)
 - `chapters/chapter_13.tex` — Virtualizzazione e cloud computing: CPU multi-core, data center tradizionale, macchine virtuali e hypervisor, alta disponibilità con SAN, live migration, consolidamento, cloud computing, scalabilità ed elasticità, provisioning dinamico, IaaS/PaaS/SaaS, cloud pubblico, privato e ibrido (Lecture 16)
 - `chapters/chapter_14.tex` — Il paradigma REST: API, HTTP (verbi, codici di stato), risorse e rappresentazioni (JSON, XML), progettazione degli URI, risorse annidate, filtri e ordinamenti, autenticazione a token, JWT e funzioni di hash, OpenAPI (Lecture 17)
+- `chapters/chapter_15.tex` — I design pattern: definizione, storia (Alexander, GoF), le quattro parti di un pattern, come leggere i disegni della memoria (stack, heap, campi statici), catalogo GoF; pattern creazionali (Singleton, Builder con e senza Director, builder delle librerie Java), strutturali (Adapter di classe e di oggetto, Composite, Decorator e flussi di I/O), comportamentali (Observer, State, Strategy); Dependency Injection e test con oggetti fittizi. Ogni esempio è compilato ed eseguito con Java 21: gli output riportati sono quelli reali (lezione *Software Design: Design Patterns* ed esempi `EsempioSingleton`, `EsempioBuilder`, `EsempioComposite`, `EsempioDecorator`)
 - `preamble/listati-vscode.tex` — aspetto dei listati: finestre di VS Code con il tema Dark+, come nella dispensa di Tecnologie Web
 - `preamble/nomi_listati.py` — genera `preamble/listati-nomi.tex`, l'elenco dei metodi e dei tipi usati nei listati Java (per colorarli come in VS Code); va rilanciato dopo aver aggiunto esempi
 - `unina_doc_class.cls`, `fonts/`, `sources/` — template Unina Docs (da `Materiale/Dispense.rar`)
@@ -55,3 +56,10 @@ cp main.pdf DispensaIGSW.pdf
   perché i comandi `\info{...}{...}` non accettano testo verbatim
 - i titoli dei riquadri che contengono una virgola vanno racchiusi in doppie graffe:
   `\info{{Titolo, con virgola}}{...}`
+- disegni della memoria (Capitolo 15), definiti in `main.tex`:
+  `\memblocco[opzioni del bordo]{colore}{nodo}{(x,y)}{larghezza}{intestazione}{campo/valore, ...}` disegna un frame
+  dello stack (`swblue`), un oggetto (`swteal`, tratteggiato se irraggiungibile) o i campi statici di una classe
+  (`ph3`); `\memrif{nodo-i}` mette il pallino del riferimento nella riga `i` e la coordinata `(nodo-i-p)` da cui parte la
+  freccia (stile `memfreccia`); `\memzona[colore]{(nodo)(nodo-fondo)}{Titolo}` racchiude i blocchi in una zona
+- negli output dei terminali un apostrofo apre una stringa (colorata): se serve, il listato prende l'opzione
+  `deletestring={[b]'}`

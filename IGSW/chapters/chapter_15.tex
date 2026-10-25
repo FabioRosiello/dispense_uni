@@ -1,0 +1,3223 @@
+\chapter{I design pattern}
+% Il codice in linea (\code) non va a capo: un po' di elasticita' in piu' evita righe che sbordano
+\emergencystretch=2.5em
+
+Nei capitoli sulle architetture abbiamo deciso la struttura \textbf{ad alto livello} di un sistema: quali sottosistemi,
+quali livelli, come comunicano. Ogni sottosistema, però, è fatto di molte classi, e anche a questo livello più basso gli
+stessi problemi si ripresentano da un progetto all'altro: creare un oggetto complicato, far collaborare due classi nate
+separatamente, avvisare automaticamente chi è interessato a un cambiamento. Questo capitolo raccoglie la lezione
+\textit{Software Design: Design Patterns}: che cos'è un design pattern, da dove viene, e i pattern più importanti, ognuno con
+il suo codice Java (compilato ed eseguito: gli output riportati sono quelli veri) e, dove aiuta, con un \textbf{disegno della
+memoria} che mostra che cosa succede davvero agli oggetti.
+
+% ============================================================
+\section{Dove siamo nel processo}
+
+\waterfallbar{3}
+
+I design pattern appartengono alla terza fase della cascata, \textit{Software e UI Design}, presentata nel Capitolo~3. Il
+System Design ha definito l'architettura e assegnato i requisiti ai sottosistemi; ora, per ciascun sottosistema, si
+definiscono gli \textbf{oggetti} necessari a realizzarlo. Gli strumenti della fase sono i \textbf{design pattern}
+(questo capitolo), l'\textit{usability engineering} e i \textit{wireframe} ad alta fedeltà dell'interfaccia utente.
+
+\subsection{Dalle architetture ai design pattern}
+
+\begin{itemize}
+  \item Un'architettura definisce la struttura di un'applicazione \textbf{ad alto livello}: in ogni modulo si raggruppano
+        molte classi.
+  \item Grazie alle architetture già note (client/server, a livelli, a microservizi\ldots) abbiamo una vasta scelta di
+        soluzioni \textbf{ampiamente collaudate} per una grande classe di problemi.
+  \item Esiste qualcosa di simile a un livello più basso? Esistono modi «standard» di combinare le classi fra loro per
+        svolgere funzioni tipiche? Sì: i \textbf{design pattern}.
+\end{itemize}
+
+\Needspace{14\baselineskip}
+\begin{center}
+\begin{tikzpicture}
+  % l'architettura: tre livelli
+  \node[font=\scriptsize\bfseries, text=ph2!80!black] at (0,2.15) {Architettura (Capitoli 11 e 12)};
+  \node[card=ph2, minimum width=3.4cm, minimum height=0.8cm] (l1) at (0,1.3) {Presentazione};
+  \node[card=ph2, minimum width=3.4cm, minimum height=0.8cm] (l2) at (0,0) {Logica applicativa};
+  \node[card=ph2, minimum width=3.4cm, minimum height=0.8cm] (l3) at (0,-1.3) {Accesso ai dati};
+  \draw[flow] (l1) -- (l2);
+  \draw[flow] (l2) -- (l3);
+  % lo zoom su un sottosistema
+  \draw[ph3!70, line width=0.7pt, dashed] (l2.north east) -- (3.6,1.9);
+  \draw[ph3!70, line width=0.7pt, dashed] (l2.south east) -- (3.6,-1.9);
+  \draw[ph3!70, line width=0.9pt, rounded corners=4pt, fill=ph3!4] (3.6,-1.9) rectangle (13.6,1.9);
+  \node[font=\scriptsize\bfseries, text=ph3!80!black, anchor=north west] at (3.7,1.85)
+    {Dentro un sottosistema: un design pattern (questo capitolo)};
+  \umlclass[2.4cm]{dps}{(5.4,0.35)}{Soggetto}{}{attach(o)\\notify()}
+  \umlclass[2.3cm]{dpo}{(9.7,0.35)}{\textit{Osservatore}}{}{update()}
+  \umlclass[2.3cm]{dpc}{(9.7,-1.3)}{Tabella}{}{update()}
+  \draw[navig] (dps.east) -- node[molt, above]{osservatori} node[molt, below, pos=0.82]{0..*} (dpo.west);
+  \draw[realizza] (dpc.north) -- (dpo.south);
+  \node[note, anchor=west, text width=2.3cm] at (11.15,0.35) {poche classi che collaborano in un modo collaudato};
+\end{tikzpicture}
+\end{center}
+
+% ============================================================
+\section{Che cos'è un design pattern}
+
+\dfn{Design pattern}{
+  Un \term{design pattern} è una \textbf{soluzione comune a un problema ricorrente} di progettazione. Astrae una struttura
+  di progetto che si ripresenta in molti sistemi e la descrive in termini di classi e oggetti: le loro
+  \textbf{dipendenze}, le loro \textbf{strutture}, le loro \textbf{interazioni} e le \textbf{convenzioni} da rispettare.
+  Dà un \textbf{nome} alla struttura, la specifica in modo esplicito e distilla l'esperienza di chi l'ha già usata.
+}
+
+\subsection{Un po' di storia}
+
+\begin{itemize}
+  \item L'idea viene dall'architettura, quella degli edifici. L'architetto \textbf{Christopher Alexander} raccolse in
+        \textit{A Pattern Language: Towns, Buildings, Construction} (1977) 253 pattern per progettare città e case, come
+        «luce da due lati in ogni stanza»: le stanze illuminate da un lato solo sono sgradevoli, e la soluzione si può
+        riusare in mille case diverse. Ogni pattern descrive un problema che si ripete e il nucleo della sua soluzione, da
+        adattare ogni volta.
+  \item Nel 1995 la «\textbf{Gang of Four}» (GoF: Erich Gamma, Richard Helm, Ralph Johnson e John Vlissides) portò l'idea
+        nel software con il libro \textit{Design Patterns: Elements of Reusable Object-Oriented Software}, che descrive 23
+        pattern per la programmazione a oggetti. Per Java si può vedere anche S.~J.~Metsker, \textit{Design Patterns in
+        Java}, Pearson, 2003.
+  \item Da allora ne sono stati proposti molti altri, in conferenze, simposi e libri. Non è raro che un singolo
+        sviluppatore proponga un nuovo pattern e lo diffonda in modo informale, con blog e riviste.
+\end{itemize}
+
+\subsection{Le quattro parti di un pattern}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.35}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{3.2cm} L}
+\toprule
+Parte & Che cosa contiene \\
+\midrule
+1. Nome & Una o due parole che identificano il pattern (Singleton, Observer\ldots) e diventano parte del vocabolario dei
+          progettisti. \\
+2. Problema & Quando applicarlo: il problema da risolvere e il contesto in cui si presenta. \\
+3. Soluzione & Gli elementi del progetto (classi e oggetti), le loro relazioni, responsabilità e collaborazioni. Non è un
+               progetto concreto ma uno \textbf{schema}, da riempire ogni volta. \\
+4. Conseguenze & I risultati e i compromessi (\textit{trade-off}) dell'applicazione: che cosa si guadagna e che cosa si
+                 paga. \\
+\bottomrule
+\end{tabularx}
+\caption{Le quattro parti di un design pattern.}
+\end{table}
+
+Un design pattern è inoltre:
+\begin{itemize}
+  \item \textbf{indipendente dal linguaggio e dall'implementazione}: descrive un'idea, che si può realizzare in Java, in
+        C\# o in Python;
+  \item una \textbf{micro-architettura}: poche classi che collaborano, non un sistema intero;
+  \item da applicare \textbf{con giudizio}, mai meccanicamente: la soluzione va tradotta in termini concreti nel contesto
+        dell'applicazione, ed è compito dello sviluppatore farlo.
+\end{itemize}
+
+\subsection{A che cosa servono}
+
+\begin{itemize}
+  \item \textbf{Codificare la buona progettazione}: distillano e diffondono l'esperienza, aiutano allo stesso modo
+        principianti ed esperti, insegnano un modo di ragionare sul progetto.
+  \item \textbf{Dare nomi espliciti alle strutture}: un vocabolario comune riduce la complessità e aumenta
+        l'espressività. «Qui ci vuole un Observer» comunica in quattro parole una struttura di quattro classi.
+  \item \textbf{Catturare e conservare le informazioni di progetto}: le decisioni si descrivono in modo sintetico e la
+        documentazione migliora.
+  \item \textbf{Facilitare la ristrutturazione} (\textit{refactoring}): i pattern sono collegati fra loro e danno al codice
+        una flessibilità in più.
+\end{itemize}
+
+% ============================================================
+\section{Come leggere i disegni della memoria}
+
+Molti pattern si capiscono davvero solo guardando gli \textbf{oggetti} mentre il programma gira: quanti ne esistono, chi
+punta a chi, che cosa resta in memoria. Per questo, nel capitolo, accanto al codice compaiono dei \textbf{disegni della
+memoria} di un programma Java, divisi in tre zone.
+
+\begin{itemize}
+  \item \textbf{Stack}. Ogni chiamata di metodo in corso ha un suo \textit{frame}, che contiene i parametri e le variabili
+        locali. Il frame nasce quando il metodo viene chiamato e sparisce quando il metodo termina; il metodo in esecuzione
+        è quello disegnato più in alto.
+  \item \textbf{Heap}. Qui vivono gli \textbf{oggetti}, creati con \code{new}. Un oggetto resta in memoria finché è
+        \textbf{raggiungibile}, cioè finché una catena di riferimenti, partendo dallo stack o dai campi statici, arriva fino a
+        lui; quando non lo è più, il \textit{garbage collector} lo elimina. Nei disegni gli oggetti irraggiungibili hanno il
+        bordo tratteggiato.
+  \item \textbf{Campi statici}. I campi \code{static} appartengono alla \textbf{classe}, non a un oggetto: ne esiste una sola
+        copia, creata quando la classe viene caricata. (Nella JVM più diffusa, HotSpot, anche questi valori stanno
+        tecnicamente nello heap, dentro l'oggetto che rappresenta la classe; li disegniamo a parte perché ne esiste una
+        copia sola.)
+\end{itemize}
+
+Una variabile di tipo primitivo (\code{int}, \code{double}, \code{boolean}) contiene direttamente il suo valore. Una
+variabile di tipo oggetto contiene invece un \textbf{riferimento}, disegnato come un pallino con una freccia verso
+l'oggetto; \code{null} è il riferimento che non punta a nulla. Anche le stringhe sono oggetti, ma per non affollare i
+disegni le scriviamo direttamente nel campo, fra virgolette.
+
+\begin{esempio}{Due riferimenti, un solo oggetto}
+\noindent\begin{minipage}[c]{0.6\textwidth}
+\begin{lstlisting}[style=java, name=Punto.java]
+public class Punto {
+    int x, y;
+
+    Punto(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=Alias.java]
+public class Alias {
+    public static void main(String[] args) {
+        int n = 5;
+        Punto p = new Punto(1, 2);
+        Punto q = p;      // copia il riferimento, non l'oggetto
+        q.x = 10;
+        System.out.println(p.x + " " + q.x + " " + n);
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac Punto.java Alias.java
+$ java Alias
+10 10 5
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.37\textwidth}
+\centering
+\begin{tikzpicture}
+  \memblocco{swblue}{f}{(0,0)}{2.3cm}{main}{n/5, p/{}, q/{}}
+  \memrif{f-2}
+  \memrif{f-3}
+  \memblocco{swteal}{pt}{(3.4,-0.25)}{1.9cm}{Punto}{x/10, y/2}
+  \draw[memfreccia] (f-2-p) -- ([yshift=3pt]pt-sx);
+  \draw[memfreccia] (f-3-p) -- ([yshift=-5pt]pt-sx);
+  \memzona[swblue]{(f)(f-fondo)}{Stack}
+  \memzona[swteal]{(pt)(pt-fondo)}{Heap}
+\end{tikzpicture}
+
+\vspace{4pt}
+{\scriptsize La memoria alla fine di \code{main}.\par}
+\end{minipage}
+
+\medskip
+\code{Punto q = p} non crea un secondo punto: copia nella variabile \code{q} lo stesso riferimento contenuto in \code{p}. Le
+due variabili puntano allo stesso oggetto, quindi \code{q.x = 10} cambia anche \code{p.x}. Il valore di \code{n}, primitivo,
+sta invece direttamente nel frame di \code{main}.
+\end{esempio}
+
+% ============================================================
+\section{I pattern della Gang of Four}
+
+I pattern della GoF sono divisi in tre famiglie, secondo il problema che risolvono:
+\begin{itemize}
+  \item \textbf{creazionali}: come si \textbf{creano} gli oggetti, nascondendo e controllando i dettagli della costruzione;
+  \item \textbf{strutturali}: come si \textbf{compongono} classi e oggetti per formare strutture più grandi;
+  \item \textbf{comportamentali}: come si distribuiscono \textbf{algoritmi e responsabilità} fra gli oggetti, e come
+        questi interagiscono.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\newcommand{\studiato}[1]{\textcolor{swred}{\textbf{#1}}}
+\begin{tabularx}{\textwidth}{P{3.0cm} L}
+\toprule
+\textbf{Pattern} & \textbf{Che cosa fa} \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Creazionali}} \\
+\studiato{Builder} & Separa la costruzione di un oggetto complesso dalla sua rappresentazione. \\
+Abstract Factory & Fornisce un'interfaccia per creare famiglie di oggetti correlati senza specificarne le classi concrete. \\
+Factory Method & Definisce un'interfaccia per creare un oggetto, ma lascia alle sottoclassi la scelta della classe da
+                 istanziare. \\
+Prototype & Indica il tipo di oggetto da creare con un'istanza prototipo, e crea i nuovi oggetti copiando il prototipo. \\
+\studiato{Singleton} & Garantisce che la classe abbia una sola istanza e fornisce un modo per accedervi. \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Strutturali}} \\
+\studiato{Adapter} & Converte l'interfaccia di una classe in un'altra, così che due classi con interfacce diverse possano
+                     lavorare insieme. \\
+Bridge & Disaccoppia un'astrazione dalla sua implementazione, così che le due possano variare indipendentemente. \\
+\studiato{Composite} & Compone gli oggetti in strutture ad albero per realizzare composizioni ricorsive. \\
+\studiato{Decorator} & Aggiunge dinamicamente nuove responsabilità a un oggetto: è un'alternativa alle sottoclassi per
+                       estenderne le funzionalità. \\
+Facade & Fornisce un'interfaccia unificata a un sottosistema, per renderlo più facile da usare. \\
+Proxy & Fornisce un surrogato di un oggetto per controllarne l'accesso. \\
+Flyweight & Usa la condivisione per gestire in modo efficiente un gran numero di oggetti piccoli. \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Comportamentali}} \\
+\studiato{Observer} & Definisce una dipendenza 1:N fra oggetti: quando uno cambia stato, gli altri vengono aggiornati
+                      automaticamente. \\
+\studiato{State} & Permette a un oggetto di cambiare comportamento a seconda del suo stato interno. \\
+\studiato{Strategy} & Definisce una famiglia di algoritmi, li incapsula uno per uno e li rende intercambiabili, così che
+                      possano variare indipendentemente da chi li usa. \\
+Template Method & Definisce lo scheletro di un algoritmo, lasciando alle sottoclassi la definizione di alcuni passi. \\
+Visitor & Rappresenta un'operazione da eseguire sugli elementi di una struttura di oggetti: si possono aggiungere
+          operazioni senza modificare le classi degli elementi. \\
+\bottomrule
+\end{tabularx}
+\caption{I pattern GoF presentati nelle slide. In rosso, come nelle slide, quelli che il corso approfondisce e che
+vediamo in questo capitolo.}
+\end{table}
+
+Il catalogo originale ne conta 23: le slide riportano tutti i creazionali e tutti gli strutturali, e 5 degli 11
+comportamentali (mancano, fra gli altri, \textit{Iterator}, quello degli iteratori delle collezioni Java, e
+\textit{Command}).
+
+% ============================================================
+\section{Pattern creazionali}
+
+In Java un oggetto si crea con \code{new} e un costruttore. È un meccanismo semplice ma rigido: il costruttore crea
+\textbf{sempre} un oggetto nuovo, deve ricevere tutti i dati in una volta sola e lega chi lo chiama alla classe concreta. I
+pattern creazionali \textbf{nascondono e controllano} la creazione degli oggetti; ne vediamo due, Singleton e Builder.
+
+\subsection{Singleton}
+
+\dfn{Singleton (creazionale)}{
+  Il pattern \term{Singleton} costruisce classi che ammettono \textbf{una e una sola istanza} e forniscono un
+  \textbf{punto di accesso globale} a quell'istanza.
+}
+
+Serve quando nel sistema deve esistere un solo oggetto di un certo tipo, e tutti devono poterlo raggiungere: la
+connessione al database, la configurazione dell'applicazione, il registro dei log, la coda di stampa. Nel diagramma delle
+classi i membri statici sono \underline{sottolineati}.
+
+\Needspace{8\baselineskip}
+\begin{center}
+\begin{tikzpicture}
+  \umlclass[4.2cm]{sg}{(0,0)}{Singleton}{\underline{- instance : Singleton}}{- Singleton()\\\underline{+ getInstance() : Singleton}}
+  \node[notauml, anchor=west, text width=5.6cm] (sgn) at (3.0,0)
+    {Il costruttore è privato: l'unico modo per avere l'oggetto è \texttt{getInstance()}, che lo crea alla prima chiamata
+     e poi restituisce sempre lo stesso.};
+  \draw[dashed, line width=0.5pt, draw=black!70] (sg.east) -- (sgn.west);
+\end{tikzpicture}
+\end{center}
+
+\Needspace{24\baselineskip}
+Ecco l'implementazione delle slide.
+
+\begin{lstlisting}[style=java, name=SingletonClass.java]
+public class SingletonClass {
+    private static SingletonClass singletonObject = null;   // l'unica istanza
+
+    private SingletonClass() {
+        // codice di inizializzazione (facoltativo)
+    }
+
+    public static SingletonClass getSingletonObject() {
+        if (singletonObject == null) {
+            singletonObject = new SingletonClass();
+        }
+        return singletonObject;
+    }
+
+    @Override
+    public Object clone() throws CloneNotSupportedException {
+        throw new CloneNotSupportedException();
+    }
+}
+\end{lstlisting}
+
+\Needspace{12\baselineskip}
+\begin{itemize}
+  \item Il riferimento \code{singletonObject} è \textbf{static}: appartiene alla classe, non a un oggetto, quindi è uno solo
+        e sopravvive mentre gli oggetti nascono e muoiono.
+  \item È \textbf{private}: non può essere cambiato dall'esterno della classe (nessuno può scriverci \code{null} o un altro
+        oggetto).
+  \item Il \textbf{costruttore è privato}: lo può invocare solo il codice della classe stessa, cioè
+        \code{getSingletonObject()}.
+  \item Chiunque può ottenere il riferimento all'istanza chiamando il metodo \textbf{statico e pubblico}
+        \code{getSingletonObject()}, che crea l'oggetto se non esiste ancora (\textit{lazy initialization},
+        inizializzazione pigra).
+  \item La possibilità di \textbf{copiare} l'oggetto è disabilitata: \code{clone()} è ridefinito in modo da lanciare sempre
+        un'eccezione.
+\end{itemize}
+
+\begin{esempio}{Quanti oggetti esistono davvero?}
+Il programma chiede l'istanza due volte e prova a copiarla.
+\begin{lstlisting}[style=java, name=ProvaSingleton.java]
+public class ProvaSingleton {
+    public static void main(String[] args) {
+        SingletonClass s1 = SingletonClass.getSingletonObject();
+        SingletonClass s2 = SingletonClass.getSingletonObject();
+        System.out.println("s1 == s2? " + (s1 == s2));   // stesso oggetto?
+
+        try {
+            Object copia = s1.clone();
+        } catch (CloneNotSupportedException e) {
+            System.out.println("Copia rifiutata: " + e);
+        }
+    }
+}
+\end{lstlisting}
+\noindent\begin{minipage}[c]{0.48\textwidth}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac SingletonClass.java ProvaSingleton.java
+$ java ProvaSingleton
+s1 == s2? true
+Copia rifiutata: java.lang.CloneNotSupportedException
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.48\textwidth}
+\centering
+\begin{tikzpicture}
+  \memblocco{swblue}{f}{(0,0)}{2.0cm}{main}{s1/{}, s2/{}}
+  \memrif{f-1}
+  \memrif{f-2}
+  \memblocco{swteal}{o}{(3.1,-0.25)}{3.3cm}{SingletonClass}{}
+  \memblocco{ph3}{st}{(3.1,-2.0)}{3.3cm}{SingletonClass}{singletonObject/{}}
+  \memrif{st-1}
+  \draw[memfreccia] (f-1-p) -- ([yshift=2pt]o.west);
+  \draw[memfreccia] (f-2-p) -- ([yshift=-3pt]o.south west);
+  \draw[memfreccia] (st-1-p) -- ++(0.6,0) |- (o.east);
+  \memzona[swblue]{(f)(f-fondo)}{Stack}
+  \memzona[swteal]{(o)(o-fondo)}{Heap}
+  \memzona[ph3]{(st)(st-fondo)}{Campi statici}
+\end{tikzpicture}
+\end{minipage}
+
+\medskip
+La prima chiamata trova \code{singletonObject} a \code{null} e crea l'oggetto; la seconda lo trova già impostato e restituisce
+lo stesso riferimento. Nel disegno ci sono tre riferimenti ma \textbf{un solo oggetto}, e \code{s1 == s2}, che confronta i
+riferimenti, vale \code{true}.
+\end{esempio}
+
+Se un'altra classe prova a creare un secondo esemplare con \code{new}, a fermarla è già il \textbf{compilatore}:
+
+\Needspace{16\baselineskip}
+\begin{lstlisting}[style=java, name=Intruso.java]
+public class Intruso {
+    public static void main(String[] args) {
+        SingletonClass altro = new SingletonClass();
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac Intruso.java
+Intruso.java:3: error: SingletonClass() has private access in SingletonClass
+        SingletonClass altro = new SingletonClass();
+                               ^
+1 error
+\end{lstlisting}
+
+\Needspace{8\baselineskip}
+\subsubsection*{L'esempio del corso: un nome che non cambia}
+
+L'esempio distribuito con il corso (\code{EsempioSingleton}) chiama il metodo \code{getInstance} e gli passa un parametro,
+che diventa una variabile di stato, \code{nome}. Il programma chiede l'istanza due volte, con due nomi diversi.
+
+\Needspace{28\baselineskip}
+\begin{lstlisting}[style=java, name=SingletonClass.java]
+package singleton;
+
+public class SingletonClass {
+    private static SingletonClass instance = null;   // all'inizio non ci sono istanze
+    private static String nome;                      // variabile di stato
+
+    private SingletonClass(String nome) {            // costruttore privato
+        setNome(nome);
+    }
+
+    public static SingletonClass getInstance(String nome) {
+        if (instance == null) {
+            instance = new SingletonClass(nome);
+        }
+        return instance;
+    }
+
+    public String getNome() {
+        return nome;
+    }
+
+    private static void setNome(String nome) {
+        SingletonClass.nome = nome;
+    }
+}
+\end{lstlisting}
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[t]{0.55\textwidth}
+\begin{lstlisting}[style=java, name=Esecutore.java]
+package singleton;
+
+public class Esecutore {
+    public static void main(String[] args) {
+        SingletonClass sc1;
+        SingletonClass sc2;
+
+        sc1 = SingletonClass.getInstance("uno");
+        sc2 = SingletonClass.getInstance("due");
+
+        System.out.println(sc1.getNome()
+                           + " --- " + sc2.getNome());
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.42\textwidth}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac singleton/*.java
+$ java singleton.Esecutore
+uno --- uno
+\end{lstlisting}
+\end{minipage}
+
+\Needspace{12\baselineskip}
+\noindent\begin{minipage}[c]{0.5\textwidth}
+Stampa \code{uno --- uno}, non \code{uno --- due}. La seconda chiamata trova \code{instance} già impostato: non entra
+nell'\code{if}, non chiama il costruttore, e il parametro \code{"due"} viene semplicemente \textbf{ignorato}.
+\code{sc1} e \code{sc2} sono lo stesso oggetto, e il nome è quello dato alla prima chiamata.
+
+Nel disegno \code{nome} sta fra i campi statici, perché è dichiarato \code{static}; l'oggetto nello heap non ha campi
+propri. Con un'istanza sola le due scelte si equivalgono, ma di solito lo stato si mette in un campo d'istanza.
+\end{minipage}\hfill
+\begin{minipage}[c]{0.46\textwidth}
+\centering
+\begin{tikzpicture}
+  \memblocco{swblue}{f}{(0,0)}{2.0cm}{main}{sc1/{}, sc2/{}}
+  \memrif{f-1}
+  \memrif{f-2}
+  \memblocco{swteal}{o}{(3.1,-0.25)}{3.0cm}{SingletonClass}{}
+  \memblocco{ph3}{st}{(3.1,-2.0)}{3.0cm}{SingletonClass}{instance/{}, nome/"uno"}
+  \memrif{st-1}
+  \draw[memfreccia] (f-1-p) -- ([yshift=2pt]o.west);
+  \draw[memfreccia] (f-2-p) -- ([yshift=-3pt]o.south west);
+  \draw[memfreccia] (st-1-p) -- ++(0.6,0) |- (o.east);
+  \memzona[swblue]{(f)(f-fondo)}{Stack}
+  \memzona[swteal]{(o)(o-fondo)}{Heap}
+  \memzona[ph3]{(st)(st-fondo)}{Campi statici}
+\end{tikzpicture}
+\end{minipage}
+
+\warning{Un parametro che a volte non serve a nulla}{
+  Un \code{getInstance} con parametri è ingannevole: chi scrive \code{getInstance("due")} si aspetta un oggetto di nome
+  \code{"due"} e riceve, senza alcun avviso, quello creato da qualcun altro con un altro nome. Se il Singleton va
+  configurato, è più chiaro farlo una volta sola, all'avvio, con un metodo dedicato (che segnala un errore se la
+  configurazione è già stata fatta), e lasciare \code{getInstance()} senza parametri.
+}
+
+\Needspace{10\baselineskip}
+\subsubsection*{Le conseguenze}
+
+\begin{itemize}
+  \item Della classe si può istanziare \textbf{al massimo un oggetto}. In alcune varianti si ammette invece un numero
+        \textbf{fisso} di istanze (per esempio al massimo 3), tenute in un array di riferimenti che \code{getInstance}
+        gestisce di conseguenza.
+  \item Il Singleton è \textbf{migliore di un oggetto statico} (cioè di una classe con soli campi e metodi \code{static}):
+        \begin{itemize}
+          \item la creazione dell'oggetto si può \textbf{personalizzare}, nel costruttore e in \code{getInstance};
+          \item la \textbf{copia} si può disabilitare;
+          \item \textbf{non occupa memoria} finché l'oggetto non viene chiesto la prima volta.
+        \end{itemize}
+  \item È la soluzione che nel corso abbiamo già usato per l'oggetto \code{DatabaseConnection}.
+\end{itemize}
+
+\begin{esempio}{Al massimo tre istanze}
+Una variante con un numero fisso di oggetti: tre stampanti, assegnate a turno a chi le chiede.
+
+\begin{lstlisting}[style=java, name=Stampante.java]
+public class Stampante {
+    private static final int MAX = 3;
+    private static final Stampante[] istanze = new Stampante[MAX];   // al massimo 3 oggetti
+    private static int prossima = 0;
+    private final int numero;
+
+    private Stampante(int numero) {
+        this.numero = numero;
+    }
+
+    public static Stampante getStampante() {
+        int i = prossima;
+        prossima = (prossima + 1) % MAX;          // a turno: 0, 1, 2, 0, 1, ...
+        if (istanze[i] == null) {
+            istanze[i] = new Stampante(i + 1);    // creata solo alla prima richiesta
+        }
+        return istanze[i];
+    }
+
+    public int getNumero() {
+        return numero;
+    }
+}
+\end{lstlisting}
+\noindent\begin{minipage}[t]{0.55\textwidth}
+\begin{lstlisting}[style=java, name=ProvaStampanti.java]
+public class ProvaStampanti {
+    public static void main(String[] args) {
+        for (int k = 1; k <= 5; k++) {
+            Stampante s = Stampante.getStampante();
+            System.out.println("Richiesta " + k
+                    + " -> stampante " + s.getNumero());
+        }
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.42\textwidth}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac Stampante.java ProvaStampanti.java
+$ java ProvaStampanti
+Richiesta 1 -> stampante 1
+Richiesta 2 -> stampante 2
+Richiesta 3 -> stampante 3
+Richiesta 4 -> stampante 1
+Richiesta 5 -> stampante 2
+\end{lstlisting}
+\end{minipage}
+\end{esempio}
+
+\begin{esempio}{La connessione al database}
+Una sola connessione condivisa da tutta l'applicazione, aperta solo quando serve la prima volta. È uno schema possibile
+per \code{DatabaseConnection}; indirizzo e credenziali sono di esempio.
+\begin{lstlisting}[style=java, name=DatabaseConnection.java]
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+
+public class DatabaseConnection {
+    private static DatabaseConnection istanza = null;
+    private final Connection connessione;
+
+    private DatabaseConnection() throws SQLException {
+        connessione = DriverManager.getConnection(
+                "jdbc:postgresql://localhost:5432/negozio", "app", "segreta");
+    }
+
+    public static DatabaseConnection getInstance() throws SQLException {
+        if (istanza == null) {
+            istanza = new DatabaseConnection();      // la connessione si apre qui, una volta sola
+        }
+        return istanza;
+    }
+
+    public Connection getConnection() {
+        return connessione;
+    }
+}
+\end{lstlisting}
+Ovunque serva il database si scrive \code{DatabaseConnection.getInstance().getConnection()}, senza passare la connessione
+di classe in classe.
+\end{esempio}
+
+\info{{Singleton e thread}}{
+  L'inizializzazione pigra delle slide non è sicura se più \textit{thread} chiamano \code{getSingletonObject()} nello
+  stesso momento: entrambi possono trovare il riferimento a \code{null} ed entrambi creano un oggetto. Due rimedi comuni
+  sono dichiarare il metodo \code{synchronized}, così che lo esegua un thread alla volta, oppure creare l'istanza subito,
+  quando la classe viene caricata (cosa che la JVM fa una volta sola):
+  \code{private static final SingletonClass ISTANZA = new SingletonClass();}. In quel caso si perde l'inizializzazione
+  pigra.
+}
+
+\subsection{Builder}
+
+Il Builder appartiene a un'intera famiglia di pattern creazionali (i \textit{Builder} e le \textit{Factory}) che affrontano
+lo stesso problema: le classi \textbf{complesse}, per le quali il meccanismo di base dei costruttori non garantisce
+abbastanza flessibilità ed efficienza.
+
+\dfn{Builder (creazionale)}{
+  Il pattern \term{Builder} rende la costruzione di un oggetto \textbf{flessibile e scomponibile} in passi, separandola dal
+  costruttore vero e proprio dell'oggetto.
+}
+
+\Needspace{14\baselineskip}
+\subsubsection*{Il problema: costruttori con troppi parametri}
+
+Un computer ha molti componenti: alcuni obbligatori (processore, RAM), molti facoltativi (scheda video, disco, sistema
+operativo), e in futuro se ne aggiungeranno altri. Con un solo costruttore, ogni creazione diventa un elenco di valori
+senza nome:
+\begin{lstlisting}[style=java]
+Computer pc = new Computer("AMD Ryzen 7", 32, "AMD Radeon RX 7800", "SSD", 2000, true);
+\end{lstlisting}
+Che cosa sono \code{2000} e \code{true}? E se un componente manca, si passa \code{null}? Le alternative non sono migliori:
+un costruttore per ogni combinazione di parametri facoltativi (costruttori che si moltiplicano a ogni nuova opzione), oppure
+un costruttore vuoto seguito da tanti metodi \code{set}, che lascia esistere per un po' un computer montato a metà e lo
+rende modificabile per sempre.
+
+\Needspace{16\baselineskip}
+\subsubsection*{La soluzione}
+
+\begin{itemize}
+  \item Il singolo oggetto \textbf{Product} è costruito dal \textbf{ConcreteBuilder}, un passo alla volta
+        (\code{buildPart()}), e consegnato alla fine (\code{getResult()}).
+  \item La classe \textbf{Director} può gestire la costruzione di un insieme di oggetti \code{Product}: conosce la sequenza
+        dei passi e la ripete chiamando il Builder.
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}
+  \umlclass[2.6cm]{bdir}{(0,0)}{Director}{}{+ construct()}
+  \umlclass[2.6cm]{bbld}{(6.0,0)}{\textit{Builder}}{}{+ buildPart()}
+  \umlclass[2.6cm]{bcon}{(6.0,-2.5)}{ConcreteBuilder}{}{+ buildPart()\\+ getResult()}
+  \umlclass[2.2cm]{bpro}{(10.2,-2.5)}{Product}{}{}
+  \draw[aggr] (bdir.east) -- node[molt, above]{builder} (bbld.west);
+  \draw[gen] (bcon.north) -- (bbld.south);
+  \draw[dep] (bcon.east) -- node[stereo, above]{«create»} (bpro.west);
+  \node[notauml, text width=3.6cm, anchor=north] (bnota) at (0,-1.6) {for all objects in structure \{\\
+    \hspace*{1em}builder.buildPart()\\\}};
+  \draw[dashed, line width=0.5pt, draw=black!70] (bdir.south) -- (bnota.north);
+\end{tikzpicture}
+\end{center}
+
+\Needspace{12\baselineskip}
+Il Builder si usa quando:
+\begin{itemize}
+  \item la creazione di un prodotto complesso deve essere \textbf{indipendente dalle parti} che lo compongono; in
+        particolare, il processo di creazione non deve conoscere il processo di \textbf{assemblaggio}, cioè come le parti
+        vengono messe insieme per formare il prodotto;
+  \item il processo di creazione deve permettere \textbf{rappresentazioni diverse} dell'oggetto costruito.
+\end{itemize}
+Gli esempi delle slide sono edifici: una casa con un piano, 3 stanze, 2 corridoi, 1 garage e tre porte; un grattacielo con
+50 piani e, su ogni piano, 15 uffici e 5 corridoi. Gli stessi passi (\textit{aggiungi un piano}, \textit{aggiungi una
+stanza}\ldots) producono edifici diversissimi.
+
+\Needspace{12\baselineskip}
+\subsubsection*{Un esempio: costruire un computer}
+
+Vogliamo costruire oggetti della classe \code{Computer} per gestirne la pubblicità, la vendita e così via. Un computer ha
+molti parametri, e in futuro potrebbe servirne qualcuno in più. Separiamo allora l'oggetto \code{Computer} da un oggetto
+\code{ComputerBuilder}, che si occupa soltanto di gestire, in modo flessibile, tutte le varianti possibili della costruzione.
+L'esempio, distribuito con il corso (\code{EsempioBuilder}), usa un ConcreteBuilder ma non il Director, che aggiungiamo più
+avanti.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \umlclass[3.1cm]{cmain}{(-6.7,0)}{Main}{}{\underline{+ main(args : String[])}}
+  \umlclass[6.0cm]{cbld}{(0,0)}{ComputerBuilder}
+    {- cpu : String\\- ramGB : int\\- gpu : String = null\\- storageType : String = "Sconosciuto"\\- storageCapacityGB : int = 0\\- hasOS : boolean = false}
+    {+ ComputerBuilder(cpu, ramGB)\\+ withDedicatedGPU(gpu) : ComputerBuilder\\+ withSSD(capacity) : ComputerBuilder\\+ withHDD(capacity) : ComputerBuilder\\+ includeOS() : ComputerBuilder\\+ build() : Computer}
+  \umlclass[3.6cm]{cpc}{(6.9,0)}{Computer}
+    {- cpu : String\\- ramGB : int\\- gpu : String\\- storageType : String\\- storageCapacityGB : int\\- hasOS : boolean}
+    {\textasciitilde\ Computer(\ldots)\\+ toString() : String}
+  \draw[dep] (cmain.east) -- node[stereo, above]{«use»} (cbld.west);
+  \draw[dep] (cbld.east) -- node[stereo, above]{«create»} (cpc.west);
+  \node[font=\tiny\itshape, text=black!60, anchor=south] at (cmain.north) {Client};
+  \node[font=\tiny\itshape, text=black!60, anchor=south] at (cbld.north) {Builder concreto};
+  \node[font=\tiny\itshape, text=black!60, anchor=south] at (cpc.north) {Prodotto complesso};
+\end{tikzpicture}
+\caption{Il diagramma delle classi dell'esempio. Il simbolo \textasciitilde\ indica la visibilità di package.}
+\end{figure}
+
+\Needspace{38\baselineskip}
+Il \textbf{prodotto} ha tutti i campi \code{final}: una volta costruito, un computer non cambia più. Il suo costruttore non ha
+modificatore di accesso (visibilità di \textit{package}): lo può chiamare solo il codice dello stesso package, cioè il
+builder.
+
+\begin{lstlisting}[style=java, name=Computer.java]
+public class Computer {
+    // Componenti obbligatori
+    private final String cpu;
+    private final int ramGB;
+
+    // Componenti opzionali
+    private final String gpu;
+    private final String storageType;      // SSD o HDD
+    private final int storageCapacityGB;
+    private final boolean hasOS;           // sistema operativo
+
+    // Costruttore package-private: lo usa solo ComputerBuilder (stesso package)
+    Computer(String cpu, int ramGB, String gpu, String storageType,
+             int storageCapacityGB, boolean hasOS) {
+        this.cpu = cpu;
+        this.ramGB = ramGB;
+        this.gpu = gpu;
+        this.storageType = storageType;
+        this.storageCapacityGB = storageCapacityGB;
+        this.hasOS = hasOS;
+    }
+
+    @Override
+    public String toString() {
+        return "Configurazione Computer:\n" +
+               "  - CPU: " + cpu + "\n" +
+               "  - RAM: " + ramGB + "GB\n" +
+               "  - GPU: " + (gpu != null ? gpu : "Integrata") + "\n" +
+               "  - Storage: " + (storageCapacityGB > 0
+                       ? storageCapacityGB + "GB " + storageType : "Nessuno Storage") + "\n" +
+               "  - OS Installato: " + hasOS;
+    }
+}
+\end{lstlisting}
+
+\Needspace{52\baselineskip}
+Il \textbf{builder} riceve nel costruttore i parametri obbligatori e tiene quelli facoltativi, con i loro valori di
+default, in campi modificabili. Ogni metodo \code{with\ldots} imposta un'opzione e restituisce \code{this}, cioè il builder
+stesso: per questo le chiamate si possono \textbf{concatenare} (\textit{fluent interface}). Il metodo \code{build()}
+controlla i dati e solo alla fine crea il prodotto.
+
+\begin{lstlisting}[style=java, name=ComputerBuilder.java]
+public class ComputerBuilder {
+    // Parametri obbligatori: final, fissati dal costruttore del builder
+    private final String cpu;
+    private final int ramGB;
+
+    // Parametri opzionali, con i valori di default
+    private String gpu = null;
+    private String storageType = "Sconosciuto";
+    private int storageCapacityGB = 0;
+    private boolean hasOS = false;
+
+    public ComputerBuilder(String cpu, int ramGB) {
+        this.cpu = cpu;
+        this.ramGB = ramGB;
+    }
+
+    // Metodi "with": impostano un'opzione e restituiscono il builder stesso
+    public ComputerBuilder withDedicatedGPU(String gpu) {
+        this.gpu = gpu;
+        return this;
+    }
+
+    public ComputerBuilder withSSD(int capacity) {
+        this.storageType = "SSD";
+        this.storageCapacityGB = capacity;
+        return this;
+    }
+
+    public ComputerBuilder withHDD(int capacity) {
+        this.storageType = "HDD";
+        this.storageCapacityGB = capacity;
+        return this;
+    }
+
+    public ComputerBuilder includeOS() {
+        this.hasOS = true;
+        return this;
+    }
+
+    // Metodo finale: controlla i dati e crea il Computer
+    public Computer build() {
+        if (ramGB < 4) {
+            throw new IllegalStateException("RAM insufficiente. Minimo richiesto: 4GB.");
+        }
+        return new Computer(cpu, ramGB, gpu, storageType, storageCapacityGB, hasOS);
+    }
+}
+\end{lstlisting}
+
+\Needspace{28\baselineskip}
+Il \textbf{client} ordina tre computer. Ogni ordine si legge come una frase: «un PC con un Ryzen 7 e 32 GB, con una GPU
+dedicata, un SSD da 2000 GB e il sistema operativo».
+
+\begin{lstlisting}[style=java, name=Main.java]
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("--- Ordine 1: PC Gaming ---");
+        Computer gamingPC = new ComputerBuilder("AMD Ryzen 7", 32)
+            .withDedicatedGPU("AMD Radeon RX 7800")
+            .withSSD(2000)
+            .includeOS()
+            .build();
+        System.out.println(gamingPC);
+
+        System.out.println("\n--- Ordine 2: PC Ufficio Base ---");
+        Computer officePC = new ComputerBuilder("Intel Core i3", 8)
+            .withHDD(500)
+            .build();                       // nessuna GPU dedicata, niente OS
+        System.out.println(officePC);
+
+        System.out.println("\n--- Ordine 3: PC obsoleto ---");
+        Computer obsoletePC = new ComputerBuilder("Intel Core i3", 2)
+            .withHDD(250)
+            .build();
+        System.out.println(obsoletePC);
+    }
+}
+\end{lstlisting}
+
+\Needspace{26\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac *.java
+$ java Main
+--- Ordine 1: PC Gaming ---
+Configurazione Computer:
+  - CPU: AMD Ryzen 7
+  - RAM: 32GB
+  - GPU: AMD Radeon RX 7800
+  - Storage: 2000GB SSD
+  - OS Installato: true
+
+--- Ordine 2: PC Ufficio Base ---
+Configurazione Computer:
+  - CPU: Intel Core i3
+  - RAM: 8GB
+  - GPU: Integrata
+  - Storage: 500GB HDD
+  - OS Installato: false
+
+--- Ordine 3: PC obsoleto ---
+Exception in thread "main" java.lang.IllegalStateException: RAM insufficiente. Minimo richiesto: 4GB.
+        at ComputerBuilder.build(ComputerBuilder.java:43)
+        at Main.main(Main.java:20)
+\end{lstlisting}
+
+Il terzo PC \textbf{non viene costruito}: \code{build()} lancia l'eccezione alla riga 43 di \code{ComputerBuilder.java}, e
+il programma si ferma. La regola sui computer obsoleti non sta nella classe \code{Computer}, ma nel builder: il prodotto
+resta semplice, e la logica di costruzione e di validazione è tutta in un posto.
+
+\Needspace{30\baselineskip}
+\subsubsection*{Che cosa succede in memoria}
+
+\code{new ComputerBuilder(\ldots)} crea un oggetto nello heap. Ogni \code{with\ldots} lo modifica e ne restituisce il
+riferimento (\code{return this}): la chiamata successiva della catena lavora quindi \textbf{sullo stesso oggetto}.
+\code{build()} copia i valori in un oggetto \code{Computer} nuovo, ed è il suo riferimento che finisce in \code{gamingPC}.
+Del builder, a quel punto, non resta alcun riferimento: è irraggiungibile, e il garbage collector lo eliminerà. Il
+\code{Computer}, con i campi \code{final}, non si può più modificare.
+
+\begin{center}
+\begin{tikzpicture}
+  \memblocco{swblue}{f}{(0,0)}{2.2cm}{main}{gamingPC/{}}
+  \memrif{f-1}
+  \memblocco{swteal}{c}{(3.1,0)}{4.3cm}{Computer}{cpu/"AMD Ryzen 7", ramGB/32, gpu/"AMD Radeon RX 7800",
+    storageType/"SSD", storageCapacityGB/2000, hasOS/true}
+  \memblocco[dashed]{swgray}{b}{(3.1,-4.35)}{4.3cm}{ComputerBuilder}{cpu/"AMD Ryzen 7", ramGB/32,
+    gpu/"AMD Radeon RX 7800", storageType/"SSD", storageCapacityGB/2000, hasOS/true}
+  \draw[memfreccia] (f-1-p) -- ([yshift=4pt]c.west);
+  \draw[dep] (b.east) -- ++(0.45,0) |- node[stereo, pos=0.25, right]{build()} (c.east);
+  \node[memnota, anchor=north west] at (0,-1.4) {il builder non è più\\raggiungibile da nessuna\\variabile: verrà
+    eliminato};
+  \memzona[swblue]{(f)(f-fondo)}{Stack}
+  \memzona[swteal]{(c)(b-fondo)}{Heap}
+\end{tikzpicture}
+\end{center}
+
+\Needspace{20\baselineskip}
+\subsubsection*{Il Director: stessi passi, rappresentazioni diverse}
+
+L'esempio del computer non usa il Director. Per vederlo all'opera servono un builder \textbf{astratto}, cioè
+un'interfaccia con i passi di costruzione, e almeno due builder concreti. Il \code{Configuratore} (il Director) conosce le
+«ricette» delle configurazioni ma non sa che cosa verrà prodotto: la stessa ricetta dà una scheda tecnica con un builder, un
+preventivo con l'altro. Il metodo \code{getResult()} non sta nell'interfaccia, perché i due prodotti hanno tipi diversi
+(\code{String} e \code{double}): è proprio come nel diagramma generale, dove \code{getResult()} compare solo nel
+ConcreteBuilder.
+
+\begin{center}
+\begin{tikzpicture}
+  \umlclass[3.8cm]{ddir}{(-0.4,0)}{Configuratore}{}{+ pcGaming(b : BuilderPC)\\+ pcUfficio(b : BuilderPC)}
+  \umlclass[3.4cm]{dint}{(5.6,0)}{{\tiny\normalfont «interface»}\\BuilderPC}{}{+ cpu(modello, ramGB)\\+ gpu(modello)\\+ ssd(capacitaGB)}
+  \umlclass[3.4cm]{dsch}{(3.6,-2.9)}{SchedaTecnica}{- testo : StringBuilder}{+ getResult() : String}
+  \umlclass[3.0cm]{dpre}{(7.8,-2.9)}{Preventivo}{- totale : double}{+ getResult() : double}
+  \draw[dep] (ddir.east) -- node[stereo, above]{«use»} (dint.west);
+  \draw[realizza] (dsch.north) -- ++(0,0.45) -| ([xshift=-0.4cm]dint.south);
+  \draw[realizza] (dpre.north) -- ++(0,0.45) -| ([xshift=0.4cm]dint.south);
+\end{tikzpicture}
+\end{center}
+
+\Needspace{18\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=BuilderPC.java]
+// Builder astratto: solo i passi di costruzione
+public interface BuilderPC {
+    void cpu(String modello, int ramGB);
+    void gpu(String modello);
+    void ssd(int capacitaGB);
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Configuratore.java]
+// Director: conosce le ricette, non il prodotto
+public class Configuratore {
+    public void pcGaming(BuilderPC b) {
+        b.cpu("AMD Ryzen 7", 32);
+        b.gpu("AMD Radeon RX 7800");
+        b.ssd(2000);
+    }
+
+    public void pcUfficio(BuilderPC b) {
+        b.cpu("Intel Core i3", 8);
+        b.ssd(256);
+    }
+}
+\end{lstlisting}
+\end{minipage}
+
+\Needspace{22\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=SchedaTecnica.java]
+// Primo ConcreteBuilder: un testo
+public class SchedaTecnica implements BuilderPC {
+    private final StringBuilder testo =
+            new StringBuilder();
+
+    public void cpu(String modello, int ramGB) {
+        testo.append("CPU " + modello
+                + ", RAM " + ramGB + " GB\n");
+    }
+    public void gpu(String modello) {
+        testo.append("GPU " + modello + "\n");
+    }
+    public void ssd(int capacitaGB) {
+        testo.append("SSD " + capacitaGB + " GB\n");
+    }
+    public String getResult() {
+        return testo.toString();
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Preventivo.java]
+// Secondo ConcreteBuilder: un prezzo
+public class Preventivo implements BuilderPC {
+    private double totale = 0;
+
+    public void cpu(String modello, int ramGB) {
+        totale += 250 + 4 * ramGB;
+    }
+    public void gpu(String modello) {
+        totale += 550;
+    }
+    public void ssd(int capacitaGB) {
+        totale += 0.08 * capacitaGB;
+    }
+    public double getResult() {
+        return totale;
+    }
+}
+\end{lstlisting}
+\end{minipage}
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[t]{0.62\textwidth}
+\begin{lstlisting}[style=java, name=Negozio.java]
+public class Negozio {
+    public static void main(String[] args) {
+        Configuratore director = new Configuratore();
+
+        SchedaTecnica scheda = new SchedaTecnica();
+        director.pcGaming(scheda);         // stessa ricetta...
+        System.out.print(scheda.getResult());
+
+        Preventivo preventivo = new Preventivo();
+        director.pcGaming(preventivo);     // ...prodotto diverso
+        System.out.println("Prezzo: " + preventivo.getResult()
+                + " euro");
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.35\textwidth}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac *.java
+$ java Negozio
+CPU AMD Ryzen 7, RAM 32 GB
+GPU AMD Radeon RX 7800
+SSD 2000 GB
+Prezzo: 1088.0 euro
+\end{lstlisting}
+\end{minipage}
+
+\medskip
+I prezzi sono di fantasia: $250 + 4 \cdot 32 = 378$ per processore e RAM, 550 per la scheda video,
+$0{,}08 \cdot 2000 = 160$ per il disco, in tutto 1088 euro. Per aggiungere una nuova rappresentazione (un elenco dei pezzi
+da ordinare al magazzino, per esempio) basta un nuovo ConcreteBuilder: il Director non cambia.
+
+\Needspace{12\baselineskip}
+\subsubsection*{Il Builder nelle librerie di Java}
+
+Il pattern è molto usato nelle classi della libreria standard di Java:
+\begin{itemize}
+  \item \code{java.lang.StringBuilder} costruisce stringhe un pezzo alla volta (le \code{String} sono immutabili: senza un
+        builder ogni concatenazione creerebbe una stringa nuova);
+  \item \code{java.util.Locale.Builder} costruisce oggetti \code{Locale} complessi, definendo lingua, paese, sistema di
+        scrittura e varianti;
+  \item \code{java.time.format.DateTimeFormatterBuilder} costruisce formattatori di date e orari.
+\end{itemize}
+
+\Needspace{32\baselineskip}
+\begin{lstlisting}[style=java, name=BuilderDiLibreria.java]
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.util.Locale;
+
+public class BuilderDiLibreria {
+    public static void main(String[] args) {
+        StringBuilder sb = new StringBuilder("Design");
+        sb.append(' ').append("Patterns").append(", GoF ").append(1995);
+        System.out.println(sb.toString());
+
+        Locale locale = new Locale.Builder().setLanguage("it").setRegion("IT").build();
+        System.out.println(locale + " = " + locale.getDisplayName(locale));
+
+        DateTimeFormatter formato = new DateTimeFormatterBuilder()
+                .appendPattern("dd/MM/yyyy")
+                .appendLiteral(" alle ")
+                .appendPattern("HH:mm")
+                .toFormatter();
+        System.out.println(LocalDateTime.of(2026, 10, 25, 9, 30).format(formato));
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ java BuilderDiLibreria.java
+Design Patterns, GoF 1995
+it_IT = italiano (Italia)
+25/10/2026 alle 09:30
+\end{lstlisting}
+
+Un builder l'avevamo già usato nel Capitolo~14, senza chiamarlo per nome: \code{HttpRequest.newBuilder(\ldots)} seguito da
+\code{.header(\ldots)}, \code{.GET()} e infine \code{.build()}. E nel Capitolo~10 avevamo osservato che catene come
+\code{builder.append("a").append("b")} non violano la Legge di Demetra, perché ogni chiamata restituisce lo stesso oggetto.
+
+% ============================================================
+\section{Pattern strutturali}
+
+I pattern strutturali si occupano della \textbf{composizione} di classi e oggetti per creare strutture più grandi. Alcuni
+usano l'ereditarietà (una classe può ereditare le proprietà di più superclassi indipendenti: in Java, estendendo una classe
+e implementando delle interfacce), altri la composizione di oggetti. Permettono per esempio a librerie nate in modo
+indipendente di lavorare insieme. Ne vediamo tre: Adapter, Composite e Decorator.
+
+\subsection{Adapter}
+
+\dfn{Adapter (strutturale)}{
+  Il pattern \term{Adapter} (sinonimo: \textit{Wrapper}) converte l'interfaccia di una classe in un'altra interfaccia,
+  quella che il client si aspetta. Permette così di far cooperare classi che altrimenti avrebbero interfacce incompatibili.
+}
+
+\textbf{Motivazione}: si vuole usare una classe già esistente e collaudata, ma la sua interfaccia non corrisponde a quella
+che serve. È la situazione dell'adattatore da viaggio: la spina italiana funziona benissimo, ma la presa americana ha
+un'altra forma; non si cambia né la spina né la presa, si mette in mezzo un adattatore.
+
+\Needspace{8\baselineskip}
+I partecipanti sono quattro:
+\begin{itemize}
+  \item \textbf{Client}: la classe che vuole usare il servizio da adattare;
+  \item \textbf{Target}: l'interfaccia che vorremmo dal servizio;
+  \item \textbf{Adaptee}: la classe esistente che fornisce il servizio;
+  \item \textbf{Adapter}: la classe che adatta l'interfaccia fornita dall'Adaptee all'interfaccia Target.
+\end{itemize}
+
+L'adattamento si può realizzare in due modi: con l'\textbf{ereditarietà} (\textit{adapter di classe}: l'Adapter eredita
+sia da Target sia da Adaptee) oppure con la \textbf{composizione} (\textit{adapter di oggetto}: l'Adapter eredita da Target e
+contiene un riferimento a un Adaptee, a cui delega).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  % adapter di classe
+  \node[font=\scriptsize\bfseries] at (2.4,1.25) {Adapter di classe (ereditarietà)};
+  \node[classe1=1.3cm] (ac) at (0,0) {Client};
+  \umlclass[2.2cm]{at}{(2.4,0)}{\textit{Target}}{}{+ request()}
+  \umlclass[2.4cm]{aa}{(5.2,0)}{Adaptee}{}{+ specificRequest()}
+  \umlclass[2.2cm]{ad}{(2.4,-2.3)}{Adapter}{}{+ request()}
+  \draw[dep] (ac.east) -- (at.west);
+  \draw[gen] (ad.north) -- (at.south);
+  \draw[gen] (ad.east) -- ++(0.9,0) -| (aa.south);
+  \node[notauml, anchor=west] (an) at (4.1,-2.9) {\{ specificRequest(); \}};
+  \draw[dashed, line width=0.5pt, draw=black!70] ([yshift=-0.25cm]ad.east) -- (an.west);
+  % adapter di oggetto
+  \begin{scope}[xshift=8.9cm]
+    \node[font=\scriptsize\bfseries] at (2.4,1.25) {Adapter di oggetto (composizione)};
+    \node[classe1=1.3cm] (bc) at (0,0) {Client};
+    \umlclass[2.2cm]{bt}{(2.4,0)}{\textit{Target}}{}{+ request()}
+    \umlclass[2.4cm]{ba}{(5.6,0)}{Adaptee}{}{+ specificRequest()}
+    \umlclass[2.2cm]{bd}{(2.4,-2.3)}{Adapter}{}{+ request()}
+    \draw[dep] (bc.east) -- (bt.west);
+    \draw[gen] (bd.north) -- (bt.south);
+    \draw[navig] (bd.east) -- node[molt, above, sloped, pos=0.55]{adaptee} (ba.south);
+    \node[notauml, anchor=west] (bn) at (4.2,-2.95) {adaptee.specificRequest()};
+    \draw[dashed, line width=0.5pt, draw=black!70] ([yshift=-0.25cm]bd.east) -- (bn.west);
+  \end{scope}
+\end{tikzpicture}
+\caption{Le due forme dell'Adapter. In Java una classe estende una sola classe: l'adapter di classe si scrive
+\code{class Adapter extends Adaptee implements Target}.}
+\end{figure}
+
+\Needspace{10\baselineskip}
+L'Adapter si usa:
+\begin{enumerate}
+  \item se si vuole usare una classe esistente (l'Adaptee) la cui interfaccia è incompatibile con quella richiesta;
+  \item se si vuole creare una classe (riusabile) che dovrà collaborare con classi non prevedibili al momento della sua
+        creazione;
+  \item se si vuole riusare un insieme di sottoclassi esistenti, ma è scomodo adattarne l'interfaccia creando una
+        sottoclasse per ciascuna: meglio creare un adapter per la classe padre. Un adapter di oggetto può contenere
+        un'istanza di qualunque sottoclasse dell'Adaptee, e le adatta tutte in una volta.
+\end{enumerate}
+
+\Needspace{16\baselineskip}
+\subsubsection*{Un esempio: l'indice di massa corporea}
+
+\noindent\begin{minipage}[c]{0.66\textwidth}
+Stiamo realizzando un software a oggetti per il mercato statunitense, e serve una classe \code{Health} (il Client) che
+fornisca, fra le altre cose, l'\textbf{indice di massa corporea} (IMC) di una persona, con l'interfaccia qui a destra. Non
+conosciamo l'algoritmo per calcolare l'indice, e decidiamo di riusare la classe \code{IMC} di un software scritto per il
+mercato italiano. Negli Stati Uniti però il peso si misura in \textbf{libbre} e l'altezza in \textbf{pollici}: sappiamo che
+1 libbra vale 0,453 chilogrammi e 1 pollice 0,0254 metri. Vogliamo liberare chi programma \code{Health} dal dover conoscere
+l'interfaccia e l'implementazione della classe \code{IMC}.
+\end{minipage}\hfill
+\begin{minipage}[c]{0.31\textwidth}
+\centering
+\begin{tikzpicture}
+  \umlclass[4.2cm]{hh}{(0,0)}{Health}{+ IMC : double}{+ evaluateIMC(weight, height)}
+  \umlclass[4.2cm]{hi}{(0,-1.9)}{IMC}{}{+ calcolaIMC(pesoKg : double,\\\hspace*{1.2em}altezzaM : double) : double}
+  \node[font=\tiny\itshape, text=black!60, anchor=south] at (hh.north) {quello che serve (Client)};
+  \node[font=\tiny\itshape, text=black!60, anchor=south] at (hi.north) {quello che esiste};
+\end{tikzpicture}
+\end{minipage}
+
+\medskip
+L'indice è il peso in chilogrammi diviso per il quadrato dell'altezza in metri: $\mathrm{IMC} = \text{peso} /
+\text{altezza}^2$. Ecco la soluzione con un adapter di oggetto, nella stessa forma delle slide; \code{Adaptee} è la classe
+che avevamo già a disposizione, che a sua volta usa il calcolo originale della classe \code{IMC}.
+
+\Needspace{40\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Main.java]
+public class Main {
+    public static void main(String[] args) {
+        Health health = new Health();
+        // 165 libbre, 70 pollici
+        health.evaluateIMC(165, 70);
+        System.out.println(health.IMC);
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=Health.java]
+// Classe da realizzare (misure americane)
+public class Health {
+    public double IMC;
+
+    public double evaluateIMC(double weight,
+                              double height) {
+        Target adapter = new Adapter();
+        IMC = adapter.evaluate(weight, height);
+        return IMC;
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=Target.java]
+// Interfaccia che richiediamo
+public interface Target {
+    double evaluate(double weight, double height);
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Adapter.java]
+// Classe che adatta la soluzione esistente
+public class Adapter implements Target {
+    private Adaptee adaptee = new Adaptee();
+
+    @Override
+    public double evaluate(double weight,
+                           double height) {
+        // libbre -> kg, pollici -> metri
+        return adaptee.calcolaIMC(weight * 0.453,
+                                  height * 0.0254);
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=Adaptee.java]
+// Classe che avevamo gia' a disposizione
+public class Adaptee {
+    public double calcolaIMC(double pesoKg,
+                             double altezzaM) {
+        IMC imc = new IMC();
+        return imc.calcolaIMC(pesoKg, altezzaM);
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=IMC.java]
+// Calcolo originale (misure italiane)
+public class IMC {
+    public double calcolaIMC(double pesoKg,
+                             double altezzaM) {
+        return pesoKg / (altezzaM * altezzaM);
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac *.java
+$ java Main
+23.643873818359882
+\end{lstlisting}
+\end{minipage}
+
+\medskip
+\code{Health} conosce soltanto l'interfaccia \code{Target}: non sa che esistono \code{Adaptee} e \code{IMC}, né che il calcolo
+originale lavora in chilogrammi e metri. Tutta la conoscenza della «traduzione» è nell'\code{Adapter}, in una riga.
+
+\warning{{Nelle slide le conversioni sono al contrario}}{
+  Nella slide della soluzione l'adapter \textbf{divide}: \code{adaptee.calcolaIMC(weight/0.453, height/0.0254)}. Ma se
+  1 libbra vale 0,453 kg, per passare dalle libbre ai chilogrammi bisogna \textbf{moltiplicare}: 165 libbre sono
+  $165 \cdot 0{,}453 = 74{,}745$ kg, mentre $165 / 0{,}453 \simeq 364$ (sarebbero chili trasformati in libbre). Con le
+  divisioni il programma stampa \code{4.795756183268009E-5}, cioè 0,000048: un indice senza senso. Con le moltiplicazioni
+  stampa 23,64, il valore corretto per una persona di 75 kg alta 1,78 m. Qui il codice è corretto.
+}
+
+\Needspace{26\baselineskip}
+\subsubsection*{Che cosa succede in memoria}
+
+Il disegno fotografa lo stack nel momento più profondo, mentre la classe \code{IMC} esegue il calcolo. Ogni chiamata ha il suo
+frame, e si vede dove avviene l'adattamento: nel frame di \code{Adapter.evaluate} i valori sono ancora in libbre e pollici,
+in quello di \code{Adaptee.calcolaIMC} sono già in chilogrammi e metri. (Nei metodi d'istanza ogni frame contiene anche il
+riferimento \code{this}, che qui non disegniamo.)
+
+\begin{center}
+\begin{tikzpicture}
+  \memblocco{swblue}{s5}{(0,0)}{3.7cm}{IMC.calcolaIMC}{pesoKg/74.745, altezzaM/1.778}
+  \memblocco{swblue}{s4}{(0,-1.6)}{3.7cm}{Adaptee.calcolaIMC}{pesoKg/74.745, altezzaM/1.778, imc/{}}
+  \memrif{s4-3}
+  \memblocco{swblue}{s3}{(0,-3.66)}{3.7cm}{Adapter.evaluate}{weight/165.0, height/70.0}
+  \memblocco{swblue}{s2}{(0,-5.26)}{3.7cm}{Health.evaluateIMC}{weight/165.0, height/70.0, adapter/{}}
+  \memrif{s2-3}
+  \memblocco{swblue}{s1}{(0,-7.32)}{3.7cm}{main}{health/{}}
+  \memrif{s1-1}
+  % oggetti
+  \memblocco{swteal}{oi}{(5.4,-2.55)}{2.2cm}{IMC}{}
+  \memblocco{swteal}{oad}{(5.4,-6.15)}{2.4cm}{Adapter}{adaptee/{}}
+  \memrif{oad-1}
+  \memblocco{swteal}{oae}{(8.9,-6.4)}{2.2cm}{Adaptee}{}
+  \memblocco{swteal}{oh}{(5.4,-7.6)}{2.4cm}{Health}{IMC/0.0}
+  \draw[memfreccia] (s4-3-p) -- (oi.west);
+  \draw[memfreccia] (s2-3-p) -- (oad.west);
+  \draw[memfreccia] (oad-1-p) -- ([yshift=-2pt]oae.west);
+  \draw[memfreccia] (s1-1-p) -- (oh.west);
+  % la conversione
+  \draw[-{Stealth[length=2.2mm]}, line width=1pt, swred] ([xshift=-0.45cm]s3-sx) to[bend left=55]
+    node[left, font=\scriptsize, text=swred, align=right, xshift=-2pt]{libbre $\times\,0{,}453$\\pollici $\times\,0{,}0254$}
+    ([xshift=-0.45cm]s4-sx);
+  \memzona[swblue]{(s5)(s1-fondo)}{Stack (in cima la chiamata in corso)}
+  \memzona[swteal]{(oi)(oh-fondo)(oae-fondo)}{Heap}
+\end{tikzpicture}
+\end{center}
+
+\code{Health.IMC} vale ancora \code{0.0}: il valore verrà scritto solo quando le chiamate termineranno e i frame, uno dopo
+l'altro dall'alto, spariranno restituendo il risultato.
+
+\Needspace{14\baselineskip}
+\subsubsection*{L'adapter di classe}
+
+La stessa conversione si può scrivere con l'ereditarietà: l'adapter \textbf{è} un \code{Adaptee}, e chiama il metodo
+ereditato. Il risultato è lo stesso.
+
+\begin{lstlisting}[style=java, name=AdapterDiClasse.java]
+// Adapter di classe: eredita dall'Adaptee invece di contenerlo
+public class AdapterDiClasse extends Adaptee implements Target {
+    @Override
+    public double evaluate(double weight, double height) {
+        return calcolaIMC(weight * 0.453, height * 0.0254);   // metodo ereditato
+    }
+}
+\end{lstlisting}
+\noindent\begin{minipage}[t]{0.55\textwidth}
+\begin{lstlisting}[style=java, name=ProvaDiClasse.java]
+public class ProvaDiClasse {
+    public static void main(String[] args) {
+        Target t = new AdapterDiClasse();
+        System.out.println(t.evaluate(165, 70));
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.42\textwidth}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac *.java
+$ java ProvaDiClasse
+23.643873818359882
+\end{lstlisting}
+\end{minipage}
+
+\medskip
+L'adapter di classe è più compatto, ma è legato a \textbf{una} classe Adaptee e la espone tutta (chi ha un
+\code{AdapterDiClasse} può chiamarne anche \code{calcolaIMC} direttamente). L'adapter di oggetto può adattare anche le
+sottoclassi dell'Adaptee e nasconde completamente l'oggetto adattato: per questo, in Java, è la forma più comune.
+
+\Needspace{14\baselineskip}
+\subsubsection*{L'uso tipico: servizi e microservizi}
+
+L'Adapter interviene di continuo quando si lavora con servizi o microservizi:
+\begin{itemize}
+  \item il progetto del nostro software ci porta a definire un'\textbf{interfaccia} (il Target, che può essere proprio
+        un'interfaccia Java, perché chiede solo un servizio);
+  \item un microservizio esistente fornisce il servizio che ci serve, ma con la \textbf{sua} interfaccia;
+  \item scriviamo una classe Adapter che interagisce con la classe che fornisce il servizio (l'Adaptee), converte i
+        parametri da lui forniti in quelli che interessano a noi, eventualmente riorganizzandoli ed elaborandoli, e li
+        fornisce attraverso l'interfaccia Target.
+\end{itemize}
+Perché non modificare direttamente il servizio? Perché non l'abbiamo scritto noi e ne abbiamo solo l'interfaccia, oppure
+perché è già usato da altri, che si aspettano l'interfaccia di oggi.
+
+\begin{esempio}{Un convertitore di valuta sopra un servizio esterno}
+Il nostro progetto vuole convertire importi in euro con una sola chiamata; la libreria del servizio dei cambi, che non
+possiamo modificare, offre invece il tasso fra due valute qualsiasi. I tassi sono di esempio.
+
+\begin{lstlisting}[style=java, name=ConvertitoreValuta.java]
+// Target: l'interfaccia decisa dal nostro progetto
+public interface ConvertitoreValuta {
+    double inEuro(double importo, String valuta);
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=ExchangeRateClient.java]
+// Adaptee: il client di un servizio esterno, che non possiamo modificare
+public class ExchangeRateClient {
+    // quante unita' di "to" vale una unita' di "from"
+    public double getRate(String from, String to) {
+        // in realta' chiamerebbe il microservizio: GET /rates?from=USD&to=EUR
+        return switch (from + "->" + to) {
+            case "USD->EUR" -> 0.92;
+            case "GBP->EUR" -> 1.17;
+            default -> throw new IllegalArgumentException("Cambio non disponibile: " + from + "->" + to);
+        };
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=AdapterCambi.java]
+// Adapter: traduce la nostra domanda nella lingua del servizio
+public class AdapterCambi implements ConvertitoreValuta {
+    private final ExchangeRateClient client = new ExchangeRateClient();
+
+    @Override
+    public double inEuro(double importo, String valuta) {
+        return importo * client.getRate(valuta, "EUR");
+    }
+}
+\end{lstlisting}
+\noindent\begin{minipage}[t]{0.6\textwidth}
+\begin{lstlisting}[style=java, name=Cassa.java]
+public class Cassa {
+    public static void main(String[] args) {
+        // il codice conosce solo il Target
+        ConvertitoreValuta conv = new AdapterCambi();
+        System.out.println("100 USD = "
+                + conv.inEuro(100, "USD") + " EUR");
+        System.out.println("100 GBP = "
+                + conv.inEuro(100, "GBP") + " EUR");
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.37\textwidth}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac *.java
+$ java Cassa
+100 USD = 92.0 EUR
+100 GBP = 117.0 EUR
+\end{lstlisting}
+\end{minipage}
+
+\medskip
+Se domani il servizio dei cambi cambia (o lo sostituiamo con un altro), si riscrive solo \code{AdapterCambi}: il resto del
+programma continua a parlare con \code{ConvertitoreValuta}.
+\end{esempio}
+
+\subsection{Composite}
+
+\dfn{Composite (strutturale)}{
+  Il pattern \term{Composite} compone gli oggetti in \textbf{strutture ad albero} che rappresentano gerarchie
+  tutto-parte, e permette ai client di trattare \textbf{allo stesso modo} gli oggetti composti e gli oggetti singoli.
+}
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[c]{0.5\textwidth}
+I partecipanti sono:
+\begin{itemize}
+  \item \textbf{Component}: dichiara l'interfaccia degli oggetti della composizione e il loro comportamento di default;
+        dichiara anche un'interfaccia per accedere ai componenti figli e gestirli;
+  \item \textbf{Leaf} (foglia): implementa gli oggetti senza figli e il loro comportamento;
+  \item \textbf{Composite}: definisce il comportamento dei componenti con figli, memorizza i figli e implementa le
+        operazioni sui figli definite dall'interfaccia Component;
+  \item \textbf{Client}: usa gli oggetti della composizione attraverso l'interfaccia Component.
+\end{itemize}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.47\textwidth}
+\centering
+\begin{tikzpicture}
+  \node[classe1=1.3cm] (cc) at (-2.6,0.6) {Client};
+  \umlclass[3.6cm]{ccomp}{(0.9,0.6)}{{\tiny\normalfont «abstract»}\\Component}{}{+ operation()\\+ add(c : Component)\\+ remove(c : Component)\\+ getChild(i : int)}
+  \umlclass[1.9cm]{cleaf}{(-1.1,-2.5)}{Leaf}{}{+ operation()}
+  \umlclass[3.5cm]{ccmp}{(2.5,-2.5)}{Composite}{}{+ operation()\\+ add(c : Component)\\+ remove(c : Component)\\+ getChild(i : int)}
+  \draw[navig] (cc.east) -- (ccomp.west);
+  \draw[gen] (cleaf.north) -- ++(0,0.55) -| ([xshift=-0.5cm]ccomp.south);
+  \draw[gen] (ccmp.north) -- ++(0,0.35) -| ([xshift=0.5cm]ccomp.south);
+  \draw[aggr] (ccmp.east) -- ++(0.45,0) |- node[molt, pos=0.75, above]{figli 0..*} (ccomp.east);
+\end{tikzpicture}
+\end{minipage}
+
+\medskip
+La relazione decisiva è l'aggregazione da \code{Composite} a \code{Component}: un composto contiene dei \textbf{componenti}, e
+quindi può contenere sia foglie sia altri composti. È questo che rende la struttura ricorsiva, e permette alberi di
+qualunque profondità.
+
+\Needspace{14\baselineskip}
+\subsubsection*{Un esempio: il file system}
+
+Vogliamo realizzare un albero di directory e file, con una funzione \code{ls} che li elenca rispettando il
+\textbf{rientro}: ogni livello dell'albero si sposta un po' più a destra. Una \code{Directory} può contenere file e altre
+directory, eventualmente vuote; \code{AbstractFile} rappresenta tutto ciò che può stare in una directory. L'esempio è quello
+distribuito con il corso (\code{EsempioComposite}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \umlclass[4.1cm]{fe}{(0,0)}{EsempioComposite}{\underline{+ indentazione : StringBuffer}}{\underline{+ main(args : String[])}}
+  \umlclass[4.8cm]{fd}{(6.0,0)}{Directory}{- nome : String\\- listaFile : ArrayList<AbstractFile>}{+ add(obj : Object)\\+ ls()}
+  \umlclass[2.2cm]{ff}{(10.9,0)}{File}{- nome : String}{+ ls()}
+  \umlclass[2.2cm]{fa}{(8.4,-2.6)}{{\tiny\normalfont «interface»}\\AbstractFile}{}{+ ls()}
+  \draw[dep] (fe.east) -- node[stereo, above]{«create»} (fd.west);
+  \draw[dep] (fe.north) -- ++(0,0.5) -| node[stereo, above, pos=0.25]{«create»} (ff.north);
+  \draw[realizza] (fd.south) -- ++(0,-0.6) -| ([xshift=-0.4cm]fa.north);
+  \draw[realizza] (ff.south) -- ++(0,-0.6) -| ([xshift=0.4cm]fa.north);
+  \draw[compos] ([yshift=-0.35cm]fd.south west) |- node[molt, pos=0.75, below]{listaFile *} (fa.west);
+\end{tikzpicture}
+\caption{Il diagramma delle classi dell'esempio: \code{Directory} è il Composite, \code{File} la Leaf, \code{AbstractFile} il
+Component.}
+\end{figure}
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[t]{0.36\textwidth}
+\begin{lstlisting}[style=java, name=AbstractFile.java]
+interface AbstractFile {
+    public void ls();
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.61\textwidth}
+\begin{lstlisting}[style=java, name=File.java]
+class File implements AbstractFile {
+    private String nome;
+
+    public File(String n) {
+        nome = n;
+    }
+
+    public void ls() {
+        System.out.println(EsempioComposite.indentazione + nome);
+    }
+}
+\end{lstlisting}
+\end{minipage}
+
+\Needspace{30\baselineskip}
+La \code{Directory} tiene i figli in una lista di \code{AbstractFile}. Il suo \code{ls()} stampa il proprio nome, aggiunge tre
+spazi al rientro, chiama \code{ls()} su ogni figlio (senza sapere se è un file o una directory: è il
+\textbf{polimorfismo}), e alla fine toglie i tre spazi.
+
+\begin{lstlisting}[style=java, name=Directory.java]
+import java.util.ArrayList;
+
+class Directory implements AbstractFile {
+    private String nome;
+    private ArrayList<AbstractFile> listaFile = new ArrayList<AbstractFile>();
+
+    public Directory(String name) {
+        nome = name;
+    }
+
+    public void add(Object obj) {
+        listaFile.add((AbstractFile) obj);
+    }
+
+    public void ls() {
+        System.out.println(EsempioComposite.indentazione + nome);
+        EsempioComposite.indentazione.append("   ");
+        for (int i = 0; i < listaFile.size(); ++i) {
+            AbstractFile obj = listaFile.get(i);
+            obj.ls();                                  // polimorfismo
+        }
+        EsempioComposite.indentazione.setLength(EsempioComposite.indentazione.length() - 3);
+    }
+}
+\end{lstlisting}
+
+\Needspace{26\baselineskip}
+\noindent\begin{minipage}[t]{0.7\textwidth}
+\begin{lstlisting}[style=java, name=EsempioComposite.java]
+public class EsempioComposite {
+    public static StringBuffer indentazione = new StringBuffer();
+
+    public static void main(String[] args) {
+        Directory one = new Directory("dir111"),
+                  two = new Directory("dir222"),
+                  thr = new Directory("dir333");
+        File a = new File("a"), b = new File("b"), c = new File("c"),
+             d = new File("d"), e = new File("e");
+        one.add(a);
+        one.add(two);
+        one.add(b);
+        two.add(c);
+        two.add(d);
+        two.add(thr);
+        thr.add(e);
+        one.ls();
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.27\textwidth}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac *.java
+$ java EsempioComposite
+dir111
+   a
+   dir222
+      c
+      d
+      dir333
+         e
+   b
+\end{lstlisting}
+\end{minipage}
+
+\medskip
+Il \code{main} chiama \code{ls()} \textbf{una sola volta}, sulla radice: l'albero intero viene visitato dalla ricorsione.
+Rispetto alle slide, il codice del corso usa una lista generica (\code{ArrayList<AbstractFile>}), così che \code{get(i)}
+restituisce già un \code{AbstractFile} senza conversioni.
+
+\Needspace{30\baselineskip}
+\subsubsection*{Che cosa succede in memoria}
+
+A destra c'è l'albero degli oggetti costruito dalle \code{add}; a sinistra lo stack nel momento in cui viene stampata la riga
+di \code{e}, la più profonda. Per non affollare il disegno, nei frame il riferimento \code{this} è indicato con il nome
+dell'oggetto puntato, e le caselle della lista \code{listaFile} (che è un oggetto \code{ArrayList} a parte) sono disegnate
+dentro la directory.
+
+\begin{center}
+\begin{tikzpicture}
+  % lo stack: in cima la chiamata in corso
+  \memblocco{swblue}{k5}{(0,0)}{2.9cm}{File.ls()}{this/e}
+  \memblocco{swblue}{k4}{(0,-1.12)}{2.9cm}{Directory.ls()}{this/dir333, i/0}
+  \memblocco{swblue}{k3}{(0,-2.7)}{2.9cm}{Directory.ls()}{this/dir222, i/2}
+  \memblocco{swblue}{k2}{(0,-4.28)}{2.9cm}{Directory.ls()}{this/dir111, i/1}
+  \memblocco{swblue}{k1}{(0,-5.86)}{2.9cm}{main}{one/dir111}
+  % il campo statico
+  \memblocco{ph3}{kst}{(0,-7.95)}{4.6cm}{EsempioComposite}{indentazione/{"\textvisiblespace\textvisiblespace\textvisiblespace\textvisiblespace\textvisiblespace\textvisiblespace\textvisiblespace\textvisiblespace\textvisiblespace"}}
+  % l'albero nello heap
+  \memblocco{swteal}{t1}{(4.3,0)}{2.5cm}{Directory}{nome/"dir111", {[0]}/{}, {[1]}/{}, {[2]}/{}}
+  \memrif{t1-2}
+  \memrif{t1-3}
+  \memrif{t1-4}
+  \memblocco{swteal}{ta}{(8.0,0.2)}{2.1cm}{File}{nome/"a"}
+  \memblocco{swteal}{t2}{(8.0,-1.3)}{2.5cm}{Directory}{nome/"dir222", {[0]}/{}, {[1]}/{}, {[2]}/{}}
+  \memrif{t2-2}
+  \memrif{t2-3}
+  \memrif{t2-4}
+  \memblocco{swteal}{tb}{(8.0,-4.15)}{2.1cm}{File}{nome/"b"}
+  \memblocco{swteal}{tc}{(11.7,-0.3)}{2.1cm}{File}{nome/"c"}
+  \memblocco{swteal}{td}{(11.7,-1.65)}{2.1cm}{File}{nome/"d"}
+  \memblocco{swteal}{t3}{(11.7,-3.0)}{2.5cm}{Directory}{nome/"dir333", {[0]}/{}}
+  \memrif{t3-2}
+  \memblocco{swteal}{te}{(15.0,-3.0)}{2.1cm}{File}{nome/"e"}
+  \draw[memfreccia] (t1-2-p) -- ++(0.45,0) |- (ta.west);
+  \draw[memfreccia] (t1-3-p) -- ++(0.45,0) |- (t2.west);
+  \draw[memfreccia] (t1-4-p) -- ++(0.45,0) |- (tb.west);
+  \draw[memfreccia] (t2-2-p) -- ++(0.45,0) |- (tc.west);
+  \draw[memfreccia] (t2-3-p) -- ++(0.45,0) |- (td.west);
+  \draw[memfreccia] (t2-4-p) -- ++(0.45,0) |- (t3.west);
+  \draw[memfreccia] (t3-2-p) -- ++(0.45,0) |- (te.west);
+  \memzona[swblue]{(k5)(k1-fondo)}{Stack}
+  \memzona[ph3]{(kst)(kst-fondo)}{Campi statici}
+  \memzona[swteal]{(t1)(ta)(te-fondo)(tc)(tb-fondo)}{Heap}
+\end{tikzpicture}
+\end{center}
+
+Ogni chiamata di \code{ls()} su una directory ha il suo frame, con il \textbf{suo} indice \code{i}: \code{dir111} è fermo al
+figlio 1 (\code{dir222}), \code{dir222} al figlio 2 (\code{dir333}), \code{dir333} al figlio 0 (\code{e}). Il rientro, condiviso
+da tutti perché statico, in quel momento vale nove spazi: tre per ogni directory aperta. Quando \code{e.ls()} termina, il suo
+frame sparisce e riprende il ciclo di \code{dir333}, che toglie tre spazi e termina a sua volta; poi riprende \code{dir222},
+che ha finito i figli; infine \code{dir111} passa al figlio 2 e stampa \code{b} con tre spazi soltanto.
+
+\info{{Trasparenza o sicurezza?}}{
+  Nel diagramma generale le operazioni sui figli (\code{add}, \code{remove}, \code{getChild}) sono dichiarate nel
+  Component: il client può trattare foglie e composti nello stesso identico modo (\textbf{trasparenza}), ma può anche
+  chiedere a una foglia di aggiungere un figlio, cosa che non ha senso e va gestita, per esempio con un'eccezione.
+  Nell'esempio del file system \code{add} esiste solo in \code{Directory}: il compilatore impedisce di aggiungere un figlio
+  a un \code{File} (\textbf{sicurezza}), ma il client deve sapere quando ha in mano una directory. È un compromesso, e
+  nessuna delle due scelte è sbagliata. Con \code{add(AbstractFile f)} invece di \code{add(Object obj)}, infine, il
+  compilatore rifiuterebbe anche gli oggetti che non sono né file né directory, che oggi passano la compilazione e
+  falliscono solo a tempo di esecuzione, sulla conversione \code{(AbstractFile) obj}.
+}
+
+\begin{esempio}{Il rientro come parametro, invece che come variabile statica}
+La \code{StringBuffer} statica è uno \textbf{stato globale}: tutte le chiamate la modificano, e ogni \code{ls()} deve
+ricordarsi di rimettere le cose a posto alla fine. Si può fare a meno, passando il rientro come parametro: ogni chiamata
+riceve il rientro del suo livello, e non c'è nulla da ripristinare.
+
+\begin{lstlisting}[style=java, name=Directory.java]
+import java.util.ArrayList;
+import java.util.List;
+
+class Directory implements AbstractFile {
+    private final String nome;
+    private final List<AbstractFile> figli = new ArrayList<>();
+    public Directory(String nome) { this.nome = nome; }
+
+    public void add(AbstractFile f) {       // solo file e directory
+        figli.add(f);
+    }
+
+    public void ls(String rientro) {
+        System.out.println(rientro + nome);
+        for (AbstractFile f : figli) {
+            f.ls(rientro + "   ");          // tre spazi in piu'
+        }
+    }
+}
+\end{lstlisting}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=AbstractFile.java]
+interface AbstractFile {
+    void ls(String rientro);
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=File.java]
+class File implements AbstractFile {
+    private final String nome;
+    public File(String nome) {
+        this.nome = nome;
+    }
+
+    public void ls(String rientro) {
+        System.out.println(rientro + nome);
+    }
+}
+\end{lstlisting}
+\end{minipage}
+
+\medskip
+La radice si stampa con \code{one.ls("")}, e l'output è identico a quello di prima.
+\end{esempio}
+
+\Needspace{14\baselineskip}
+\subsubsection*{Le conseguenze}
+
+\begin{itemize}
+  \item Il Composite permette di definire gerarchie di classi fatte di oggetti \textbf{primitivi} e \textbf{composti}: gli
+        oggetti primitivi si compongono in oggetti più complessi, che a loro volta si compongono ricorsivamente. Ovunque il
+        client si aspetta un oggetto primitivo, si può usare indifferentemente un oggetto composto.
+  \item \textbf{Semplifica il client}: i client usano in modo uniforme le strutture composte e gli oggetti singoli, e di
+        solito non sanno (né dovrebbero preoccuparsi di sapere) se stanno lavorando con una foglia o con un composto.
+  \item È \textbf{flessibile}: rende facile aggiungere nuovi tipi di componenti; nuove sottoclassi Leaf o Composite
+        funzionano automaticamente con le strutture e con il codice dei client esistenti.
+  \item È spesso usato per la gerarchia dei \textbf{widget} di un'interfaccia grafica. In Java AWT e Swing, per esempio,
+        un \code{Container} (una finestra, un pannello) è a sua volta un \code{Component} e contiene altri
+        \code{Component}: pulsanti, etichette e altri pannelli.
+\end{itemize}
+
+\subsection{Decorator}
+
+Il pattern Decorator permette di creare oggetti complessi \textbf{aggiungendo funzionalità} a oggetti più semplici.
+\begin{itemize}
+  \item L'oggetto complesso \textbf{include} l'oggetto semplice e lo «decora», aggiungendo funzionalità: l'oggetto originale
+        viene passato come parametro al costruttore del decoratore, e si ottiene l'oggetto «decorato».
+  \item Più decoratori si possono anche \textbf{concatenare}, aggiungendo funzionalità un passo alla volta: l'oggetto
+        complesso è l'ultimo anello della catena.
+  \item La concatenazione può avvenire secondo una composizione \textbf{arbitraria}: il numero dei comportamenti possibili
+        cresce in modo combinatorio rispetto al numero dei decoratori disponibili.
+\end{itemize}
+È un'\textbf{alternativa all'ereditarietà}, singola o multipla. Con l'ereditarietà le funzionalità si aggiungono in modo
+\textbf{statico}, secondo la gerarchia delle classi scritta nel codice: non si può ottenere a tempo di esecuzione una
+combinazione arbitraria di funzionalità, né aggiungerne o toglierne.
+
+\dfn{Decorator (strutturale)}{
+  Il pattern \term{Decorator} aggiunge \textbf{dinamicamente} nuove responsabilità a un oggetto, avvolgendolo in un altro
+  oggetto che ha la stessa interfaccia: è un'alternativa flessibile alle sottoclassi per estenderne le funzionalità.
+}
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[c]{0.45\textwidth}
+\centering
+\begin{tikzpicture}
+  \umlclass[2.4cm]{dco}{(1.4,0)}{\textit{Component}}{}{+ operation()}
+  \umlclass[3.1cm]{dcc}{(-0.6,-2.3)}{ConcreteComponent}{}{+ operation()}
+  \umlclass[2.6cm]{dde}{(3.2,-2.3)}{\textit{Decorator}}{- component}{+ operation()}
+  \umlclass[3.1cm]{dcd}{(3.2,-4.8)}{ConcreteDecorator}{}{+ operation()}
+  \draw[gen] (dcc.north) -- ++(0,0.5) -| ([xshift=-0.4cm]dco.south);
+  \draw[gen] (dde.north) -- ++(0,0.5) -| ([xshift=0.4cm]dco.south);
+  \draw[aggr] (dde.east) -- ++(0.5,0) |- (dco.east);
+  \draw[gen] (dcd.north) -- (dde.south);
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.52\textwidth}
+\begin{itemize}
+  \item \textbf{Component} è una classe astratta o un'interfaccia.
+  \item \textbf{ConcreteComponent} è l'implementazione di base del Component.
+  \item \textbf{Decorator} è una classe astratta che \textbf{include} un Component (lo ha come attributo) e ne
+        \textbf{eredita} l'operazione: è un Component che contiene un Component.
+  \item \textbf{ConcreteDecorator} migliora il Component: può assumerne tutte le caratteristiche, perché ha un attributo
+        \code{component} a cui delegare, e può modificarne i metodi ridefinendoli (\textit{override}).
+\end{itemize}
+\end{minipage}
+
+\Needspace{12\baselineskip}
+\subsubsection*{Un esempio: la pizza}
+
+Una pizza base (olio e pomodoro) costa 3 euro; ogni ingrediente aggiunto la rende più ricca e più cara. Invece di scrivere
+una classe per ogni combinazione, scriviamo una classe per ogni \textbf{ingrediente}, che decora una pizza qualsiasi.
+L'esempio è quello distribuito con il corso (\code{EsempioDecorator}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \umlclass[3.7cm]{pz}{(0,0)}{{\tiny\normalfont «interface»}\\Pizza}{}{+ getDescription() : String\\+ getCost() : double}
+  \umlclass[3.7cm]{pzb}{(-4.6,-2.6)}{OlioEPomodoro}{}{+ getDescription() : String\\+ getCost() : double}
+  \umlclass[4.4cm]{pzd}{(3.2,-2.6)}{\textit{PizzaDecorator}}{\# pizza : Pizza}{+ PizzaDecorator(pizza : Pizza)\\+ getDescription() : String\\+ getCost() : double}
+  \umlclass[2.6cm]{pzm}{(-0.2,-5.7)}{Mozzarella}{}{+ getDescription()\\+ getCost()}
+  \umlclass[2.6cm]{pzp}{(3.2,-5.7)}{Prosciutto}{}{+ getDescription()\\+ getCost()}
+  \umlclass[2.6cm]{pzf}{(6.6,-5.7)}{Fungo}{}{+ getDescription()\\+ getCost()}
+  \node[classe1=1.4cm] (pzc) at (-4.6,0) {Main};
+  \draw[realizza] (pzb.north) -- ++(0,0.6) -| ([xshift=-0.5cm]pz.south);
+  \draw[realizza] (pzd.north) -- ++(0,0.6) -| ([xshift=0.5cm]pz.south);
+  \draw[aggr] (pzd.east) -- ++(0.6,0) |- node[molt, pos=0.75, above]{decora} (pz.east);
+  \foreach \x in {pzm, pzp, pzf}{ \draw[gen] (\x.north) -- ++(0,0.45) -| (pzd.south); }
+  \draw[dep] (pzc.east) -- node[stereo, above]{«use»} (pz.west);
+\end{tikzpicture}
+\caption{Il diagramma delle classi della pizza: \code{Pizza} è il Component, \code{OlioEPomodoro} il ConcreteComponent,
+\code{PizzaDecorator} il Decorator, gli ingredienti i ConcreteDecorator.}
+\end{figure}
+
+\Needspace{24\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Pizza.java]
+// Component: l'interfaccia comune
+public interface Pizza {
+    String getDescription();
+    double getCost();
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=OlioEPomodoro.java]
+// ConcreteComponent: la pizza base
+public class OlioEPomodoro implements Pizza {
+    @Override
+    public String getDescription() {
+        return "Pizza Olio e Pomodoro";
+    }
+
+    @Override
+    public double getCost() {
+        return 3.00;
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=PizzaDecorator.java]
+// Decorator: e' una Pizza e contiene una Pizza
+public abstract class PizzaDecorator
+        implements Pizza {
+    protected Pizza pizza;       // la pizza avvolta
+
+    public PizzaDecorator(Pizza pizza) {
+        this.pizza = pizza;
+    }
+
+    @Override
+    public String getDescription() {
+        return pizza.getDescription();   // delega
+    }
+
+    @Override
+    public double getCost() {
+        return pizza.getCost();          // delega
+    }
+}
+\end{lstlisting}
+\end{minipage}
+
+\Needspace{20\baselineskip}
+Ogni ingrediente è un decoratore concreto: aggiunge il proprio nome alla descrizione e il proprio prezzo al costo della pizza
+che avvolge. \code{Prosciutto} (1 euro) e \code{Fungo} (2 euro, descrizione «Funghi») sono identici a \code{Mozzarella},
+tranne che per il testo e il prezzo.
+
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Mozzarella.java]
+// ConcreteDecorator: aggiunge la mozzarella
+public class Mozzarella extends PizzaDecorator {
+    public Mozzarella(Pizza pizza) {
+        super(pizza);
+    }
+
+    @Override
+    public String getDescription() {
+        return pizza.getDescription()
+                + ", Mozzarella";
+    }
+
+    @Override
+    public double getCost() {
+        return pizza.getCost() + 1.50;
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Fungo.java]
+// ConcreteDecorator: aggiunge i funghi
+public class Fungo extends PizzaDecorator {
+    public Fungo(Pizza pizza) {
+        super(pizza);
+    }
+
+    @Override
+    public String getDescription() {
+        return pizza.getDescription()
+                + ", Funghi";
+    }
+
+    @Override
+    public double getCost() {
+        return pizza.getCost() + 2.00;
+    }
+}
+\end{lstlisting}
+\end{minipage}
+
+\Needspace{34\baselineskip}
+Il \code{main} ordina una pizza base, poi la stessa con la mozzarella, poi una pizza «personalizzata» con quattro ingredienti,
+fra cui la mozzarella due volte.
+
+\begin{lstlisting}[style=java, name=Main.java]
+public class Main {
+    public static void main(String[] args) {
+        // Ordiniamo una pizza base
+        Pizza myPizza = new OlioEPomodoro();
+        System.out.println("Pizza ordinata: " + myPizza.getDescription());
+        System.out.println("Costo: €" + myPizza.getCost());
+        System.out.println("--------------------");
+
+        // Aggiungiamo la mozzarella alla pizza
+        myPizza = new Mozzarella(myPizza);
+        System.out.println("Pizza ordinata: " + myPizza.getDescription());
+        System.out.println("Costo: €" + myPizza.getCost());
+        System.out.println("--------------------");
+
+        // Una pizza piu' ricca, con doppia mozzarella
+        Pizza customPizza = new OlioEPomodoro();
+        customPizza = new Prosciutto(customPizza);
+        customPizza = new Mozzarella(customPizza);
+        customPizza = new Fungo(customPizza);
+        customPizza = new Mozzarella(customPizza);
+        System.out.println("\n*** La tua pizza personalizzata ***");
+        System.out.println("Descrizione: " + customPizza.getDescription());
+        System.out.println("Costo totale: €" + customPizza.getCost());
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac *.java
+$ java Main
+Pizza ordinata: Pizza Olio e Pomodoro
+Costo: €3.0
+--------------------
+Pizza ordinata: Pizza Olio e Pomodoro, Mozzarella
+Costo: €4.5
+--------------------
+
+*** La tua pizza personalizzata ***
+Descrizione: Pizza Olio e Pomodoro, Prosciutto, Mozzarella, Funghi, Mozzarella
+Costo totale: €9.0
+\end{lstlisting}
+
+\Needspace{24\baselineskip}
+\subsubsection*{Che cosa succede in memoria}
+
+Ogni \code{new} aggiunge un anello alla catena: il nuovo decoratore riceve nel costruttore la pizza costruita fin lì e la
+conserva nel campo \code{pizza}; il riferimento al nuovo anello rimpiazza quello vecchio in \code{customPizza}. Alla fine
+\code{customPizza} punta all'anello più esterno, e da lì si arriva, di riferimento in riferimento, fino alla pizza base.
+
+\begin{center}
+\begin{tikzpicture}
+  \memblocco{swblue}{pm}{(0,0)}{2.5cm}{main}{customPizza/{}}
+  \memrif{pm-1}
+  \foreach \nome/\classe/\x in {p5/Mozzarella/3.4, p4/Fungo/6.4, p3/Mozzarella/9.4, p2/Prosciutto/12.4}{
+    \memblocco{swteal}{\nome}{(\x,0)}{2.4cm}{\classe}{pizza/{}}
+    \memrif{\nome-1}
+  }
+  \memblocco{swteal}{p1}{(15.4,0)}{2.6cm}{OlioEPomodoro}{}
+  \draw[memfreccia] (pm-1-p) -- (p5-sx);
+  \draw[memfreccia] (p5-1-p) -- (p4-sx);
+  \draw[memfreccia] (p4-1-p) -- (p3-sx);
+  \draw[memfreccia] (p3-1-p) -- (p2-sx);
+  \draw[memfreccia] (p2-1-p) -- ++(0.3,0) |- (p1.west);
+  % i risultati di getCost() che risalgono la catena
+  \foreach \nome/\testo in {p5/{$7{,}50 + 1{,}50 = 9{,}00$}, p4/{$5{,}50 + 2{,}00 = 7{,}50$},
+                            p3/{$4{,}00 + 1{,}50 = 5{,}50$}, p2/{$3{,}00 + 1{,}00 = 4{,}00$}, p1/{$3{,}00$}}{
+    \node[font=\scriptsize, anchor=north, inner sep=2pt] (r-\nome) at (\nome-giu |- 0,-1.35) {\testo};
+  }
+  \draw[-{Stealth[length=2mm]}, line width=0.8pt, swred, dashed] (r-p1.south |- 0,-1.95) --
+    node[below, font=\scriptsize, text=swred]{\texttt{getCost()}: i risultati risalgono la catena, dalla pizza base
+    all'anello più esterno} (r-p5.south |- 0,-1.95);
+  \memzona[swblue]{(pm)(pm-fondo)}{Stack}
+  \memzona[swteal]{(p5)(p1)(p2-fondo)(r-p5)(r-p1)}{Heap}
+\end{tikzpicture}
+\end{center}
+
+La chiamata \code{customPizza.getCost()} \textbf{scende} lungo la catena: ogni decoratore, prima di aggiungere il suo
+prezzo, chiede il costo alla pizza che contiene. Solo \code{OlioEPomodoro} risponde subito, con 3,00; poi i risultati
+\textbf{risalgono}, e ogni anello aggiunge il suo pezzo: 4,00, 5,50, 7,50, 9,00. La descrizione si costruisce allo stesso
+modo, ed è per questo che gli ingredienti compaiono nell'ordine in cui sono stati aggiunti.
+
+\info{{Quante classi servirebbero con l'ereditarietà?}}{
+  Con tre ingredienti, una sottoclasse per ogni combinazione richiederebbe $2^3 = 8$ classi (\textit{base},
+  \textit{Mozzarella}, \textit{Prosciutto}, \textit{Mozzarella e Prosciutto}, \ldots), e non permetterebbe comunque la
+  doppia mozzarella; con dieci ingredienti sarebbero $2^{10} = 1024$. Con i decoratori servono tre classi, una per
+  ingrediente, e le combinazioni, ripetizioni comprese, si scelgono a tempo di esecuzione.
+}
+
+\Needspace{24\baselineskip}
+\subsubsection*{Il Decorator nelle librerie di Java}
+
+Il pattern è usato spesso nelle librerie di Java, in particolare nell'input/output: \code{Reader}, \code{BufferedReader(Reader
+in)}, \code{InputStream}, \code{InputStreamReader(InputStream in)}, \code{BufferedInputStream(InputStream in)}. Ogni classe
+riceve nel costruttore un oggetto del suo stesso tipo (o del tipo da cui legge) e gli aggiunge una capacità:
+\begin{itemize}
+  \item \code{System.in} è un \code{InputStream}: legge \textbf{byte};
+  \item \code{InputStreamReader} lo avvolge e trasforma i byte in \textbf{caratteri}, secondo una codifica;
+  \item \code{BufferedReader} avvolge il lettore di caratteri e aggiunge un \textbf{buffer} e il metodo \code{readLine()}, che
+        legge una riga intera.
+\end{itemize}
+
+\Needspace{30\baselineskip}
+\begin{lstlisting}[style=java, name=LeggiRighe.java]
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+
+public class LeggiRighe {
+    public static void main(String[] args) throws IOException {
+        BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+        String riga;
+        while ((riga = in.readLine()) != null) {      // una riga intera alla volta
+            System.out.println("Hai scritto: " + riga);
+        }
+    }
+}
+\end{lstlisting}
+\noindent\begin{minipage}[c]{0.56\textwidth}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ printf 'ciao\nDesign Patterns\n' | java LeggiRighe.java
+Hai scritto: ciao
+Hai scritto: Design Patterns
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[c]{0.41\textwidth}
+\centering
+\begin{tikzpicture}
+  \memblocco{swteal}{r3}{(0,0)}{3.1cm}{BufferedReader}{in/{}}
+  \memrif{r3-1}
+  \memblocco{swteal}{r2}{(0,-1.35)}{3.1cm}{InputStreamReader}{in/{}}
+  \memrif{r2-1}
+  \memblocco{swteal}{r1}{(0,-2.7)}{3.1cm}{InputStream}{}
+  \draw[memfreccia] (r3-1-p) -- ++(0.45,0) |- (r2.east);
+  \draw[memfreccia] (r2-1-p) -- ++(0.45,0) |- (r1.east);
+  \node[font=\scriptsize, anchor=west] at ([xshift=0.7cm]r3.east) {righe};
+  \node[font=\scriptsize, anchor=west] at ([xshift=0.7cm]r2.east) {caratteri};
+  \node[font=\scriptsize, anchor=west] at ([xshift=0.7cm]r1.east) {byte (\texttt{System.in})};
+\end{tikzpicture}
+\end{minipage}
+
+\medskip
+Nel disegno la catena di oggetti creata dalla prima riga di \code{main}; i nomi dei campi interni delle classi della libreria
+sono semplificati.
+
+\Needspace{12\baselineskip}
+\subsubsection*{Vantaggi e svantaggi}
+
+\begin{itemize}
+  \item \textbf{Vantaggio}: combinando i decoratori si ottiene un numero illimitato di combinazioni di chiamate ai
+        costruttori. Non serve dichiarare le classi «prosciutto e funghi», «margherita», «margherita prosciutto e funghi»,
+        «margherita doppia mozzarella»\ldots
+  \item \textbf{Svantaggio}: costruire un oggetto richiede di istanziare più oggetti e di chiamare più costruttori, e ogni
+        chiamata di metodo attraversa tutta la catena. Il pattern è quindi poco efficiente dal punto di vista
+        computazionale (e, di conseguenza, anche da quello energetico).
+\end{itemize}
+
+% ============================================================
+\section{Pattern comportamentali}
+
+I pattern comportamentali riguardano gli \textbf{algoritmi} e l'\textbf{assegnazione delle responsabilità} fra gli oggetti:
+come gli oggetti interagiscono e si dividono il lavoro senza legarsi troppo strettamente a un algoritmo particolare. Ne
+vediamo tre: Observer e State, a cui le slide dedicano un esempio, e Strategy, che la tabella delle slide evidenzia.
+
+\subsection{Observer}
+
+\dfn{Observer (comportamentale)}{
+  Il pattern \term{Observer} definisce una dipendenza 1:N fra oggetti: quando un oggetto (il \textbf{soggetto}) cambia
+  stato, tutti gli oggetti che dipendono da lui (gli \textbf{osservatori}) vengono avvisati e aggiornati automaticamente.
+}
+
+\begin{itemize}
+  \item \textbf{Contesto}: uno o più oggetti sono interessati a osservare i cambiamenti di stato di un soggetto.
+  \item \textbf{Problema}: il soggetto può avere osservatori diversi, anche di tipi diversi, e deve essere possibile
+        aggiungere nuovi osservatori mentre l'applicazione è in esecuzione.
+  \item \textbf{Soluzione}: il soggetto offre delle operazioni con cui un osservatore dichiara il proprio interesse per i
+        cambiamenti di stato (\code{attach}) o lo ritira (\code{detach}). Quando lo stato cambia, il soggetto chiama
+        \code{notify}, che a sua volta chiama \code{update} su ogni osservatore registrato.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \umlclass[3.0cm]{oas}{(0,0)}{\textit{AbstractSubject}}{}{+ attach(o : Observer)\\+ detach(o : Observer)\\+ notify()}
+  \umlclass[2.4cm]{oob}{(6.4,0)}{\textit{Observer}}{}{+ update()}
+  \umlclass[3.0cm]{ocs}{(0,-3.0)}{ConcreteSubject}{- state}{+ getState()\\+ setState(s)}
+  \umlclass[2.6cm]{oco}{(6.4,-3.0)}{ConcreteObserver}{- observerState}{+ update()}
+  \draw[navig] (oas.east) -- node[molt, above]{observers} node[molt, below, pos=0.85]{0..*} (oob.west);
+  \draw[gen] (ocs.north) -- (oas.south);
+  \draw[gen] (oco.north) -- (oob.south);
+  \draw[navig] (oco.west) -- node[molt, above]{subject} node[molt, below, pos=0.85]{1} (ocs.east);
+  \node[notauml, anchor=east] (on1) at (-2.3,0.3) {for all o in observers\\\hspace*{1em}o.update()};
+  \draw[dashed, line width=0.5pt, draw=black!70] (on1.east) -- ([yshift=-0.25cm]oas.west);
+  \node[notauml, anchor=north] (on2) at (6.4,-4.25) {observerState = subject.getState()};
+  \draw[dashed, line width=0.5pt, draw=black!70] (on2.north) -- (oco.south);
+\end{tikzpicture}
+\caption{La struttura dell'Observer. Il soggetto conosce i suoi osservatori solo attraverso l'interfaccia \code{Observer}.}
+\end{figure}
+
+\Needspace{16\baselineskip}
+Il diagramma di sequenza mostra il comportamento: l'osservatore si registra; più tardi una sorgente esterna cambia lo stato
+del soggetto, che notifica tutti gli osservatori; ognuno, ricevuto l'\code{update()}, chiede al soggetto il nuovo stato.
+
+\begin{center}
+\begin{tikzpicture}
+  \foreach \n/\x/\t in {sq1/0/{\underline{:ConcreteObserver}}, sq2/4.4/{\underline{:ConcreteSubject}}, sq3/8.6/{External Source}}{
+    \node[partec, minimum width=2.6cm] (\n) at (\x,0) {\t};
+    \draw[vita] (\n.south) -- ++(0,-4.6);
+  }
+  \draw[sinc] (0.08,-0.9) -- node[msgl]{attach(this)} (4.32,-0.9);
+  \attiv{4.4}{-0.9}{-1.2}
+  \draw[sinc] (8.52,-1.7) -- node[msgl]{setState(s)} (4.48,-1.7);
+  \attiv{8.6}{-1.6}{-1.9}
+  \attiv{4.4}{-1.7}{-4.2}
+  \draw[sinc] (4.48,-2.2) -- (5.6,-2.2) -- (5.6,-2.5) -- (4.48,-2.5);
+  \node[font=\tiny, anchor=west] at (5.65,-2.35) {notify()};
+  \draw[sinc] (4.32,-2.9) -- node[msgl]{update()} (0.08,-2.9);
+  \attiv{0}{-2.9}{-4.0}
+  \draw[sinc] (0.08,-3.35) -- node[msgl]{getState()} (4.32,-3.35);
+  \draw[ritorno] (4.32,-3.8) -- node[msgl]{s} (0.08,-3.8);
+\end{tikzpicture}
+\end{center}
+
+\Needspace{12\baselineskip}
+\subsubsection*{L'esempio delle slide}
+
+L'osservatore è un'interfaccia e il soggetto una classe astratta: entrambi sono \textbf{invarianti}, cioè restano uguali
+in ogni applicazione, e potrebbero essere un'interfaccia e una classe di libreria. Cambiano solo le classi concrete. I
+nomi del codice corrispondono a quelli del diagramma così:
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Nel diagramma} & \textbf{Nel codice dell'esempio} \\
+\midrule
+\code{AbstractSubject}, \code{ConcreteSubject} & \code{Soggetto}, \code{SoggettoConcreto} \\
+\code{attach()}, \code{detach()} & \code{registraOsservatore()}, \code{rimuoviOsservatore()} \\
+\code{notify()} & \code{update()} di \code{Soggetto} (protetto) \\
+\code{Observer}, \code{ConcreteObserver} & \code{Osservatore}, \code{OsservatoreConcreto} \\
+\code{update()} dell'osservatore & \code{aggiorna()} \\
+\code{observerState} & il campo \code{stato} dell'osservatore \\
+\bottomrule
+\end{tabular}
+\caption{Corrispondenza fra il diagramma e il codice. Il metodo \code{rimuoviOsservatore()} non è nelle slide: l'abbiamo
+aggiunto per completare l'interfaccia del soggetto.}
+\end{table}
+
+\Needspace{38\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Osservatore.java]
+// osservatore (interfaccia): invariante,
+// potrebbe essere un'interfaccia di libreria
+public interface Osservatore {
+    public void aggiorna();
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=OsservatoreConcreto.java]
+// osservatore (concreto): e' legato al soggetto
+// di cui vuole conoscere le modifiche
+public class OsservatoreConcreto
+        implements Osservatore {
+    private int stato;           // copia dello stato
+    private Soggetto osservato;  // il soggetto
+
+    public OsservatoreConcreto(Soggetto soggetto) {
+        this.osservato = soggetto;
+    }
+
+    @Override
+    public void aggiorna() {
+        stato = osservato.getStato();
+        System.out.println(
+                "Notificato; Nuovo Stato:");
+        System.out.println(stato);
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Soggetto.java]
+import java.util.ArrayList;
+
+// soggetto (astratto): invariante,
+// potrebbe essere una classe di libreria
+public abstract class Soggetto {
+    protected int stato;  // stato del soggetto
+    protected ArrayList<Osservatore> osservatori;
+
+    public Soggetto() {
+        osservatori = new ArrayList<Osservatore>();
+        stato = 0;
+    }
+
+    // attach
+    public void registraOsservatore(Osservatore o) {
+        osservatori.add(o);
+    }
+
+    // detach
+    public void rimuoviOsservatore(Osservatore o) {
+        osservatori.remove(o);
+    }
+
+    // notify: avvisa tutti gli osservatori
+    protected void update() {
+        for (int i = 0; i < osservatori.size(); i++) {
+            Osservatore o = osservatori.get(i);
+            o.aggiorna();
+        }
+    }
+
+    public abstract void setStato(int s);
+    public abstract int getStato();
+}
+\end{lstlisting}
+\end{minipage}
+
+\Needspace{24\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Main.java]
+public class Main {
+    public static void main(String[] args) {
+        Soggetto soggetto = new SoggettoConcreto();
+        Osservatore o1 =
+                new OsservatoreConcreto(soggetto);
+        soggetto.registraOsservatore(o1);
+
+        Osservatore o2 =
+                new OsservatoreConcreto(soggetto);
+        soggetto.registraOsservatore(o2);
+
+        soggetto.setStato(20);
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac *.java
+$ java Main
+Notificato; Nuovo Stato:
+20
+Notificato; Nuovo Stato:
+20
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=SoggettoConcreto.java]
+// soggetto (concreto)
+public class SoggettoConcreto extends Soggetto {
+    public SoggettoConcreto() {
+        super();
+    }
+
+    @Override
+    public void setStato(int s) {
+        stato = s;
+        update();    // la chiamata in piu' rispetto
+                     // a una classe normale
+    }
+
+    @Override
+    public int getStato() {
+        return stato;
+    }
+}
+\end{lstlisting}
+\end{minipage}
+
+\medskip
+Rispetto a una classe qualsiasi, \code{SoggettoConcreto} ha una sola chiamata in più, \code{update()} dentro
+\code{setStato}: è quella che fa partire le notifiche. Una sola chiamata a \code{setStato(20)} produce due stampe, una per
+osservatore. (Nella slide il testo stampato inizia con una virgoletta «, che in Java non chiude la stringa: qui è
+corretta.)
+
+\Needspace{24\baselineskip}
+\subsubsection*{Che cosa succede in memoria}
+
+Dopo \code{setStato(20)} la memoria è questa. I riferimenti vanno \textbf{nei due sensi}: il soggetto conosce i suoi
+osservatori attraverso la lista (disegnata, come nel Composite, dentro l'oggetto), e ogni osservatore conosce il soggetto
+attraverso il campo \code{osservato}, da cui legge il nuovo stato. Ogni osservatore ne tiene una \textbf{copia} nel proprio
+campo \code{stato}. Le variabili \code{o1} e \code{o2} di \code{main}, che puntano agli stessi due osservatori, non sono
+disegnate.
+
+\begin{center}
+\begin{tikzpicture}
+  \memblocco{swblue}{om}{(0,0)}{2.6cm}{main}{soggetto/{}}
+  \memrif{om-1}
+  \memblocco{swteal}{os}{(3.8,0)}{3.6cm}{SoggettoConcreto}{stato/20, {osservatori[0]}/{}, {osservatori[1]}/{}}
+  \memrif{os-2}
+  \memrif{os-3}
+  \memblocco{swteal}{oo1}{(9.2,0.4)}{3.2cm}{OsservatoreConcreto}{stato/20, osservato/{}}
+  \memrif{oo1-2}
+  \memblocco{swteal}{oo2}{(9.2,-1.95)}{3.2cm}{OsservatoreConcreto}{stato/20, osservato/{}}
+  \memrif{oo2-2}
+  \draw[memfreccia] (om-1-p) -- ([yshift=-3pt]os.west);
+  \draw[memfreccia] (os-2-p) -- ++(0.55,0) |- (oo1.west);
+  \draw[memfreccia] (os-3-p) -- ++(0.75,0) |- (oo2.west);
+  \coordinate (osopra) at ($(os.north)+(0,0.55)$);
+  \coordinate (osotto) at ($(os-giu)+(0,-1.75)$);
+  \draw[memfreccia] (oo1-2-p) -- ++(0.55,0) |- (osopra) -- (os.north);
+  \draw[memfreccia] (oo2-2-p) -- ++(0.55,0) |- (osotto) -- (os-giu);
+  \memzona[swblue]{(om)(om-fondo)}{Stack}
+  \memzona[swteal]{(os)(oo1)(oo2-fondo)(osopra)(osotto)}{Heap}
+\end{tikzpicture}
+\end{center}
+
+\Needspace{14\baselineskip}
+\subsubsection*{Un problema: il valore delle azioni}
+
+\noindent\begin{minipage}[c]{0.62\textwidth}
+Si vuole gestire un attributo \code{valore} nella classe \code{AzioniAcquistate}, che misuri il valore istantaneo di un
+insieme di azioni acquistate di una società. È calcolato come
+\[ \text{AzioniAcquistate.valore} = \text{Società.quotazione} \times \text{AzioniAcquistate.quantità}. \]
+Quando il sistema aggiorna la quotazione delle azioni di una società, si vuole che gli attributi \code{valore} di tutte le
+istanze di \code{AzioniAcquistate} di quella società siano aggiornati \textbf{automaticamente}.
+\end{minipage}\hfill
+\begin{minipage}[c]{0.35\textwidth}
+\centering
+\begin{tikzpicture}
+  \umlclass[2.4cm]{paz}{(0,0)}{AzioniAcquistate}{+ quantità\\+ valore}{}
+  \umlclass[2.0cm]{pso}{(3.6,0)}{Società}{+ quotazione}{}
+  \draw[assoc] (paz.east) -- node[molt, above, pos=0.15]{0..*} node[molt, above, pos=0.88]{1} (pso.west);
+\end{tikzpicture}
+\end{minipage}
+
+\medskip
+La soluzione delle slide applica l'Observer: la società è il soggetto, le azioni acquistate sono gli osservatori. Ogni
+azione, appena creata, si registra presso la sua società (\code{attach}); \code{setQuotazione} cambia la quotazione e chiama
+\code{notify}; l'\code{update} di ogni azione ricalcola \code{valore = societa.getQuotazione() * quantita}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \umlclass[3.0cm]{aas}{(0,0)}{\textit{AbstractSocieta}}{}{+ attach(o)\\+ detach(o)\\\# notifica()}
+  \umlclass[3.4cm]{aoq}{(6.6,0)}{{\tiny\normalfont «interface»}\\OsservatoreQuotazione}{}{+ update()}
+  \umlclass[3.0cm]{aso}{(0,-3.1)}{Societa}{- nome : String\\- quotazione : double}{+ getQuotazione()\\+ setQuotazione(q)}
+  \umlclass[3.4cm]{aaz}{(6.6,-3.1)}{AzioneAcquistata}{- quantita : int\\- valore : double}{+ AzioneAcquistata(s, q)\\+ update()}
+  \draw[navig] (aas.east) -- node[molt, above]{observers} node[molt, below, pos=0.85]{0..*} (aoq.west);
+  \draw[gen] (aso.north) -- (aas.south);
+  \draw[realizza] (aaz.north) -- (aoq.south);
+  \draw[navig] (aaz.west) -- node[molt, above]{societa} node[molt, below, pos=0.85]{1} (aso.east);
+  \node[notauml, anchor=north] (an1) at (0,-4.65) {\{ \ldots\ notifica(); \}};
+  \draw[dashed, line width=0.5pt, draw=black!70] (an1.north) -- (aso.south);
+  \node[notauml, anchor=north] (an2) at (6.6,-4.65) {\{ valore = societa.getQuotazione() * quantita; \}};
+  \draw[dashed, line width=0.5pt, draw=black!70] (an2.north) -- (aaz.south);
+  \node[notauml, anchor=west] (an3) at (9.0,-2.3) {\{ societa.attach(this); \}};
+  \draw[dashed, line width=0.5pt, draw=black!70] (an3.south west) -- (aaz.north east);
+\end{tikzpicture}
+\caption{La soluzione con l'Observer. Nelle slide la società concreta si chiama \code{ConcreteSocieta}; qui \code{Societa}.}
+\end{figure}
+
+\Needspace{30\baselineskip}
+Le slide si fermano al diagramma; ecco il codice.
+
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=OsservatoreQuotazione.java]
+public interface OsservatoreQuotazione {
+    void update();
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=AbstractSocieta.java]
+import java.util.ArrayList;
+import java.util.List;
+
+public abstract class AbstractSocieta {
+    private final List<OsservatoreQuotazione>
+            observers = new ArrayList<>();
+
+    public void attach(OsservatoreQuotazione o) {
+        observers.add(o);
+    }
+    public void detach(OsservatoreQuotazione o) {
+        observers.remove(o);
+    }
+
+    protected void notifica() {  // il notify()
+        for (OsservatoreQuotazione o : observers) {
+            o.update();
+        }
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Societa.java]
+public class Societa extends AbstractSocieta {
+    private final String nome;
+    private double quotazione;
+
+    public Societa(String nome, double quotazione) {
+        this.nome = nome;
+        this.quotazione = quotazione;
+    }
+
+    public String getNome() { return nome; }
+    public double getQuotazione() {
+        return quotazione;
+    }
+
+    public void setQuotazione(double quotazione) {
+        this.quotazione = quotazione;
+        notifica();    // le azioni si ricalcolano
+    }
+}
+\end{lstlisting}
+\end{minipage}
+
+\Needspace{30\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=AzioneAcquistata.java]
+public class AzioneAcquistata
+        implements OsservatoreQuotazione {
+    private final Societa societa;
+    private final int quantita;
+    private double valore;
+
+    public AzioneAcquistata(Societa societa,
+                            int quantita) {
+        this.societa = societa;
+        this.quantita = quantita;
+        societa.attach(this);  // si iscrive
+        update();              // valore iniziale
+    }
+
+    @Override
+    public void update() {
+        valore = societa.getQuotazione() * quantita;
+    }
+
+    @Override
+    public String toString() {
+        return quantita + " azioni "
+                + societa.getNome() + " = "
+                + valore + " euro";
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Portafoglio.java]
+public class Portafoglio {
+    public static void main(String[] args) {
+        Societa acme = new Societa("ACME", 10.0);
+        AzioneAcquistata mie =
+                new AzioneAcquistata(acme, 100);
+        AzioneAcquistata tue =
+                new AzioneAcquistata(acme, 40);
+        System.out.println(mie);
+        System.out.println(tue);
+
+        // la borsa aggiorna la quotazione...
+        acme.setQuotazione(12.5);
+        // ...e i valori sono gia' aggiornati
+        System.out.println(mie);
+        System.out.println(tue);
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac *.java
+$ java Portafoglio
+100 azioni ACME = 1000.0 euro
+40 azioni ACME = 400.0 euro
+100 azioni ACME = 1250.0 euro
+40 azioni ACME = 500.0 euro
+\end{lstlisting}
+\end{minipage}
+
+\medskip
+Il \code{main} non chiede mai alle azioni di ricalcolarsi: basta cambiare la quotazione, e le due azioni lo vengono a
+sapere da sole.
+
+\Needspace{18\baselineskip}
+\begin{warningbox}{{Perché notifica() e non notify()}}
+  Il diagramma GoF chiama \code{notify()} il metodo che avvisa gli osservatori, ma in Java non si può: \code{notify()}
+  esiste già in \code{java.lang.Object}, la superclasse di tutte le classi, serve alla sincronizzazione fra thread ed è
+  \code{final}, quindi non si può ridefinire. Con un metodo \code{public void notify() \{ \}} in \code{AbstractSocieta} il
+  compilatore rifiuta la classe:
+  \begin{lstlisting}[style=shell, name=Terminale]
+$ javac AbstractSocieta.java
+AbstractSocieta.java:2: error: notify() in AbstractSocieta cannot override notify() in Object
+    public void notify() { }
+                ^
+  overridden method is final
+1 error
+\end{lstlisting}
+  Per questo il codice delle slide usa nomi diversi (\code{update()} nel soggetto, \code{aggiorna()} nell'osservatore), e
+  qui usiamo \code{notifica()}.
+\end{warningbox}
+
+\Needspace{14\baselineskip}
+\subsubsection*{Quando usarlo}
+
+\begin{itemize}
+  \item Quando i cambiamenti di un soggetto devono essere «trasmessi» (\textit{broadcast}) a molti oggetti.
+  \item Quando oggetti indipendenti dall'applicazione (i soggetti) devono invocare oggetti specifici dell'applicazione per
+        notificare un cambiamento del proprio stato interno. Il soggetto non ha bisogno di sapere nulla dei suoi osservatori
+        né di come funzionano: per esempio quando un sensore o un servizio fornisce un dato aggiornato e l'interfaccia
+        utente deve essere avvisata.
+  \item L'Observer è il cuore del pattern \textbf{MVC} (Model-View-Controller), in cui gli oggetti dell'interfaccia utente
+        (\textit{View}) possono essere osservatori diretti degli oggetti del modello (\textit{Model}): gli oggetti del
+        Model hanno le funzioni di notifica, gli oggetti della GUI le funzioni di aggiornamento.
+\end{itemize}
+
+\begin{esempio}{L'Observer nelle interfacce grafiche di Java}
+Nelle librerie grafiche di Java (AWT e Swing) ogni pulsante è un soggetto: gli osservatori si chiamano \textit{listener} e
+si registrano con i metodi \code{add\ldots Listener}. Quando l'utente fa clic, il pulsante notifica tutti i listener
+registrati.
+\begin{lstlisting}[style=java, name=Finestra.java]
+import javax.swing.JButton;
+import javax.swing.JFrame;
+
+public class Finestra {
+    public static void main(String[] args) {
+        JFrame finestra = new JFrame("Editor");
+        JButton salva = new JButton("Salva");
+        // attach: il pulsante (soggetto) registra un osservatore
+        salva.addActionListener(evento -> System.out.println("Salvataggio..."));
+        finestra.add(salva);
+        finestra.pack();
+        finestra.setVisible(true);
+    }
+}
+\end{lstlisting}
+La libreria standard aveva anche una coppia \code{java.util.Observable} / \code{java.util.Observer} pronta all'uso, ma è
+deprecata da Java 9: oggi si scrivono interfacce proprie, come negli esempi di questo capitolo, o si usano i
+\textit{listener}.
+\end{esempio}
+
+\subsection{State}
+
+\dfn{State (comportamentale)}{
+  Il pattern \term{State} permette a un oggetto di \textbf{cambiare comportamento a seconda del suo stato interno}. È una
+  soluzione generale e flessibile per realizzare le macchine a stati.
+}
+
+\noindent\begin{minipage}[c]{0.55\textwidth}
+La classe \code{State} contiene implementazioni \textbf{vuote} di tutti i metodi che corrispondono alle transizioni (i
+\textit{trigger}, o \textit{handler}). Il polimorfismo permette al \code{Context} di avere un attributo di tipo
+\code{State} e di interagire con qualunque stato possibile: \code{request()} esegue \code{state.handle()}, e a seconda
+dell'oggetto che c'è in \code{state} viene eseguito il codice di uno stato o dell'altro.
+\end{minipage}\hfill
+\begin{minipage}[c]{0.42\textwidth}
+\centering
+\begin{tikzpicture}
+  \umlclass[1.9cm]{sct}{(0,0)}{Context}{}{+ request()}
+  \umlclass[1.9cm]{sst}{(3.6,0)}{\textit{State}}{}{+ handle()}
+  \umlclass[2.4cm]{ssa}{(2.1,-2.2)}{ConcreteStateA}{}{+ handle()}
+  \umlclass[2.4cm]{ssb}{(5.1,-2.2)}{ConcreteStateB}{}{+ handle()}
+  \draw[aggr] (sct.east) -- node[molt, above]{state} (sst.west);
+  \draw[gen] (ssa.north) -- ++(0,0.45) -| (sst.south);
+  \draw[gen] (ssb.north) -- ++(0,0.45) -| (sst.south);
+  \node[notauml, anchor=north] (scn) at (-0.3,-1.4) {state.handle()};
+  \draw[dashed, line width=0.5pt, draw=black!70] (scn.north) -- (sct.south);
+\end{tikzpicture}
+\end{minipage}
+
+\medskip
+Il pattern l'abbiamo già incontrato nel Capitolo~9, dove traduceva in codice il diagramma di stato del
+\textbf{distributore automatico}: là si trovano il diagramma di stato, la classe contenitore \code{Distributore}, la classe
+generale \code{State} e lo stato \code{Attesa}. Il diagramma di stato si traduce così:
+\begin{itemize}
+  \item una \textbf{classe generale} che dichiara i metodi corrispondenti a tutte le azioni, ma li implementa senza fare
+        nulla;
+  \item una serie di \textbf{classi derivate}, una per ogni stato del diagramma, che implementano (con un
+        \textit{override}) solo i metodi corrispondenti agli eventi che possono scattare in quello stato.
+\end{itemize}
+Qui completiamo l'esempio. Il diagramma delle classi delle slide mostra quali eventi gestisce ciascuno stato.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \node[classe1=1.6cm] (zcl) at (0,3.9) {Cliente};
+  \umlclass[5.0cm]{zdi}{(0,0)}{Distributore}
+    {- stato : State\\- credito : int\\\underline{\textasciitilde\ attesa : State}\\\underline{\textasciitilde\ attesaSceltaProdotto : State}\\\underline{\textasciitilde\ erogazioneProdotto : State}}
+    {+ inserisciMoneta()\\+ selezionaProdotto()\\+ richiestaRestituzioneCredito()\\+ prelevaProdotto()\\+ timeoutErogazione()\\+ spegniDistributore()\\\textasciitilde\ setState(s : State)\\\textasciitilde\ getCredito() : int\\\textasciitilde\ setCredito(c : int)}
+  \umlclass[4.2cm]{zst}{(7.6,0)}{State}{}{+ inserisciMoneta(d)\\+ sceltaProdotto(d)\\+ richiestaRestituzione(d)\\+ prelevaProdotto(d)\\+ timeOutErogazione(d)\\+ spegniDistributore(d)}
+  \draw[dep] (zcl.south) -- node[stereo, right]{«create»} (zdi.north);
+  \draw[compos] (zdi.east) -- node[molt, above]{stato} node[molt, below, pos=0.88]{1} (zst.west);
+  \umlclass[4.0cm]{zs1}{(0.4,-5.4)}{Attesa}{}{+ inserisciMoneta(d)\\+ sceltaProdotto(d)\\+ richiestaRestituzione(d)\\+ prelevaProdotto(d)\\+ spegniDistributore(d)}
+  \umlclass[4.0cm]{zs2}{(5.0,-5.4)}{AttesaSceltaProdotto}{}{+ inserisciMoneta(d)\\+ sceltaProdotto(d)\\+ richiestaRestituzione(d)\\+ prelevaProdotto(d)\\+ spegniDistributore(d)}
+  \umlclass[4.0cm]{zs3}{(9.6,-5.4)}{ErogazioneProdotto}{}{+ inserisciMoneta(d)\\+ sceltaProdotto(d)\\+ richiestaRestituzione(d)\\+ prelevaProdotto(d)\\+ timeOutErogazione(d)\\+ spegniDistributore(d)}
+  \foreach \s in {zs1, zs2, zs3}{ \draw[gen] (\s.north) |- (7.6,-3.0) -- (zst.south); }
+\end{tikzpicture}
+\caption{Il distributore con il pattern State, dalle slide (\code{d} è il \code{Distributore} passato a ogni metodo). Il
+simbolo \textasciitilde\ indica la visibilità di package; i tre stati sono attributi statici, quindi sottolineati.}
+\end{figure}
+
+\Needspace{30\baselineskip}
+Le slide mostrano il codice di \code{Distributore}, di \code{State} e di \code{Attesa} (quello del Capitolo~9) e dicono che
+la soluzione completa è su Teams. Qui ricostruiamo gli altri due stati dal diagramma di stato del Capitolo~9: una moneta in
+più in \textbf{Attesa scelta prodotto} incrementa il credito; la scelta del prodotto avvia l'\textbf{erogazione};
+l'erogazione avvenuta (il prelievo) scala 2 euro e porta in Attesa scelta prodotto se prima il credito era di almeno 4 euro,
+altrimenti in Attesa; il \textit{time out} torna alla scelta senza scalare nulla. I messaggi stampati sono nostri.
+
+\begin{lstlisting}[style=java, name=AttesaSceltaProdotto.java]
+public class AttesaSceltaProdotto extends State {
+    @Override
+    public void inserisciMoneta(Distributore distributore) {      // autotransizione
+        distributore.setCredito(distributore.getCredito() + 1);
+        System.out.println("Credito attuale: " + distributore.getCredito());
+    }
+    @Override
+    public void richiestaRestituzione(Distributore distributore) {
+        System.out.println("Ritira il tuo credito: " + distributore.getCredito());
+        distributore.setCredito(0);
+        distributore.setState(Distributore.attesa);
+    }
+    @Override
+    public void sceltaProdotto(Distributore distributore) {
+        System.out.println("Erogazione in corso...");
+        distributore.setState(Distributore.erogazioneProdotto);
+    }
+    @Override
+    public void spegniDistributore(Distributore distributore) {
+        System.out.println("Ritira il tuo credito: " + distributore.getCredito());
+        distributore.setCredito(0);
+        System.out.println("Spengo il distributore");
+        System.exit(0);
+    }
+    @Override
+    public void prelevaProdotto(Distributore distributore) {
+        System.out.println("Il prodotto non e' pronto");
+    }
+}
+\end{lstlisting}
+
+\Needspace{40\baselineskip}
+\begin{lstlisting}[style=java, name=ErogazioneProdotto.java]
+public class ErogazioneProdotto extends State {
+    @Override
+    public void prelevaProdotto(Distributore distributore) {     // erogazione avvenuta
+        int credito = distributore.getCredito();
+        distributore.setCredito(credito - 2);
+        System.out.println("Ecco il prodotto. Credito residuo: " + distributore.getCredito());
+        if (credito >= 4) {
+            distributore.setState(Distributore.attesaSceltaProdotto);
+        } else {
+            distributore.setState(Distributore.attesa);
+        }
+    }
+    @Override
+    public void timeOutErogazione(Distributore distributore) {   // erogazione fallita
+        System.out.println("Erogazione fallita: scegli di nuovo");
+        distributore.setState(Distributore.attesaSceltaProdotto);
+    }
+    @Override
+    public void inserisciMoneta(Distributore distributore) {
+        System.out.println("Attendi: erogazione in corso");
+    }
+    @Override
+    public void sceltaProdotto(Distributore distributore) {
+        System.out.println("Attendi: erogazione in corso");
+    }
+    @Override
+    public void richiestaRestituzione(Distributore distributore) {
+        System.out.println("Attendi: erogazione in corso");
+    }
+    @Override
+    public void spegniDistributore(Distributore distributore) {
+        System.out.println("Ritira il tuo credito: " + distributore.getCredito());
+        distributore.setCredito(0);
+        System.out.println("Spengo il distributore");
+        System.exit(0);
+    }
+}
+\end{lstlisting}
+
+\Needspace{30\baselineskip}
+Il \code{main} di prova delle slide simula un cliente. Nella stessa sequenza di comandi la stessa chiamata,
+\code{dis.selezionaProdotto()}, produce effetti diversi a seconda dello stato:
+
+\begin{lstlisting}[style=java, name=Cliente.java]
+public class Cliente {
+    public static void main(String[] args) {
+        Distributore dis = new Distributore();
+
+        // scelgo un prodotto senza aver inserito monete
+        System.out.print("Scelgo un prodotto. "); dis.selezionaProdotto();
+        System.out.print("Inserisco un euro. "); dis.inserisciMoneta();
+        System.out.print("Scelgo un prodotto. "); dis.selezionaProdotto();
+        System.out.print("Inserisco un euro. "); dis.inserisciMoneta();
+        System.out.print("Scelgo un prodotto. "); dis.selezionaProdotto();
+        System.out.print("Prelevo il prodotto. "); dis.prelevaProdotto();
+        System.out.print("Inserisco un euro. "); dis.inserisciMoneta();
+        System.out.print("Inserisco un euro. "); dis.inserisciMoneta();
+        System.out.print("Inserisco un euro. "); dis.inserisciMoneta();
+        System.out.print("Inserisco un euro. "); dis.inserisciMoneta();
+        System.out.print("Scelgo un prodotto. "); dis.selezionaProdotto();
+        System.out.print("Scelgo un prodotto. "); dis.selezionaProdotto();
+        System.out.print("Richiedo la restituzione del credito. ");
+        dis.richiestaRestituzioneCredito();
+        System.out.print("Inserisco un euro. "); dis.inserisciMoneta();
+        System.out.print("Prelevo il prodotto. "); dis.prelevaProdotto();
+        System.out.print("Spengo il distributore. "); dis.spegniDistributore();
+        System.out.print("Inserisco un euro. "); dis.inserisciMoneta();
+    }
+}
+\end{lstlisting}
+
+\Needspace{22\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac *.java
+$ java Cliente
+Scelgo un prodotto. Non hai credito sufficiente
+Inserisco un euro. Credito attuale: 1
+Scelgo un prodotto. Non hai credito sufficiente
+Inserisco un euro. Credito attuale: 2
+Scelgo un prodotto. Erogazione in corso...
+Prelevo il prodotto. Ecco il prodotto. Credito residuo: 0
+Inserisco un euro. Credito attuale: 1
+Inserisco un euro. Credito attuale: 2
+Inserisco un euro. Credito attuale: 3
+Inserisco un euro. Credito attuale: 4
+Scelgo un prodotto. Erogazione in corso...
+Scelgo un prodotto. Attendi: erogazione in corso
+Richiedo la restituzione del credito. Attendi: erogazione in corso
+Inserisco un euro. Attendi: erogazione in corso
+Prelevo il prodotto. Ecco il prodotto. Credito residuo: 2
+Spengo il distributore. Ritira il tuo credito: 2
+Spengo il distributore
+\end{lstlisting}
+
+La prima scelta trova il distributore in Attesa (\textit{non hai credito sufficiente}), la terza in Attesa scelta prodotto
+(parte l'erogazione), la seconda delle due scelte consecutive in Erogazione prodotto (\textit{attendi}). L'ultima riga del
+\code{main}, «Inserisco un euro», non viene mai eseguita: \code{spegniDistributore()} termina il programma con
+\code{System.exit(0)}.
+
+\Needspace{24\baselineskip}
+\subsubsection*{Che cosa succede in memoria}
+
+Il disegno mostra la memoria prima dello spegnimento. Gli stati sono tre oggetti creati \textbf{una volta sola}, nei campi
+statici di \code{Distributore}; il campo \code{stato} del distributore punta a uno di loro. Una \textbf{transizione} non crea
+nulla: \code{setState(\ldots)} sposta il riferimento. L'ultimo prelievo, con 4 euro di credito, l'ha spostato da
+ErogazioneProdotto ad AttesaSceltaProdotto (la freccia grigia è quella di prima).
+
+\begin{center}
+\begin{tikzpicture}
+  \memblocco{swblue}{zm}{(0,0)}{2.2cm}{main}{dis/{}}
+  \memrif{zm-1}
+  \memblocco{swteal}{zd}{(3.3,0)}{2.7cm}{Distributore}{stato/{}, credito/2}
+  \memrif{zd-1}
+  \memblocco{swteal}{za}{(8.3,0.75)}{3.5cm}{Attesa}{}
+  \memblocco{swteal}{zb}{(8.3,-0.55)}{3.5cm}{AttesaSceltaProdotto}{}
+  \memblocco{swteal}{zc}{(8.3,-1.85)}{3.5cm}{ErogazioneProdotto}{}
+  \memblocco{ph3}{zs}{(4.6,-3.4)}{4.4cm}{Distributore}{attesa/{}, attesaSceltaProdotto/{}, erogazioneProdotto/{}}
+  \memrif{zs-1}
+  \memrif{zs-2}
+  \memrif{zs-3}
+  \draw[memfreccia] (zm-1-p) -- ([yshift=-3pt]zd.west);
+  \draw[memfreccia, draw=black!30, dashed] (zd-1-p) -- ++(0.75,0) |- (zc.west);
+  \draw[memfreccia, draw=swred, line width=1.1pt] (zd-1-p) -- ++(0.75,0) |- (zb.west);
+  \node[font=\tiny, text=swred, anchor=south east] at ([xshift=-2pt]zb.north west) {stato corrente};
+  \draw[memfreccia] (zs-1-p) -- (12.25,0 |- zs-1-p) |- (za.east);
+  \draw[memfreccia] (zs-2-p) -- (12.55,0 |- zs-2-p) |- (zb.east);
+  \draw[memfreccia] (zs-3-p) -- (12.85,0 |- zs-3-p) |- (zc.east);
+  \memzona[swblue]{(zm)(zm-fondo)}{Stack}
+  \memzona[swteal]{(zd)(za)(zc-fondo)}{Heap}
+  \memzona[ph3]{(zs)(zs-fondo)}{Campi statici}
+\end{tikzpicture}
+\end{center}
+
+\info{{Perché gli stati possono essere condivisi}}{
+  Gli oggetti stato \textbf{non hanno campi}: tutti i dati (il credito) stanno nel contesto, che ogni metodo riceve come
+  parametro. Per questo bastano tre oggetti per tutti i distributori del programma, creati una volta sola nei campi
+  statici: due distributori diversi possono trovarsi nello stesso stato condividendo lo stesso oggetto, ciascuno con il
+  proprio credito. Se uno stato dovesse ricordare qualcosa di suo, servirebbe un oggetto stato per ogni distributore.
+}
+
+\subsection{Strategy}
+
+\dfn{Strategy (comportamentale)}{
+  Il pattern \term{Strategy} definisce una famiglia di algoritmi, incapsula ciascuno in una classe e li rende
+  \textbf{intercambiabili}: l'algoritmo può variare indipendentemente da chi lo usa.
+}
+
+Le slide lo evidenziano nella tabella dei pattern comportamentali senza dedicargli un esempio. Eccone uno breve, anche
+perché la sua struttura è identica a quella dello State, e conviene vedere in che cosa i due differiscono. Un ordine deve
+calcolare il costo della spedizione, e i modi di spedire sono diversi: ciascuno diventa una classe che implementa la stessa
+interfaccia.
+
+\begin{center}
+\begin{tikzpicture}
+  \umlclass[4.4cm]{yor}{(-0.6,0)}{Ordine}{- spedizione : StrategiaSpedizione}{+ setSpedizione(s)\\+ totale() : double}
+  \umlclass[3.4cm]{yst}{(5.6,0)}{{\tiny\normalfont «interface»}\\StrategiaSpedizione}{}{+ costo(pesoKg) : double}
+  \umlclass[2.2cm]{ys1}{(2.9,-2.6)}{Standard}{}{+ costo(pesoKg)}
+  \umlclass[2.2cm]{ys2}{(5.6,-2.6)}{Express}{}{+ costo(pesoKg)}
+  \umlclass[2.4cm]{ys3}{(8.4,-2.6)}{RitiroInNegozio}{}{+ costo(pesoKg)}
+  \draw[aggr] (yor.east) -- node[molt, above]{strategia} (yst.west);
+  \foreach \s in {ys1, ys2, ys3}{ \draw[realizza] (\s.north) |- (5.6,-1.45) -- (yst.south); }
+\end{tikzpicture}
+\end{center}
+
+\Needspace{26\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=StrategiaSpedizione.java]
+// Strategy: la famiglia di algoritmi,
+// dietro un'unica interfaccia
+public interface StrategiaSpedizione {
+    double costo(double pesoKg);
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=Standard.java]
+public class Standard implements StrategiaSpedizione {
+    public double costo(double pesoKg) {
+        return 5.0 + 0.5 * pesoKg;
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=Express.java]
+public class Express implements StrategiaSpedizione {
+    public double costo(double pesoKg) {
+        return 12.0 + 1.0 * pesoKg;
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=RitiroInNegozio.java]
+public class RitiroInNegozio
+        implements StrategiaSpedizione {
+    public double costo(double pesoKg) {
+        return 0.0;
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Ordine.java]
+// Context: usa una strategia senza sapere quale
+public class Ordine {
+    private final double merce;
+    private final double pesoKg;
+    private StrategiaSpedizione spedizione =
+            new Standard();
+
+    public Ordine(double merce, double pesoKg) {
+        this.merce = merce;
+        this.pesoKg = pesoKg;
+    }
+
+    // la sceglie il client
+    public void setSpedizione(StrategiaSpedizione s) {
+        this.spedizione = s;
+    }
+
+    public double totale() {
+        return merce + spedizione.costo(pesoKg);
+    }
+}
+\end{lstlisting}
+\end{minipage}
+
+\Needspace{16\baselineskip}
+\noindent\begin{minipage}[t]{0.62\textwidth}
+\begin{lstlisting}[style=java, name=Negozio.java]
+public class Negozio {
+    public static void main(String[] args) {
+        // 40 euro di merce, 6 kg
+        Ordine ordine = new Ordine(40.0, 6.0);
+        System.out.println("Standard:   " + ordine.totale());
+
+        // si cambia algoritmo
+        ordine.setSpedizione(new Express());
+        System.out.println("Express:    " + ordine.totale());
+
+        ordine.setSpedizione(new RitiroInNegozio());
+        System.out.println("In negozio: " + ordine.totale());
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.35\textwidth}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac *.java
+$ java Negozio
+Standard:   48.0
+Express:    58.0
+In negozio: 40.0
+\end{lstlisting}
+\end{minipage}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{3.4cm} L L}
+\toprule
+ & \textbf{State} & \textbf{Strategy} \\
+\midrule
+Chi cambia l'oggetto & Gli stati stessi, con \code{setState}, quando scatta una transizione & Il client, con
+  \code{setSpedizione}, quando vuole \\
+Gli oggetti si conoscono? & Sì: ogni stato sa in quali altri stati si può passare & No: ogni strategia ignora le altre \\
+Che cosa rappresenta & Una fase della vita dell'oggetto & Un modo diverso di fare la stessa cosa \\
+\bottomrule
+\end{tabularx}
+\caption{Stessa struttura, intenzioni diverse.}
+\end{table}
+
+Anche questo pattern è nella libreria di Java: un \code{Comparator} è una strategia di confronto, e la stessa chiamata
+\code{lista.sort(c)} ordina la lista per prezzo, per nome o per data a seconda del \code{Comparator c} che le si passa.
+
+% ============================================================
+\section{Pattern moderni: la Dependency Injection}
+
+Non tutti i pattern usati oggi fanno parte del catalogo originale della GoF. Uno dei più diffusi, e già incontrato in questa
+dispensa, è la Dependency Injection.
+
+\dfn{Dependency Injection}{
+  Si ha \term{Dependency Injection} (iniezione delle dipendenze) quando le risorse da cui un componente dipende gli vengono
+  \textbf{passate (iniettate) dall'esterno}, invece di essere istanziate dal componente stesso durante la sua esecuzione. Il
+  componente dichiara, per esempio nel costruttore, il tipo (eventualmente generico) e la quantità di tutte le risorse da
+  cui dipende; i riferimenti alle risorse gli vengono poi passati, per esempio attraverso il costruttore.
+}
+
+L'avevamo vista all'opera nel Capitolo~4, dove la \code{Cassa} riceveva nel costruttore il \code{GatewayPagamenti} (così da
+poterla provare con un gateway finto), e nel Capitolo~10, dove il \code{Traveler} riceveva dall'esterno il mezzo di
+trasporto.
+
+\Needspace{20\baselineskip}
+\subsubsection*{Un esempio semplice}
+
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=MyClass.java]
+import java.util.logging.Logger;
+
+public class MyClass {
+    private Logger logger;
+
+    public MyClass(Logger logger) {
+        this.logger = logger;
+        // scrive un messaggio informativo nel log
+        logger.info("This is a log message.");
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=Avvio.java]
+import java.util.logging.Logger;
+
+public class Avvio {
+    public static void main(String[] args) {
+        // prima si crea la dipendenza...
+        Logger log = Logger.getLogger("ordini");
+        // ...poi la si inietta
+        MyClass oggetto = new MyClass(log);
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ javac *.java
+$ java Avvio
+Oct 25, 2026 10:15:39 PM MyClass <init>
+INFO: This is a log message.
+\end{lstlisting}
+\end{minipage}
+
+\medskip
+\code{MyClass} può scrivere in un log, e il log su cui scrive è l'oggetto di tipo \code{Logger} che riceve come parametro: non
+sa (e non deve sapere) dove finiscono i messaggi. Qui usiamo il \code{Logger} della libreria standard,
+\code{java.util.logging}, che scrive su standard error la data, la classe e il metodo che hanno prodotto il messaggio
+(\code{<init>} è il costruttore). Nella slide alla chiamata di \code{logger.info} manca il punto e virgola. L'esempio viene
+dal tutorial di Vogella sulla Dependency Injection (\url{https://www.vogella.com/tutorials/DependencyInjection/article.html}).
+
+\Needspace{12\baselineskip}
+\subsubsection*{Le conseguenze}
+
+\begin{itemize}
+  \item Rende la classe \textbf{più generica}, perché ne separa il comportamento dall'oggetto specifico che le viene passato.
+        Resta però una dipendenza fra l'oggetto e una classe (o un'interfaccia): il \textbf{tipo} della risorsa.
+  \item Non è sempre ottimale dal punto di vista dell'\textbf{accoppiamento}: chi crea l'oggetto deve conoscere e creare anche
+        tutte le sue dipendenze.
+  \item Si chiama anche \term{inversione del controllo} (\textit{inversion of control}), perché richiede di creare
+        \textbf{prima} l'oggetto da cui si dipende e \textbf{poi} quello che lo userà: la direzione è opposta, per esempio, a
+        quella del modello BCE (Boundary-Control-Entity), in cui l'interfaccia (Boundary) crea il controllo che le serve e il
+        controllo crea e usa le entità.
+\end{itemize}
+
+\Needspace{16\baselineskip}
+\subsubsection*{Dependency Injection e test}
+
+La Dependency Injection è fondamentale per il \textbf{test in isolamento} e per il \textbf{test di integrazione}: permette di
+provare un oggetto passandogli un oggetto \textbf{fittizio} su cui agire, al posto dell'oggetto concreto, che potrebbe non
+essere disponibile o non essere ancora stato testato. Il caso tipico delle slide: vogliamo testare una classe che chiama un
+servizio, ma il servizio non è ancora disponibile.
+\begin{itemize}
+  \item Se si segue il pattern, la classe sotto test riceve attraverso il costruttore un riferimento all'oggetto servizio:
+        nel test le si passa un servizio fittizio, e la classe si può eseguire anche senza quello originale.
+  \item Se non lo si segue, il riferimento al servizio è scritto dentro la classe (oppure il servizio viene istanziato al
+        suo interno) e al momento del test non si può cambiare.
+\end{itemize}
+
+\Needspace{30\baselineskip}
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=ServizioMeteo.java]
+public interface ServizioMeteo {
+    double temperatura(String citta);   // gradi C
+}
+\end{lstlisting}
+\begin{lstlisting}[style=java, name=AllarmeCaldo.java]
+public class AllarmeCaldo {
+    private final ServizioMeteo meteo;   // la risorsa
+
+    public AllarmeCaldo(ServizioMeteo meteo) {
+        this.meteo = meteo;              // iniettata
+    }
+
+    public String controlla(String citta) {
+        double t = meteo.temperatura(citta);
+        if (t >= 35) {
+            return "ALLARME: a " + citta
+                    + " ci sono " + t + " gradi";
+        }
+        return "Nessun allarme a " + citta;
+    }
+}
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\begin{lstlisting}[style=java, name=MeteoFinto.java]
+// Oggetto fittizio per i test: restituisce
+// sempre la temperatura scelta dal test
+public class MeteoFinto implements ServizioMeteo {
+    private final double temperatura;
+
+    public MeteoFinto(double temperatura) {
+        this.temperatura = temperatura;
+    }
+
+    @Override
+    public double temperatura(String citta) {
+        return temperatura;
+    }
+}
+\end{lstlisting}
+\end{minipage}
+\begin{lstlisting}[style=java, name=App.java]
+public class App {
+    public static void main(String[] args) {
+        // prima la dipendenza...
+        ServizioMeteo meteo = new MeteoHttp("https://api.meteo.example");
+        // ...poi chi la usa
+        AllarmeCaldo allarme = new AllarmeCaldo(meteo);
+        System.out.println(allarme.controlla("Napoli"));
+    }
+}
+\end{lstlisting}
+
+\Needspace{30\baselineskip}
+In produzione \code{AllarmeCaldo} riceve \code{MeteoHttp}, che interroga un servizio REST con l'\code{HttpClient} visto nel
+Capitolo~14; nel test riceve \code{MeteoFinto}, che risponde subito e sempre allo stesso modo. Il test non ha bisogno né
+della rete né del servizio, e può scegliere la temperatura che gli serve per provare entrambi i casi.
+
+\begin{lstlisting}[style=java, name=MeteoHttp.java]
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+// Implementazione vera: interroga un servizio REST esterno
+public class MeteoHttp implements ServizioMeteo {
+    private final HttpClient client = HttpClient.newHttpClient();
+    private final String baseUrl;
+
+    public MeteoHttp(String baseUrl) {
+        this.baseUrl = baseUrl;
+    }
+
+    @Override
+    public double temperatura(String citta) {
+        try {
+            URI uri = URI.create(baseUrl + "/temperatura?citta=" + citta);
+            HttpRequest richiesta = HttpRequest.newBuilder(uri).build();
+            String corpo = client.send(richiesta, HttpResponse.BodyHandlers.ofString()).body();
+            return Double.parseDouble(corpo);
+        } catch (Exception e) {
+            throw new IllegalStateException("Servizio meteo non raggiungibile", e);
+        }
+    }
+}
+\end{lstlisting}
+
+\Needspace{34\baselineskip}
+\begin{lstlisting}[style=java, name=AllarmeCaldoTest.java]
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
+
+class AllarmeCaldoTest {
+    @Test
+    void segnalaIlCaldoDa35GradiInSu() {
+        AllarmeCaldo allarme = new AllarmeCaldo(new MeteoFinto(38.0));
+        assertEquals("ALLARME: a Napoli ci sono 38.0 gradi", allarme.controlla("Napoli"));
+    }
+
+    @Test
+    void taceSottoI35Gradi() {
+        AllarmeCaldo allarme = new AllarmeCaldo(new MeteoFinto(22.5));
+        assertEquals("Nessun allarme a Napoli", allarme.controlla("Napoli"));
+    }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=shell, name=Terminale, deletestring={[b]'}]
+$ java -jar junit-platform-console-standalone.jar execute --class-path out \
+       --select-class AllarmeCaldoTest --details=tree --details-theme=ascii
++-- JUnit Jupiter [OK]
+| '-- AllarmeCaldoTest [OK]
+|   +-- taceSottoI35Gradi() [OK]
+|   '-- segnalaIlCaldoDa35GradiInSu() [OK]
+...
+[         2 tests successful      ]
+[         0 tests failed          ]
+\end{lstlisting}
+
+\medskip
+(L'uscita di JUnit è accorciata: le righe omesse riassumono i contenitori di test trovati ed eseguiti.)
+
+\Needspace{24\baselineskip}
+\subsubsection*{Che cosa succede in memoria}
+
+La classe \code{AllarmeCaldo} è la stessa nei due casi; cambia solo l'oggetto a cui punta il suo campo \code{meteo}, e lo
+decide chi crea l'allarme.
+
+\noindent\begin{minipage}[t]{0.49\textwidth}
+\centering
+{\small\textbf{In produzione} (\code{App.main})\par}
+\medskip
+\begin{tikzpicture}
+  \memblocco{swblue}{dm}{(0,0)}{2.0cm}{main}{allarme/{}}
+  \memrif{dm-1}
+  \memblocco{swteal}{da}{(2.9,0)}{2.4cm}{AllarmeCaldo}{meteo/{}}
+  \memrif{da-1}
+  \memblocco{swteal}{dh}{(2.9,-1.6)}{5.6cm}{MeteoHttp}{client/{\ldots}, baseUrl/{"https://api.meteo.example"}}
+  \draw[memfreccia] (dm-1-p) -- ([yshift=-3pt]da.west);
+  \draw[memfreccia] (da-1-p) -- ++(0.45,0) coordinate (dgomito) -- (dgomito |- dh.north);
+  \memzona[swblue]{(dm)(dm-fondo)}{Stack}
+  \memzona[swteal]{(da)(dh-fondo)}{Heap}
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+\centering
+{\small\textbf{Nel test} (\code{segnalaIlCaldoDa35GradiInSu})\par}
+\medskip
+\begin{tikzpicture}
+  \memblocco{swblue}{tm}{(0,0)}{2.0cm}{test}{allarme/{}}
+  \memrif{tm-1}
+  \memblocco{swteal}{ta}{(2.9,0)}{2.4cm}{AllarmeCaldo}{meteo/{}}
+  \memrif{ta-1}
+  \memblocco{swteal}{tf}{(2.9,-1.6)}{2.8cm}{MeteoFinto}{temperatura/38.0}
+  \draw[memfreccia] (tm-1-p) -- ([yshift=-3pt]ta.west);
+  \draw[memfreccia] (ta-1-p) -- ++(0.45,0) coordinate (tgomito) -- (tgomito |- tf.north);
+  \memzona[swblue]{(tm)(tm-fondo)}{Stack}
+  \memzona[swteal]{(ta)(tf-fondo)}{Heap}
+\end{tikzpicture}
+\end{minipage}
+
+\Needspace{16\baselineskip}
+\begin{esempio}{Il controesempio: la dipendenza scritta dentro la classe}
+\begin{lstlisting}[style=java, name=AllarmeCaldoRigido.java]
+public class AllarmeCaldoRigido {
+    // la dipendenza e' creata qui dentro: nessun test potra' sostituirla
+    private final ServizioMeteo meteo = new MeteoHttp("https://api.meteo.example");
+
+    public String controlla(String citta) {
+        double t = meteo.temperatura(citta);      // chiama sempre il servizio vero
+        return t >= 35 ? "ALLARME: a " + citta + " ci sono " + t + " gradi"
+                       : "Nessun allarme a " + citta;
+    }
+}
+\end{lstlisting}
+Per provare \code{AllarmeCaldoRigido} serve il servizio vero, raggiungibile e acceso; e non c'è modo di fargli restituire
+38 gradi a comando per verificare l'allarme.
+\end{esempio}
+
+\info{{Chi crea gli oggetti? I framework}}{
+  In un'applicazione grande, creare a mano tutte le dipendenze nell'ordine giusto diventa faticoso. Framework come
+  \textbf{Spring} o \textbf{Jakarta EE} lo fanno da soli: si dichiara nel costruttore di che cosa ha bisogno una classe (in
+  Jakarta EE con l'annotazione \code{@Inject}; in Spring basta il costruttore, o \code{@Autowired}), e il framework crea gli
+  oggetti e li collega. Il codice delle classi resta quello visto qui.
+}
+
+% ============================================================
+\section{Conclusioni}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.35}
+\begin{tabularx}{\textwidth}{>{\bfseries}P{3.2cm} L L}
+\toprule
+Famiglia & Su che cosa si concentra & Quali problemi risolve \\
+\midrule
+Strutturali & Come gli oggetti si compongono per formare strutture più grandi & Realizzare funzionalità nuove a partire
+  da quelle esistenti; dare flessibilità ed estensibilità \\
+Comportamentali & Gli algoritmi e l'assegnazione delle responsabilità agli oggetti & L'accoppiamento troppo stretto con un
+  algoritmo particolare \\
+Creazionali & La creazione di oggetti complessi & Nascondere come gli oggetti complessi vengono creati e assemblati \\
+\bottomrule
+\end{tabularx}
+\caption{Le tre famiglie di pattern in sintesi.}
+\end{table}
+
+\Needspace{10\baselineskip}
+Alcune osservazioni finali:
+\begin{itemize}
+  \item I pattern permettono di progettare a un \textbf{livello più astratto}: trattano molte interazioni fra classi e oggetti
+        come un'unità; spesso sono utili dopo un primo progetto, come obiettivi di ristrutturazione delle classi
+        (\textit{refactoring}).
+  \item Una progettazione \textbf{orientata alla variazione}: si considera quali aspetti del progetto possono variare, si
+        individuano i pattern applicabili, li si varia per valutarne i compromessi, e si ripete.
+  \item I design pattern forniscono soluzioni a problemi comuni, portano a modelli e codice estensibili, si possono usare così
+        come sono oppure come esempi di \textbf{ereditarietà di interfaccia} e di \textbf{delega}, e applicano gli stessi
+        principi alla struttura e al comportamento.
+\end{itemize}
+
+\warning{I design pattern non risolvono tutti i problemi}{
+  Le slide chiudono con una provocazione: «i design pattern risolvono tutti i vostri problemi di ingegneria del software».
+  Non è così. Si potrebbe continuare a lungo a presentare pattern, ma alla fine bisogna \textbf{prima definire il problema}
+  e poi cercare una soluzione; e poiché i pattern sono soluzioni a problemi, \textbf{non si guardano i pattern finché il
+  problema non è stato definito}. Un pattern applicato dove non serve aggiunge solo classi e complessità.
+}
+
+\Needspace{14\baselineskip}
+\subsubsection*{Per approfondire}
+
+\begin{itemize}
+  \item C. Alexander, \textit{The Timeless Way of Building}, Oxford, 1979; \textit{A Pattern Language}, Oxford, 1977.
+  \item E. Gamma, R. Helm, R. Johnson, J. Vlissides, \textit{Design Patterns}, Addison-Wesley, 1995.
+  \item F. Buschmann et al., \textit{Pattern-Oriented Software Architecture}, Wiley, 1996.
+  \item M. Fowler, \textit{Analysis Patterns}, Addison-Wesley, 1996.
+  \item K. Beck, \textit{Smalltalk Best Practice Patterns}, Prentice Hall, 1997.
+  \item S. Alpert et al., \textit{The Design Patterns Smalltalk Companion}, Addison-Wesley, 1998.
+  \item W. Brown et al., \textit{AntiPatterns}, Wiley, 1998.
+\end{itemize}
+
+% ============================================================
+\Needspace{30\baselineskip}
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item Un \textbf{design pattern} è una soluzione comune a un problema ricorrente di progettazione, descritta da nome,
+        problema, soluzione e conseguenze; nasce dall'architettura di Alexander e dal catalogo della \textbf{GoF} (1995).
+  \item \textbf{Singleton}: costruttore privato, istanza in un campo statico, accesso con \code{getInstance()}; un solo
+        oggetto, creato alla prima richiesta.
+  \item \textbf{Builder}: la costruzione si fa a passi, su un oggetto builder (\code{with\ldots} restituisce \code{this}); il
+        prodotto si crea, già validato, con \code{build()}. Il Director ripete la stessa ricetta con builder diversi.
+  \item \textbf{Adapter}: una classe che implementa l'interfaccia attesa (Target) e traduce le chiamate verso la classe
+        esistente (Adaptee), per ereditarietà o, più spesso, per composizione.
+  \item \textbf{Composite}: foglie e composti hanno la stessa interfaccia; il composto contiene componenti, e le operazioni
+        si propagano ricorsivamente sull'albero.
+  \item \textbf{Decorator}: decoratori con la stessa interfaccia dell'oggetto decorato, concatenati a tempo di esecuzione;
+        ogni chiamata attraversa la catena.
+  \item \textbf{Observer}: il soggetto tiene la lista degli osservatori (\code{attach}, \code{detach}) e a ogni cambiamento li
+        notifica; è il cuore dell'MVC e dei \textit{listener}.
+  \item \textbf{State}: uno stato è un oggetto, una transizione è il cambio di un riferimento; \textbf{Strategy}: stessa
+        struttura, ma è il client a scegliere l'algoritmo.
+  \item \textbf{Dependency Injection}: le dipendenze si passano dall'esterno, di solito nel costruttore (inversione del
+        controllo); così nei test si possono sostituire con oggetti fittizi.
+\end{itemize}
+}
