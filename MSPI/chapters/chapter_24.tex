@@ -1,0 +1,229 @@
+\chapter{Minimi quadrati e stima ricorsiva}
+
+Dimentichiamoci ora della probabilità. In questo capitolo i vettori contano per quello che sono, e non perché sono
+considerati realizzazioni di vettori aleatori: è il punto di vista della \textbf{statistica descrittiva}. Si hanno dei
+dati misurati e si cerca il modello lineare che li descrive meglio, nel senso dei \textbf{minimi quadrati}. È lo stesso
+problema dello stimatore lineare MMSE, con le medie sui dati al posto delle medie statistiche. Alla fine vedremo come
+aggiornare la stima quando arriva un dato nuovo, senza rifare tutti i conti da capo.
+
+% ============================================================
+\section{Il modello lineare e la stima ai minimi quadrati}
+% ============================================================
+
+Un \term{insieme di addestramento} (\emph{training set}) è una collezione di $p$ vettori $n$-dimensionali $\vett{x}(1),
+\ldots, \vett{x}(p)$, che si possono organizzare come colonne di una matrice $n \times p$:
+\[ \matr{X} = \begin{bmatrix} x_1(1) & x_1(2) & \cdots & x_1(p) \\ x_2(1) & x_2(2) & \cdots & x_2(p) \\ \vdots & \vdots
+   & \ddots & \vdots \\ x_n(1) & x_n(2) & \cdots & x_n(p) \end{bmatrix} = \left[ \vett{x}(1)\ \ \vett{x}(2)\ \ \cdots\ \
+   \vett{x}(p) \right] \in \R^{n \times p} . \]
+Si conoscono anche $p$ valori misurati del parametro $\theta$, uno per ciascun vettore dell'insieme di addestramento:
+$\vett{y} = [\theta(1), \theta(2), \ldots, \theta(p)]^T \in \R^p$. Per esempio, ogni $\vett{x}(i)$ può raccogliere $n$
+caratteristiche di una casa (superficie, numero di stanze, piano) e $\theta(i)$ il suo prezzo.
+
+Si vuole adattare ai dati un \textbf{modello lineare}
+\[ \theta(i) = \vett{a}^T \vett{x}(i) + \epsilon_i , \qquad i = 1, \ldots, p , \]
+dove $\vett{a}$ è un vettore $n$-dimensionale di coefficienti da scegliere ed $\epsilon_i$ è l'errore del modello sul
+dato $i$. Si sceglie $\vett{a}$ in modo da minimizzare la somma dei quadrati degli errori,
+\[ \norm{\vett{\epsilon}}^2 = \sum_{i=1}^{p} \left( \vett{a}^T \vett{x}(i) - \theta(i) \right)^2 , \qquad \vett{\epsilon}
+   = [\epsilon_1, \ldots, \epsilon_p]^T , \]
+dove $\norm{\vett{v}}^2 = \vett{v}^T \vett{v} = \sum_i v_i^2$ è il quadrato della lunghezza del vettore (Capitolo~16).
+
+La somma si scrive in modo compatto con la matrice dei dati. Il prodotto $\matr{X}^T \vett{a}$ ($p \times n$ per $n
+\times 1$) è un vettore $p \times 1$: la riga $i$ di $\matr{X}^T$ è $\vett{x}(i)^T$, quindi il suo elemento $i$-esimo è
+$\vett{x}(i)^T \vett{a} = \vett{a}^T \vett{x}(i)$ (un numero è uguale al suo trasposto). Allora
+\[ \matr{X}^T \vett{a} - \vett{y} = \begin{bmatrix} \vett{x}(1)^T \vett{a} - \theta(1) \\ \vdots \\ \vett{x}(p)^T
+   \vett{a} - \theta(p) \end{bmatrix} \qquad\text{e}\qquad \sum_{i=1}^{p} \left( \vett{a}^T \vett{x}(i) - \theta(i)
+   \right)^2 = \norm{\matr{X}^T \vett{a} - \vett{y}}^2 . \]
+
+\teorema[minimiquadrati]{La stima ai minimi quadrati}{
+  Se la matrice simmetrica $n \times n$ $\matr{X}\matr{X}^T$ è invertibile, il vettore che minimizza
+  $\norm{\matr{X}^T \vett{a} - \vett{y}}^2$ è
+  \[ \vett{a}_{\text{LS}} = \left( \matr{X} \matr{X}^T \right)^{-1} \matr{X}\, \vett{y} , \]
+  la \term{stima ai minimi quadrati} (LS, \emph{Least Squares}). È la soluzione delle \term{equazioni normali}
+  $\matr{X}\matr{X}^T \vett{a} = \matr{X}\vett{y}$.
+}
+
+\begin{dimostrazione}
+\passo{Il quadrato di una differenza} Per due vettori $\norm{\vett{\alpha} - \vett{\beta}}^2 = (\vett{\alpha} -
+\vett{\beta})^T (\vett{\alpha} - \vett{\beta}) = \norm{\vett{\alpha}}^2 + \norm{\vett{\beta}}^2 - 2\vett{\alpha}^T
+\vett{\beta}$, come $(a - b)^2 = a^2 + b^2 - 2ab$. Con $\vett{\alpha} = \matr{X}^T \vett{a}$ e $\vett{\beta} = \vett{y}$,
+e il trasposto di un prodotto $(\matr{X}^T \vett{a})^T = \vett{a}^T \matr{X}$:
+\[ \norm{\matr{X}^T \vett{a} - \vett{y}}^2 = \vett{a}^T \matr{X} \matr{X}^T \vett{a} + \norm{\vett{y}}^2 - 2\vett{a}^T
+   \matr{X} \vett{y} . \]
+\passo{Il gradiente} $\matr{X}\matr{X}^T$ è simmetrica (è uguale alla sua trasposta). Con le formule del Capitolo~23
+(il secondo termine non dipende da $\vett{a}$):
+\[ \nabla_{\vett{a}} \norm{\matr{X}^T \vett{a} - \vett{y}}^2 = 2\matr{X}\matr{X}^T \vett{a} - 2\matr{X}\vett{y} =
+   \vett{0} \quad\Longrightarrow\quad \vett{a} = \left( \matr{X}\matr{X}^T \right)^{-1} \matr{X}\, \vett{y} . \]
+\passo{È un minimo} La somma dei quadrati è una funzione di secondo grado a forma di scodella: $\vett{q}^T \matr{X}
+\matr{X}^T \vett{q} = \norm{\matr{X}^T \vett{q}}^2 \geq 0$ per ogni $\vett{q}$, quindi la matrice è definita non
+negativa (Capitolo~16), e l'unico punto a gradiente nullo è il fondo della scodella.
+\end{dimostrazione}
+
+La formula richiede che la matrice $\matr{X}\matr{X}^T$ sia invertibile. In sostanza servono $p \geq n$ dati (almeno
+tante equazioni quante sono le incognite) e che le $n$ colonne della matrice $\matr{X}^T$, di dimensioni $p \times n$,
+siano \term{linearmente indipendenti}: nessuna caratteristica deve essere una combinazione lineare delle altre (se due
+caratteristiche dicessero la stessa cosa, per esempio la superficie in metri quadri e in centimetri quadri, non si
+saprebbe come dividere il peso fra loro).
+
+\info{Il legame con lo stimatore lineare MMSE}{
+  Dividendo per $p$, $\frac{1}{p}\matr{X}\matr{X}^T = \frac{1}{p}\sum_i \vett{x}(i)\vett{x}(i)^T$ e $\frac{1}{p}\matr{X}
+  \vett{y} = \frac{1}{p}\sum_i \theta(i)\, \vett{x}(i)$ sono le medie campione di $\vett{X}\vett{X}^T$ e di
+  $\Theta\vett{X}$: per la legge dei grandi numeri tendono a $\matr{R} = E[\vett{X}\vett{X}^T]$ e a $E[\Theta\vett{X}]$.
+  La stima LS è la versione «con i dati» dello stimatore lineare MMSE del Capitolo~23 (senza la costante $b$; per averla
+  basta aggiungere a ogni $\vett{x}(i)$ una componente sempre uguale a 1, come nell'esempio che segue).
+}
+
+\begin{esempio}{La retta che passa più vicina a sei punti}
+Si cercano i coefficienti della retta $\theta = a_1 + a_2 t$ che approssima meglio sei punti misurati:
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}c|cccccc@{}}
+  $t_i$ & 1 & 2 & 3 & 4 & 5 & 6 \\ \hline
+  $\theta_i$ & $2{,}1$ & $3{,}9$ & $6{,}2$ & $7{,}8$ & $10{,}1$ & $12{,}0$
+\end{tabular}
+\end{center}
+È il modello lineare con $\vett{x}(i) = [1, t_i]^T$ (la componente costante 1 moltiplica $a_1$). Quindi
+\[ \matr{X}\matr{X}^T = \sum_i \vett{x}(i) \vett{x}(i)^T = \begin{bmatrix} p & \sum t_i \\ \sum t_i & \sum t_i^2
+   \end{bmatrix} = \begin{bmatrix} 6 & 21 \\ 21 & 91 \end{bmatrix} , \qquad \matr{X}\vett{y} = \begin{bmatrix} \sum
+   \theta_i \\ \sum t_i \theta_i \end{bmatrix} = \begin{bmatrix} 42{,}1 \\ 182{,}2 \end{bmatrix} . \]
+Con la formula dell'inversa $2 \times 2$ (determinante $6 \cdot 91 - 21^2 = 105$):
+\[ \vett{a}_{\text{LS}} = \frac{1}{105} \begin{bmatrix} 91 & -21 \\ -21 & 6 \end{bmatrix} \begin{bmatrix} 42{,}1 \\
+   182{,}2 \end{bmatrix} = \frac{1}{105} \begin{bmatrix} 3831{,}1 - 3826{,}2 \\ -884{,}1 + 1093{,}2 \end{bmatrix} =
+   \begin{bmatrix} 0{,}047 \\ 1{,}991 \end{bmatrix} . \]
+La retta è $\theta \approx 0{,}047 + 1{,}991\, t$. Gli errori $\epsilon_i$ sono i segmenti verticali della figura; la
+somma dei loro quadrati, $0{,}107$, è la più piccola possibile fra tutte le rette.
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[width=10.5cm, height=6cm, xmin=0, xmax=7, ymin=0, ymax=13.5, xtick={1,2,3,4,5,6}, ytick={2,4,6,8,10,12},
+  xlabel=$t$, ylabel=$\theta$, axis lines=left, tick label style={font=\scriptsize}, label style={font=\small},
+  grid=major, grid style={mspigray!20}]
+  \addplot[mspiB, line width=1.1pt, domain=0.3:6.7] {0.0467 + 1.9914*x};
+  \foreach \t/\y in {1/2.1, 2/3.9, 3/6.2, 4/7.8, 5/10.1, 6/12.0} {
+    \edef\temp{\noexpand\draw[mspiC, line width=1pt] (axis cs:\t,\y) -- (axis cs:\t,{0.0467 + 1.9914*\t});}\temp
+  }
+  \addplot[only marks, mark=*, mark size=2pt, mspiA] coordinates {(1,2.1) (2,3.9) (3,6.2) (4,7.8) (5,10.1) (6,12.0)};
+  \node[font=\small, mspiB!80!black, anchor=west] at (axis cs:4.3,6.3) {$\theta = 0{,}047 + 1{,}991\, t$};
+\end{axis}
+\end{tikzpicture}
+\end{center}
+(Gli errori sono così piccoli che nella figura i segmenti verdi si vedono appena: i punti sono quasi allineati.)
+\end{esempio}
+
+% ============================================================
+\section{Un dato in più: la stima ricorsiva}
+% ============================================================
+
+Esplicitiamo che la stima è basata su $p$ dati:
+\[ \vett{a}_{\text{LS}}(p) = \left( \matr{X}(p) \matr{X}^T(p) \right)^{-1} \matr{X}(p)\, \vett{y}(p) . \]
+Consideriamo questo scenario: si vuole migliorare progressivamente la stima aggiungendo nuove osservazioni, man mano che
+arrivano, e farlo con una complessità limitata. Supponiamo $p \geq n$ e di aver già calcolato $\vett{a}_{\text{LS}}(p)$.
+Arrivano un nuovo vettore $\vett{x}(p + 1)$ e una nuova osservazione $\theta(p + 1)$; la nuova stima sarebbe
+\[ \vett{a}_{\text{LS}}(p + 1) = \left( \matr{X}(p + 1) \matr{X}^T(p + 1) \right)^{-1} \matr{X}(p + 1)\, \vett{y}(p +
+   1) . \]
+Dobbiamo ricalcolare tutto da zero? No: la matrice da invertire cambia di poco, e la si può aggiornare.
+
+\teorema[shermanmorrison]{Formula di Sherman-Morrison}{
+  Sia $\matr{R}$ una matrice $n \times n$ invertibile e siano $\vett{u}$ e $\vett{v}$ vettori colonna $n$-dimensionali,
+  con $1 + \vett{v}^T \matr{R}^{-1} \vett{u} \neq 0$. Allora l'inversa della matrice con \emph{aggiornamento di rango 1}
+  $\matr{R} + \vett{u}\vett{v}^T$ è
+  \[ \left( \matr{R} + \vett{u}\vett{v}^T \right)^{-1} = \matr{R}^{-1} - \frac{\matr{R}^{-1} \vett{u}\, \vett{v}^T
+     \matr{R}^{-1}}{1 + \vett{v}^T \matr{R}^{-1} \vett{u}} . \]
+}
+
+\begin{dimostrazione}[basta moltiplicare]
+\passo{Si moltiplica} Chiamiamo $c = \vett{v}^T \matr{R}^{-1} \vett{u}$: è un numero ($1 \times n$ per $n \times n$ per
+$n \times 1$). Moltiplicando $\matr{R} + \vett{u}\vett{v}^T$ per il secondo membro:
+\[ \left( \matr{R} + \vett{u}\vett{v}^T \right) \left( \matr{R}^{-1} - \frac{\matr{R}^{-1} \vett{u}\vett{v}^T
+   \matr{R}^{-1}}{1 + c} \right) = \matr{I} + \vett{u}\vett{v}^T \matr{R}^{-1} - \frac{\vett{u}\vett{v}^T \matr{R}^{-1} +
+   \vett{u} \left( \vett{v}^T \matr{R}^{-1} \vett{u} \right) \vett{v}^T \matr{R}^{-1}}{1 + c} . \]
+\passo{Si raccoglie} Il numero $c$ si può spostare dove si vuole: il numeratore della frazione è $(1 + c)\,
+\vett{u}\vett{v}^T \matr{R}^{-1}$, e la frazione vale $\vett{u}\vett{v}^T \matr{R}^{-1}$. Resta $\matr{I}$: il secondo
+membro è proprio l'inversa.
+\end{dimostrazione}
+
+Le slide scrivono il denominatore come $1 + \vett{u}^T \matr{R}^{-1} \vett{v}$; nel nostro uso $\vett{u} = \vett{v}$ e
+$\matr{R}$ è simmetrica, quindi le due scritture coincidono.
+
+\teorema[rls]{La stima ai minimi quadrati ricorsiva}{
+  Siano $\matr{R}(p) = \matr{X}(p)\matr{X}^T(p)$ e $K(p + 1) = \vett{x}(p + 1)^T \matr{R}^{-1}(p)\, \vett{x}(p + 1)$
+  (un numero). Allora
+  \[ \matr{R}^{-1}(p + 1) = \matr{R}^{-1}(p) - \frac{\matr{R}^{-1}(p)\, \vett{x}(p + 1)\, \vett{x}(p + 1)^T
+     \matr{R}^{-1}(p)}{1 + K(p + 1)} , \]
+  \[ \vett{a}(p + 1) = \left[ \matr{I}_n - \frac{\matr{R}^{-1}(p)\, \vett{x}(p + 1)\, \vett{x}(p + 1)^T}{1 + K(p + 1)}
+     \right] \left[ \vett{a}(p) + \theta(p + 1)\, \matr{R}^{-1}(p)\, \vett{x}(p + 1) \right] . \]
+  Il calcolo comporta $O(n^2)$ operazioni, indipendentemente da $p$: la complessità non cresce con il numero di dati.
+}
+
+\begin{dimostrazione}
+\passo{La matrice come somma} Il prodotto $\matr{X}(p)\matr{X}^T(p)$, fatto «colonne per righe», è la somma dei
+prodotti colonna per riga dei singoli vettori:
+\[ \matr{X}(p)\matr{X}^T(p) = \left[ \vett{x}(1)\ \cdots\ \vett{x}(p) \right] \begin{bmatrix} \vett{x}^T(1) \\ \vdots
+   \\ \vett{x}^T(p) \end{bmatrix} = \sum_{i=1}^{p} \vett{x}(i)\, \vett{x}^T(i) . \]
+\passo{Un dato in più è un aggiornamento di rango 1} Aggiungendo il termine $i = p + 1$:
+\[ \matr{R}(p + 1) = \sum_{i=1}^{p+1} \vett{x}(i)\vett{x}^T(i) = \matr{R}(p) + \underbrace{\vett{x}(p +
+   1)}_{\vett{u}}\, \underbrace{\vett{x}^T(p + 1)}_{\vett{v}^T} , \]
+e la formula di Sherman-Morrison dà l'inversa, con $\vett{u} = \vett{v} = \vett{x}(p + 1)$.
+\passo{Il vettore dei termini noti} La matrice dei dati si allunga di una colonna e il vettore delle osservazioni di
+un elemento: $\matr{X}(p + 1) = [\matr{X}(p)\ \ \vett{x}(p + 1)]$ e $\vett{y}(p + 1) = [\vett{y}^T(p),\ \theta(p +
+1)]^T$. Moltiplicando a blocchi, $\matr{X}(p + 1)\vett{y}(p + 1) = \matr{X}(p)\vett{y}(p) + \theta(p + 1)\, \vett{x}(p +
+1)$.
+\passo{Si mette insieme} Scriviamo in breve $\vett{x}$ per $\vett{x}(p + 1)$, $\theta$ per $\theta(p + 1)$ e $K$ per
+$K(p + 1)$. Raccogliendo $\matr{R}^{-1}(p)$ a destra nella formula dell'inversa (che si può fare perché
+$\matr{R}^{-1}(p) = \matr{I}_n \matr{R}^{-1}(p)$, inserendo la matrice identità, che non cambia nulla):
+\[ \vett{a}(p + 1) = \left[ \matr{I}_n - \frac{\matr{R}^{-1}(p)\, \vett{x}\vett{x}^T}{1 + K} \right] \matr{R}^{-1}(p)
+   \left[ \matr{X}(p)\vett{y}(p) + \theta\, \vett{x} \right] , \]
+e $\matr{R}^{-1}(p)\matr{X}(p)\vett{y}(p) = \vett{a}(p)$ è la stima precedente: si ottiene la formula dell'enunciato.
+\passo{Il costo} Servono solo prodotti matrice per vettore e colonna per riga di dimensione $n$: ciascuno costa circa
+$n^2$ moltiplicazioni, qualunque sia $p$. Rifare tutto da capo costerebbe invece circa $n^2 p$ operazioni per
+$\matr{X}\matr{X}^T$ più circa $n^3$ per l'inversione.
+\end{dimostrazione}
+
+\info{La stessa formula, letta come una correzione}{
+  Svolgendo il prodotto (con $\vett{x}$, $\theta$, $K$ in breve, $\matr{R}^{-1} = \matr{R}^{-1}(p)$, e ricordando che
+  $\vett{x}^T \matr{R}^{-1} \vett{x} = K$ e $\vett{x}^T \vett{a}(p)$ sono numeri):
+  \[ \vett{a}(p) + \theta \matr{R}^{-1}\vett{x} - \frac{\matr{R}^{-1}\vett{x} \left( \vett{x}^T \vett{a}(p) \right) + \theta
+     \matr{R}^{-1}\vett{x}\, K}{1 + K} = \vett{a}(p) + \matr{R}^{-1}\vett{x} \left[ \theta \left( 1 - \frac{K}{1 + K}
+     \right) - \frac{\vett{x}^T \vett{a}(p)}{1 + K} \right] , \]
+  e siccome $1 - \frac{K}{1 + K} = \frac{1}{1 + K}$ la formula diventa
+  \[ \vett{a}(p + 1) = \vett{a}(p) + \frac{\matr{R}^{-1}(p)\, \vett{x}(p + 1)}{1 + K(p + 1)} \Big[ \theta(p + 1) -
+     \vett{x}(p + 1)^T \vett{a}(p) \Big] . \]
+  Il termine fra parentesi quadre è l'errore che il vecchio modello commette sul dato nuovo (l'\emph{innovazione}):
+  se il modello aveva già previsto bene $\theta(p + 1)$, la stima quasi non cambia; se aveva sbagliato, viene corretta
+  in proporzione all'errore. È la stessa idea del filtro di Kalman.
+}
+
+\begin{esempio}{La stima che migliora dato dopo dato}
+Si stimano i coefficienti della retta $\theta = a_1 + a_2 t$ da dati simulati con $a_1 = 1$, $a_2 = 2$ e un rumore
+gaussiano di deviazione standard 1, che arrivano uno alla volta. La prima stima si calcola con la formula diretta sui
+primi due dati (servono $p \geq n = 2$); poi si usa la formula ricorsiva.
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[width=12cm, height=5.6cm, xmin=0, xmax=61, ymin=0, ymax=3.8, xtick={2,10,20,30,40,50,60},
+  ytick={0,1,2,3}, xlabel={numero di dati $p$}, axis lines=left, tick label style={font=\scriptsize},
+  label style={font=\small}, grid=major, grid style={mspigray!20}, legend style={font=\scriptsize, at={(0.99,0.98)},
+  anchor=north east}, legend columns=2]
+  \addplot[mspiA, line width=1.1pt, mark=*, mark size=1pt] coordinates {(2,3.522) (3,1.011) (4,0.995) (5,0.758) (6,0.764) (7,1.402) (8,0.429) (9,0.647) (10,0.613) (11,0.748) (12,0.751) (13,0.704) (14,0.868) (15,0.788) (16,0.613) (17,0.684) (18,0.689) (19,0.689) (20,0.889) (21,0.895) (22,0.793) (23,0.727) (24,0.757) (25,0.691) (26,0.435) (27,0.510) (28,0.511) (29,0.491) (30,0.487) (31,0.479) (32,0.552) (33,0.572) (34,0.541) (35,0.513) (36,0.597) (37,0.657) (38,0.691) (39,0.696) (40,0.718) (41,0.713) (42,0.699) (43,0.683) (44,0.717) (45,0.667) (46,0.622) (47,0.622) (48,0.624) (49,0.634) (50,0.613) (51,0.556) (52,0.620) (53,0.622) (54,0.628) (55,0.685) (56,0.658) (57,0.653) (58,0.730) (59,0.758) (60,0.770)};
+  \addplot[mspiB, line width=1.1pt, mark=*, mark size=1pt] coordinates {(2,1.387) (3,1.954) (4,1.942) (5,1.999) (6,1.924) (7,1.821) (8,2.075) (9,2.075) (10,2.079) (11,2.049) (12,2.046) (13,2.079) (14,2.041) (15,2.036) (16,2.137) (17,2.120) (18,2.119) (19,2.129) (20,2.016) (21,2.012) (22,2.074) (23,2.092) (24,2.084) (25,2.090) (26,2.157) (27,2.155) (28,2.155) (29,2.160) (30,2.154) (31,2.140) (32,2.128) (33,2.127) (34,2.135) (35,2.126) (36,2.105) (37,2.094) (38,2.086) (39,2.086) (40,2.073) (41,2.080) (42,2.075) (43,2.078) (44,2.070) (45,2.082) (46,2.116) (47,2.122) (48,2.122) (49,2.108) (50,2.121) (51,2.135) (52,2.120) (53,2.118) (54,2.117) (55,2.100) (56,2.098) (57,2.101) (58,2.079) (59,2.071) (60,2.064)};
+  \addplot[mspiA, dashed, domain=0:61, samples=2] {1};
+  \addplot[mspiB, dashed, domain=0:61, samples=2] {2};
+  \legend{{$a_1(p)$}, {$a_2(p)$}, {valore vero 1}, {valore vero 2}}
+\end{axis}
+\end{tikzpicture}
+\end{center}
+Con due soli dati la stima è molto lontana dal vero ($a_1 \approx 3{,}5$, $a_2 \approx 1{,}4$), ma bastano pochi dati in
+più per avvicinarsi. Dopo 60 dati la stima ricorsiva coincide, fino all'ultima cifra, con quella calcolata da capo su
+tutti i dati.
+\end{esempio}
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item Statistica descrittiva: insieme di addestramento $\matr{X} = [\vett{x}(1) \cdots \vett{x}(p)]$ e osservazioni
+        $\vett{y}$; modello lineare $\theta(i) = \vett{a}^T\vett{x}(i) + \epsilon_i$.
+  \item \textbf{Minimi quadrati}: si minimizza $\norm{\matr{X}^T\vett{a} - \vett{y}}^2$; $\vett{a}_{\text{LS}} =
+        (\matr{X}\matr{X}^T)^{-1}\matr{X}\vett{y}$, se $p \geq n$ e le caratteristiche sono linearmente indipendenti.
+        È lo stimatore lineare MMSE con le medie campione.
+  \item \textbf{Sherman-Morrison}: $(\matr{R} + \vett{u}\vett{v}^T)^{-1} = \matr{R}^{-1} - \frac{\matr{R}^{-1}\vett{u}
+        \vett{v}^T\matr{R}^{-1}}{1 + \vett{v}^T\matr{R}^{-1}\vett{u}}$.
+  \item \textbf{Stima ricorsiva}: $\matr{R}(p + 1) = \matr{R}(p) + \vett{x}(p + 1)\vett{x}^T(p + 1)$; l'aggiornamento
+        di $\matr{R}^{-1}$ e di $\vett{a}$ costa $O(n^2)$ operazioni, indipendentemente da $p$.
+\end{itemize}
+}

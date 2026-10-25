@@ -1,0 +1,292 @@
+\chapter{Stima classica e limite di Cramér-Rao}
+
+Nella stima bayesiana il parametro era una variabile aleatoria con una densità a priori nota. Spesso però non si ha
+abbastanza informazione per assegnare una densità $f_\Theta(\theta)$: la massa di un elettrone, la distanza di una
+stella, la probabilità di testa di una moneta mai vista non sono «estratte a caso» da nessuna parte. In questo capitolo
+il parametro $\theta$ è una quantità \textbf{deterministica e non nota}: è l'inferenza \textbf{non bayesiana}, o
+classica. Vedremo come costruire uno stimatore, come giudicarne la qualità e, soprattutto, che esiste un limite
+inferiore all'errore che \emph{qualunque} stimatore può commettere: il limite di Cramér-Rao.
+
+% ============================================================
+\section{La verosimiglianza e lo stimatore a massima verosimiglianza}
+% ============================================================
+
+Le osservazioni $\vett{x} \in \mathcal{X}^n$ sono realizzazioni di un vettore aleatorio la cui PDF appartiene a una
+famiglia $f_{\vett{X}}(\vett{x}; \theta)$, dove $\theta$ è deterministico e non noto e appartiene a un insieme $S$, lo
+\term{spazio dei parametri}. Il punto e virgola, al posto della barra verticale del condizionamento, ricorda che $\theta$
+non è una variabile aleatoria: è solo un parametro da cui la densità dipende.
+
+\dfn{Verosimiglianza}{
+  La \term{verosimiglianza} (\emph{likelihood}) del parametro $\theta$, date le osservazioni disponibili, è la funzione
+  \[ L(\theta; \vett{x}) = f_{\vett{X}}(\vett{x}; \theta) , \]
+  o, equivalentemente, la \term{funzione di verosimiglianza logaritmica} $\Lambda(\theta; \vett{x}) = \log
+  f_{\vett{X}}(\vett{x}; \theta)$.
+}
+
+È la stessa formula della densità, guardata al contrario: la densità è una funzione dei dati $\vett{x}$ per $\theta$
+fissato (e ha area 1); la verosimiglianza è una funzione del parametro $\theta$ per i dati fissati, quelli che si sono
+osservati (e in generale non ha area 1). Dice quanto ciascun valore del parametro rende plausibili i dati osservati.
+
+\dfn{Stimatore a massima verosimiglianza}{
+  La \term{stima a massima verosimiglianza} di $\theta$ è
+  \[ \hat\theta(\vett{x}) = \arg\max_{\theta \in S} \log f_{\vett{X}}(\vett{x}; \theta) , \]
+  ed è una realizzazione dello \term{stimatore a massima verosimiglianza} (MLE, \emph{Maximum Likelihood Estimator})
+  $\hat\Theta(\vett{X}) = \arg\max_{\theta \in S} \log f_{\vett{X}}(\vett{X}; \theta)$.
+}
+
+Si sceglie il valore del parametro che rende più probabili i dati osservati. Il logaritmo non sposta il punto di massimo
+(Capitolo~21) e trasforma i prodotti delle densità di dati indipendenti in somme, molto più facili da derivare. Si noti
+il legame con la stima bayesiana: con una densità a priori uniforme, la densità a posteriori è proporzionale alla
+verosimiglianza, e la stima MAP coincide con quella a massima verosimiglianza.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=13cm, height=5.6cm, xmin=0, xmax=1, ymin=0, ymax=1.12, xtick={0,0.2,0.3,0.4,0.6,0.8,1},
+  xticklabels={$0$,$0{,}2$,$0{,}3$,$0{,}4$,$0{,}6$,$0{,}8$,$1$}, ytick={0,0.5,1}, yticklabels={$0$,$0{,}5$,$1$},
+  xlabel=$\beta$, ylabel={$L(\beta; \vett{x}) / L(\hat\beta; \vett{x})$}, axis lines=left,
+  tick label style={font=\scriptsize}, label style={font=\small}, grid=major, grid style={mspigray!20},
+  legend style={font=\scriptsize, at={(0.98,0.97)}, anchor=north east}]
+  \addplot[mspiA, line width=1.1pt, domain=0.001:0.999, samples=200] {(x/0.3)^3*((1-x)/0.7)^7};
+  \addplot[mspiB, line width=1.1pt, domain=0.001:0.999, samples=300] {(x/0.3)^30*((1-x)/0.7)^70};
+  \draw[black, dashed] (axis cs:0.3,0) -- (axis cs:0.3,1.05);
+  \legend{{$n = 10$, $w = 3$}, {$n = 100$, $w = 30$}}
+\end{axis}
+\end{tikzpicture}
+\caption{La verosimiglianza della probabilità di testa $\beta$ di una moneta, divisa per il suo massimo, dopo $n$ lanci
+con $w$ teste. In entrambi i casi il massimo è in $\hat\beta = \frac{w}{n} = 0{,}3$, ma con 100 lanci il picco è molto
+più stretto: i dati escludono molti più valori del parametro.}
+\end{figure}
+
+% ============================================================
+\section{Le qualità di uno stimatore}
+% ============================================================
+
+\dfn{Polarizzazione di uno stimatore}{
+  Dato uno stimatore $\hat\Theta_n(\vett{X})$ del parametro non aleatorio $\theta$, calcolato da $n$ dati, si scrive
+  \[ E\left[ \hat\Theta_n(\vett{X}) \right] = \theta + b_n(\theta) , \]
+  dove $b_n(\theta)$ è la \term{polarizzazione} (\emph{bias}) dello stimatore. Lo stimatore è \term{non polarizzato}
+  (o corretto) se $b_n(\theta) = 0$, e \term{asintoticamente non polarizzato} se $b_n(\theta) \to 0$ per $n \to \infty$.
+}
+
+Uno stimatore non polarizzato non sbaglia «in media»: se si potesse ripetere l'esperimento tante volte, la media delle
+stime sarebbe il valore vero. Ma ogni singola stima può comunque essere lontana: serve anche misurare quanto le stime
+sono sparpagliate. L'errore aleatorio dello stimatore si quantifica di solito con il suo valore quadratico medio,
+l'\term{errore quadratico medio}
+\[ e_n^2 = E\left[ \left( \hat\Theta_n(\vett{X}) - \theta \right)^2 \right] . \]
+
+\teorema[msebias]{L'errore quadratico medio si divide in varianza e polarizzazione}{
+  \[ \mathrm{MSE}\left[ \hat\Theta(\vett{X}) \right] = E\left[ \left( \hat\Theta(\vett{X}) - \theta \right)^2 \right] =
+     \mathrm{VAR}\left[ \hat\Theta(\vett{X}) \right] + b_n^2(\theta) . \]
+  In particolare, se l'errore quadratico medio tende a zero, tendono a zero sia la varianza sia la polarizzazione.
+}
+
+\begin{dimostrazione}
+\passo{Si aggiunge e si toglie la media} $\hat\Theta - \theta = \left( \hat\Theta - E[\hat\Theta] \right) + \left(
+E[\hat\Theta] - \theta \right)$, e la seconda parentesi è il numero $b_n(\theta)$.
+\passo{Si sviluppa il quadrato}
+\[ E\left[ \left( \hat\Theta - \theta \right)^2 \right] = E\left[ \left( \hat\Theta - E[\hat\Theta] \right)^2 \right] +
+   2\, b_n(\theta)\, E\left[ \hat\Theta - E[\hat\Theta] \right] + b_n^2(\theta) . \]
+Il termine misto ha media nulla, perché lo scarto dalla media ha media zero; il primo termine è la varianza.
+\passo{La conseguenza} I due addendi $\mathrm{VAR}[\hat\Theta] \geq 0$ e $b_n^2(\theta) \geq 0$ non sono negativi: se
+la loro somma tende a zero, tende a zero ciascuno dei due.
+\end{dimostrazione}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.62]
+  \foreach \c/\t/\d in {0/{polarizzazione piccola\\ varianza piccola}/T1, 5.6/{polarizzazione piccola\\ varianza
+    grande}/T2, 11.2/{polarizzazione grande\\ varianza piccola}/T3, 16.8/{polarizzazione grande\\ varianza grande}/T4} {
+    \begin{scope}[xshift=\c cm]
+      \fill[mspiB!10] (0,0) circle (2.2);
+      \draw[mspigray] (0,0) circle (2.2) (0,0) circle (1.5) (0,0) circle (0.8);
+      \fill[mspiB!70] (0,0) circle (0.22);
+      \node[font=\scriptsize, align=center, anchor=north] at (0,-2.4) {\t};
+    \end{scope}
+  }
+  \begin{scope}[xshift=0cm] \foreach \p in {(0.10,-0.03), (0.65,0.10), (0.04,0.08), (-0.10,-0.13), (0.10,-0.08), (0.15,-0.04), (-0.34,-0.25), (-0.16,-0.38), (-0.01,-0.05), (0.18,-0.16), (-0.04,0.11), (0.14,-0.19), (0.29,-0.12), (0.23,-0.06)} \fill[mspiA] \p circle (2.6pt); \end{scope}
+  \begin{scope}[xshift=5.6cm] \foreach \p in {(-0.24,-0.72), (-0.07,1.38), (-0.37,0.89), (0.77,-0.22), (0.64,0.80), (-0.17,-0.31), (0.65,0.21), (1.23,0.25), (-0.66,-0.03), (-0.68,0.44), (0.41,-0.24), (-0.51,0.52), (-0.22,0.71), (-0.56,-0.16)} \fill[mspiA] \p circle (2.6pt); \end{scope}
+  \begin{scope}[xshift=11.2cm] \foreach \p in {(0.65,0.25), (1.26,0.77), (0.63,0.60), (0.41,0.69), (0.96,0.39), (0.68,0.50), (0.84,0.38), (0.59,0.40), (0.67,0.60), (0.77,0.50), (0.44,0.38), (0.68,0.35), (0.73,0.39), (0.46,0.63)} \fill[mspiA] \p circle (2.6pt); \end{scope}
+  \begin{scope}[xshift=16.8cm] \foreach \p in {(1.29,0.16), (1.12,-0.08), (0.03,0.34), (1.66,0.40), (-0.12,0.60), (0.43,0.05), (0.97,-0.54), (-0.27,-0.38), (1.39,0.52), (0.42,0.07), (1.15,1.19), (0.35,0.62), (0.58,0.67), (0.84,0.86)} \fill[mspiA] \p circle (2.6pt); \end{scope}
+\end{tikzpicture}
+\caption{Polarizzazione e varianza come tiri al bersaglio: il centro è il valore vero $\theta$, ogni punto blu una stima
+ottenuta da un diverso campione. La polarizzazione è la distanza fra il centro dei colpi e il centro del bersaglio, la
+varianza è quanto i colpi sono sparpagliati. Solo il primo stimatore ha un errore quadratico medio piccolo.}
+\end{figure}
+
+Per uno stimatore non polarizzato l'errore quadratico medio coincide con la varianza,
+\[ \mathrm{VAR}\left[ \hat\Theta_n(\vett{X}) \right] = E\left[ \left( \hat\Theta_n(\vett{X}) - \theta \right)^2 \right]
+   = E\left[ \hat\Theta_n^2(\vett{X}) \right] - \theta^2 , \]
+e lo stimatore non polarizzato a minimo errore quadratico medio è quello che minimizza la varianza. Come nel caso
+bayesiano (Capitolo~21), si parla poi di consistenza: uno stimatore è \term{consistente in senso debole} se
+$\hat\Theta_n(\vett{X}) \to \theta$ in probabilità, \term{consistente in senso forte} se $\hat\Theta_n(\vett{X}) \to
+\theta$ quasi certamente (con probabilità 1), \term{consistente in media quadratica} se $e_n^2 \to 0$.
+
+% ============================================================
+\section{Il limite di Cramér-Rao}
+% ============================================================
+
+Quanto può essere piccola la varianza di uno stimatore non polarizzato? Il risultato di questa sezione dice che non può
+scendere sotto un certo valore, che dipende solo dalla famiglia di densità e non dallo stimatore. Sia $\vett{x} \in
+\mathcal{X}^n$ la realizzazione di un vettore aleatorio $\vett{X} \sim f_{\vett{X}}(\vett{x}; \theta)$, con $\theta$
+parametro non aleatorio. Supponiamo che la densità sia abbastanza regolare da poter derivare rispetto a $\theta$ sotto
+il segno di integrale (Capitolo~21).
+
+\begin{richiamo}{la derivata del logaritmo}
+Per la regola della catena (Capitolo~11), la derivata di $\log g(\theta)$ è $\frac{g'(\theta)}{g(\theta)}$ (qui
+$\log$ è il logaritmo naturale). Rovesciando la formula, $g'(\theta) = \left( \frac{\dd}{\dd\theta} \log g(\theta)
+\right) g(\theta)$. Applicata a una densità che dipende da un parametro:
+\[ \frac{\partial}{\partial\theta} f_{\vett{X}}(\vett{x}; \theta) = \left( \frac{\partial}{\partial\theta} \log
+   f_{\vett{X}}(\vett{x}; \theta) \right) f_{\vett{X}}(\vett{x}; \theta) . \]
+È il trucco che trasforma un integrale della derivata della densità in una \emph{media}, perché compare il fattore
+$f_{\vett{X}}$.
+\end{richiamo}
+
+\teorema[score]{Le due identità della derivata logaritmica}{
+  \[ E\left[ \frac{\partial}{\partial\theta} \log f_{\vett{X}}(\vett{X}; \theta) \right] = 0 , \qquad
+     E\left[ \frac{\partial^2}{\partial\theta^2} \log f_{\vett{X}}(\vett{X}; \theta) \right] = -E\left[ \left(
+     \frac{\partial}{\partial\theta} \log f_{\vett{X}}(\vett{X}; \theta) \right)^2 \right] = -\mathrm{VAR}\left[
+     \frac{\partial}{\partial\theta} \log f_{\vett{X}}(\vett{X}; \theta) \right] . \]
+}
+
+\begin{dimostrazione}[derivando due volte l'area della densità]
+\passo{Prima derivata} Si parte dall'identità $\int_{\R^n} f_{\vett{X}}(\vett{x}; \theta) \dd\vett{x} = 1$, che vale
+per ogni $\theta$. Derivando rispetto a $\theta$ (il secondo membro è costante) e usando il richiamo:
+\[ \int_{\R^n} \frac{\partial}{\partial\theta} f_{\vett{X}}(\vett{x}; \theta) \dd\vett{x} = \int_{\R^n} \left(
+   \frac{\partial}{\partial\theta} \log f_{\vett{X}}(\vett{x}; \theta) \right) f_{\vett{X}}(\vett{x}; \theta)
+   \dd\vett{x} = E\left[ \frac{\partial}{\partial\theta} \log f_{\vett{X}}(\vett{X}; \theta) \right] = 0 . \]
+Sotto integrale $\vett{x}$ è una variabile muta di integrazione e si scrive con la lettera minuscola; nella media
+statistica, che è la media di una funzione di un vettore aleatorio, si scrive con la maiuscola.
+\passo{Seconda derivata} Si deriva di nuovo l'integrale del passo 1, con la regola del prodotto:
+\[ \int_{\R^n} \left( \frac{\partial^2}{\partial\theta^2} \log f_{\vett{X}} \right) f_{\vett{X}} \dd\vett{x} +
+   \int_{\R^n} \left( \frac{\partial}{\partial\theta} \log f_{\vett{X}} \right) \frac{\partial f_{\vett{X}}}{\partial
+   \theta} \dd\vett{x} = 0 . \]
+Nel secondo integrale si usa di nuovo il richiamo, $\frac{\partial f_{\vett{X}}}{\partial\theta} = \left(
+\frac{\partial}{\partial\theta} \log f_{\vett{X}} \right) f_{\vett{X}}$: diventa la media del quadrato della derivata
+logaritmica. Portandolo a destra si ottiene la seconda identità.
+\passo{Quadrato medio e varianza} La derivata logaritmica ha media nulla (passo 1), quindi il suo valore quadratico medio
+coincide con la sua varianza.
+\end{dimostrazione}
+
+\dfn{Informazione di Fisher}{
+  L'\term{informazione di Fisher} che i dati contengono sul parametro $\theta$ è
+  \[ I_n(\theta) = E\left[ \left( \frac{\partial}{\partial\theta} \log f_{\vett{X}}(\vett{X}; \theta) \right)^2 \right] =
+     -E\left[ \frac{\partial^2}{\partial\theta^2} \log f_{\vett{X}}(\vett{X}; \theta) \right] . \]
+}
+
+La seconda forma ha un'interpretazione geometrica: la derivata seconda della log-verosimiglianza misura quanto è
+\textbf{curva}, quanto è appuntito il suo picco. Un picco stretto, come quello con 100 lanci nella figura della prima
+sezione, individua bene il parametro: tanta informazione. Un picco piatto lascia molti valori quasi ugualmente
+plausibili: poca informazione.
+
+\teorema[cramerrao]{Limite di Cramér-Rao}{
+  Sia $\hat\Theta(\vett{X})$ uno stimatore del parametro non aleatorio $\theta$, con $E[\hat\Theta(\vett{X})] = \theta +
+  b_n(\theta)$. Allora
+  \[ \mathrm{VAR}\left[ \hat\Theta(\vett{X}) \right] \geq \frac{\abs*{1 + b_n'(\theta)}^2}{I_n(\theta)} . \]
+  In particolare, se lo stimatore è non polarizzato,
+  \[ \mathrm{MSE}\left[ \hat\Theta(\vett{X}) \right] = E\left[ \left( \hat\Theta(\vett{X}) - \theta \right)^2 \right] =
+     \mathrm{VAR}\left[ \hat\Theta(\vett{X}) \right] \geq \frac{1}{I_n(\theta)} . \]
+}
+
+\begin{dimostrazione}[con la covarianza]
+\passo{La media dello stimatore, derivata} Per ipotesi
+$E[\hat\Theta(\vett{X})] = \int_{\R^n} \hat\Theta(\vett{x})\, f_{\vett{X}}(\vett{x}; \theta) \dd\vett{x} = \theta +
+b_n(\theta)$. Derivando rispetto a $\theta$ (lo stimatore $\hat\Theta(\vett{x})$ dipende solo dai dati, non da
+$\theta$) e usando il richiamo:
+\[ \int_{\R^n} \hat\Theta(\vett{x}) \left( \frac{\partial}{\partial\theta} \log f_{\vett{X}}(\vett{x}; \theta) \right)
+   f_{\vett{X}}(\vett{x}; \theta) \dd\vett{x} = E\left[ \hat\Theta(\vett{X})\, \frac{\partial}{\partial\theta} \log
+   f_{\vett{X}}(\vett{X}; \theta) \right] = 1 + b_n'(\theta) . \]
+\passo{È una covarianza} Ricordando che $COV(X, Y) = R_{XY} - \mu_X \mu_Y$ (Capitolo~9), la covarianza coincide con la
+correlazione se almeno una delle due medie è nulla, come qui per la derivata logaritmica (Teorema~\ref{teo:score}):
+\[ COV\left( \hat\Theta(\vett{X}),\ \frac{\partial}{\partial\theta} \log f_{\vett{X}}(\vett{X}; \theta) \right) =
+   E\left[ \hat\Theta(\vett{X})\, \frac{\partial}{\partial\theta} \log f_{\vett{X}}(\vett{X}; \theta) \right] = 1 +
+   b_n'(\theta) . \]
+\passo{Il limite della covarianza} Per il Capitolo~9, $\abs{COV(X, Y)}^2 \leq \sigma_X^2 \sigma_Y^2$, quindi
+\[ \abs*{1 + b_n'(\theta)}^2 \leq \mathrm{VAR}\left[ \hat\Theta(\vett{X}) \right]\, \mathrm{VAR}\left[
+   \frac{\partial}{\partial\theta} \log f_{\vett{X}}(\vett{X}; \theta) \right] = \mathrm{VAR}\left[ \hat\Theta(\vett{X})
+   \right] I_n(\theta) , \]
+dove la varianza della derivata logaritmica è l'informazione di Fisher, per il Teorema~\ref{teo:score}.
+\passo{Si divide} Dividendo per $I_n(\theta) > 0$ si ottiene il limite. Se lo stimatore è non polarizzato, $b_n = 0$,
+la derivata $b_n'$ è nulla e la varianza coincide con l'errore quadratico medio.
+\end{dimostrazione}
+
+Mettendo insieme il limite con il Teorema~\ref{teo:msebias}, per uno stimatore qualsiasi
+\[ \mathrm{MSE}\left[ \hat\Theta(\vett{X}) \right] = \mathrm{VAR}\left[ \hat\Theta(\vett{X}) \right] + b_n^2(\theta) \geq
+   \frac{\abs*{1 + b_n'(\theta)}^2}{I_n(\theta)} + b_n^2(\theta) . \]
+Il limite di Cramér-Rao (CRB, \emph{Cramér-Rao Bound}) è dunque un limite inferiore per l'errore quadratico medio di
+qualunque stimatore non polarizzato: nessuno può fare meglio di $\frac{1}{I_n(\theta)}$.
+
+\dfn{Stimatore efficiente}{
+  Uno stimatore non polarizzato il cui errore quadratico medio è uguale al limite di Cramér-Rao, $\frac{1}{I_n(\theta)}$,
+  si dice \term{efficiente}.
+}
+
+Le slide aggiungono due fatti, che non dimostriamo. Se per un dato problema di stima non bayesiana esiste uno stimatore
+efficiente, questo coincide necessariamente con lo stimatore a massima verosimiglianza. E lo stimatore a massima
+verosimiglianza ha un buon comportamento asintotico: sotto opportune condizioni di regolarità è
+\begin{itemize}
+  \item asintoticamente corretto (non polarizzato);
+  \item consistente (converge in probabilità al valore vero);
+  \item asintoticamente efficiente (la sua varianza si avvicina al limite di Cramér-Rao);
+  \item asintoticamente normale (per $n$ grande ha densità gaussiana, come nel teorema centrale del limite).
+\end{itemize}
+
+% ============================================================
+\section{Esempi}
+% ============================================================
+
+\begin{esempio}{La probabilità di testa}
+Sia $\vett{x} \in \{0, 1\}^n$ la realizzazione di $n$ lanci di Bernoulli con parametro $\beta$ non noto, e sia
+$w(\vett{x})$ il numero di «1». Come nel Capitolo~21, $p_{\vett{X}}(\vett{x}) = \beta^{w(\vett{x})} (1 - \beta)^{n -
+w(\vett{x})}$; ora però $\beta$ non è aleatorio.
+
+\textbf{La stima a massima verosimiglianza.} Si annulla la derivata della log-verosimiglianza, che è la stessa del
+calcolo della stima MAP:
+\[ \frac{\partial}{\partial\beta} \log p_{\vett{X}}(\vett{x}) = \frac{w(\vett{x})}{\beta} - \frac{n - w(\vett{x})}{1 -
+   \beta} = 0 \quad\Longrightarrow\quad (1 - \beta)\, w(\vett{x}) = \beta\, (n - w(\vett{x})) \quad\Longrightarrow\quad
+   \hat\beta = \frac{w(\vett{x})}{n} . \]
+\textbf{Le prestazioni.} $w(\vett{X})$ è binomiale: $E[w(\vett{X})] = n\beta$ ed $E[w^2(\vett{X})] = n\beta(1 - \beta) +
+n^2\beta^2$ (varianza più quadrato della media). Quindi
+\[ E\left[ \hat\beta(\vett{X}) \right] = \frac{n\beta}{n} = \beta , \qquad E\left[ \hat\beta^2(\vett{X}) \right] =
+   \frac{n\beta - n\beta^2 + n^2\beta^2}{n^2} = \frac{\beta(1 - \beta)}{n} + \beta^2 , \qquad \mathrm{VAR}\left[
+   \hat\beta(\vett{X}) \right] = \frac{\beta(1 - \beta)}{n} . \]
+(Nella slide 92 c'è scritto $\mathrm{VAR}[\hat\beta^2(\vett{X})]$: è la varianza di $\hat\beta$, non del suo quadrato.)
+Lo stimatore è non polarizzato e consistente in media quadratica. \textbf{È efficiente?} La derivata seconda della
+log-verosimiglianza è
+\[ \frac{\partial^2}{\partial\beta^2} \log p_{\vett{X}}(\vett{x}) = -\frac{w(\vett{x})}{\beta^2} - \frac{n -
+   w(\vett{x})}{(1 - \beta)^2} , \]
+e quindi l'informazione di Fisher è
+\[ I_n(\beta) = E\left[ \frac{w(\vett{X})}{\beta^2} + \frac{n - w(\vett{X})}{(1 - \beta)^2} \right] = \frac{n\beta}{\beta^2}
+   + \frac{n - n\beta}{(1 - \beta)^2} = \frac{n}{\beta} + \frac{n}{1 - \beta} = n\, \frac{1 - \beta + \beta}{\beta(1 -
+   \beta)} = \frac{n}{\beta(1 - \beta)} . \]
+Il limite di Cramér-Rao è $\frac{1}{I_n(\beta)} = \frac{\beta(1 - \beta)}{n}$: la varianza dello stimatore a massima
+verosimiglianza lo raggiunge, quindi lo stimatore è \textbf{efficiente}. Nessuno stimatore non polarizzato può stimare la
+probabilità di testa meglio della frequenza delle teste.
+\end{esempio}
+
+\begin{esempio}{La media di dati gaussiani}
+Siano $X_1, \ldots, X_n$ i.i.d. $\mathcal{N}(\mu, \sigma^2)$, con $\sigma^2$ noto e $\mu$ da stimare. La
+log-verosimiglianza è
+\[ \log f_{\vett{X}}(\vett{x}; \mu) = -\frac{n}{2} \log(2\pi\sigma^2) - \sum_{k=1}^{n} \frac{(x_k - \mu)^2}{2\sigma^2} ,
+   \qquad \frac{\partial}{\partial\mu} \log f_{\vett{X}} = \sum_{k=1}^{n} \frac{x_k - \mu}{\sigma^2} , \qquad
+   \frac{\partial^2}{\partial\mu^2} \log f_{\vett{X}} = -\frac{n}{\sigma^2} . \]
+Annullando la derivata prima si trova $\hat\mu = \frac{1}{n}\sum_k x_k$: la stima a massima verosimiglianza è la media
+campione. L'informazione di Fisher è $I_n(\mu) = \frac{n}{\sigma^2}$ e il limite di Cramér-Rao è $\frac{\sigma^2}{n}$, che
+è proprio la varianza della media campione (Capitolo~18): anche qui lo stimatore a massima verosimiglianza è efficiente.
+\end{esempio}
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item Parametro \textbf{non aleatorio}: \textbf{verosimiglianza} $L(\theta; \vett{x}) = f_{\vett{X}}(\vett{x};
+        \theta)$; stima a \textbf{massima verosimiglianza} $\hat\theta = \arg\max_\theta \log f_{\vett{X}}(\vett{x};
+        \theta)$.
+  \item \textbf{Polarizzazione} $b_n(\theta) = E[\hat\Theta] - \theta$; $\mathrm{MSE} = \mathrm{VAR} + b_n^2$; consistenza
+        debole, forte, in media quadratica.
+  \item Derivata logaritmica: media nulla; \textbf{informazione di Fisher} $I_n(\theta) = E[(\partial_\theta \log
+        f)^2] = -E[\partial_\theta^2 \log f]$.
+  \item \textbf{Limite di Cramér-Rao}: $\mathrm{VAR}[\hat\Theta] \geq \frac{\abs{1 + b_n'}^2}{I_n(\theta)}$; per uno
+        stimatore non polarizzato $\mathrm{MSE} \geq \frac{1}{I_n(\theta)}$. Chi lo raggiunge è \textbf{efficiente}.
+  \item Frequenza delle teste e media campione sono stime a massima verosimiglianza efficienti, con varianze
+        $\frac{\beta(1-\beta)}{n}$ e $\frac{\sigma^2}{n}$.
+\end{itemize}
+}

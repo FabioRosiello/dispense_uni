@@ -1,0 +1,345 @@
+\chapter{La codifica di sorgente}
+
+Nel capitolo precedente abbiamo visto che una sorgente con entropia $1{,}75$ bit si può codificare con $1{,}75$ bit per
+simbolo invece di 2. In quest'ultimo capitolo trasformiamo l'osservazione in teoria: quali codici si possono decifrare
+senza ambiguità, quanto possono essere corti (mai meno dell'entropia) e come si costruisce il codice migliore, con
+l'algoritmo di Huffman, lo stesso che ancora oggi lavora dentro i formati ZIP, JPEG e MP3.
+
+% ============================================================
+\section{Sorgenti e codici}
+% ============================================================
+
+Una \term{sorgente di informazione} si schematizza come un blocco che in ogni istante $n$ emette una lettera presa da un
+alfabeto $\mathcal{X}$, detto \term{alfabeto sorgente}. Una \term{sorgente discreta senza memoria} (DMS,
+\emph{Discrete Memoryless Source}) emette una sequenza di lettere senza conservare memoria delle emissioni precedenti: la
+sua emissione è la stringa aleatoria
+\[ \ldots, X_0, X_1, \ldots, X_n, \ldots \]
+dove le $X_i$ sono variabili aleatorie indipendenti con una pmf comune $p_X(x)$, $x \in \mathcal{X}$ (sorgente
+stazionaria). È un processo aleatorio indipendente e stazionario come quelli del Capitolo~17. La \term{codifica di
+sorgente} rappresenta le emissioni della sorgente con stringhe binarie quanto più brevi possibile.
+
+Nell'esempio del Capitolo~25 c'erano due codici, uno a lunghezza fissa e uno a lunghezza variabile. Con un codice a
+lunghezza variabile chi riceve i bit non sa dove finisce ogni parola codice (\emph{codeword}), e ci sono due
+possibilità:
+\begin{enumerate}
+  \item si mette un segno di interpunzione fra due parole successive: è uno «spreco», che aumenta il numero medio di bit
+        per lettera;
+  \item si impone che le concatenazioni di parole codice corrispondano in modo biunivoco alle concatenazioni di lettere
+        dell'alfabeto sorgente.
+\end{enumerate}
+Formalmente, un codice rappresenta ogni lettera con una stringa binaria di lunghezza $l(x)$:
+\[ C : x \in \mathcal{X} \;\longmapsto\; C(x) \in \{0, 1\}^{l(x)} , \]
+e lo si estende alle sequenze concatenando: $C(x_1 x_2 \cdots x_n) = C(x_1)\, C(x_2) \cdots C(x_n)$.
+
+\dfn{Codice univocamente decifrabile}{
+  Un codice di sorgente si dice \term{univocamente decifrabile} se, per ogni $n$, una qualunque concatenazione di parole
+  codice corrisponde a un'unica concatenazione di lettere: dalla stringa binaria $C(x_1) C(x_2) \cdots C(x_n)$ si
+  ricava una e una sola sequenza $(x_1, x_2, \ldots, x_n) = \left( C^{-1}[x_1], \ldots, C^{-1}[x_n] \right)$.
+}
+
+\dfn{Codice istantaneo}{
+  Un codice si dice \term{istantaneo} se ogni parola codice può essere decodificata appena si presenta nella stringa
+  binaria, senza guardare i bit successivi. I codici istantanei sono quelli per cui nessuna parola codice è
+  \term{prefisso} (cioè la parte iniziale) di un'altra parola codice: per questo si chiamano anche \term{codici a
+  prefisso}.
+}
+
+Un codice a prefisso è univocamente decifrabile: leggendo da sinistra, appena i bit letti formano una parola codice, la
+si decodifica (non può essere l'inizio di una parola più lunga) e si ricomincia.
+
+\begin{esempio}{Tre codici a confronto}
+Si considerino tre codici per una sorgente con otto lettere:
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}c|c|c|c|c@{}}
+  $x$ & $p_X(x)$ & $C_1(x)$ & $C_2(x)$ & $C_3(x)$ \\ \hline
+  1 & $1/4$ & \texttt{000} & \texttt{0} & \texttt{10} \\
+  2 & $3/32$ & \texttt{001} & \texttt{1001} & \texttt{110} \\
+  3 & $1/8$ & \texttt{010} & \texttt{100} & \texttt{001} \\
+  4 & $1/32$ & \texttt{011} & \texttt{1111} & \texttt{1111} \\
+  5 & $3/16$ & \texttt{100} & \texttt{01} & \texttt{000} \\
+  6 & $1/8$ & \texttt{101} & \texttt{110} & \texttt{010} \\
+  7 & $1/16$ & \texttt{110} & \texttt{1100} & \texttt{1110} \\
+  8 & $1/8$ & \texttt{111} & \texttt{111} & \texttt{011}
+\end{tabular}
+\end{center}
+$C_1$ è univocamente decifrabile, perché è a lunghezza fissa: si taglia la stringa ogni 3 bit. La sua lunghezza media
+è $L_1 = E[l_1(X)] = 3$. $C_2$ e $C_3$ sono a lunghezza variabile, e le loro lunghezze medie sono
+\[ L_2 = E[l_2(X)] = 2{,}5 \ \text{bit/simbolo} , \qquad L_3 = E[l_3(X)] = 2{,}84375 \ \text{bit/simbolo} . \]
+Entrambi sono più corti di $C_1$, ma solo $C_3$ è univocamente decifrabile. Con $C_2$, infatti, la stringa
+\texttt{1111000} si può leggere come \texttt{111|100|0}, cioè $(x_1, x_2, x_3) = (8, 3, 1)$, ma anche come
+\texttt{1111|0|0|0}, cioè $(x_1, x_2, x_3, x_4) = (4, 1, 1, 1)$: due messaggi diversi danno gli stessi bit. $C_3$
+invece è un codice a prefisso: nessuna parola è l'inizio di un'altra. Vogliamo minimizzare la lunghezza media, ma
+preservando l'univoca decifrabilità. (L'entropia di questa sorgente è $H(X) \approx 2{,}80$ bit: $C_2$ scende sotto
+l'entropia, e vedremo che proprio per questo non può essere decifrabile.)
+\end{esempio}
+
+Un codice a prefisso si visualizza bene con un \term{albero binario}: si parte dalla radice, a ogni bit si scende a
+sinistra (0) o a destra (1), e le parole codice sono le \textbf{foglie}. La condizione del prefisso dice proprio che
+nessuna parola codice sta lungo il cammino che porta a un'altra.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[level distance=1.05cm, every node/.style={font=\scriptsize},
+  inner/.style={circle, fill=mspigray, inner sep=1.4pt},
+  leaf/.style={draw=mspiA!80!black, fill=mspiA!10, rounded corners=2pt, inner sep=2.5pt, font=\scriptsize},
+  level 1/.style={sibling distance=6.4cm}, level 2/.style={sibling distance=3.2cm},
+  level 3/.style={sibling distance=1.6cm}, level 4/.style={sibling distance=1.2cm},
+  edge from parent/.style={draw, mspigray, line width=0.8pt}]
+  \node[inner] {}
+    child {node[inner] {}
+      child {node[inner] {}
+        child {node[leaf] {\texttt{000}: 5} edge from parent node[left] {0}}
+        child {node[leaf] {\texttt{001}: 3} edge from parent node[right] {1}}
+        edge from parent node[left] {0}}
+      child {node[inner] {}
+        child {node[leaf] {\texttt{010}: 6} edge from parent node[left] {0}}
+        child {node[leaf] {\texttt{011}: 8} edge from parent node[right] {1}}
+        edge from parent node[right] {1}}
+      edge from parent node[left, above=1pt] {0}}
+    child {node[inner] {}
+      child {node[leaf] {\texttt{10}: 1} edge from parent node[left] {0}}
+      child {node[inner] {}
+        child {node[leaf] {\texttt{110}: 2} edge from parent node[left] {0}}
+        child {node[inner] {}
+          child {node[leaf] {\texttt{1110}: 7} edge from parent node[left] {0}}
+          child {node[leaf] {\texttt{1111}: 4} edge from parent node[right] {1}}
+          edge from parent node[right] {1}}
+        edge from parent node[right] {1}}
+      edge from parent node[right, above=1pt] {1}};
+\end{tikzpicture}
+\caption{L'albero del codice $C_3$: ogni parola codice è una foglia (con accanto la lettera che rappresenta), e il
+cammino dalla radice alla foglia ne dà i bit. Le foglie corte, vicine alla radice, sono per le lettere più frequenti.}
+\end{figure}
+
+% ============================================================
+\section{La disuguaglianza di Kraft}
+% ============================================================
+
+Le parole corte sono preziose, ma non se ne possono avere troppe: una parola di lunghezza 1 occupa da sola metà
+dell'albero. La disuguaglianza di Kraft dice esattamente quali insiemi di lunghezze sono possibili.
+
+\teorema[kraft]{Disuguaglianza di Kraft}{
+  Un insieme di lunghezze $\{l(x)\}_{x \in \mathcal{X}}$ è compatibile con la condizione del prefisso (cioè esiste un
+  codice a prefisso con quelle lunghezze) se e solo se
+  \[ \sum_{x \in \mathcal{X}} 2^{-l(x)} \leq 1 . \]
+}
+
+\begin{dimostrazione}[contando le foglie dell'albero]
+\passo{Le foglie in fondo} Sia $l_{\max}$ la lunghezza più grande. Un albero binario completo profondo $l_{\max}$ ha
+$2^{l_{\max}}$ nodi all'ultimo livello (a ogni livello raddoppiano). Una parola codice di lunghezza $l$ ha sotto di sé
+$2^{l_{\max} - l}$ di quei nodi: quelli che si ottengono prolungandola con $l_{\max} - l$ bit qualsiasi.
+\passo{Se il codice è a prefisso} Due parole diverse non possono avere nodi in comune sotto di sé (altrimenti una
+sarebbe prefisso dell'altra), quindi in tutto occupano al più tutti i nodi dell'ultimo livello:
+\[ \sum_{x} 2^{l_{\max} - l(x)} \leq 2^{l_{\max}} \quad\Longrightarrow\quad \sum_x 2^{-l(x)} \leq 1 , \]
+dividendo per $2^{l_{\max}}$.
+\passo{Viceversa} Se le lunghezze soddisfano la disuguaglianza, si costruisce il codice assegnando le parole in ordine
+di lunghezza crescente: a ogni passo si prende il primo nodo libero alla profondità richiesta e si «toglie» tutto il
+sottoalbero sotto di esso. La parola di lunghezza $l$ consuma la frazione $2^{-l}$ dei nodi dell'ultimo livello: finché
+la somma delle frazioni non supera 1, c'è sempre un nodo libero, e nessuna parola assegnata è prefisso di un'altra.
+\end{dimostrazione}
+
+Per il codice $C_3$ dell'esempio: $2^{-2} + 5 \cdot 2^{-3} + 2 \cdot 2^{-4} = \frac14 + \frac58 + \frac18 = 1$: l'albero
+è «pieno». Per $C_2$, invece, $2^{-1} + 2^{-2} + 3 \cdot 2^{-3} + 3 \cdot 2^{-4} = 1{,}3125 > 1$: nessun codice a prefisso
+può avere quelle lunghezze. Si dimostra (teorema di McMillan) che la disuguaglianza di Kraft è necessaria anche per
+l'univoca decifrabilità: un codice univocamente decifrabile non può avere parole più corte di un codice a prefisso. Per
+questo d'ora in poi ci concentriamo solo sui codici a prefisso, che non perdono nulla e sono i più comodi da
+decodificare.
+
+% ============================================================
+\section{Il codice di Shannon e il limite entropico}
+% ============================================================
+
+Si abbia una sorgente con alfabeto $M$-ario, $X \in \{x_1, x_2, \ldots, x_M\}$, e si supponga nota la legge con cui le
+lettere vengono emesse, $\{p_X(x_i) = \Pr\{X = x_i\}\}_{i=1}^{M}$. L'idea più naturale, suggerita dall'esempio del
+Capitolo~25, è dare a ogni lettera una parola lunga quanto la sua informazione. Siccome le lunghezze devono essere
+intere, si arrotonda per eccesso: $\lceil a \rceil$ indica la \term{parte intera superiore} di $a$, il più piccolo intero
+che non è minore di $a$ (per esempio $\lceil 2{,}3 \rceil = 3$ e $\lceil 3 \rceil = 3$).
+
+\dfn{Codice di Shannon}{
+  Il \term{codice di Shannon} usa per la lettera $x_i$ una stringa binaria di lunghezza
+  \[ l(x_i) = \left\lceil \log_2 \frac{1}{p_X(x_i)} \right\rceil . \]
+}
+
+\teorema[shannoncode]{Il codice di Shannon esiste ed è quasi ottimo}{
+  Esiste un codice a prefisso con le lunghezze del codice di Shannon, e la sua lunghezza media $L$ soddisfa
+  \[ H(X) \leq L < H(X) + 1 . \]
+}
+
+\begin{dimostrazione}
+\passo{L'arrotondamento} Per definizione di parte intera superiore
+\[ \log_2 \frac{1}{p_X(x_i)} \leq l(x_i) < \log_2 \frac{1}{p_X(x_i)} + 1 . \]
+\passo{Kraft} Dalla prima disuguaglianza, $2^{-l(x_i)} \leq 2^{-\log_2 \frac{1}{p_X(x_i)}} = p_X(x_i)$, quindi
+\[ \sum_{i=1}^{M} 2^{-l(x_i)} \leq \sum_{i=1}^{M} p_X(x_i) = 1 : \]
+per il teorema di Kraft esiste almeno un codice istantaneo con quelle lunghezze.
+\passo{La lunghezza media} Moltiplicando la doppia disuguaglianza del passo 1 per $p_X(x_i)$ e sommando su $i$:
+\[ \underbrace{\sum_{i=1}^{M} p_X(x_i) \log_2 \frac{1}{p_X(x_i)}}_{H(X)} \leq \underbrace{\sum_{i=1}^{M} p_X(x_i)\,
+   l(x_i)}_{L,\ \text{lunghezza media}} < \sum_{i=1}^{M} p_X(x_i) \log_2 \frac{1}{p_X(x_i)} + 1 . \]
+\end{dimostrazione}
+
+Il limite inferiore non è una peculiarità del codice di Shannon: vale per qualsiasi codice univocamente decifrabile.
+
+\teorema[limiteentropico]{Il limite entropico}{
+  La lunghezza media di qualsiasi codice che soddisfa la disuguaglianza di Kraft (in particolare, di qualsiasi codice a
+  prefisso) è maggiore o uguale all'entropia della sorgente:
+  \[ L = \sum_{x} p_X(x)\, l(x) \geq H(X) , \]
+  con l'uguaglianza se e solo se $p_X(x) = 2^{-l(x)}$ per ogni $x$.
+}
+
+\begin{dimostrazione}[con la disuguaglianza di Jensen]
+\passo{La differenza come media di un logaritmo} Scrivendo $l(x) = \log_2 2^{l(x)}$:
+\[ H(X) - L = \sum_x p_X(x) \left[ \log_2 \frac{1}{p_X(x)} - \log_2 2^{l(x)} \right] = \sum_x p_X(x) \log_2
+   \frac{2^{-l(x)}}{p_X(x)} = E\left[ \log_2 \frac{2^{-l(X)}}{p_X(X)} \right] . \]
+\passo{Jensen} Il logaritmo è concavo, quindi la media del logaritmo non supera il logaritmo della media (Capitolo~25):
+\[ H(X) - L \leq \log_2 E\left[ \frac{2^{-l(X)}}{p_X(X)} \right] = \log_2 \sum_x p_X(x)\, \frac{2^{-l(x)}}{p_X(x)} =
+   \log_2 \sum_x 2^{-l(x)} \leq \log_2 1 = 0 , \]
+dove l'ultima disuguaglianza è quella di Kraft.
+\passo{L'uguaglianza} Servono uguaglianze in entrambi i passaggi: in Jensen la quantità $\frac{2^{-l(x)}}{p_X(x)}$ deve
+essere costante, e in Kraft la somma deve valere 1; insieme danno $p_X(x) = 2^{-l(x)}$.
+\end{dimostrazione}
+
+Dalla relazione $L \geq H(X)$ risulta evidente che l'entropia di una sorgente dà una misura della sua
+\textbf{comprimibilità}: nessun codice univocamente decifrabile la può comprimere sotto $H(X)$ bit per simbolo in media,
+e il codice di Shannon ci arriva a meno di un bit. Il limite si raggiunge esattamente quando tutte le probabilità sono
+potenze di $\frac12$ (probabilità \term{diadiche}), come per la sorgente quaternaria del Capitolo~25.
+
+% ============================================================
+\section{I codici di Huffman}
+% ============================================================
+
+Il codice di Shannon può sprecare quasi un bit per simbolo. Il codice migliore, quello con la minima lunghezza media fra
+tutti i codici a prefisso, si costruisce con un algoritmo molto semplice, dovuto a David Huffman (che lo inventò nel
+1952 come esercizio per un corso universitario).
+
+\dfn{Algoritmo di Huffman}{
+  \begin{enumerate}
+    \item Si dispongono verticalmente i simboli in ordine di probabilità decrescente.
+    \item Si raggruppano i due simboli meno probabili in un «macrosimbolo», a cui si assegna la somma delle probabilità
+          dei due simboli che lo compongono: questo riduce di un'unità la cardinalità dell'alfabeto.
+    \item Si ripete il passo precedente fino ad arrivare alla \term{radice} dell'albero, cioè a un unico macrosimbolo con
+          probabilità pari a 1.
+    \item Si assegnano 1 e 0 ai rami ascendenti e discendenti dell'albero. La parola codice di ogni nodo terminale è la
+          sequenza dei bit che si incontrano per arrivare dalla radice al nodo su cui essa è posta.
+  \end{enumerate}
+}
+
+L'idea è che i due simboli meno probabili devono avere le parole più lunghe, e conviene che siano «fratelli»
+nell'albero, cioè che differiscano solo nell'ultimo bit: unendoli in un macrosimbolo si riduce il problema a un alfabeto
+con una lettera in meno, e si ripete.
+
+\begin{esempio}{Una sorgente diadica}
+Alfabeto $\mathcal{X} = \{1, 2, \ldots, 8\}$ con
+$p_1(x) = \left( \frac14, \frac14, \frac18, \frac18, \frac{1}{16}, \frac{1}{16}, \frac{1}{16}, \frac{1}{16} \right)$.
+Si uniscono prima le coppie di lettere da $\frac{1}{16}$, poi le coppie da $\frac18$ (lettere o macrosimboli), poi
+quelle da $\frac14$, e infine le due metà. Nel disegno le probabilità sono scritte in sedicesimi.
+\begin{center}
+\begin{tikzpicture}[x=1.45cm, y=0.62cm, every node/.style={font=\scriptsize, text=black},
+  lf/.style={anchor=east, inner sep=2pt}, nd/.style={circle, fill=mspigray, inner sep=1.3pt},
+  br/.style={draw, mspigray, line width=0.8pt}]
+  \foreach \i/\p/\c in {1/4/11, 2/4/10, 3/2/011, 4/2/010, 5/1/0011, 6/1/0010, 7/1/0001, 8/1/0000} {
+    \node[lf] (s\i) at (0,-\i) {lettera \i, $\frac{\p}{16}$};
+    \node[anchor=west, font=\scriptsize\ttfamily, text=mspiA!80!black] at (5.1,-\i) {\c};
+  }
+  \node[nd, label={[font=\tiny]above:2}] (a) at (1,-7.5) {};
+  \node[nd, label={[font=\tiny]above:2}] (b) at (1,-5.5) {};
+  \node[nd, label={[font=\tiny]above:4}] (d) at (2,-3.5) {};
+  \node[nd, label={[font=\tiny]above:4}] (c) at (2,-6.5) {};
+  \node[nd, label={[font=\tiny]above:8}] (e) at (3,-5) {};
+  \node[nd, label={[font=\tiny]above:8}] (f) at (3,-1.5) {};
+  \node[nd, label={[font=\tiny]above:16}] (r) at (4,-3.25) {};
+  \node[font=\scriptsize, anchor=west] at (4.1,-3.25) {radice};
+  \draw[br] (s7.east) -- node[above] {1} (a); \draw[br] (s8.east) -- node[below] {0} (a);
+  \draw[br] (s5.east) -- node[above] {1} (b); \draw[br] (s6.east) -- node[below] {0} (b);
+  \draw[br] (s3.east) -- node[above] {1} (d); \draw[br] (s4.east) -- node[below] {0} (d);
+  \draw[br] (b) -- node[above] {1} (c); \draw[br] (a) -- node[below] {0} (c);
+  \draw[br] (d) -- node[above] {1} (e); \draw[br] (c) -- node[below] {0} (e);
+  \draw[br] (s1.east) -- node[above] {1} (f); \draw[br] (s2.east) -- node[below] {0} (f);
+  \draw[br] (f) -- node[above] {1} (r); \draw[br] (e) -- node[below] {0} (r);
+  \node[font=\scriptsize, anchor=west] at (5.1,0) {\textbf{parola}};
+\end{tikzpicture}
+\end{center}
+Le lunghezze sono $2, 2, 3, 3, 4, 4, 4, 4$, proprio uguali a $\log_2 \frac{1}{p_1(x)}$, e
+\[ L_1 = 2 \cdot \frac14 \cdot 2 + 3 \cdot \frac18 \cdot 2 + 4 \cdot \frac{1}{16} \cdot 4 = 1 + 0{,}75 + 1 = 2{,}75
+   \ \text{bit/simbolo} = H_1(X) . \]
+La sorgente è diadica e il codice raggiunge l'entropia. (Nella slide 150 le parole di questo codice sono scritte con i
+bit in ordine inverso, dalla foglia alla radice: lette così, \texttt{00} sarebbe prefisso di \texttt{001}; rovesciandole
+si ottiene un codice a prefisso equivalente a questo.)
+\end{esempio}
+
+\begin{esempio}{Una sorgente non diadica}
+Stesso alfabeto, con $p_2(x) = \left( \frac13, \frac19, \frac19, \frac19, \frac{1}{27}, \frac{2}{27}, \frac16,
+\frac{1}{18} \right)$. In cinquantaquattresimi le probabilità sono $18, 6, 6, 6, 2, 4, 9, 3$. Ordinate in modo
+decrescente: lettera 1 (18), lettera 7 (9), lettere 2, 3, 4 (6 ciascuna), lettera 6 (4), lettera 8 (3), lettera 5 (2).
+Le unioni successive sono: $5 + 8$ ($2 + 3 = 5$); poi questo con la $6$ ($5 + 4 = 9$); poi $3 + 4$ ($6 + 6 = 12$); poi
+$2 + 7$ ($6 + 9 = 15$; in caso di parità si può scegliere); poi i due macrosimboli da 9 e 12 ($21$); poi la lettera 1 con
+il macrosimbolo da 15 ($33$); infine $33 + 21 = 54$.
+\begin{center}
+\begin{tikzpicture}[x=1.25cm, y=0.62cm, every node/.style={font=\scriptsize, text=black},
+  lf/.style={anchor=east, inner sep=2pt}, nd/.style={circle, fill=mspigray, inner sep=1.3pt},
+  br/.style={draw, mspigray, line width=0.8pt}]
+  \foreach \i/\n/\p/\c in {1/1/18/11, 2/7/9/101, 3/2/6/100, 4/3/6/011, 5/4/6/010, 6/6/4/001, 7/8/3/0001, 8/5/2/0000} {
+    \node[lf] (s\i) at (0,-\i) {lettera \n, $\frac{\p}{54}$};
+    \node[anchor=west, font=\scriptsize\ttfamily, text=mspiA!80!black] at (6.3,-\i) {\c};
+  }
+  \node[nd, label={[font=\tiny]above:5}] (A) at (1,-7.5) {};
+  \node[nd, label={[font=\tiny]above:9}] (B) at (2,-6.75) {};
+  \node[nd, label={[font=\tiny]above:12}] (C) at (3,-4.5) {};
+  \node[nd, label={[font=\tiny]above:15}] (D) at (4,-2.5) {};
+  \node[nd, label={[font=\tiny]above:21}] (E) at (4,-5.6) {};
+  \node[nd, label={[font=\tiny]above:33}] (F) at (5,-1.75) {};
+  \node[nd, label={[font=\tiny]above:54}] (R) at (5.6,-3.7) {};
+  \draw[br] (s7.east) -- node[above] {1} (A); \draw[br] (s8.east) -- node[below] {0} (A);
+  \draw[br] (s6.east) -- node[above] {1} (B); \draw[br] (A) -- node[below] {0} (B);
+  \draw[br] (s4.east) -- node[above] {1} (C); \draw[br] (s5.east) -- node[below] {0} (C);
+  \draw[br] (s2.east) -- node[above] {1} (D); \draw[br] (s3.east) -- node[below] {0} (D);
+  \draw[br] (C) -- node[above] {1} (E); \draw[br] (B) -- node[below] {0} (E);
+  \draw[br] (s1.east) -- node[above] {1} (F); \draw[br] (D) -- node[below] {0} (F);
+  \draw[br] (F) -- node[above right] {1} (R); \draw[br] (E) -- node[below right] {0} (R);
+  \node[font=\scriptsize, anchor=west] at (6.3,0) {\textbf{parola}};
+\end{tikzpicture}
+\end{center}
+Le lunghezze sono 2 per la lettera 1, 3 per le lettere 2, 3, 4, 6 e 7, e 4 per le lettere 5 e 8:
+\[ L_2 = \frac{2 \cdot 18 + 3 \cdot (6 + 6 + 6 + 4 + 9) + 4 \cdot (2 + 3)}{54} = \frac{36 + 93 + 20}{54} = \frac{149}{54}
+   \approx 2{,}759 \ \text{bit/simbolo} , \]
+contro un'entropia $H_2(X) \approx 2{,}7017$ bit: il codice non raggiunge l'entropia, perché le probabilità non sono
+potenze di $\frac12$. Il codice di Shannon, con lunghezze $\lceil \log_2 \frac{1}{p_2(x)} \rceil = 2, 4, 4, 4, 5, 4, 3,
+5$, avrebbe $L \approx 3{,}26$: mezzo bit in più. (Nella tabella della slide 150 le parole delle lettere 5 e 7
+risultano scambiate rispetto alle probabilità: alla lettera 7, che ha probabilità $\frac16$, spetta una parola di 3 bit,
+alla lettera 5, con probabilità $\frac{1}{27}$, una di 4.)
+\end{esempio}
+
+Le slide concludono con alcune osservazioni.
+\begin{itemize}
+  \item Il codice di Huffman \textbf{non è unico}: in caso di parità si possono unire i simboli meno probabili in modi
+        diversi, e si possono scambiare gli 0 con gli 1. Tutti i codici ottenuti hanno però la stessa lunghezza media.
+  \item In entrambi gli esempi le due lettere meno probabili \textbf{differiscono solo nell'ultimo bit}: è una
+        caratteristica di tutti i codici di Huffman, perché sono state unite per prime.
+  \item Entrambi i codici sono \textbf{ottimi}: raggiungono la minima lunghezza media possibile fra i codici a prefisso.
+        Tuttavia solo il primo raggiunge una lunghezza media pari all'entropia della sorgente.
+  \item Se il limite entropico è raggiungibile, allora lo si raggiunge con un codice di Huffman; se, viceversa, il
+        codice di Huffman non raggiunge il limite entropico, il limite non è ottenibile. Il limite entropico è
+        raggiungibile se e solo se $p_X(x) = 2^{-l(x)}$ per ogni $x \in \mathcal{X}$ (Teorema~\ref{teo:limiteentropico}).
+\end{itemize}
+
+\info{Avvicinarsi all'entropia codificando a blocchi}{
+  Anche quando le probabilità non sono diadiche si può arrivare vicino quanto si vuole all'entropia: invece di
+  codificare una lettera alla volta, si codificano blocchi di $k$ lettere, trattandoli come lettere di un alfabeto più
+  grande. Per una sorgente senza memoria l'entropia di un blocco è $k\, H(X)$, e il codice di Shannon per i blocchi ha
+  lunghezza media minore di $k\, H(X) + 1$: per lettera, meno di $H(X) + \frac{1}{k}$. Lo spreco di un bit si divide
+  fra le $k$ lettere del blocco.
+}
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item Una \textbf{sorgente discreta senza memoria} emette lettere i.i.d.; la \textbf{codifica di sorgente} le
+        rappresenta con stringhe binarie il più corte possibile.
+  \item Un codice è \textbf{univocamente decifrabile} se ogni stringa si legge in un solo modo; è \textbf{a prefisso}
+        (istantaneo) se nessuna parola è l'inizio di un'altra. Un codice a prefisso è un albero binario con le parole
+        sulle foglie.
+  \item \textbf{Kraft}: esiste un codice a prefisso con lunghezze $l(x)$ se e solo se $\sum_x 2^{-l(x)} \leq 1$.
+  \item \textbf{Limite entropico}: $L \geq H(X)$ per ogni codice univocamente decifrabile, con l'uguaglianza solo se
+        $p_X(x) = 2^{-l(x)}$. Il \textbf{codice di Shannon}, $l = \lceil \log_2 \frac{1}{p} \rceil$, ha $H \leq L < H + 1$.
+  \item \textbf{Huffman}: si uniscono ripetutamente i due simboli meno probabili; il codice è ottimo fra i codici a
+        prefisso.
+\end{itemize}
+}

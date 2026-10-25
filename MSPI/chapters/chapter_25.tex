@@ -1,0 +1,277 @@
+\chapter{Informazione ed entropia}
+
+Che cos'è l'informazione? Come la si misura? Sono domande che sembrano filosofiche, ma nel 1948 Claude Shannon diede
+loro una risposta precisa, con un numero: l'\textbf{entropia}. È il numero che dice di quanti bit c'è davvero bisogno per
+trasmettere o memorizzare i dati prodotti da una sorgente, e quindi quanto si possono comprimere un file, una foto, una
+canzone. In questo capitolo definiamo l'informazione di un evento e l'entropia di una variabile aleatoria, e
+dimostriamo, con la disuguaglianza di Jensen, quanto può valere al massimo. Il capitolo successivo userà l'entropia per
+progettare i codici.
+
+% ============================================================
+\section{Un esempio: comprimere una sorgente quaternaria}
+% ============================================================
+
+Una sorgente emette ogni secondo un simbolo quaternario, schematizzato da una variabile $X \in \mathcal{X} = \{0, 1, 2,
+3\}$; indichiamo con $X(n)$ l'$n$-esima emissione. Contando quante volte compare ciascuna cifra, la frequenza di
+occorrenza tende alla probabilità (Capitolo~18). Sia allora $p_{X(n)}(x) = p_X(x)$ la pmf della generica emissione, e
+supponiamo
+\[ p_X(0) = \frac12 , \qquad p_X(1) = \frac14 , \qquad p_X(2) = \frac18 , \qquad p_X(3) = \frac18 . \]
+Ogni simbolo quaternario si può rappresentare con una coppia di bit: indipendentemente dal simbolo emesso, si ha un
+codice di lunghezza 2 bit/simbolo. Cambiamo però approccio: usiamo un codice a \textbf{lunghezza variabile}, con parole
+più corte per i simboli più frequenti, come quello della terza colonna.
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}c|c|c|c@{}}
+  $x$ & $p_X(x)$ & codice a lunghezza fissa & codice a lunghezza variabile \\ \hline
+  0 & $1/2$ & \texttt{00} & \texttt{0} \\
+  1 & $1/4$ & \texttt{01} & \texttt{10} \\
+  2 & $1/8$ & \texttt{10} & \texttt{110} \\
+  3 & $1/8$ & \texttt{11} & \texttt{111}
+\end{tabular}
+\end{center}
+Supponiamo che la sorgente emetta una lunga stringa di $N$ simboli. Con il codice a lunghezza fissa si usano 2
+bit/simbolo. Con quello a lunghezza variabile, indicando con $f_N(i)$ la frequenza con cui il simbolo $i$ compare nella
+stringa, il numero medio di bit per simbolo è
+\[ L_N = 1 \cdot f_N(0) + 2 \cdot f_N(1) + 3 \cdot f_N(2) + 3 \cdot f_N(3) . \]
+Al crescere di $N$ le frequenze tendono alle probabilità, e $L_N$ tende alla \term{lunghezza media del codice}
+\[ L = 1 \cdot \frac12 + 2 \cdot \frac14 + 3 \cdot \frac18 + 3 \cdot \frac18 = \frac12 + \frac12 + \frac38 + \frac38 =
+   1 + \frac34 = \frac74 = 1{,}75 \ \text{bit/simbolo} . \]
+Il codice a lunghezza variabile ha anche un'altra caratteristica importante: è \textbf{univocamente decifrabile}. Per
+esempio la sequenza 0, 1, 0, 2, 3, 0 diventa \texttt{0 10 0 110 111 0}, cioè la stringa \texttt{01001101110}, e chi la
+riceve la può spezzare in un solo modo, leggendo da sinistra: nessuna parola del codice è l'inizio di un'altra (lo
+vedremo nel Capitolo~26). Si riesce a usare solo 1,75 bit/simbolo perché la sorgente emette \emph{meno informazione} di
+quella che corrisponde a 2 bit/simbolo. Ma come si misura questa informazione?
+
+% ============================================================
+\section{L'informazione di un evento}
+% ============================================================
+
+Siano $(A_1, A_2, \ldots, A_N)$ gli eventi di interesse, cioè $N$ sottoinsiemi di uno spazio campione $\Omega$, e si
+consideri lo spazio di probabilità $(\Omega, \mathcal{T}, P)$, con la $\sigma$-algebra $\mathcal{T}$ costruita a
+partire dagli eventi di interesse. Sia $A \in \mathcal{T}$ un evento del cui verificarsi siamo informati: vogliamo
+definire $i(A)$, la quantità di informazione che riceviamo sapendo che $A$ si è verificato. Ipotesi sensate sono:
+\begin{enumerate}
+  \item $i(A) \geq 0$: l'informazione deve essere una quantità non negativa (l'informazione non può nuocere);
+  \item l'informazione relativa al verificarsi di eventi rari deve avere maggior valore: $i(A)$ deve essere una
+        funzione \textbf{decrescente} di $P(A)$ (la notizia «oggi a Napoli è sorto il sole» non informa nessuno, «oggi a
+        Napoli nevica» sì);
+  \item \textbf{indipendenza}: se $A$ e $B$ sono eventi indipendenti, $i(A \cap B) = i(A) + i(B)$ (sapere che sono
+        successe due cose che non hanno niente a che fare l'una con l'altra informa quanto le due notizie separate).
+\end{enumerate}
+
+\dfn{Informazione di un evento}{
+  La \term{quantità di informazione} associata al verificarsi dell'evento $A$ è
+  \[ i(A) \stackrel{\triangle}{=} \log \frac{1}{P(A)} . \]
+}
+
+Perché proprio il logaritmo? Se l'informazione dipende solo dalla probabilità, $i(A) = g(P(A))$, per due eventi
+indipendenti $P(A \cap B) = P(A)\,P(B)$, e la terza richiesta diventa $g(xy) = g(x) + g(y)$: serve una funzione che
+trasformi i prodotti in somme, ed è proprio la proprietà del logaritmo, $\log(xy) = \log x + \log y$. Si può dimostrare
+che le funzioni continue con questa proprietà sono solo i multipli del logaritmo; per la seconda richiesta il multiplo
+deve essere negativo, e $-\log x = \log \frac1x$. La base del logaritmo è una scelta di unità di misura.
+
+\teorema[informazione]{Proprietà dell'informazione}{
+  La funzione $i(A) = \log \frac{1}{P(A)}$ soddisfa le tre richieste. Inoltre l'evento certo non dà informazione:
+  $i(\Omega) = \log 1 = 0$.
+}
+
+\begin{dimostrazione}
+\passo{Non è negativa} $P(A) \leq 1$, quindi $\frac{1}{P(A)} \geq 1$ e il suo logaritmo non è negativo.
+\passo{È decrescente} Se $P(A)$ diminuisce, $\frac{1}{P(A)}$ aumenta, e il logaritmo è una funzione crescente.
+\passo{È additiva} Per eventi indipendenti
+$i(A \cap B) = \log \frac{1}{P(A) P(B)} = \log \frac{1}{P(A)} + \log \frac{1}{P(B)} = i(A) + i(B)$.
+\end{dimostrazione}
+
+Con il logaritmo in base 2 l'informazione si misura in \term{bit}: sapere l'esito del lancio di una moneta onesta dà
+$\log_2 2 = 1$ bit, la faccia di un dado $\log_2 6 \approx 2{,}58$ bit, una carta estratta da un mazzo di 52 carte
+$\log_2 52 \approx 5{,}7$ bit, e sapere che sono usciti dieci «testa» di fila $\log_2 2^{10} = 10$ bit (uno per lancio,
+per l'indipendenza).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[quaderno, axis lines=left, width=10cm, height=5cm, xmin=0, xmax=1.08, ymin=0, ymax=6.2,
+  xtick={0.125,0.25,0.5,1}, xticklabels={$\frac18$,$\frac14$,$\frac12$,$1$}, ytick={1,2,3,4,5,6}, xlabel={$P(A)$},
+  ylabel={$i(A)$ [bit]}]
+  \addplot[mspiA, domain=0.016:1, samples=120] {-ln(x)/ln(2)};
+  \addplot[only marks, mark=*, mark size=1.6pt, mspiB] coordinates {(0.125,3) (0.25,2) (0.5,1) (1,0)};
+\end{axis}
+\end{tikzpicture}
+\caption{L'informazione $i(A) = \log_2 \frac{1}{P(A)}$: zero per l'evento certo, 1 bit per un evento di probabilità
+$\frac12$, e sempre di più quanto più l'evento è raro. Dimezzare la probabilità aggiunge un bit.}
+\end{figure}
+
+% ============================================================
+\section{L'entropia}
+% ============================================================
+
+Si esegua ripetutamente un esperimento con esiti possibili $(A_1, A_2, \ldots, A_N)$, di probabilità
+$\{P(A_i)\}_{i=1}^{N}$. L'informazione che si riceve è una variabile aleatoria, che vale $i(A_k) = \log \frac{1}{P(A_k)}$
+quando l'esito è $A_k$, cioè con probabilità $P(A_k)$. Il suo valore medio è
+\[ E[i(A)] = \sum_{k=1}^{N} i(A_k)\, P(A_k) = \sum_{k=1}^{N} P(A_k) \log \frac{1}{P(A_k)} . \]
+La quantità $H(\mathcal{E}) = E[i(A)]$ si chiama \term{entropia} dell'esperimento aleatorio $\mathcal{E}$, i cui
+possibili risultati sono $(A_1, \ldots, A_N)$.
+
+\dfn{Entropia di una variabile aleatoria discreta}{
+  Sia $X$ una variabile aleatoria con alfabeto $\mathcal{X} = \{x_1, x_2, \ldots, x_M\}$, con $\card{\mathcal{X}} = M$.
+  L'informazione $i(X) = \log \frac{1}{p_X(X)}$ è una variabile aleatoria, e l'\term{entropia} di $X$ è la sua media:
+  \[ H(X) = E[i(X)] = \sum_{i=1}^{M} p_X(x_i) \log \frac{1}{p_X(x_i)} . \]
+  La definizione si applica anche al caso $M \to \infty$. La base del logaritmo determina l'unità di misura: l'entropia
+  si misura in \term{bit} se la base è 2, in \term{nat} se la base è $e$.
+}
+
+Se un valore ha probabilità nulla, il suo termine $p \log \frac1p$ si conta come 0: infatti $p \log \frac1p \to 0$ per
+$p \to 0$ (il logaritmo cresce molto più lentamente di quanto $p$ si rimpicciolisce). La quantità di informazione che
+si riceve osservando le determinazioni di una variabile aleatoria è pari alla quantità di \textbf{incertezza a priori}
+che si aveva sull'esito dell'esperimento: una variabile massimamente informativa è anche una variabile massimamente
+incerta. E senza incertezza a priori non esiste informazione: se si sapesse già che cosa uscirà, osservarlo non
+insegnerebbe nulla.
+
+\begin{esempio}{L'entropia della sorgente quaternaria}
+Per la sorgente della prima sezione, in bit:
+\[ H(X) = \frac12 \log_2 2 + \frac14 \log_2 4 + \frac18 \log_2 8 + \frac18 \log_2 8 = \frac12 + \frac24 + \frac38 +
+   \frac38 = 1{,}75 \ \text{bit} . \]
+È esattamente la lunghezza media del codice a lunghezza variabile! Non è un caso: in quel codice ogni simbolo $x$ ha
+una parola lunga proprio $\log_2 \frac{1}{p_X(x)}$ bit (1, 2, 3 e 3), cioè quanto la sua informazione. Nel prossimo
+capitolo vedremo che nessun codice univocamente decifrabile può fare meglio dell'entropia.
+\end{esempio}
+
+\begin{esempio}{Il lancio di una moneta}
+Si consideri una moneta per cui croce ($C$) esce con probabilità $P(\{C\}) = p$ e testa ($T$) con probabilità
+$P(\{T\}) = 1 - p$. Da $\Omega = \{C, T\}$ si forma la $\sigma$-algebra $\mathcal{T} = \mathcal{P}(\Omega) = \{\emptyset,
+\{C\}, \{T\}, \Omega\}$. L'entropia dell'esperimento è
+\[ H(\mathcal{E}) = p \log \frac{1}{p} + (1 - p) \log \frac{1}{1 - p} = -p \log p - (1 - p) \log(1 - p) = H(p, 1 - p)
+   = H_2(p) . \]
+La stessa espressione vale per una sorgente binaria che emette 0 con probabilità $p$ e 1 con probabilità $1 - p$, e in
+generale per ogni esperimento con esito binario: $H_2(p)$ si chiama \term{funzione entropia binaria}.
+\begin{center}
+\begin{tikzpicture}
+\begin{axis}[quaderno, axis lines=left, width=9cm, height=5cm, xmin=0, xmax=1.08, ymin=0, ymax=1.15,
+  xtick={0,0.11,0.5,1}, xticklabels={$0$,$0{,}11$,$\frac12$,$1$}, ytick={0.5,1}, yticklabels={$\frac12$,$1$},
+  xlabel=$p$, ylabel={$H_2(p)$ [bit]}]
+  \addplot[mspiA, domain=0.001:0.999, samples=200] {-x*ln(x)/ln(2) - (1-x)*ln(1-x)/ln(2)};
+  \draw[mspigray, dashed] (axis cs:0.11,0) -- (axis cs:0.11,0.5) -- (axis cs:0,0.5);
+  \draw[mspigray, dashed] (axis cs:0.5,0) -- (axis cs:0.5,1);
+\end{axis}
+\end{tikzpicture}
+\end{center}
+L'entropia è massima, 1 bit, quando la moneta è onesta ($p = \frac12$): è il caso più incerto. Vale zero quando $p = 0$
+o $p = 1$, perché l'esito è già noto. Una moneta molto truccata, con $p = 0{,}11$, produce solo mezzo bit per lancio:
+una lunga sequenza dei suoi lanci si può comprimere, in media, a metà.
+\end{esempio}
+
+% ============================================================
+\section{La disuguaglianza di Jensen}
+% ============================================================
+
+L'entropia di una variabile aleatoria ha la forma generale $H(X) = E[i(X)] = E[g(X)]$, con $g(\alpha) = \log
+\frac{1}{p_X(\alpha)}$. Viene allora naturale chiedersi: esiste una relazione generale, anche solo una disuguaglianza,
+che leghi le quantità $E[g(X)]$ e $g(E[X])$? In generale no: c'è solo se $g(\cdot)$ ha la concavità sempre dello stesso
+verso su tutto l'intervallo $[x_{\text{MIN}}, x_{\text{MAX}}]$, dove $x_{\text{MIN}}$ è il più piccolo valore di $X$ e
+$x_{\text{MAX}}$ il più grande.
+
+\begin{richiamo}{funzioni convesse e concave}
+Una funzione $g$ è \term{convessa} su un intervallo $I$ se, presi due punti qualsiasi del suo grafico, il segmento che
+li unisce (la \emph{corda}) sta sopra il grafico: è fatta «a coppa», come $x^2$ o $e^x$. È \term{concava} se la corda
+sta sotto il grafico (fatta «a cupola», come $\log x$ o $\sqrt{x}$), cioè se $-g$ è convessa. Per le funzioni con
+derivata seconda c'è un criterio semplice: $g$ è convessa dove $g'' \geq 0$ (la pendenza cresce) e concava dove $g''
+\leq 0$. Per esempio
+\[ \frac{\dd^2}{\dd y^2} \log y = \frac{\dd}{\dd y} \frac{1}{y} = -\frac{1}{y^2} < 0 \qquad \forall\, y > 0 : \]
+il logaritmo è concavo. Una proprietà ci servirà: una funzione convessa sta sempre \textbf{sopra le sue rette
+tangenti}. Siccome la pendenza cresce, allontanandosi dal punto di tangenza $\mu$ la funzione sale (o scende meno) della
+tangente:
+\[ g(x) \geq g(\mu) + g'(\mu)\, (x - \mu) \qquad \text{per ogni } x \in I . \]
+Per una funzione concava la disuguaglianza è rovesciata: sta sotto le sue tangenti.
+\end{richiamo}
+
+\teorema[jensen]{Disuguaglianza di Jensen}{
+  Se $g(x)$ è convessa nell'intervallo $I \supseteq \mathcal{X}$ e $X \in \mathcal{X}$ è una variabile aleatoria
+  arbitraria, allora
+  \[ E[g(X)] \geq g\left( E[X] \right) . \]
+  Simmetricamente, se $g$ è concava nell'intervallo $I \supseteq \mathcal{X}$, allora $E[g(X)] \leq g\left( E[X]
+  \right)$. L'uguaglianza vale solo se $g(\cdot)$ è lineare (sui valori assunti da $X$) o se $X$ non è aleatoria (cioè è
+  costante al variare di $\omega \in \Omega$). Se $g(x)$ non ha concavità costante in $I$ non esiste una relazione
+  generale.
+}
+
+\begin{dimostrazione}[con la retta tangente]
+\passo{La tangente nella media} Sia $\mu = E[X]$: è una media di valori di $I$, quindi sta in $I$. Per la proprietà
+del richiamo, per ogni valore $x$ che la variabile può assumere
+\[ g(x) \geq g(\mu) + g'(\mu)\, (x - \mu) . \]
+\passo{Si fa la media} La disuguaglianza vale per ogni valore di $X$, quindi anche fra le medie (la media di una
+quantità più grande è più grande). A destra $g(\mu)$ e $g'(\mu)$ sono numeri, e per la linearità
+\[ E[g(X)] \geq g(\mu) + g'(\mu) \left( E[X] - \mu \right) = g(\mu) + g'(\mu) \cdot 0 = g\left( E[X] \right) . \]
+\passo{Il caso concavo} Se $g$ è concava, $-g$ è convessa: applicando il risultato a $-g$ e cambiando segno si
+ottiene $E[g(X)] \leq g(E[X])$.
+\end{dimostrazione}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[quaderno, axis lines=left, width=9.5cm, height=6cm, xmin=0, xmax=3.3, ymin=0, ymax=9.6,
+  xtick={0.6,1.6,2.6}, xticklabels={$x_1$,$\mu$,$x_2$}, ytick=\empty, xlabel=$x$, ylabel=$g(x)$, clip=false]
+  \addplot[mspiA, domain=0.2:3.0, samples=80] {x^2 + 0.6};
+  \addplot[mspiB, line width=0.9pt] coordinates {(0.6,0.96) (2.6,7.36)};
+  \addplot[mspiC, line width=0.9pt, domain=0.5:2.8] {3.16 + 3.2*(x - 1.6)};
+  \draw[mspigray, dashed] (axis cs:0.6,0) -- (axis cs:0.6,0.96) (axis cs:2.6,0) -- (axis cs:2.6,7.36)
+    (axis cs:1.6,0) -- (axis cs:1.6,4.16);
+  \fill[mspiB] (axis cs:1.6,4.16) circle (2pt) node[left, font=\scriptsize, text=black] {$E[g(X)]$};
+  \fill[mspiA] (axis cs:1.6,3.16) circle (2pt) node[right, font=\scriptsize, text=black] {$g(E[X])$};
+  \node[font=\scriptsize, mspiC!80!black, anchor=west] at (axis cs:2.8,6.0) {tangente in $\mu$};
+  \node[font=\scriptsize, mspiB!80!black, anchor=south east] at (axis cs:2.4,7.3) {corda};
+\end{axis}
+\end{tikzpicture}
+\hspace{0.3cm}
+\begin{minipage}[b]{5.4cm}\small
+Una variabile che vale $x_1$ o $x_2$ con probabilità $\frac12$ ha media $\mu$ nel punto di mezzo. $E[g(X)] = \frac12
+g(x_1) + \frac12 g(x_2)$ è il punto di mezzo della corda, che per una funzione convessa sta sopra il grafico, cioè
+sopra $g(E[X])$. La tangente in $\mu$ (verde) sta tutta sotto la curva: è l'idea della dimostrazione.
+\vspace{0.6cm}
+\end{minipage}
+\caption{La disuguaglianza di Jensen per una funzione convessa.}
+\end{figure}
+
+\subsection{L'entropia non supera il logaritmo dell'alfabeto}
+
+\teorema[entropiamax]{L'entropia massima}{
+  Per ogni variabile aleatoria discreta $X$ con alfabeto finito $\mathcal{X}$:
+  \[ 0 \leq H(X) \leq \log \card{\mathcal{X}} . \]
+  Fra tutte le pmf su $\mathcal{X}$, quella con la massima entropia è l'\textbf{uniforme}; l'entropia è nulla solo se
+  $X$ è in realtà una costante.
+}
+
+\begin{dimostrazione}[con la disuguaglianza di Jensen]
+\passo{L'entropia come media di un logaritmo} Si scrive
+\[ H(X) = E\left[ \log \frac{1}{p_X(X)} \right] = E[\log Y] , \qquad\text{con}\qquad Y(\omega) =
+   \frac{1}{p_X(X(\omega))} , \]
+una variabile aleatoria che assume valori positivi (consideriamo nell'alfabeto solo i valori con $p_X(x) > 0$, gli unici
+che contano).
+\passo{La media di $Y$} Ogni valore $\frac{1}{p_X(x)}$ è assunto con la probabilità $p_X(x)$, quindi
+\[ E[Y] = \sum_{x \in \mathcal{X}} \underbrace{\frac{1}{p_X(x)}}_{\text{valori assunti}} \cdot
+   \underbrace{p_X(x)}_{\text{prob. dei valori}} = \sum_{x \in \mathcal{X}} 1 = \card{\mathcal{X}} . \]
+\passo{Jensen} Il logaritmo è concavo per $y > 0$ (richiamo), quindi
+$H(X) = E[\log Y] \leq \log E[Y] = \log \card{\mathcal{X}}$.
+\passo{Il caso uniforme} Se $p_X(x) = \frac{1}{\card{\mathcal{X}}}$ per ogni $x$, tutti i termini sono uguali:
+\[ H(X) = \sum_{x \in \mathcal{X}} \frac{1}{\card{\mathcal{X}}} \log \card{\mathcal{X}} = \log \card{\mathcal{X}} , \]
+e il limite superiore è raggiunto.
+\passo{Il limite inferiore} Ogni termine $p \log \frac1p$ è non negativo, perché $p \leq 1$; la somma è nulla solo se
+tutti i termini lo sono, cioè se ogni probabilità vale 0 o 1: un solo valore certo.
+\end{dimostrazione}
+
+Per la sorgente quaternaria $\log_2 4 = 2$ bit è il massimo, raggiunto con simboli equiprobabili: in quel caso il codice
+a lunghezza fissa di 2 bit sarebbe già il migliore possibile. La nostra sorgente ha entropia $1{,}75 < 2$ bit, ed è
+proprio questa differenza che il codice a lunghezza variabile sfrutta.
+
+\gbox{In sintesi}{mspiA!80!black}{
+\begin{itemize}
+  \item \textbf{Informazione} di un evento: $i(A) = \log \frac{1}{P(A)}$; non negativa, grande per eventi rari,
+        additiva per eventi indipendenti. In base 2 si misura in bit.
+  \item \textbf{Entropia}: $H(X) = E[i(X)] = \sum_x p_X(x) \log \frac{1}{p_X(x)}$, l'informazione media, cioè
+        l'incertezza a priori. Entropia binaria $H_2(p) = -p\log p - (1-p)\log(1-p)$, massima (1 bit) per $p = \frac12$.
+  \item \textbf{Jensen}: $E[g(X)] \geq g(E[X])$ per $g$ convessa, $\leq$ per $g$ concava (la funzione sta sopra o sotto
+        le sue tangenti).
+  \item $0 \leq H(X) \leq \log \card{\mathcal{X}}$, con il massimo per la pmf uniforme.
+  \item La sorgente $(\frac12, \frac14, \frac18, \frac18)$ ha entropia $1{,}75$ bit, quanto la lunghezza media del suo
+        codice a lunghezza variabile.
+\end{itemize}
+}
