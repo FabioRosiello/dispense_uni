@@ -1,0 +1,119 @@
+% ============================================================
+% AGGIUNTE ALLA CLASSE: spiegazioni, diagrammi, marcatori
+% ============================================================
+%
+% UTILIZZO:
+%   \begin{spiegazione}[Titolo opzionale] ... \end{spiegazione}
+%       riquadro verde che segue ogni dimostrazione: l'idea in parole semplici,
+%       con un diagramma o un esempio passo passo (non si spezza tra due pagine)
+%   \begin{passi} \item ... \item ... \end{passi}
+%       elenco di passi numerati con un cerchietto (per gli esempi passo passo)
+%   \senzadim
+%       targhetta «senza dimostrazione»: il programma non chiede la dimostrazione
+%   \facoltativa
+%       targhetta per le dimostrazioni che il programma non chiede ma che aiutano a capire
+%
+%   Stili TikZ:
+%     Hasse:      [hasse] sull'ambiente; nodi \node[hv] (etichette) o \node[hpunto,label=...] (pallini);
+%                 linee \draw[hlato]; evidenziazioni hv evid / hv evid2
+%     Relazioni:  nodi \node[rv]; frecce \draw[rfreccia]; cappi \draw[rcappio] (n) to (n)
+%     Funzioni:   insiemi \node[insieme, fit=...]; elementi \node[elem]; frecce \draw[fun]
+% ============================================================
+
+\RequirePackage{tikz-cd}
+
+% Indice: i numeri di pagina a tre cifre non entrano nella casella standard di 1,55em e la
+% classe (\overfullrule) segnerebbe ogni riga con un quadratino nero; la casella si allarga
+% (a una misura fissa, così tutti i numeri finiscono sullo stesso margine destro).
+\makeatletter
+\renewcommand{\@pnumwidth}{22pt}
+\makeatother
+% Nelle righe delle parti la casella del numero, composta in corpo 14, sporgerebbe oltre il
+% bordo del foglio: il numero si allinea al margine destro senza casella.
+\titlecontents{part}
+    [0pt]
+    {\addvspace{1cm}\centering}
+    {\color{primary!60!black}\fontsize{16}{0}\selectfont\Gobold Parte \thecontentslabel\quad}
+    {\color{primary!60!black}\fontsize{16}{0}\selectfont\Gobold}
+    {\hfill\color{primary!80!black}\bfseries\Scientifica\fontsize{14}{0}\selectfont\thecontentspage}
+    [\addvspace{0.3cm}\hrule height 1.5pt\addvspace{0.5cm}]
+
+% ── Colori per le classi di equivalenza e le parti di una partizione ──
+\colorlet{classeA}{primary!16}
+\colorlet{classeB}{orange!22}
+\colorlet{classeC}{seagreen!22}
+\colorlet{classeD}{pink!30}
+\colorlet{classeE}{naplesyellow!45}
+\colorlet{classeF}{violet!12}
+
+% ── Riquadro SPIEGAZIONE ──────────────────────────────────────
+\newtcolorbox{spiegazionebox}[1]{
+  enhanced, breakable=false,
+  colback=seagreen!5!white, colframe=seagreen!65!black,
+  boxrule=0pt, leftrule=3pt, arc=0pt, outer arc=0pt,
+  left=3mm, right=2mm, top=1.2mm, bottom=1.4mm,
+  before skip=0mm, after skip=6mm,
+  fontupper=\normalsize,
+}
+\NewDocumentEnvironment{spiegazione}{O{Spiegazione}}{%
+  \begin{concetto}\vspace{-3mm}%
+  \begin{spiegazionebox}{#1}%
+  {\color{seagreen!55!black}{\mdseries\iidea}\ \bfseries #1}\par\nopagebreak\vspace{0.6mm}%
+  \setlength{\parskip}{0.6em}%
+}{%
+  \end{spiegazionebox}\end{concetto}%
+}
+
+% ── Passi numerati ────────────────────────────────────────────
+\NewDocumentCommand{\numcerchio}{m}{\tikz[baseline=(n.base)]\node[circle, fill=seagreen!65!black, text=white,
+  font=\scriptsize\bfseries, inner sep=0pt, minimum size=4mm] (n) {#1};}
+\newenvironment{passi}{%
+  \begin{enumerate}[label=\numcerchio{\arabic*}, leftmargin=7.5mm, labelsep=2mm,
+                    itemsep=0.8mm, topsep=0.6mm, parsep=0.3em]%
+}{\end{enumerate}}
+
+% ── Targhette ─────────────────────────────────────────────────
+\newcommand{\targhetta}[2]{%
+  \tikz[baseline=(t.base)]\node[rounded corners=2pt, fill=#1!12, draw=#1!60!black, line width=0.4pt,
+    font=\scriptsize\bfseries, text=#1!60!black, inner xsep=3pt, inner ysep=1.5pt] (t) {#2};}
+\newcommand{\senzadim}{\targhetta{neutral}{senza dimostrazione}\par\smallskip}
+\newcommand{\facoltativa}{\targhetta{neutral}{dimostrazione non richiesta dal programma}\par\smallskip}
+
+% ── Blocchi colorati (classi di equivalenza, parti di una partizione) ──
+% \blocco[larghezza]{colore}{percorso}: «macchia» colorata attorno a un gruppo di elementi.
+% Il percorso unisce i centri dei nodi:
+%   due elementi:  \blocco{classeA}{(n1.center) -- (n2.center)}
+%   tre elementi:  \blocco{classeB}{(n1.center) -- (n2.center) -- (n3.center) -- cycle}
+%   un elemento:   \blocco{classeC}{(n1.center) -- ++(0.001,0)}
+\newcommand{\blocco}[3][6.4mm]{%
+  \begin{scope}[on background layer]
+    \draw[line width=#1+0.8pt, line cap=round, line join=round, draw=#2!55!black!45] #3;
+    \draw[line width=#1, line cap=round, line join=round, draw=#2, fill=#2] #3;
+  \end{scope}}
+
+% ── Stili TikZ ────────────────────────────────────────────────
+\tikzset{
+  % diagrammi di Hasse
+  hasse/.style={every node/.append style={font=\small}},
+  hv/.style={draw=primary!70!black, fill=primary!7, rounded corners=2pt, inner sep=2pt,
+             minimum height=4.6mm, minimum width=4.6mm},
+  hv evid/.style={hv, fill=orange!25, draw=orange!85!black},
+  hv evid2/.style={hv, fill=seagreen!25, draw=seagreen!75!black},
+  hpunto/.style={circle, fill=primary!80!black, inner sep=0pt, minimum size=5pt},
+  hlato/.style={draw=black!60, line width=0.75pt},
+  hlato evid/.style={draw=orange!85!black, line width=1.4pt},
+  % grafi di relazioni binarie
+  rv/.style={circle, draw=primary!75!black, fill=primary!7, inner sep=1pt, minimum size=6mm, font=\small},
+  rfreccia/.style={-{Stealth[length=2.3mm]}, line width=0.7pt, draw=black!70},
+  % cappi: \draw[rfreccia] (n) to[rcappio] (n);
+  rcappio/.style={out=120, in=60, min distance=8mm},
+  rcappio sotto/.style={out=-120, in=-60, min distance=8mm},
+  rcappio sx/.style={out=150, in=210, min distance=8mm},
+  rcappio dx/.style={out=30, in=-30, min distance=8mm},
+  % diagrammi a frecce delle funzioni
+  insieme/.style={draw=black!60, rounded corners=9pt, line width=0.6pt, inner sep=6pt},
+  elem/.style={font=\small, inner sep=1.5pt},
+  fun/.style={-{Stealth[length=2.2mm]}, line width=0.7pt, draw=primary!80!black},
+  fun2/.style={-{Stealth[length=2.2mm]}, line width=0.7pt, draw=cherryred!85!black},
+  fun3/.style={-{Stealth[length=2.2mm]}, line width=0.7pt, draw=seagreen!70!black},
+}
