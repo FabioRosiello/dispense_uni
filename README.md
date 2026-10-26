@@ -2,7 +2,7 @@
 
 | Cartella | Contenuto |
 |---|---|
-| `Algebra/` | Dispensa di Algebra per Informatica (`DispensaAlgebra.pdf`), sorgenti LaTeX e appunti scritti a mano (`Appunti/`) |
+| `Algebra/` | Dispensa di Algebra per Informatica, 6 CFU (`DispensaAlgebra.pdf`), sorgenti LaTeX e appunti scritti a mano (`Appunti/`) |
 | `IGSW/` | Dispensa di Ingegneria del Software (`DispensaIGSW.pdf`) e sorgenti LaTeX |
 | `MSPI/` | Dispensa di Metodi Statistici per l'Informazione (`DispensaMSPI.pdf`) e sorgenti LaTeX |
 | `RPD/` | Dispensa di Reti e Programmazione Distribuita (`DispensaRPD.pdf`) e sorgenti LaTeX |
