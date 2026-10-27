@@ -1,9 +1,10 @@
 \chapter{Gestione delle sessioni}
 
-Alla nostra applicazione manca ancora una funzionalità essenziale: più utenti
-devono poter registrarsi, autenticarsi e gestire ciascuno la \textbf{propria}
-lista. Realizzarla richiede un concetto nuovo, il \term{tracciamento della
-sessione}.
+Nel capitolo precedente abbiamo realizzato con Node.js la nostra prima
+applicazione web, la lista di cose da fare. Le manca ancora una funzionalità
+essenziale: più utenti devono poter registrarsi, autenticarsi e gestire
+ciascuno la \textbf{propria} lista. Realizzarla richiede un concetto nuovo, il
+\term{tracciamento della sessione}.
 
 \section{Il problema}
 
@@ -15,31 +16,30 @@ Come fa il server a sapere che un utente ha già effettuato il login?
 
 \begin{figure}[H]
   \centering
-  \begin{tikzpicture}[font=\Lato\small,
-      hdr/.style={wtnode, minimum width=3.0cm, minimum height=0.9cm},
-      life/.style={draw=neutral!45!white, line width=0.7pt, dashed},
-      msg/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
-                  draw=primary!70!black},
-      rsp/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
-                  draw=accent!70!black},
-      ml/.style={font=\FiraCodeNL\scriptsize, midway, above, inner sep=2.5pt,
-                 fill=white, text=neutral!15!black}]
+  \begin{tikzpicture}
+    % application server con le due rotte, e il database
+    \draw[wtserver] (9.0,1.15) rectangle (13.4,-3.05);
+    \node[font=\Lato\small\bfseries, text=primary!45!black] at (11.2,0.8)
+      {Application Server};
+    \node[wtrotta, minimum width=2.8cm, minimum height=1.3cm] at (11.2,-0.25) {/login};
+    \node[wtrotta, minimum width=2.8cm, minimum height=1.3cm] at (11.2,-2.05) {/todo};
+    \node[wtdatabase] (db) at (15.3,-0.95) {database};
+    \draw[{Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]},
+          line width=0.9pt, draw=accent!70!black] (13.4,-0.95) -- (db.west);
 
-    \def\xb{0} \def\xs{9.0}
-
-    \node[hdr] (B) at (\xb,0) {\textbf{Utente}};
-    \node[hdr] (S) at (\xs,0) {\textbf{Application Server}};
-    \draw[life] (B.south) -- (\xb,-4.0);
-    \draw[life] (S.south) -- (\xs,-4.0);
-
-    \draw[msg] (\xb,-0.9) -- (\xs,-0.9) node[ml]{POST /login usr=luigi\&pwd=pass};
-    \draw[rsp] (\xs,-1.8) -- (\xb,-1.8) node[ml]{200 OK};
-    \draw[msg] (\xb,-2.7) -- (\xs,-2.7) node[ml]{GET /todo};
-
-    \node[font=\Lato\Large\bfseries, text=red-gradient-6] at (\xs+0.9,-3.3) {?};
-    \node[font=\Lato\scriptsize\itshape, text=red-gradient-6!80!black,
-          anchor=west, align=left] at (\xs+1.3,-3.3)
-      {chi è questo\\ utente?};
+    % l'utente e i quattro messaggi
+    \pic at (0,-1.07) {utente=naplesyellow!80!orange};
+    \node[mcod, below] at (0,-1.1) {Utente};
+    \draw[wtreq]  (0.8,0.1)  -- (9.8,0.1);
+    \draw[wtrisp] (9.8,-0.6) -- (0.8,-0.6);
+    \draw[wtreq]  (0.8,-1.7) -- (9.8,-1.7);
+    \draw[wtrisp] (9.8,-2.4) -- (0.8,-2.4);
+    \node[wtmsg] at (5.0,0.1)  {1: POST /login usr=luigi\&pwd=pass};
+    \node[wtmsg] at (5.0,-0.6) {2: 200 OK};
+    \node[wtmsg] at (5.0,-1.7) {3: GET /todo};
+    \node[wtmsg] at (5.0,-2.4) {4: \textcolor{merr}{\textbf{?}}};
+    \node[mnota, text=merr, anchor=north] at (5.0,-2.5)
+      {la richiesta 3 non dice chi la invia: la lista di chi?};
   \end{tikzpicture}
   \caption{Senza stato, la terza richiesta arriva da uno sconosciuto.}
   \label{fig:stateless-problem}
@@ -64,21 +64,77 @@ richieste diverse è impostare dei \term{cookie}. L'idea è la seguente.
     \begin{itemize}
       \item Se lo sono, il server imposta dei cookie per tenere traccia
             dell'interazione, per esempio
-            \codel{Set-Cookie: auth=true; username=luigi}.
+            \codel{Set-Cookie: auth=true; username=luigi}. È una scrittura
+            abbreviata: in realtà ogni cookie ha il proprio header
+            \code{Set-Cookie}, come si vedrà nel codice.
       \item Se non lo sono, mostra una pagina di errore e non imposta alcun
             cookie.
     \end{itemize}
   \item Le pagine dinamiche che richiedono autenticazione controllano il cookie
         \code{auth}: se è impostato mostrano il contenuto, altrimenti
-        reindirizzano alla pagina di login.
+        reindirizzano alla pagina di login (o rispondono con un errore).
 \end{enumerate}
 
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}
+    % application server con le due rotte, e il database
+    \draw[wtserver] (9.0,1.15) rectangle (13.4,-4.65);
+    \node[font=\Lato\small\bfseries, text=primary!45!black] at (11.2,0.8)
+      {Application Server};
+    \node[wtrotta, minimum width=2.8cm, minimum height=1.3cm] at (11.2,-0.25) {/login};
+    \node[wtrotta, minimum width=2.8cm, minimum height=3.0cm] at (11.2,-2.8) {/todo};
+    \node[wtdatabase] (db) at (15.3,-1.75) {database};
+    \draw[{Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]},
+          line width=0.9pt, draw=accent!70!black] (13.4,-1.75) -- (db.west);
+
+    % utente A: login, poi la lista
+    \pic at (0,-0.37) {utente=naplesyellow!80!orange};
+    \node[mcod, below] at (0,-0.4) {Utente A};
+    \draw[wtreq]  (0.8,0.1)  -- (9.8,0.1);
+    \draw[wtrisp] (9.8,-0.6) -- (0.8,-0.6);
+    \node[wtmsg] at (5.0,0.1)  {1: POST /login usr=luigi\&pwd=pass};
+    \node[wtmsg] at (5.0,-0.6) {2: 200 OK Set-Cookie: auth=true; username=luigi};
+
+    \pic at (0,-2.07) {utente=naplesyellow!80!orange};
+    \node[mcod, below] at (0,-2.1) {Utente A};
+    \draw[wtreq]  (0.8,-1.6) -- (9.8,-1.6);
+    \draw[wtrisp] (9.8,-2.3) -- (0.8,-2.3);
+    \node[wtmsg] at (5.0,-1.6) {3: GET /todo Cookie: auth=true; username=luigi};
+    \node[wtmsg] at (5.0,-2.3) {4: 200 OK + la lista di luigi};
+
+    % utente B: nessun cookie
+    \pic at (0,-3.77) {utente=red-gradient-3!85!black};
+    \node[mcod, below] at (0,-3.8) {Utente B};
+    \draw[wtreq]  (0.8,-3.3) -- (9.8,-3.3);
+    \draw[wtrisp] (9.8,-4.0) -- (0.8,-4.0);
+    \node[wtmsg] at (5.0,-3.3) {5: GET /todo (senza cookie)};
+    \node[wtmsg] at (5.0,-4.0) {6: \textcolor{merr}{401 Unauthorized}};
+  \end{tikzpicture}
+  \caption{L'approccio ingenuo: lo stato viaggia nei cookie, e il server si fida
+           di quello che il browser gli rimanda.}
+  \label{fig:naive-cookies}
+\end{figure}
+
+Dopo il login (1), il server risponde impostando i cookie (2); da quel momento
+il browser li allega a \textbf{ogni} richiesta allo stesso sito (3), e il server
+li usa per capire chi sta chiedendo che cosa (4). Chi non ha i cookie, come
+l'utente B, riceve un errore (5, 6). Nello schema la risposta al login è
+semplificata in \code{200 OK}: il codice che segue risponde con un
+reindirizzamento, ma ciò che conta è l'header \code{Set-Cookie}, che il browser
+memorizza qualunque sia il codice di stato.
+
 \subsection{Gestire il login}
+
+Il form di login ha i campi \code{usr} e \code{pwd} e usa il metodo
+\code{POST}; il corpo della richiesta si analizza come per il salvataggio degli
+elementi della lista. Se le credenziali sono corrette, il server reindirizza
+alla homepage e imposta due cookie:
 
 \begin{affianco}[0.5][c]
 \begin{lstlisting}[style=js, name=login.js]
 if (isAuthenticated) {
-  response.writeHead(300, {
+  response.writeHead(302, {
     "Location": "/",
     "Set-Cookie": [
       `auth=true; max-age=${60 * 60}`,
@@ -90,7 +146,7 @@ if (isAuthenticated) {
 \end{lstlisting}
 \risultato
 \begin{lstlisting}[style=http, name=Risposta generata]
-HTTP/1.1 300 Multiple Choices
+HTTP/1.1 302 Found
 Location: /
 Set-Cookie: auth=true; max-age=3600
 Set-Cookie: username=luigi; max-age=3600
@@ -98,15 +154,18 @@ Set-Cookie: username=luigi; max-age=3600
 \wtnota{Due header \code{Set-Cookie}: il browser\\ memorizza due cookie distinti.}
 \end{affianco}
 
-Si impostano due cookie --- uno con il nome utente, l'altro un semplice valore
-booleano --- entrambi con scadenza a un'ora, e si reindirizza alla homepage.
+Uno contiene il nome utente, l'altro è un semplice valore booleano; entrambi
+scadono dopo un'ora (\code{max-age} è espresso in secondi).
 
-\warning{300 o 303?}{
-  Il codice delle slide usa \code{300} (\textit{Multiple Choices}), con cui il
-  browser \textbf{non è tenuto} a seguire l'header \code{Location}. Per
-  reindirizzare dopo l'invio di un form si usa di norma \code{303}
-  (\textit{See Other}), oppure \code{302}: il browser segue il reindirizzamento
-  con una \code{GET}, e un aggiornamento della pagina non reinvia il form.}
+\info{Perché 302}{
+  \code{302} (\textit{Found}) è un \textbf{reindirizzamento}: il browser
+  memorizza i cookie ricevuti e poi segue l'header \code{Location} con una
+  \code{GET} a \code{/}, portando con sé i cookie appena impostati. È lo schema
+  \textit{Post/Redirect/Get} del capitolo precedente: aggiornare la pagina dopo
+  il login non reinvia le credenziali. Lì si usava \code{303}
+  (\textit{See Other}), il codice più preciso dopo una \code{POST} perché chiede
+  esplicitamente di proseguire con una \code{GET}; i browser però trattano
+  \code{302} allo stesso modo.}
 
 Se invece le credenziali non sono corrette, si mostra di nuovo la pagina di
 login restituendo un codice \code{401}:
@@ -267,24 +326,67 @@ function handleTodoListRequest(request, response, context = {}) {
 \end{immagine}
 \end{affianco}
 
+\info{Il codice completo}{
+  Il codice completo di questa versione dell'applicazione, con i dati di
+  sessione memorizzati nei cookie, è disponibile tra i materiali del corso su
+  Teams. Conviene scaricarlo, eseguirlo e seguirne il funzionamento con il
+  debugger, come visto nel capitolo 11.}
+
 \section{I problemi dell'approccio a cookie}
 
 L'approccio funziona ed è semplice da implementare. Purtroppo soffre di un
-problema \textbf{critico}.
+problema \textbf{critico}: i cookie sono interamente controllati dal client, e
+manipolarli è banale. Bastano i DevTools: nella scheda \textit{Archiviazione}
+di Firefox (\textit{Applicazione} in Chrome) i cookie di un sito sono elencati
+in una tabella, e un doppio clic su un valore permette di modificarlo.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{15.4cm}
+\begin{devtools}{Archiviazione}
+  {\Lato\scriptsize\color{neutral!20!black}%
+  \noindent\begin{minipage}[t]{3.4cm}\vspace{5pt}
+    \hspace*{6pt}{\tiny$\blacktriangleright$}\ Archiviazione cache\par\vspace{3pt}
+    \hspace*{6pt}{\tiny$\blacktriangledown$}\ Cookie\par\vspace{3pt}
+    \hspace*{15pt}\colorbox{dtblue!12}{http://localhost:3000}\par\vspace{3pt}
+    \hspace*{6pt}{\tiny$\blacktriangleright$}\ Indexed DB\par\vspace{3pt}
+    \hspace*{6pt}{\tiny$\blacktriangleright$}\ Archiviazione locale\par\vspace{3pt}
+    \hspace*{6pt}{\tiny$\blacktriangleright$}\ Archiviazione sessione\par\vspace{5pt}
+  \end{minipage}%
+  {\color{dtline}\vrule width 0.8pt}%
+  \begin{minipage}[t]{\dimexpr\linewidth-3.4cm-0.8pt\relax}\vspace{0pt}
+    \colorbox{dtbar}{\makebox[\dimexpr\linewidth-2\fboxsep][l]{%
+      \color{neutral!45!black}\quad Filtra elementi\hfill +\quad}}\par
+    \noindent\begin{tabular*}{\linewidth}{@{\hspace{8pt}}l@{\extracolsep{\fill}}lllll@{\hspace{8pt}}}
+      \rule{0pt}{11pt}\textbf{Nome} & \textbf{Valore} & \textbf{Dominio} &
+        \textbf{Percorso} & \textbf{Scadenza / Max-Age} & \textbf{HttpOnly} \\ \hline
+      \rule{0pt}{11pt}auth & true & localhost & / & Mon, 27 Oct 2025 18:42:17 GMT & false \\
+      username & \fcolorbox{dtblue}{white}{bob\rule[-1.5pt]{0.5pt}{8pt}} &
+        localhost & / & Mon, 27 Oct 2025 18:42:17 GMT & false \\
+    \end{tabular*}\par\vspace{4pt}
+  \end{minipage}}
+\end{devtools}
+\end{minipage}
+\caption{La scheda \textit{Archiviazione} dei DevTools di Firefox: un doppio
+         clic sul valore del cookie \code{username}, e \code{luigi} diventa
+         \code{bob}. Alla richiesta successiva il server crede di parlare con
+         bob.}
+\label{fig:cookie-tampering}
+\end{figure}
 
 \error{I cookie sono interamente controllati dal client}{
-  Manipolarli è banale: bastano i DevTools. Un utente può cambiare il valore del
-  proprio cookie \code{username} in qualunque altro nome utente, oppure
-  impostarsi da solo un cookie \code{auth=true} \textbf{senza mai passare dalla
-  pagina di login}. La nostra autenticazione diventa del tutto inutile.
+  Un utente può cambiare il valore del proprio cookie \code{username} in
+  qualunque altro nome utente, oppure impostarsi da solo un cookie
+  \code{auth=true} \textbf{senza mai passare dalla pagina di login}. La nostra
+  autenticazione diventa del tutto inutile.
 
   Il problema della manomissione si può mitigare con i \term{cookie firmati}: il
   server firma i cookie con la propria chiave privata e, finché la chiave resta
   segreta, riconosce quelli manomessi. Resta però il fatto che i dati viaggiano
   sul client.}
 
-Ci sono poi limiti pratici. I browser impongono restrizioni sui cookie per
-evitare problemi di prestazioni:
+I problemi non si fermano alla manomissione. I browser impongono restrizioni
+sui cookie per evitare problemi di prestazioni:
 
 \begin{itemize}
   \item la dimensione di un cookie è generalmente limitata a \textbf{4096 byte};
@@ -292,9 +394,18 @@ evitare problemi di prestazioni:
         dominio.
 \end{itemize}
 
-E se dovessimo memorizzare più dati di sessione?
+I limiti del proprio browser si possono verificare su
+\urlx{http://browsercookielimits.iain.guru/}. E se dovessimo memorizzare più
+dati di sessione?
 
 \section{Le sessioni web}
+
+Le domande sono quindi due. Come tenere traccia di informazioni
+\textbf{sensibili} sulle interazioni precedenti, senza che il client possa
+manometterle? E come memorizzare \textbf{più dati} di quanti ne permettano i
+cookie? La risposta è il meccanismo delle \term{sessioni web}: i dati restano
+sul server, e il cookie (lo stesso meccanismo della RFC 6265, \textit{HTTP
+State Management Mechanism}) trasporta soltanto un identificatore.
 
 \dfn{Sessione web}{
   Quando serve tenere traccia di informazioni attraverso più richieste, il server
@@ -309,43 +420,67 @@ soltanto un identificatore opaco, e non può metterci mano.
 
 \begin{figure}[H]
   \centering
-  \begin{tikzpicture}[font=\Lato\small,
-      hdr/.style={wtnode, minimum width=3.0cm, minimum height=0.9cm},
-      life/.style={draw=neutral!45!white, line width=0.7pt, dashed},
-      msg/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
-                  draw=primary!70!black},
-      rsp/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
-                  draw=accent!70!black},
-      ml/.style={font=\FiraCodeNL\scriptsize, midway, above, inner sep=2.5pt,
-                 fill=white, text=neutral!15!black}]
+  \colorlet{sidA}{orange-gradient-6!80!black}%
+  \begin{tikzpicture}
+    % application server con i dati di sessione
+    \draw[wtserver] (9.0,1.15) rectangle (15.2,-4.65);
+    \node[font=\Lato\small\bfseries, text=primary!45!black] at (12.1,0.8)
+      {Application Server};
+    \draw[rounded corners=4pt, draw=accent!55!black, line width=0.8pt,
+          fill=accent!6!white] (9.35,0.4) rectangle (14.85,-4.3);
+    \node[font=\Lato\scriptsize\bfseries, text=accent!45!black, anchor=west]
+      at (9.5,0.12) {Dati di sessione};
+    \oggetto[fill=orange-gradient-1!70!white, text=sidA,
+             font=\FiraCodeNL\scriptsize\bfseries]
+      {s1}{(12.1,-0.5)}{5.0cm}{id: ahs37gfw\ldots asi3ff435}
+      {auth/true, username/"john"}
+    \oggetto[font=\FiraCodeNL\scriptsize\bfseries]
+      {s2}{(12.1,-2.55)}{5.0cm}{id: 4fg23g54\ldots ssdf23g43u}
+      {auth/true, username/"billy"}
 
-    \def\xb{0} \def\xs{8.4}
+    % utente A: login, poi la lista
+    \pic at (0,-0.37) {utente=naplesyellow!80!orange};
+    \node[mcod, below] at (0,-0.4) {Utente A};
+    \draw[wtreq]  (0.8,0.1)  -- (9.0,0.1);
+    \draw[wtrisp] (9.0,-0.6) -- (0.8,-0.6);
+    \node[wtmsg] at (4.9,0.1)  {1: POST /login usr=john\&pwd=pass};
+    \node[wtmsg] at (4.9,-0.6)
+      {2: 200 OK Set-Cookie: SID=\textcolor{sidA}{ahs37\ldots 435}};
 
-    \node[hdr] (B) at (\xb,0) {\textbf{Utente A}};
-    \node[hdr] (S) at (\xs,0) {\textbf{Application Server}};
-    \draw[life] (B.south) -- (\xb,-3.4);
-    \draw[life] (S.south) -- (\xs,-3.4);
+    \pic at (0,-2.07) {utente=naplesyellow!80!orange};
+    \node[mcod, below] at (0,-2.1) {Utente A};
+    \draw[wtreq]  (0.8,-1.6) -- (9.0,-1.6);
+    \draw[wtrisp] (9.0,-2.3) -- (0.8,-2.3);
+    \node[wtmsg] at (4.9,-1.6)
+      {3: GET /todo Cookie: SID=\textcolor{sidA}{ahs37\ldots 435}};
+    \node[wtmsg] at (4.9,-2.3) {4: 200 OK + la lista di john};
 
-    \draw[msg] (\xb,-0.9) -- (\xs,-0.9) node[ml]{POST /login usr=john\&pwd=pass};
-    \draw[rsp] (\xs,-1.7) -- (\xb,-1.7) node[ml]{200 OK Set-Cookie: SID=ahs37...435};
-    \draw[msg] (\xb,-2.5) -- (\xs,-2.5) node[ml]{GET /todos Cookie: SID=ahs37...435};
-    \draw[rsp] (\xs,-3.2) -- (\xb,-3.2) node[ml]{200 OK lista di john};
-
-    % store lato server
-    \node[wtnodeplain, anchor=north west, align=left,
-          font=\FiraCodeNL\scriptsize] (st) at (10.4,0.4)
-      {ahs37...435\\ \ \ auth: true\\ \ \ username: john\\[3pt]
-       4fg23...43u\\ \ \ auth: true\\ \ \ username: billy};
-    \node[font=\Lato\scriptsize, text=green-gradient-6!60!black, anchor=south west]
-      at (10.4,0.5) {dati di sessione (sul server)};
-    \begin{scope}[on background layer]
-      \node[rounded corners=4pt, draw=green-gradient-6, line width=0.9pt,
-            fill=green-gradient-1!35!white, fit=(st), inner sep=7pt] {};
-    \end{scope}
+    % utente B: nessun identificatore
+    \pic at (0,-3.77) {utente=red-gradient-3!85!black};
+    \node[mcod, below] at (0,-3.8) {Utente B};
+    \draw[wtreq]  (0.8,-3.3) -- (9.0,-3.3);
+    \draw[wtrisp] (9.0,-4.0) -- (0.8,-4.0);
+    \node[wtmsg] at (4.9,-3.3) {5: GET /todo (senza SID)};
+    \node[wtmsg] at (4.9,-4.0) {6: redirect alla pagina di login};
   \end{tikzpicture}
-  \caption{Il client possiede solo l'identificatore; i dati restano sul server.}
+  \caption{Il client possiede solo l'identificatore; i dati restano sul server.
+           Chi non presenta un identificatore valido viene rimandato al login.}
   \label{fig:sessions}
 \end{figure}
+
+Seguiamo i messaggi dello schema.
+\begin{itemize}[leftmargin=2.6em, labelwidth=2em, labelsep=0.6em, align=left]
+  \item[\textbf{1-2}] L'utente A invia le credenziali di john. Il server crea
+        una nuova sessione, vi memorizza \code{auth} e \code{username} e
+        restituisce al browser \textbf{solo} l'identificatore, nel cookie
+        \code{SID} (nel codice che segue si chiamerà \code{sessionId}).
+  \item[\textbf{3-4}] A ogni richiesta successiva il browser rimanda il cookie.
+        Il server cerca la sessione con quell'identificatore, vi trova
+        \code{username: "john"} e mostra la lista di john.
+  \item[\textbf{5-6}] L'utente B non ha alcun identificatore valido: la sua
+        richiesta non corrisponde a nessuna sessione, e il server lo
+        reindirizza alla pagina di login.
+\end{itemize}
 
 \section{Implementare le sessioni da zero}
 
@@ -381,22 +516,86 @@ class Session {
 }
 \end{lstlisting}
 \risultato
-\begin{immagine}[Una mappa di mappe: all'identificatore\\
-                 corrisponde la sessione dell'utente.]
+\begin{immagine}[Una mappa di mappe: a ogni identificatore\\
+                 corrisponde una sessione.]
 \begin{tikzpicture}
   \mchiave{1.6cm}
-  \oggetto[fill=accent!14!white]{st}{(0,0)}{2.8cm}{sessionStore (Map)}
-    {ahs37\ldots/, 4fg23\ldots/}
+  \oggetto[fill=accent!14!white]{st}{(0,-0.35)}{2.8cm}{sessionStore (Map)}
+    {Kjhdfgo7\ldots 34niAdudh/, 34uih\&7G\ldots Q4jkhsadg/,
+     908shdu\%\ldots jhsdf\$a\&a/}
   \mchiave{1.4cm}
-  \oggetto{s1}{(4.2,0.35)}{2.6cm}{Map}{username/"john", auth/true}
-  \oggetto{s2}{(4.2,-1.55)}{2.6cm}{Map}{username/"billy", auth/true}
+  \oggetto[fill=orange-gradient-1!70!white]{s1}{(4.75,1.0)}{2.6cm}{Map}
+    {username/"luigi", auth/true}
+  \oggetto{s2}{(4.75,-0.6)}{2.6cm}{Map}{username/"bob", auth/true}
+  \oggetto[fill=green-gradient-1]{s3}{(4.75,-2.2)}{2.6cm}{Map}
+    {username/"bob", auth/true}
   \node (d1) at ([xshift=-9pt]st-1.east) {};
   \node (d2) at ([xshift=-9pt]st-2.east) {};
+  \node (d3) at ([xshift=-9pt]st-3.east) {};
   \riferimento{d1}{to[out=0, in=180] (s1.west)}
   \riferimento{d2}{to[out=0, in=180] (s2.west)}
+  \riferimento{d3}{to[out=0, in=180] (s3.west)}
 \end{tikzpicture}
 \end{immagine}
 \end{affianco}
+
+Le chiavi della prima mappa sono gli identificatori di sessione, i valori le
+sessioni. Nell'esempio bob ha \textbf{due} sessioni: è normale, perché
+ogni login ne crea una nuova. Basta che bob abbia effettuato l'accesso da due
+browser, o da due dispositivi diversi, e ciascuno avrà il proprio
+identificatore.
+
+Il listato omette i metodi rimanenti: la versione completa è nel file
+\code{Session.js} dell'esempio del corso. Una possibile implementazione dei due
+metodi usati sopra è la seguente.
+
+\begin{affianco}[0.46][c]
+\begin{lstlisting}[style=js, name=Session.js]
+import { randomUUID } from "crypto";
+
+class Session {
+  /* ... i metodi visti sopra ... */
+
+  generateNewSessionId() {
+    // generatore crittograficamente sicuro
+    return randomUUID();
+  }
+
+  getSessionById(sessionId) {
+    // undefined se la sessione non esiste
+    return this.sessionStore.get(sessionId);
+  }
+}
+\end{lstlisting}
+\risultato
+\begin{immagine}[Un identificatore prevedibile si indovina; uno casuale no.]
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt},
+    sid/.style={rounded corners=2pt, fill=white, line width=0.7pt,
+      font=\FiraCodeNL\scriptsize, inner sep=3pt}]
+  \node[mnota, anchor=west] at (0,0.5) {\textbf{con un contatore}};
+  \node[sid, draw=neutral!50!black, anchor=west] (a) at (0,0) {sessionId=41};
+  \node[sid, draw=merr, text=merr, anchor=west] (b) at (3.2,0) {sessionId=42};
+  \draw[a, draw=merr] (a) -- node[mnota, above, text=merr]{+1} (b);
+  \node[mnota, text=merr, anchor=north west] at (0,-0.3)
+    {basta provare il valore successivo per rubare la sessione di un altro};
+  \node[mnota, anchor=west] at (0,-1.25) {\textbf{con randomUUID()}};
+  \node[sid, draw=mok, anchor=west] at (0,-1.75)
+    {sessionId=1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed};
+  \node[mnota, text=mok, anchor=north west] at (0,-2.05)
+    {122 bit casuali: indovinarne uno valido è praticamente impossibile};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
+
+\warning{L'identificatore deve essere imprevedibile}{
+  Chi conosce un identificatore valido \textbf{è}, per il server, il
+  proprietario della sessione. Se gli identificatori fossero numeri progressivi,
+  o generati con \code{Math.random()}, che non è pensato per la sicurezza, un
+  attaccante potrebbe indovinarli. Per questo si usa un generatore
+  crittograficamente sicuro, come \code{randomUUID} del modulo \code{crypto}.
+  Il furto della sessione (\textit{session hijacking}) e le sue contromisure
+  sono trattati nel capitolo 22.}
 
 \subsection{Usare le sessioni}
 
@@ -412,7 +611,7 @@ if (isAuthenticated) {
   session.storeSessionData(sessionId, "username", user.username);
   session.storeSessionData(sessionId, "auth", true);
 
-  response.writeHead(300, {
+  response.writeHead(302, {
     "Location": "/",
     "Set-Cookie": [
       `sessionId=${sessionId}; max-age=${60 * 60}`
@@ -423,7 +622,7 @@ if (isAuthenticated) {
 \end{lstlisting}
 \risultato
 \begin{lstlisting}[style=http, name=Risposta generata]
-HTTP/1.1 300 Multiple Choices
+HTTP/1.1 302 Found
 Location: /
 Set-Cookie: sessionId=ahs37...; max-age=3600
 \end{lstlisting}
@@ -476,6 +675,13 @@ restituisce \code{undefined}.
   una richiesta servita dalla macchina B non trova la sessione creata sulla
   macchina A. In produzione le sessioni si conservano in un archivio condiviso
   (Redis, un database), oppure si adottano token autoconsistenti e firmati.}
+
+\info{Il codice completo, versione con le sessioni}{
+  Anche la versione migliorata dell'applicazione, con le sessioni memorizzate
+  sul server e la classe \code{Session} completa, è disponibile tra i materiali
+  del corso su Teams. Vale lo stesso consiglio: eseguirla e seguirla con il
+  debugger, confrontandola con la versione a cookie. Nel capitolo 14 lo stesso
+  meccanismo sarà offerto già pronto dal middleware \code{express-session}.}
 
 \subsection{Altri metodi di tracciamento}
 

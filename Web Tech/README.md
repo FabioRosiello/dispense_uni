@@ -41,7 +41,7 @@ escluse: restano sulle slide e sul sito del docente, dove vengono aggiornate.
 | `chapters/10. Web statico e dinamico.tex` | Limiti del web statico, programmazione lato server, CGI (flusso, interfaccia con variabili d'ambiente, stdin e stdout, lista di cose da fare), scripting lato server, PHP, NGINX e PHP-FPM |
 | `chapters/11. Node.tex` | Diffusione dei runtime (State of JS), modello multi-thread e I/O bloccante, event loop, installazione con nvm (Node.js 22.14.0), REPL, npm e `package.json` (`npm run`), primo server HTTP, debug in VS Code (Auto Attach, breakpoint, azioni di debug), nodemon |
 | `chapters/12. Web app con Node.tex` | L'applicazione to-do e le sue tre pagine, routing, motori di template e Pug (con l'HTML generato dalle inclusioni), analisi del corpo delle richieste, l'applicazione completa (router, controller, template con layout comune, prove con `curl`, Post/Redirect/Get), estensione con la cancellazione (routing sul `pathname`, parametri della query, perché una GET non deve modificare lo stato) |
-| `chapters/13. Sessioni.tex` | Cookie, i loro limiti, sessioni memorizzate sul server |
+| `chapters/13. Sessioni.tex` | HTTP stateless e tracciamento della sessione, approccio ingenuo con i cookie (schema con due utenti, login con reindirizzamento `302`, `parseCookies`, contesto passato ai controller), manomissione dei cookie con i DevTools e loro limiti, sessioni web lato server (schema con due utenti e i dati di sessione), classe `Session` con una `Map` di `Map` e identificatori generati con `randomUUID`, sessioni in memoria e produzione, altri metodi di tracciamento |
 | `chapters/14. Express.tex` | Framework e inversione del controllo, routing, middleware, gestione errori, messaggi flash |
 | `chapters/15. Web app con Express.tex` | ORM e Sequelize, organizzazione del progetto, file di configurazione |
 | `chapters/16. REST.tex` | Stile REST, verbi e risorse, JWT, hash crittografici, OpenAPI |
@@ -99,7 +99,8 @@ selezionare **LuaLaTeX**. Nessuna altra configurazione è necessaria.
   del codice HTML appena presentato;
 - ambiente `affianco`: codice a sinistra e risultato a destra, in un blocco che
   non si divide mai fra due pagine (vedi sotto);
-- ambiente `devtools`: finestra dei DevTools, con i pannelli *Regole* e *Rete*;
+- ambiente `devtools`: finestra dei DevTools, con i pannelli *Regole* e *Rete*
+  (e *Archiviazione*, la scheda dei cookie, che compare solo quando è attiva);
 - ambiente `console`: console dei DevTools, per l'output di uno script. Ogni
   riga del sorgente è una riga di output (niente `\\` da scrivere a mano);
 - ambiente `immagine`: uno schema TikZ nella colonna del risultato, centrato e
@@ -165,6 +166,7 @@ dispensa perché abbiano lo stesso aspetto:
 | `\wtdialogo[campo]{messaggio}{pulsanti}` | una finestra `alert`/`confirm`/`prompt` |
 | `\wttoast[tipo]{titolo}{messaggio}` | una notifica di ngx-toastr (`success`, `error`, `warning`, `info`) |
 | `\ctabella{...}` | il risultato di `console.table` nei DevTools |
+| `\pic {utente=colore}`, `wtserver`, `wtrotta`, `wtdatabase`, `wtreq`, `wtrisp`, `wtmsg` | gli scambi numerati di richieste e risposte: utenti, application server con le sue rotte, database, frecce e testo dei messaggi |
 | `mdom`, `mtesto`, `mcommento`, `mnuovo`, `mramo` | nodi e rami di un albero DOM |
 | `mfun`, `mvar`, `mnota`, `mcod`, `mrif`, `mcerca` | funzioni, caselle, note, codice e frecce negli schemi |
 
