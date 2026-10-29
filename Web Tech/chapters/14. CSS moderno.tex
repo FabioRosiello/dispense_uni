@@ -1,0 +1,1431 @@
+\chapter{CSS moderno e adattivo}
+
+Nei capitoli 3 e 4 abbiamo visto come i selettori stabiliscono a quali elementi
+si applica uno stile, come la cascata risolve le dichiarazioni in conflitto, il
+box model e il flusso normale, il posizionamento, Flexbox e Grid, le media query
+e i layout responsive. In questo capitolo estendiamo quei concetti con le
+funzionalità più recenti del CSS: selettori più concisi, variabili, valori
+calcolati, nuove unità per il viewport dei dispositivi mobili, query sui
+contenitori, immagini che si adattano al dispositivo, preferenze dell'utente e
+regole annidate.
+
+\section{Selettori moderni}
+
+I selettori CSS sono molto espressivi: combinando selettori semplici si
+descrivono relazioni anche complesse fra gli elementi. Le liste di selettori
+complessi, però, tendono a diventare ripetitive. I frammenti ripetuti allungano
+il foglio di stile, che diventa più pesante da scaricare, e rendono le modifiche
+più soggette a errori.
+
+Strumenti come \term{Sass}, un preprocessore CSS che vedremo nel capitolo 19,
+sono diventati popolari proprio perché offrivano modi comodi per organizzare e
+semplificare i fogli di stile. Il CSS moderno ha incorporato direttamente nel
+linguaggio diverse funzionalità di questo tipo.
+
+\begin{esempio}{Un CSS ripetitivo}
+Vogliamo dare lo stesso stile a tutti gli \tg{em} contenuti in un \tg{a}, in tre
+diverse regioni della pagina. La regola a sinistra funziona, ma è ripetitiva. Se
+poi volessimo limitarla agli \tg{em} dei link con classe \code{foo}, dovremmo
+sostituire \code{a} con \code{a.foo} in tre punti del selettore.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=css, name=link.css]
+header a em,
+main a em,
+footer a em {
+  color: purple;
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=css, name=link-foo.css]
+header a.foo em,
+main a.foo em,
+footer a.foo em {
+  color: purple;
+}
+\end{lstlisting}
+\wtnota{Tre occorrenze da modificare per un solo cambiamento.}
+\end{affianco}
+\end{esempio}
+
+Le \term{pseudo-classi funzionali} aiutano a scrivere selettori più concisi. Si
+chiamano così perché, come le funzioni, ricevono degli argomenti fra parentesi:
+un elenco di selettori.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.2cm}}l@{}}
+  \textbf{Pseudo-classe} & \textbf{A che cosa serve} \\
+  \code{:is()}    & raggruppa selettori alternativi \\
+  \code{:where()} & crea stili predefiniti facili da sovrascrivere \\
+  \code{:not()}   & esclude gli elementi che corrispondono agli argomenti \\
+  \code{:has()}   & seleziona un elemento in base ad altri elementi collegati \\
+\end{tabular}
+\end{center}
+
+\subsection{:is()}
+
+La pseudo-classe \code{:is()} (\textit{matches-any}) seleziona un elemento se
+\textbf{almeno uno} dei selettori passati come argomento lo seleziona. È utile
+quando di un selettore complesso cambia solo una parte: la parte che varia
+finisce dentro \code{:is()}, quella comune si scrive una volta sola.
+
+\begin{affianco}[0.48][c]
+\begin{lstlisting}[style=css, name=prima.css]
+header a em,
+main a em,
+footer a em {
+  color: purple;
+}
+
+button:hover,
+button:focus,
+button:active {
+  background: navy;
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=css, name=dopo.css]
+:is(header, main, footer) a em {
+  color: purple;
+}
+
+button:is(:hover, :focus, :active) {
+  background: navy;
+}
+\end{lstlisting}
+\wtnota{Le due versioni selezionano gli stessi elementi.}
+\end{affianco}
+
+Per limitare ora la prima regola ai link con classe \code{foo} basta una sola
+modifica: \code{:is(header, main, footer) a.foo em}.
+
+\subsection{:where()}
+
+\code{:where()} seleziona gli elementi esattamente come \code{:is()}: un
+elemento viene selezionato se almeno uno degli argomenti lo seleziona. La
+differenza fondamentale è che \code{:where()} e \textbf{tutti i suoi argomenti}
+contribuiscono alla cascata con specificità \textbf{zero}. Gli stili che ne
+derivano sono quindi, di proposito, facili da sovrascrivere: è lo strumento
+adatto per scrivere stili predefiniti, per esempio in una libreria, che chi la
+usa potrà ridefinire con un selettore qualunque.
+
+\begin{affianco}[0.44][c]
+\begin{lstlisting}[style=css, name=where.css]
+:where(main a #em) {
+  color: red;
+}
+
+em {
+  color: purple;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=where.html]
+<body>
+  <main>
+    <a href="#">
+      <em id="em">Emphasis</em> link
+    </a>
+  </main>
+</body>
+\end{lstlisting}
+\risultato
+\begin{browser}[where.html]
+  \wtlink{\mbox{\textcolor{css-purple}{\textit{Emphasis}}} link}
+\end{browser}
+\begin{devtools}{Analisi pagina}
+  \dtgruppo{Regole dell'elemento \texttt{<em id="em">}}
+  \dtregola{em}{where.css:5}
+  \dtdich{color}{purple}
+  \dtchiudi
+  \dtregola{:where(main a \#em)}{specificità (0,0,0) \quad where.css:1}
+  \dtbarrata{color}{red}
+  \dtchiudi
+\end{devtools}
+\wtnota{Vince \code{em}, con specificità (0,0,1),\\ anche se l'altro selettore
+        contiene un id.}
+\end{affianco}
+
+Il selettore \code{main a \#em} avrebbe specificità $(1, 0, 2)$ e vincerebbe
+senza discussioni; racchiuso in \code{:where()} vale $(0, 0, 0)$, e basta il
+semplice selettore di tipo \code{em} per sovrascriverlo.
+
+\subsection{:not()}
+
+\code{:not()} seleziona gli elementi che \textbf{non} corrispondono a
+\textbf{nessuno} dei suoi argomenti.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=css, name=not.css]
+li:not(.selected, .active) {
+  opacity: 0.5;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=lista.html]
+<ol>
+  <li>A</li>
+  <li class="selected">B</li>
+  <li class="active">C</li>
+</ol>
+\end{lstlisting}
+\risultato
+\begin{browser}[lista.html]
+  \hspace*{1.2em}{\color{black!45}1.\enspace A}\par
+  \hspace*{1.2em}2.\enspace B\par
+  \hspace*{1.2em}3.\enspace C
+\end{browser}
+\wtnota{Solo A non ha né \code{.selected} né \code{.active}:\\ è l'unico
+        elemento semitrasparente.}
+\end{affianco}
+
+\subsection{:has()}
+
+\code{:has()} seleziona un elemento in base ai suoi \textbf{discendenti} o ad
+altri elementi \textbf{collegati}. I suoi argomenti sono \term{selettori
+relativi}: vengono valutati a partire dall'elemento stesso, per cui
+\code{ol:has(.active)} indica gli \tg{ol} che hanno un discendente
+\code{.active}, e \code{li:has(+ .selected)} i \tg{li} il cui fratello
+\textbf{immediatamente successivo} ha la classe \code{selected}.
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=css, name=has.css]
+/* gli <ol> che contengono un .active */
+ol:has(.active) {
+  background-color: lightgray;
+}
+
+/* gli <li> seguiti subito da un .selected */
+li:has(+ .selected) {
+  color: red;
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[lista.html]
+  \noindent\colorbox{css-lightgray}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
+    \hspace*{1.2em}\textcolor{css-red}{1.\enspace A}\par
+    \hspace*{1.2em}2.\enspace B\par
+    \hspace*{1.2em}3.\enspace C}}
+\end{browser}
+\wtnota{L'\tg{ol} contiene C, che è \code{.active}: diventa grigio.\\ A è
+        seguito da B, che è \code{.selected}: diventa rosso.}
+\end{affianco}
+
+Per la prima volta il CSS può selezionare un elemento in base a ciò che
+\textbf{contiene} o a ciò che lo \textbf{segue}: per questo \code{:has()} viene
+spesso chiamato \guillemotleft selettore del genitore\guillemotright.
+
+\warning{I commenti CSS si scrivono solo con /* */}{
+  Nelle slide i commenti di questo esempio sono scritti con \code{//}, come in
+  JavaScript. In CSS non è un commento: il browser legge \code{//} e il resto
+  della riga come l'inizio di una dichiarazione non valida, che si estende fino
+  al primo punto e virgola, e la scarta insieme alla dichiarazione successiva
+  (qui proprio \code{background-color}). L'unica sintassi per i commenti è
+  \code{/* ... */}.}
+
+\subsection{La specificità delle pseudo-classi funzionali}
+
+Ricordiamo dal capitolo 3 che la specificità è una terna $(A, B, C)$: numero di
+selettori di id; di classe, attributo e pseudo-classe; di tipo e
+pseudo-elemento. Le pseudo-classi funzionali seguono regole proprie.
+
+\begin{itemize}
+  \item \textbf{Non} contano come pseudo-classi: non aggiungono nulla a $B$, a
+        differenza di \code{:focus} o \code{:hover}.
+  \item \code{:where()}, compreso tutto il suo contenuto, contribuisce sempre
+        con specificità \textbf{zero}.
+  \item Per \code{:is()}, \code{:not()} e \code{:has()} la specificità è quella
+        del loro argomento \textbf{più specifico}.
+\end{itemize}
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=css, name=specificita.css]
+li:is(.selected, #foo) {
+  color: red;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=lista.html]
+<ol>
+  <li>A</li>
+  <li class="selected">B</li>
+  <li class="active">C</li>
+</ol>
+\end{lstlisting}
+\risultato
+\begin{browser}[lista.html]
+  \hspace*{1.2em}1.\enspace A\par
+  \hspace*{1.2em}\textcolor{css-red}{2.\enspace B}\par
+  \hspace*{1.2em}3.\enspace C
+\end{browser}
+\begin{devtools}{Analisi pagina}
+  \dtregola{li:is(.selected, \#foo)}{specificità (1,0,1)}
+  \dtdich{color}{red}
+  \dtchiudi
+\end{devtools}
+\wtnota{B è selezionato grazie a \code{.selected}, ma la regola\\ ha la
+        specificità di \code{\#foo}, il suo argomento più specifico.}
+\end{affianco}
+
+La specificità non dipende da quale argomento seleziona davvero l'elemento: la
+regola vale $(1, 0, 1)$ anche se nessun elemento della pagina ha l'id
+\code{foo}. Ecco i selettori di questa sezione.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{1.2cm}}c@{\hspace{1.2cm}}l@{}}
+  \textbf{Selettore} & \textbf{Specificità} & \textbf{Perché} \\
+  \code{header a em}                         & $(0, 0, 3)$ & tre selettori di tipo \\
+  \code{:is(header, main, footer) a em}      & $(0, 0, 3)$ & l'argomento più specifico è un tipo \\
+  \code{:where(header, main, footer) a em}   & $(0, 0, 2)$ & \code{:where()} vale zero \\
+  \code{:where(main a \#em)}                  & $(0, 0, 0)$ & tutto dentro \code{:where()} \\
+  \code{li:not(.selected, .active)}          & $(0, 1, 1)$ & una classe e un tipo \\
+  \code{li:has(+ .selected)}                 & $(0, 1, 1)$ & una classe e un tipo \\
+  \code{li:is(.selected, \#foo)}              & $(1, 0, 1)$ & l'argomento più specifico è un id \\
+  \code{button:is(:hover, :focus, :active)}  & $(0, 1, 1)$ & una pseudo-classe e un tipo \\
+\end{tabular}
+\end{center}
+
+\section{Custom properties}
+
+I valori ripetuti sono frequenti nei fogli di stile, e sono difficili da
+mantenere.
+
+\begin{lstlisting}[style=css, name=ripetuto.css]
+h1     { color: #663399; }
+a      { color: #663399; }
+button { background: #663399; }
+\end{lstlisting}
+
+Che cosa succede quando il colore principale del sito cambia? Bisogna trovare e
+sostituire ogni occorrenza, senza dimenticarne nessuna e senza cambiare per
+errore lo stesso valore usato altrove con un altro significato.
+
+\dfn{Custom property}{
+  Le \term{custom property}, o \term{variabili CSS}, sono entità definite da chi
+  scrive il foglio di stile. Rappresentano valori specifici, che si possono
+  riutilizzare. Si definiscono con la sintassi delle custom property, cioè un
+  nome che comincia con due trattini (\code{-{}-primary-color: \#663399}),
+  oppure con la regola \code{@property}. Una volta definite, il loro valore si
+  legge con la funzione \code{var()}.}
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=css, name=variabili.css]
+:root {
+  --primary-color: #663399;
+}
+
+h1 {
+  color: var(--primary-color);
+}
+
+a {
+  color: var(--primary-color);
+}
+
+button {
+  background: var(--primary-color);
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[variabili.html]
+  {\Lora\bfseries\LARGE\textcolor{css-rebeccapurple}{Titolo}}\par\vspace{6pt}
+  \textcolor{css-rebeccapurple}{\uline{Un link}}\par\vspace{6pt}
+  \wtbottone[css-rebeccapurple][black][black!75]{Pulsante}
+\end{browser}
+\wtnota{Per cambiare il colore di tutto il sito\\ basta modificare una riga.}
+\end{affianco}
+
+I nomi delle custom property distinguono maiuscole e minuscole:
+\code{-{}-primary-color} e \code{-{}-Primary-Color} sono due proprietà diverse.
+
+\subsection{Cascata ed ereditarietà}
+
+Le custom property si comportano come le altre proprietà:
+
+\begin{itemize}
+  \item partecipano alla \textbf{cascata};
+  \item sono normalmente \textbf{ereditate} dai discendenti;
+  \item possono essere \textbf{sovrascritte}.
+\end{itemize}
+
+La pseudo-classe \code{:root} seleziona la radice dell'albero del documento (in
+una pagina HTML, l'elemento \tg{html}) e si usa per definire custom property
+\guillemotleft globali\guillemotright, che ogni elemento della pagina eredita.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=css, name=accent.css]
+:root {
+  --accent: #cfa2fb;
+}
+
+button {
+  background: var(--accent);
+}
+
+.warning {
+  --accent: orangered;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=accent.html]
+<button>Normal button</button>
+<button class="warning">Warning</button>
+<div class="warning">
+  <button>Inside a warning div</button>
+</div>
+\end{lstlisting}
+\risultato
+\begin{browser}[accent.html]
+  \wtbottone[css-lilla][black][black!75]{Normal button}\enspace
+  \wtbottone[css-orangered][black][black!75]{Warning}\par\vspace{4pt}
+  \wtbottone[css-orangered][black][black!75]{Inside a warning div}
+\end{browser}
+\begin{immagine}[Da dove prende il suo valore ogni \code{var(-{}-accent)}.]
+\begin{tikzpicture}[
+    el/.style={mdom, anchor=west},
+    v/.style={mnota, anchor=west},
+    r/.style={mramo}]
+  \node[el] (html) at (0,0) {<html>};
+  \node[v] at ([xshift=4pt]html.east) {\code{-{}-accent: \#cfa2fb}};
+  \node[el] (b1) at (0.6,-0.7) {<button>};
+  \node[v] at ([xshift=4pt]b1.east) {eredita \textcolor{css-lilla!70!black}{\#cfa2fb}};
+  \node[el] (b2) at (0.6,-1.4) {<button class="warning">};
+  \node[v] at ([xshift=4pt]b2.east) {\textcolor{css-orangered}{orangered}, dichiarato qui};
+  \node[el] (d) at (0.6,-2.1) {<div class="warning">};
+  \node[v] at ([xshift=4pt]d.east) {\textcolor{css-orangered}{orangered}, dichiarato qui};
+  \node[el] (b3) at (1.2,-2.8) {<button>};
+  \node[v] at ([xshift=4pt]b3.east) {eredita \textcolor{css-orangered}{orangered}};
+  \draw[r] (0.3,-0.22) |- (b1.west);
+  \draw[r] (0.3,-0.22) |- (b2.west);
+  \draw[r] (0.3,-0.22) |- (d.west);
+  \draw[r] (0.9,-2.32) |- (b3.west);
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
+
+Il terzo pulsante non ha classi, ma è dentro un \tg{div} con classe
+\code{warning}: la custom property \code{-{}-accent} viene ereditata dal
+\tg{div}, e il pulsante diventa arancione come il secondo. (Per semplicità lo
+schema omette \tg{body}, attraverso cui il valore di \tg{html} arriva ai
+pulsanti.)
+
+\subsection{Valori di riserva}
+
+\code{var()} accetta un secondo argomento, il \term{valore di riserva}
+(\textit{fallback}): se la custom property non è definita, si usa quello.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=css, name=notice.css]
+.notice {
+  color: var(--notice-color, darkred);
+}
+
+.teal-theme {
+  --notice-color: teal;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=notice.html]
+<p class="notice">Avviso</p>
+<div class="teal-theme">
+  <p class="notice">Avviso</p>
+</div>
+\end{lstlisting}
+\risultato
+\begin{browser}[notice.html]
+  \textcolor{css-darkred}{Avviso}\par\vspace{6pt}
+  \textcolor{css-teal}{Avviso}
+\end{browser}
+\wtnota{Nel primo paragrafo \code{-{}-notice-color} non è definita:\\ si usa
+        il valore di riserva \code{darkred}.}
+\end{affianco}
+
+I valori di riserva sono utili quando un componente permette una
+personalizzazione \textbf{facoltativa}: chi lo usa può definire
+\code{-{}-notice-color}, e se non lo fa il componente ha comunque un aspetto
+sensato.
+
+\subsection{La regola @property}
+
+La regola \code{@property} registra una custom property in modo esplicito:
+ne dichiara il tipo di valore ammesso (\code{syntax}), se viene ereditata
+(\code{inherits}) e il valore iniziale (\code{initial-value}, obbligatorio
+salvo che il tipo sia \code{"*"}, cioè qualunque). Permette così, fra l'altro,
+di personalizzare il comportamento dell'ereditarietà.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=css, name=property.css]
+@property --accent {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: teal;
+}
+
+button {
+  background: var(--accent);
+}
+
+.warning {
+  --accent: orangered;
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[accent.html]
+  \wtbottone[css-teal][black][black!75]{Normal button}\enspace
+  \wtbottone[css-orangered][black][black!75]{Warning}\par\vspace{4pt}
+  \wtbottone[css-teal][black][black!75]{Inside a warning div}
+\end{browser}
+\wtnota{Stesso HTML di prima: ora il terzo pulsante\\ è di nuovo color
+        \code{teal}.}
+\end{affianco}
+
+Con \code{inherits: false} il pulsante dentro il \tg{div} non eredita più il
+valore \code{orangered} dal genitore: non dichiarando \code{-{}-accent} per
+conto suo, prende il valore iniziale \code{teal}. Il secondo pulsante, che ha
+lui stesso la classe \code{warning}, resta invece arancione.
+
+\section{Valori calcolati}
+
+\subsection{calc()}
+
+La funzione \code{calc()} combina valori e unità \textbf{compatibili}, per
+esempio una percentuale e dei pixel, e supporta le quattro operazioni
+\code{+}, \code{-}, \code{*} e \code{/}.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=css, name=calc.css]
+.container {
+  background-color: purple;
+  color: white;
+  width: 200px;
+}
+
+.item {
+  background-color: orangered;
+  width: calc(100% - 20px);
+  margin: auto;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=calc.html]
+<div class="container">
+  Container
+  <div class="item">Item</div>
+</div>
+\end{lstlisting}
+\risultato
+\begin{browser}[calc.html]
+\begin{tikzpicture}[font=\Lora\small,
+    misura/.style={{Stealth[length=4pt]}-{Stealth[length=4pt]}, line width=0.6pt}]
+  \fill[css-purple] (0,0) rectangle (4,1.0);
+  \node[anchor=north west, text=white, inner sep=3pt] at (0,1.0) {Container};
+  \fill[css-orangered] (0.2,0.02) rectangle (3.8,0.5);
+  \node[anchor=west, text=white, inner sep=3pt] at (0.2,0.26) {Item};
+  \draw[misura, draw=css-purple] (0,-0.25) -- (4,-0.25);
+  \node[font=\Lato\scriptsize\bfseries, text=css-purple, anchor=north]
+    at (2,-0.27) {200px};
+  \draw[misura, draw=css-orangered] (0.2,-0.85) -- (3.8,-0.85);
+  \node[font=\Lato\scriptsize\bfseries, text=css-orangered, anchor=north]
+    at (2,-0.87) {100\% - 20px = 200px - 20px = 180px};
+\end{tikzpicture}
+\end{browser}
+\wtnota{\code{100\%} è la larghezza del contenitore;\\ \code{margin: auto}
+        lascia 10px per lato.}
+\end{affianco}
+
+\warning{Gli spazi attorno a + e -}{
+  Dentro \code{calc()} gli operatori \code{+} e \code{-} vanno circondati da
+  spazi: \code{calc(100\% - 20px)} è valido, \code{calc(100\%-20px)} no. Senza
+  spazi il browser legge \code{-20px} come un numero negativo, non trova
+  l'operatore e scarta l'intera dichiarazione. Per \code{*} e \code{/} gli spazi
+  sono facoltativi.}
+
+\subsection{min() e max()}
+
+\code{min()} e \code{max()} restituiscono rispettivamente il \textbf{più
+piccolo} e il \textbf{più grande} dei loro argomenti. Gli argomenti, separati
+da virgole, possono essere più di due e possono contenere espressioni come
+quelle di \code{calc()}.
+
+\begin{affianco}[0.5][t]
+\begin{lstlisting}[style=css, name=min.css]
+.item {
+  background-color: orangered;
+  width: min(100px, calc(100% - 2rem));
+  margin: auto;
+}
+\end{lstlisting}
+L'elemento:
+\begin{itemize}
+  \item non è mai più largo di 100px;
+  \item si restringe quando lo spazio disponibile è minore;
+  \item conserva almeno 1rem di spazio per lato.
+\end{itemize}
+\risultato
+\begin{lstlisting}[style=css, name=max.css]
+.item {
+  background-color: orangered;
+  font-size: max(1rem, 10vw);
+  margin: auto;
+}
+\end{lstlisting}
+La dimensione del testo:
+\begin{itemize}
+  \item non è mai minore di 1rem;
+  \item cresce nei viewport più larghi.
+\end{itemize}
+\end{affianco}
+
+Dentro \code{min()} la funzione \code{calc()} si può anche omettere:
+\code{min(100px, 100\% - 2rem)} è equivalente. I grafici mostrano come variano
+i due valori, supponendo \code{1rem} pari a 16 pixel (il valore predefinito dei
+browser).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      asse/.style={-{Stealth[length=5pt]}, line width=0.7pt, draw=neutral!45!black},
+      curva/.style={line width=1.4pt, draw=css-orangered},
+      guida/.style={dashed, line width=0.5pt, draw=neutral!55!white}]
+    % min(100px, 100% - 2rem): x in px del contenitore, 1px = 0.025cm
+    \begin{scope}[x=0.025cm, y=0.025cm]
+      \draw[asse] (0,0) -- (260,0);
+      \node[anchor=north] at (130,-15) {larghezza del contenitore};
+      \draw[asse] (0,0) -- (0,130) node[anchor=south, align=center]
+        {larghezza dell'elemento};
+      \draw[guida] (132,0) -- (132,100);
+      \draw[guida] (0,100) -- (132,100);
+      \node[anchor=east] at (0,100) {100px};
+      \node[anchor=north] at (132,0) {132px};
+      \node[anchor=north] at (32,0) {32px};
+      \draw[curva] (32,0) -- (132,100) -- (250,100);
+      \node[anchor=south east, text=css-orangered!80!black, rotate=45]
+        at (88,58) {100\% - 2rem};
+      \node[anchor=south, text=css-orangered!80!black] at (195,100) {100px};
+    \end{scope}
+    % max(1rem, 10vw): x in px del viewport, 1px = 0.0125cm; y: 1px = 0.075cm
+    \begin{scope}[xshift=8.6cm, x=0.0125cm, y=0.075cm]
+      \draw[asse] (0,0) -- (520,0);
+      \node[anchor=north] at (260,-5) {larghezza del viewport};
+      \draw[asse] (0,0) -- (0,46) node[anchor=south] {dimensione del testo};
+      \draw[guida] (160,0) -- (160,16);
+      \node[anchor=east] at (0,16) {16px};
+      \node[anchor=north] at (160,0) {160px};
+      \draw[curva] (0,16) -- (160,16) -- (420,42);
+      \node[anchor=south, text=css-orangered!80!black] at (80,16) {1rem};
+      \node[anchor=south east, text=css-orangered!80!black, rotate=21]
+        at (330,33) {10vw};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{A sinistra \code{min(100px, 100\% - 2rem)}: segue la larghezza del
+           contenitore fino a 100 pixel, poi si ferma. A destra
+           \code{max(1rem, 10vw)}: resta a 16 pixel finché \code{10vw} non lo
+           supera, cioè oltre un viewport di 160 pixel.}
+\end{figure}
+
+\subsection{clamp()}
+
+\code{clamp(minimo, preferito, massimo)} vincola un valore fra un minimo e un
+massimo: il valore cresce in modo fluido, ma non diventa mai più piccolo del
+minimo né più grande del massimo. Equivale a
+\codel{max(minimo, min(preferito, massimo))}.
+
+\begin{affianco}[0.42][c]
+\begin{lstlisting}[style=css, name=clamp.css]
+h1 {
+  font-size: clamp(
+    2rem,   /* minimo */
+    7vw,    /* preferito */
+    3em     /* massimo */
+  );
+}
+\end{lstlisting}
+\risultato
+\begin{immagine}[Con \code{1rem} = 16px e il testo del genitore a 16px.]
+\begin{tikzpicture}[font=\Lato\scriptsize, x=0.0085cm, y=0.06cm,
+    asse/.style={-{Stealth[length=5pt]}, line width=0.7pt, draw=neutral!45!black},
+    curva/.style={line width=1.4pt, draw=css-orangered},
+    guida/.style={dashed, line width=0.5pt, draw=neutral!55!white}]
+  \fill[primary!6!white] (0,0) rectangle (457,56);
+  \fill[green-gradient-1!40!white] (457,0) rectangle (686,56);
+  \fill[primary!6!white] (686,0) rectangle (900,56);
+  \draw[asse] (0,0) -- (920,0);
+  \node[anchor=north] at (460,-6.5) {larghezza del viewport};
+  \draw[asse] (0,0) -- (0,60) node[anchor=south] {dimensione di \code{h1}};
+  \draw[guida] (457,0) -- (457,32) (686,0) -- (686,48);
+  \node[anchor=east] at (0,32) {32px};
+  \node[anchor=east] at (0,48) {48px};
+  \node[anchor=north] at (457,0) {457px};
+  \node[anchor=north] at (686,0) {686px};
+  \draw[curva] (0,32) -- (457,32) -- (686,48) -- (900,48);
+  \node[anchor=south, text=neutral!35!black] at (228,34) {minimo: 2rem};
+  \node[anchor=south, text=neutral!35!black, align=center] at (571,50)
+    {preferito:\\ 7vw};
+  \node[anchor=south, text=neutral!35!black] at (793,50) {massimo: 3em};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
+
+Il valore preferito \code{7vw} vale 32 pixel con un viewport largo 457 pixel e
+48 pixel con uno largo 686: fra queste due larghezze il titolo cresce con la
+finestra, prima e dopo resta fermo. Nella proprietà \code{font-size}, \code{em}
+si riferisce alla dimensione del testo del \textbf{genitore}: con il valore
+predefinito di 16 pixel, \code{3em} vale 48 pixel.
+
+\section{L'altezza del viewport sui dispositivi mobili}
+
+\code{100vh} rappresenta l'altezza del viewport. Nei browser desktop si basa
+sulle dimensioni correnti della finestra; nei browser mobili la questione è più
+delicata, perché i controlli del browser, come la barra degli indirizzi, possono
+comparire e scomparire: per esempio, scorrendo la pagina verso il basso la barra
+si nasconde e lo spazio per la pagina aumenta.
+
+Il CSS moderno definisce unità aggiuntive per un controllo più fine:
+
+\begin{itemize}
+  \item \code{svh} (\textit{small viewport height}): l'altezza del viewport
+        calcolata quando i controlli sono \textbf{visibili};
+  \item \code{lvh} (\textit{large viewport height}): l'altezza massima
+        possibile, calcolata con i controlli \textbf{nascosti}; è il
+        comportamento di \code{vh};
+  \item \code{dvh} (\textit{dynamic viewport height}): l'altezza
+        \textbf{corrente}, che cambia dinamicamente. Se i controlli sono
+        visibili coincide con \code{svh}, cioè con \code{lvh} meno l'altezza dei
+        controlli; se sono nascosti coincide con \code{lvh}.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      telefono/.style={rounded corners=7pt, draw=neutral!60!black,
+        line width=1.2pt, fill=white},
+      barra/.style={fill=neutral!18!white, draw=neutral!45!white, line width=0.5pt},
+      svh/.style={fill=purple-gradient-6!85!white, draw=purple-gradient-6!60!black},
+      lvh/.style={fill=primary!60!white, draw=primary!60!black},
+      dvh/.style={fill=css-deeppink!70!white, draw=css-deeppink!70!black},
+      dietro/.style={fill=primary!22!white, draw=primary!60!black, dashed}]
+    \foreach \x/\titolo/\visibili in {0/{controlli visibili}/1, 5.6/{controlli nascosti}/0} {
+      \begin{scope}[xshift=\x cm]
+        \draw[telefono] (-0.15,-0.25) rectangle (3.75,5.05);
+        \node[anchor=south, font=\Lato\small\bfseries] at (1.8,5.15) {\titolo};
+        % area dello schermo: da y=0 a y=4.6
+        \ifnum\visibili=1
+          \fill[barra] (0,0) rectangle (3.6,0.55);
+          % svh e dvh: lo spazio visibile; lvh prosegue sotto la barra
+          \draw[svh] (0.25,0.55) rectangle (1.05,4.6);
+          \draw[dietro] (1.4,0) rectangle (2.2,0.55);
+          \draw[lvh] (1.4,0.55) rectangle (2.2,4.6);
+          \draw[dvh] (2.55,0.55) rectangle (3.35,4.6);
+          \node[anchor=north, text=neutral!35!black] at (1.8,-0.32)
+            {in basso, la barra degli indirizzi};
+        \else
+          \draw[svh] (0.25,0.55) rectangle (1.05,4.6);
+          \draw[lvh] (1.4,0) rectangle (2.2,4.6);
+          \draw[dvh] (2.55,0) rectangle (3.35,4.6);
+          \node[anchor=north, text=neutral!35!black] at (1.8,-0.32)
+            {la barra è nascosta};
+        \fi
+        \node[rotate=90, text=white, font=\Lato\scriptsize\bfseries] at (0.65,2.6) {100svh};
+        \node[rotate=90, text=white, font=\Lato\scriptsize\bfseries] at (1.8,2.6) {100lvh};
+        \node[rotate=90, text=white, font=\Lato\scriptsize\bfseries] at (2.95,2.6) {100dvh};
+      \end{scope}
+    }
+    \node[anchor=west, align=left, text=neutral!25!black] at (10.0,2.4)
+      {\code{svh}: sempre lo spazio\\ \phantom{\code{svh}: }con i controlli\\[4pt]
+       \code{lvh}: sempre lo spazio\\ \phantom{\code{lvh}: }senza i controlli\\[4pt]
+       \code{dvh}: lo spazio\\ \phantom{\code{dvh}: }di questo momento};
+  \end{tikzpicture}
+  \caption{Tre riquadri alti \code{100svh}, \code{100lvh} e \code{100dvh} sullo
+           stesso telefono. Con la barra degli indirizzi visibile, la parte
+           tratteggiata di \code{100lvh} finisce sotto la barra.}
+\end{figure}
+
+In pratica \code{100svh} garantisce che un elemento sia visibile per intero
+anche quando i controlli occupano parte dello schermo, mentre \code{100dvh}
+segue lo spazio effettivamente disponibile; quest'ultimo, cambiando mentre si
+scorre la pagina, può però costringere il browser a ricalcolare il layout.
+
+\section{Pattern di layout moderni}
+
+\subsection{gap con Grid e Flexbox}
+
+La proprietà \code{gap}, già incontrata con Grid nel capitolo 4, si usa sia sui
+contenitori \textbf{grid} sia sui contenitori \textbf{flex} per aggiungere spazio
+fra i figli. A differenza dei margini sui singoli figli, \code{gap} aggiunge
+spazio \textbf{solo fra un elemento e l'altro}, mai fra gli elementi e il bordo
+del contenitore: lo spazio sul bordo resta compito del \code{padding}.
+
+\begin{affianco}[0.42][c]
+\begin{lstlisting}[style=css, name=gap.css]
+.container {
+  background-color: purple;
+  display: flex;
+  gap: 30px;
+  padding: 10px;
+  flex-wrap: wrap;
+}
+
+.item {
+  flex: 1 1 100px;
+  height: 100px;
+  background-color: orangered;
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=gap.html]
+<div class="container">
+  <div class="item"></div>
+  <div class="item"></div>
+  <div class="item"></div>
+  <div class="item"></div>
+  <div class="item"></div>
+</div>
+\end{lstlisting}
+\risultato
+\begin{immagine}[Verso il bordo 10px di \code{padding}; fra gli elementi 30px
+                 di \code{gap},\\ anche fra le righe quando gli elementi vanno
+                 a capo.]
+\begin{tikzpicture}[x=0.01cm, y=0.01cm, font=\Lato\scriptsize,
+    it/.style={fill=css-orangered},
+    misura/.style={{Stealth[length=3pt]}-{Stealth[length=3pt]}, line width=0.5pt,
+      draw=neutral!25!black}]
+  % contenitore largo 680px: 5 elementi da 108px
+  \fill[css-purple] (0,0) rectangle (680,120);
+  \foreach \i in {0,...,4} {
+    \fill[it] ({10+\i*138},10) rectangle ({118+\i*138},110);
+  }
+  \draw[misura] (118,130) -- (148,130);
+  \node[anchor=south] at (133,133) {gap: 30px};
+  \draw[misura] (670,60) -- (680,60);
+  \node[anchor=west] at (688,60) {padding: 10px};
+  \node[anchor=north] at (340,-5) {contenitore largo 680px: una riga};
+  % contenitore largo 400px: 3 + 2 elementi
+  \begin{scope}[yshift=-3.25cm]
+    \fill[css-purple] (0,0) rectangle (400,250);
+    \foreach \i in {0,1,2} {
+      \fill[it] ({10+\i*136.67},140) rectangle ({116.67+\i*136.67},240);
+    }
+    \fill[it] (10,10) rectangle (185,110);
+    \fill[it] (215,10) rectangle (390,110);
+    \draw[misura] (420,110) -- (420,140);
+    \node[anchor=west] at (430,125) {gap: 30px};
+    \node[anchor=north] at (200,-5) {largo 400px: due righe};
+  \end{scope}
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
+
+Con \code{flex: 1 1 100px} ogni elemento parte da 100 pixel e si allarga per
+occupare lo spazio rimasto. Nel contenitore stretto ne stanno solo tre per
+riga ($3 \cdot 100 + 2 \cdot 30 = 360$ pixel sui 380 disponibili): con
+\code{flex-wrap: wrap} gli altri due vanno a capo e si spartiscono la seconda
+riga.
+
+\subsection{La scorciatoia flex}
+
+La proprietà \code{flex} è una scorciatoia (\textit{shorthand}) per tre
+proprietà dei flex item, già incontrate in parte nel capitolo 4:
+
+\begin{affianco}[0.42][c]
+\begin{lstlisting}[style=css, name=flex.css]
+.item {
+  flex: 1 1 100px;
+}
+
+/* equivalente alla regola sopra */
+.item {
+  flex-grow: 1;
+  flex-shrink: 1;
+  flex-basis: 100px;
+}
+\end{lstlisting}
+\risultato
+\begin{itemize}
+  \item \code{flex-grow}: come l'elemento \textbf{cresce}, cioè quale quota
+        dello spazio libero riceve;
+  \item \code{flex-shrink}: come l'elemento \textbf{si restringe} quando lo
+        spazio non basta;
+  \item \code{flex-basis}: la sua \textbf{dimensione di base}, lungo l'asse
+        principale, prima che lo spazio venga distribuito.
+\end{itemize}
+\end{affianco}
+
+Il browser parte dalle dimensioni di base di tutti gli elementi e le confronta
+con lo spazio del contenitore. Se avanza spazio, lo distribuisce in proporzione
+a \code{flex-grow}; se manca, toglie la differenza in proporzione a
+\code{flex-shrink}. Le figure che seguono lo mostrano con tre elementi in fila;
+le demo interattive di MDN, mostrate a lezione, permettono di provare dal vivo
+i tre valori.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[x=0.012cm, y=0.012cm, font=\Lato\scriptsize,
+      base/.style={fill=primary!35!white, draw=primary!65!black, line width=0.5pt},
+      extra/.style={fill=primary!10!white, draw=primary!65!black, line width=0.5pt},
+      cont/.style={draw=neutral!50!black, line width=0.6pt, dashed},
+      lab/.style={anchor=east, font=\FiraCodeNL\scriptsize}]
+    % contenitore di 500px, basi di 100px: avanzano 200px
+    \foreach \nr/\riga/\pa/\pb/\pc in {0/{1 1 1}/66.67/66.67/66.67,
+                                       1/{2 1 1}/100/50/50,
+                                       2/{0 1 1}/0/100/100} {
+      \begin{scope}[yshift=-\nr*0.75cm]
+        \node[lab] at (-12,20) {flex-grow: \riga};
+        \draw[cont] (0,0) rectangle (500,40);
+        \pgfmathsetmacro{\xa}{100+\pa}
+        \pgfmathsetmacro{\xb}{\xa+100+\pb}
+        \draw[base] (0,0) rectangle (100,40);
+        \draw[extra] (100,0) rectangle (\xa,40);
+        \draw[base] (\xa,0) rectangle ({\xa+100},40);
+        \draw[extra] ({\xa+100},0) rectangle (\xb,40);
+        \draw[base] (\xb,0) rectangle ({\xb+100},40);
+        \draw[extra] ({\xb+100},0) rectangle (500,40);
+        \pgfmathtruncatemacro{\la}{round(100+\pa)}
+        \pgfmathtruncatemacro{\lb}{round(100+\pb)}
+        \pgfmathtruncatemacro{\lc}{round(100+\pc)}
+        \node[anchor=west] at (510,20) {\la\ + \lb\ + \lc\ px};
+      \end{scope}
+    }
+    \node[anchor=south west, font=\Lato\scriptsize] at (0,48)
+      {\tikz\draw[base] (0,0) rectangle (8pt,6pt); base di 100px\quad
+       \tikz\draw[extra] (0,0) rectangle (8pt,6pt); quota dei 200px liberi};
+  \end{tikzpicture}
+  \caption{\code{flex-grow}: in un contenitore di 500 pixel tre elementi con
+           \code{flex-basis: 100px} lasciano 200 pixel liberi, divisi in
+           proporzione a \code{flex-grow}. Con 2, 1, 1 il primo riceve metà dello
+           spazio libero; con 0 non cresce affatto.}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[x=0.012cm, y=0.012cm, font=\Lato\scriptsize,
+      base/.style={fill=primary!35!white, draw=primary!65!black, line width=0.5pt},
+      fuori/.style={draw=css-orangered, line width=0.6pt, dashed},
+      cont/.style={draw=neutral!50!black, line width=0.6pt, dashed},
+      lab/.style={anchor=east, font=\FiraCodeNL\scriptsize}]
+    % basi di 200px in un contenitore di 300px: mancano 300px
+    \node[lab] at (-12,20) {basi};
+    \draw[cont] (0,0) rectangle (300,40);
+    \foreach \i in {0,1,2} \draw[fuori] ({\i*200},4) rectangle ({\i*200+200},36);
+    \node[anchor=west, text=css-orangered!80!black] at (610,20)
+      {600px in 300px: ne mancano 300};
+    \foreach \nr/\riga/\pa/\pb/\pc in {1/{1 1 1}/100/100/100,
+                                       2/{0 1 1}/200/50/50,
+                                       3/{2 1 1}/50/125/125} {
+      \begin{scope}[yshift=-\nr*0.75cm]
+        \node[lab] at (-12,20) {flex-shrink: \riga};
+        \draw[cont] (0,0) rectangle (300,40);
+        \draw[base] (0,0) rectangle (\pa,40);
+        \draw[base] (\pa,0) rectangle ({\pa+\pb},40);
+        \draw[base] ({\pa+\pb},0) rectangle (300,40);
+        \node[anchor=west] at (310,20) {\pa\ + \pb\ + \pc\ px};
+      \end{scope}
+    }
+  \end{tikzpicture}
+  \caption{\code{flex-shrink}: tre basi di 200 pixel non entrano in un
+           contenitore di 300. I 300 pixel mancanti si tolgono in proporzione a
+           \code{flex-shrink} \textbf{moltiplicato per la base}: con 0 il primo
+           elemento non si restringe; con 2, 1, 1 perde il doppio degli altri.}
+\end{figure}
+
+Nella restrizione il fattore viene pesato con la dimensione di base: a parità
+di \code{flex-shrink}, un elemento più grande cede più spazio. Un elemento,
+inoltre, non scende di norma sotto la larghezza minima del proprio contenuto
+(la parola più lunga, per un testo).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[x=0.0125cm, y=0.0125cm, font=\Lato\scriptsize,
+      el/.style={fill=primary!12!white, draw=primary!65!black, line width=0.5pt},
+      cont/.style={draw=neutral!50!black, line width=0.6pt, dashed},
+      lab/.style={anchor=east, font=\FiraCodeNL\scriptsize, align=right},
+      txt/.style={font=\Lora\scriptsize, align=center}]
+    \foreach \nr/\riga/\pa/\pb/\pc in {0/{flex: 1 1 auto}/127/227/127,
+                                       1/{flex: 1 1 0}/160/160/160,
+                                       2/{il primo: flex: 1 1 200px\\ gli altri: flex: 1 1 0}/293/93/93} {
+      \begin{scope}[yshift=-\nr*1.25cm]
+        \node[lab] at (-12,38) {\riga};
+        \draw[cont] (0,0) rectangle (480,76);
+        \draw[el] (0,0) rectangle (\pa,76);
+        \draw[el] (\pa,0) rectangle ({\pa+\pb},76);
+        \draw[el] ({\pa+\pb},0) rectangle (480,76);
+        \pgfmathsetlengthmacro{\wa}{(\pa-8)*0.0125cm}
+        \pgfmathsetlengthmacro{\wb}{(\pb-8)*0.0125cm}
+        \pgfmathsetlengthmacro{\wc}{(\pc-8)*0.0125cm}
+        \node[txt, text width=\wa] at ({\pa/2},38) {Uno};
+        \node[txt, text width=\wb] at ({\pa+\pb/2},38) {Un testo più lungo};
+        \node[txt, text width=\wc] at ({\pa+\pb+\pc/2},38) {Tre};
+        \node[anchor=west] at (490,38) {\pa\ + \pb\ + \pc\ px};
+      \end{scope}
+    }
+  \end{tikzpicture}
+  \caption{\code{flex-basis} in un contenitore di 480 pixel, supponendo che i
+           tre testi occupino 30, 130 e 30 pixel. Con \code{auto} la base è il
+           contenuto, e lo spazio libero si aggiunge sopra; con \code{0} tutto
+           lo spazio viene diviso in parti uguali; una base di 200px parte già
+           in vantaggio.}
+\end{figure}
+
+\info{I valori più comuni di flex}{
+  \begin{tabular}{@{}l@{\hspace{0.8cm}}l@{\hspace{0.8cm}}l@{}}
+    \code{flex: 1}    & equivale a \code{1 1 0\%}  & parti uguali, indipendenti dal contenuto \\
+    \code{flex: auto} & equivale a \code{1 1 auto} & parte dal contenuto, poi cresce \\
+    \code{flex: none} & equivale a \code{0 0 auto} & dimensione fissa, data dal contenuto \\
+    valore iniziale   & \code{0 1 auto}            & non cresce, ma può restringersi \\
+  \end{tabular}}
+
+\section{Container query}
+
+Le media query osservano il \textbf{viewport}. Consideriamo una card che, sotto
+i 300 pixel di larghezza, diventa verde e riduce il testo.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=css, name=card.css]
+.card {
+  background-color: lightblue;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid black;
+}
+
+.card :is(h2, p) {
+  font-size: 1.25em;
+}
+
+@media (max-width: 300px) {
+  .card {
+    background-color: lightgreen;
+  }
+  .card :is(h2, p) {
+    font-size: 1em;
+  }
+}
+\end{lstlisting}
+\begin{lstlisting}[style=html, name=card.html]
+<div class="card">
+  <h2>Card title</h2>
+  <p>Card text</p>
+</div>
+\end{lstlisting}
+\risultato
+\begin{browser}[finestra larga]
+  \noindent\colorbox{css-lightblue}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
+    \vspace{2pt}{\bfseries\Large Card title}\par\vspace{6pt}
+    {\large Card text}\vspace{2pt}}}
+\end{browser}
+\begin{minipage}{4.2cm}
+\begin{browser}[sotto i 300px]
+  \noindent\colorbox{css-lightgreen}{\parbox{\dimexpr\linewidth-2\fboxsep}{%
+    \vspace{2pt}{\bfseries\normalsize Card title}\par\vspace{4pt}
+    {\small Card text}\vspace{2pt}}}
+\end{browser}
+\end{minipage}
+\end{affianco}
+
+Il problema è che la stessa card può comparire in contenitori diversi: in uno
+\textbf{grande}, come l'area principale del contenuto, oppure in uno
+\textbf{piccolo}, come una barra laterale o una colonna stretta di una griglia.
+Quando sta in un contenitore piccolo vorremmo che si comportasse come in un
+viewport piccolo, \textbf{anche se il viewport è grande}. La media query non
+può aiutarci: in una finestra larga la sua condizione è falsa per tutte e due
+le card.
+
+\begin{affianco}[0.44][c]
+\begin{lstlisting}[style=html, name=pagina.html]
+<main style="width: 350px;">
+  <div class="card">
+    <h2>Main card</h2>
+    <p>Main text</p>
+  </div>
+</main>
+<aside style="width: 200px;">
+  <div class="card">
+    <h2>Aside title</h2>
+    <p>aside text</p>
+  </div>
+</aside>
+\end{lstlisting}
+\risultato
+\begin{browser}[pagina.html, finestra larga]
+\begin{tikzpicture}[font=\Lora,
+    card/.style={draw=black, line width=0.4pt, rounded corners=2pt,
+      fill=css-lightblue, anchor=north west, align=left, inner sep=5pt}]
+  \node[card, text width=3.85cm] at (0,0)
+    {{\bfseries\large Main card}\\[5pt] {\normalsize Main text}};
+  \node[card, text width=2.05cm] at (4.35,0)
+    {{\bfseries\large Aside title}\\[5pt] {\normalsize aside text}};
+\end{tikzpicture}
+\end{browser}
+\wtnota{Il viewport è largo: entrambe le card restano azzurre.}
+\end{affianco}
+
+Le \term{container query} sono state introdotte per superare questo limite:
+permettono di dare stile a un componente in base alle dimensioni di un suo
+\textbf{antenato}, il \term{contenitore}.
+
+\begin{itemize}
+  \item Sull'antenato va dichiarata la proprietà \code{container-type}. Con il
+        valore \code{inline-size} il contenitore si può interrogare sulla
+        dimensione \textit{inline}, che per il testo orizzontale è la
+        larghezza.
+  \item Poi, con la regola \code{@container}, si scrivono le query: valgono per
+        i \textbf{discendenti} del contenitore più vicino, non per il
+        contenitore stesso.
+\end{itemize}
+
+\begin{affianco}[0.44][c]
+\begin{lstlisting}[style=css, name=container.css]
+aside {
+  container-type: inline-size;
+}
+
+@container (max-width: 300px) {
+  .card {
+    background-color: lightgreen;
+  }
+  .card :is(h2, p) {
+    font-size: 1em;
+  }
+}
+\end{lstlisting}
+\risultato
+\begin{browser}[pagina.html, finestra larga]
+\begin{tikzpicture}[font=\Lora,
+    card/.style={draw=black, line width=0.4pt, rounded corners=2pt,
+      anchor=north west, align=left, inner sep=5pt}]
+  \node[card, fill=css-lightblue, text width=3.85cm] at (0,0)
+    {{\bfseries\large Main card}\\[5pt] {\normalsize Main text}};
+  \node[card, fill=css-lightgreen, text width=2.05cm] at (4.35,0)
+    {{\bfseries\footnotesize Aside title}\\[3pt] {\footnotesize aside text}};
+\end{tikzpicture}
+\end{browser}
+\wtnota{L'\tg{aside} è largo 200px, quindi meno di 300:\\ la sua card diventa
+        verde. Il \tg{main} non è un contenitore.}
+\end{affianco}
+
+\section{Immagini responsive}
+
+Il CSS stabilisce \textbf{quanto grande} viene mostrata un'immagine. Scaricare
+un'immagine ad alta risoluzione per poi rimpicciolirla su uno schermo piccolo,
+però, non è efficiente: si trasferiscono byte che nessuno vedrà. L'HTML permette
+di fornire \textbf{più file} per la stessa immagine, i \term{candidati}, e
+lascia al browser la scelta di quello più adatto al dispositivo. Il vantaggio è
+che il browser scarica \textbf{solo} la versione che gli serve. Si usano
+l'attributo \attr{srcset} oppure l'elemento \tg{picture}.
+
+\subsection{srcset}
+
+\begin{lstlisting}[style=html, name=srcset.html]
+<img src="fu-tzu-400.jpg"
+     srcset="fu-tzu-400.jpg 400w,
+             fu-tzu-800.jpg 800w,
+             fu-tzu-1200.jpg 1200w"
+     alt="Portrait of the great master Fu-Tzu">
+\end{lstlisting}
+
+All'immagine sono associati tre file diversi.
+
+\begin{itemize}
+  \item L'attributo \attr{src} è il valore di riserva, per i browser che non
+        supportano \attr{srcset}.
+  \item \attr{srcset} è un elenco di nomi di file, ciascuno seguito da un
+        \textbf{descrittore}:
+        \begin{itemize}
+          \item i \textbf{descrittori di larghezza}, un numero seguito da
+                \code{w}, indicano la larghezza intrinseca del file in pixel;
+          \item i \textbf{descrittori di densità}, un numero seguito da
+                \code{x}, indicano per quale densità di pixel del dispositivo è
+                pensato il file, rispetto alla densità standard. Per esempio
+                \code{srcset="logo.png 1x, logo-2x.png 2x"} serve il secondo
+                file agli schermi ad alta densità.
+        \end{itemize}
+\end{itemize}
+
+Con i descrittori di larghezza il browser deve sapere quanto sarà larga
+l'immagine nella pagina: lo indica l'attributo \attr{sizes}, che se manca vale
+\code{100vw}, cioè tutta la larghezza del viewport. Moltiplicando quella
+larghezza per la densità dello schermo ottiene i pixel necessari, e sceglie il
+candidato più adatto. Per esempio, con l'immagine larga quanto il viewport:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{0.9cm}}c@{\hspace{0.9cm}}c@{\hspace{0.9cm}}c@{\hspace{0.9cm}}l@{}}
+  \textbf{Dispositivo} & \textbf{Viewport} & \textbf{Densità} &
+    \textbf{Pixel necessari} & \textbf{File scaricato} \\
+  smartphone     & 375px  & 2 & 750  & \code{fu-tzu-800.jpg} \\
+  tablet         & 768px  & 1 & 768  & \code{fu-tzu-800.jpg} \\
+  portatile      & 1440px & 1 & 1440 & \code{fu-tzu-1200.jpg} (il più grande) \\
+\end{tabular}
+\end{center}
+
+La scelta finale spetta comunque al browser, che può tenere conto anche della
+cache o della qualità della connessione.
+
+\subsection{picture e art direction}
+
+\begin{affianco}[0.6][c]
+\codicepiccolo
+\begin{lstlisting}[style=html, name=picture.html]
+<picture>
+  <source media="(max-width: 200px)" srcset="fu-tzu-400.png">
+  <source media="(max-width: 400px)" srcset="fu-tzu-800.png">
+  <img src="fu-tzu-1200.png" alt="Portrait of the great master Fu-Tzu">
+</picture>
+\end{lstlisting}
+\risultato
+\begin{itemize}
+  \item il browser usa il primo \tg{source} la cui media query è vera;
+  \item se nessuna lo è, usa l'\tg{img};
+  \item l'\tg{img} è obbligatoria: è l'elemento che viene davvero
+        mostrato, i \tg{source} ne cambiano solo il file.
+\end{itemize}
+\end{affianco}
+
+L'\term{art direction} è il processo di scelta del contenuto più adatto a
+specifiche condizioni. Non si tratta solo di versioni a risoluzioni diverse
+della stessa immagine: su uno smartphone si può mostrare, per esempio, un
+grafico con meno dettagli, o una foto ritagliata sul soggetto, e su un desktop
+la versione completa.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[t]{4.6cm}\vspace{0pt}
+\begin{browser}[picture.html]
+  \centering
+  \begin{tikzpicture}
+    \node[inner sep=0pt] (img) {\includegraphics[width=3.7cm]{sources/fu-tzu.jpg}};
+    \node[anchor=north, text=white, font=\Lato\bfseries\Huge] at ([yshift=-2pt]img.north) {1200};
+  \end{tikzpicture}
+\end{browser}
+\end{minipage}\hfill
+\begin{minipage}[t]{14.2cm}\vspace{0pt}
+\begin{devtools}{Rete}
+  {\Lato\scriptsize\setlength{\tabcolsep}{5pt}%
+  \colorbox{dtbar}{\makebox[\dimexpr\linewidth-2\fboxsep][l]{%
+    \color{neutral!45!black}\quad fu-tzu\hfill}}\par
+  \noindent\hspace*{6pt}{\color{neutral!30!black}Tutti\quad HTML\quad CSS\quad
+    JS\quad XHR\quad Caratteri\quad \colorbox{dtline}{Immagini}\quad Media\quad
+    WS\quad Altro}\par\vspace{2pt}
+  {\color{dtline}\hrule}
+  \noindent\begin{tabular*}{\linewidth}{@{\hspace{8pt}}l@{\extracolsep{\fill}}llllll@{\hspace{8pt}}}
+    \rule{0pt}{10pt}\textbf{Stato} & \textbf{Metodo} & \textbf{Dominio} &
+    \textbf{File} & \textbf{Iniziatore} & \textbf{Tipo} & \textbf{Dimensione} \\ \hline
+    \rule{0pt}{10pt}\dtstato{200} & GET & 127.0.0.1:3004 & fu-tzu-1200.png &
+      imageset & png & 1,65 MB \\
+  \end{tabular*}\par\vspace{8pt}
+  {\color{dtline}\hrule}\vspace{2pt}
+  \noindent\hspace*{6pt}{\color{neutral!25!black}1 richiesta (filtrata)}\par\vspace{3pt}}
+\end{devtools}
+\end{minipage}
+\caption{In una finestra larga più di 400 pixel nessun \tg{source} è adatto:
+         la scheda \textit{Rete}, filtrata sulle richieste di immagini
+         \code{fu-tzu}, mostra che il browser ha scaricato solo
+         \code{fu-tzu-1200.png}, non le altre due versioni.}
+\end{figure}
+
+\section{Media query sulle preferenze dell'utente}
+
+Le media query possono verificare molto più delle dimensioni del viewport.
+Possono riflettere anche le \textbf{preferenze dell'utente}, che di solito
+vengono dalle impostazioni del browser o del sistema operativo.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}l@{\hspace{1.0cm}}l@{}}
+  \textbf{Preferenza} & \textbf{Media query} \\
+  schema di colori scuro          & \code{@media (prefers-color-scheme: dark)} \\
+  meno animazioni                 & \code{@media (prefers-reduced-motion: reduce)} \\
+  più (o meno) contrasto          & \code{@media (prefers-contrast: more)} \\
+  meno trasparenze                & \code{@media (prefers-reduced-transparency: reduce)} \\
+\end{tabular}
+\end{center}
+
+Nelle slide il valore delle due preferenze \textit{reduced} è scritto
+\code{reduced}: quello corretto è \code{reduce}, e con un valore sbagliato la
+media query viene ignorata.
+
+\begin{affianco}[0.46][c]
+\begin{lstlisting}[style=css, name=colori.css]
+:root {
+  --bg-color: white;
+  --text-color: indigo;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: indigo;
+    --text-color: white;
+  }
+}
+\end{lstlisting}
+\risultato
+\begin{center}
+\begin{tikzpicture}[font=\Lato\scriptsize,
+    opz/.style={draw=neutral!45!white, line width=0.6pt, rounded corners=3pt,
+      minimum width=1.6cm, minimum height=0.7cm, fill=white}]
+  \node[anchor=south, font=\Lato\scriptsize\bfseries] at (2.0,0.55)
+    {impostazioni del browser: aspetto dei siti web};
+  \node[opz] (s) at (0,0) {sistema};
+  \node[opz, draw=dtblue, line width=1pt] (c) at (2.0,0) {chiaro};
+  \node[opz, fill=neutral!75!black, text=white] (d) at (4.0,0) {scuro};
+\end{tikzpicture}
+\end{center}
+\begin{minipage}[t]{0.49\linewidth}
+\begin{browser}[chiaro]
+  {\bfseries\large\textcolor{css-indigo}{Color Scheme}}\par\vspace{3pt}
+  {\scriptsize\textcolor{css-indigo}{Color scheme preference.}}
+\end{browser}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\linewidth}
+\begin{browser}[scuro]
+  % lo sfondo indaco copre anche i margini interni della finestra
+  \vspace*{-6pt}\noindent\makebox[\linewidth][l]{\hspace*{-8pt}%
+  \colorbox{css-indigo}{\parbox{\dimexpr\linewidth+16pt-2\fboxsep}{%
+    \vspace{6pt}\hspace*{4pt}{\bfseries\large\textcolor{white}{Color Scheme}}\par\vspace{3pt}
+    \hspace*{4pt}{\scriptsize\textcolor{white}{Color scheme preference.}}\vspace{6pt}}}}%
+  \vspace*{-6pt}
+\end{browser}
+\end{minipage}
+\wtnota{Con \textit{sistema} il browser segue l'impostazione\\ del sistema
+        operativo.}
+\end{affianco}
+
+Le custom property si prestano bene a questo uso: la media query ridefinisce
+solo le variabili, e tutte le regole che le usano cambiano di conseguenza.
+
+\section{@supports}
+
+La regola \code{@supports} applica degli stili solo quando il browser supporta
+una certa proprietà con un certo valore.
+
+\begin{affianco}[0.46][c]
+\begin{lstlisting}[style=css, name=supports.css]
+.cards {
+  display: block;
+}
+
+@supports (display: grid) {
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+\end{lstlisting}
+\risultato
+\begin{immagine}[Lo stesso contenuto, senza e con il supporto per Grid.]
+\begin{tikzpicture}[font=\Lato\scriptsize,
+    c/.style={draw=primary!60!black, fill=primary!12!white, line width=0.6pt,
+      minimum height=0.5cm, inner sep=2pt}]
+  \node[anchor=south] at (1.4,1.85) {senza Grid};
+  \foreach \i in {0,...,3} \node[c, minimum width=2.8cm] at (1.4,{1.5-\i*0.6}) {card \the\numexpr\i+1\relax};
+  \node[anchor=south] at (5.2,1.85) {con Grid};
+  \foreach \i in {0,1} {
+    \node[c, minimum width=1.6cm] at (4.55,{1.5-\i*0.6}) {card \the\numexpr2*\i+1\relax};
+    \node[c, minimum width=1.6cm] at (5.85,{1.5-\i*0.6}) {card \the\numexpr2*\i+2\relax};
+  }
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
+
+La prima regola è il valore di riserva (\textit{fallback}): un browser che non
+conosce Grid mostra le card una sotto l'altra, che è comunque leggibile. Il
+layout avanzato su due colonne viene applicato solo dai browser che lo
+supportano. È un esempio di \term{progressive enhancement}: si parte da una
+base che funziona ovunque e la si arricchisce dove possibile.
+
+\section{Annidamento nativo}
+
+Nel CSS moderno le regole dei selettori correlati si possono
+\textbf{annidare}, come Sass permetteva di fare da anni (capitolo 19): una
+regola scritta dentro un'altra si applica ai \textbf{discendenti} degli elementi
+selezionati da quella esterna.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=css, name=annidato.css]
+.card {
+  background-color: lightblue;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid black;
+
+  :is(h2, p) {
+    font-size: 1.25em;
+  }
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=css, name=equivalente.css]
+.card {
+  background-color: lightblue;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid black;
+}
+
+.card :is(h2, p) {
+  font-size: 1.25em;
+}
+\end{lstlisting}
+\wtnota{A sinistra la regola annidata, a destra la sua forma equivalente.}
+\end{affianco}
+
+\subsection{Il selettore \&}
+
+Nei selettori annidati il simbolo \code{\&} si riferisce esplicitamente al
+selettore della regola genitore. Serve quando la regola annidata non riguarda
+un discendente, ma l'elemento \textbf{stesso}, per esempio con una
+pseudo-classe, oppure quando si vuole un combinatore diverso dallo spazio.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=css, name=nesting.css]
+.card {
+  background: white;
+
+  &:hover {
+    background: lavender;
+  }
+
+  & > h2 {
+    color: rebeccapurple;
+  }
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=css, name=equivalente.css]
+.card {
+  background: white;
+}
+
+.card:hover {
+  background: lavender;
+}
+
+.card > h2 {
+  color: rebeccapurple;
+}
+\end{lstlisting}
+\end{affianco}
+
+Senza \code{\&}, un selettore annidato viene combinato con quello esterno come
+\textbf{discendente}: \code{:hover} annidato dentro \code{.card} equivarrebbe a
+\code{.card :hover}, cioè a qualunque discendente della card sotto il
+puntatore, e non alla card stessa. È la differenza fra \code{.card:hover} e
+\code{.card :hover}, che sta tutta in uno spazio.
+
+\warning{Annidare con moderazione}{
+  Conviene mantenere l'annidamento \textbf{poco profondo}. Un annidamento
+  eccessivo rende più difficili da capire sia i selettori che ne risultano sia
+  il comportamento della cascata: con quattro o cinque livelli diventa difficile
+  ricostruire a mente quale selettore completo si sta scrivendo, e quale sia la
+  sua specificità.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Learn CSS} --- web.dev. \\
+        \urlx{https://web.dev/learn/css/} \\
+        Sezioni 14 e 17.
+  \item \textbf{Using CSS custom properties (variables)} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Cascading_variables/Using_custom_properties}
+  \item \textbf{calc() CSS function} --- MDN web docs. \\
+        \urlx{https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/calc}
+\end{itemize}
