@@ -4,9 +4,9 @@ Dispensa in italiano del corso di **Tecnologie Web** (prof. Bernardo Breve,
 slide del prof. Luigi Libero Lucio Starace), Università degli Studi di Napoli
 Federico II, corso di laurea in Informatica.
 
-Copre **l'intero corso**: tutte le 24 lezioni, più la lezione bonus su CMS e
+Copre **l'intero corso**: tutte le lezioni, più la lezione bonus su CMS e
 GraphQL (inclusa come capitolo finale e segnalata come fuori programma).
-24 capitoli, 373 pagine.
+25 capitoli, 391 pagine.
 
 Il codice è quasi sempre accompagnato, **accanto**, da ciò che produce: il
 rendering nel browser, l'output in console o nel terminale, oppure uno schema
@@ -42,17 +42,18 @@ escluse: restano sulle slide e sul sito del docente, dove vengono aggiornate.
 | `chapters/11. Node.tex` | Diffusione dei runtime (State of JS), modello multi-thread e I/O bloccante, event loop, installazione con nvm (Node.js 22.14.0), REPL, npm e `package.json` (`npm run`), primo server HTTP, debug in VS Code (Auto Attach, breakpoint, azioni di debug), nodemon |
 | `chapters/12. Web app con Node.tex` | L'applicazione to-do e le sue tre pagine, routing, motori di template e Pug (con l'HTML generato dalle inclusioni), analisi del corpo delle richieste, l'applicazione completa (router, controller, template con layout comune, prove con `curl`, Post/Redirect/Get), estensione con la cancellazione (routing sul `pathname`, parametri della query, perché una GET non deve modificare lo stato) |
 | `chapters/13. Sessioni.tex` | HTTP stateless e tracciamento della sessione, approccio ingenuo con i cookie (schema con due utenti, login con reindirizzamento `302`, `parseCookies`, contesto passato ai controller), manomissione dei cookie con i DevTools e loro limiti, sessioni web lato server (schema con due utenti e i dati di sessione), classe `Session` con una `Map` di `Map` e identificatori generati con `randomUUID`, sessioni in memoria e produzione, altri metodi di tracciamento |
-| `chapters/14. Express.tex` | Framework e inversione del controllo, routing, middleware, gestione errori, messaggi flash |
-| `chapters/15. Web app con Express.tex` | ORM e Sequelize, organizzazione del progetto, file di configurazione |
-| `chapters/16. REST.tex` | Stile REST, verbi e risorse, JWT, hash crittografici, OpenAPI |
-| `chapters/17. TypeScript.tex` | Transpiler, tipi, unioni, interfacce, generici, livelli di severità |
-| `chapters/18. Frontend Tooling.tex` | Sass, framework CSS, bundling, tree shaking, minificazione, Vite |
-| `chapters/19. Single Page App.tex` | Routing lato client, componenti, Web Components API |
-| `chapters/20. Angular.tex` | Componenti, template, eventi, `@Input`/`@Output`, Router |
-| `chapters/21. Angular avanzato.tex` | Form, servizi e DI, guardie, HttpClient, Observable, signal, la SPA completa |
-| `chapters/22. Sicurezza.tex` | XSS, CSRF, SQL injection, session hijacking, same-origin policy e CORS |
-| `chapters/23. Testing.tex` | Piramide del testing, Jasmine, test double, E2E, fragilità e flakiness, Playwright |
-| `chapters/24. CMS e GraphQL.tex` | *(fuori programma)* CMS tradizionali e headless, Strapi, GraphQL, siti statici |
+| `chapters/14. CSS moderno.tex` | CSS moderno e adattivo: pseudo-classi funzionali (`:is()`, `:where()`, `:not()`, `:has()`) e la loro specificità, custom properties (`var()`, ereditarietà, `:root`, valori di riserva, `@property`), `calc()`, `min()`, `max()` e `clamp()`, unità `svh`, `lvh` e `dvh`, `gap` e la scorciatoia `flex` (`flex-grow`, `flex-shrink`, `flex-basis`), container query, immagini responsive (`srcset`, `<picture>` e art direction), media query sulle preferenze dell'utente, `@supports`, annidamento nativo e selettore `&` |
+| `chapters/15. Express.tex` | Framework e inversione del controllo, routing, middleware, gestione errori, messaggi flash |
+| `chapters/16. Web app con Express.tex` | ORM e Sequelize, organizzazione del progetto, file di configurazione |
+| `chapters/17. REST.tex` | Stile REST, verbi e risorse, JWT, hash crittografici, OpenAPI |
+| `chapters/18. TypeScript.tex` | Transpiler, tipi, unioni, interfacce, generici, livelli di severità |
+| `chapters/19. Frontend Tooling.tex` | Sass, framework CSS, bundling, tree shaking, minificazione, Vite |
+| `chapters/20. Single Page App.tex` | Routing lato client, componenti, Web Components API |
+| `chapters/21. Angular.tex` | Componenti, template, eventi, `@Input`/`@Output`, Router |
+| `chapters/22. Angular avanzato.tex` | Form, servizi e DI, guardie, HttpClient, Observable, signal, la SPA completa |
+| `chapters/23. Sicurezza.tex` | XSS, CSRF, SQL injection, session hijacking, same-origin policy e CORS |
+| `chapters/24. Testing.tex` | Piramide del testing, Jasmine, test double, E2E, fragilità e flakiness, Playwright |
+| `chapters/25. CMS e GraphQL.tex` | *(fuori programma)* CMS tradizionali e headless, Strapi, GraphQL, siti statici |
 | `unina_doc_class.cls` | Classe di documento (ripresa dalle *Dispense APA*, non modificata) |
 | `fonts/` | Font usati dalla classe (Lato, Gobold, FiraCode, Lora, IcoMoon, …) |
 | `sources/` | Logo dell'ateneo, risorse della copertina, immagine di Fu-Tzu (`fu-tzu.jpg`, dalle slide) |
