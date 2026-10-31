@@ -1,0 +1,1170 @@
+\chapter{Array e puntatori}
+\label{chap:puntatori}
+
+I programmi lavorano spesso su molti dati dello stesso tipo: i voti di una
+classe, le misure di un esperimento, le parole di un testo. Gli
+\textbf{array} sono il tipo di dato che li raccoglie in variabili
+\textbf{indicizzate}. In C gli array sono strettamente legati ai
+\textbf{puntatori}: il nome di un array è trattato come un puntatore
+costante, i puntatori si possono indicizzare come gli array, e il C ha
+un'\textbf{aritmetica dei puntatori}. I puntatori servono anche a ottenere
+l'effetto del passaggio “per riferimento” dei parametri, e a chiedere memoria
+mentre il programma è in esecuzione. Le stringhe, che in C sono array di
+caratteri, e gli array a più dimensioni sono l'argomento del
+capitolo~\ref{chap:stringhe}.
+
+\section{Gli array}
+
+\subsection{Tante variabili, un solo nome}
+
+Un programma che gestisce dei voti potrebbe dichiarare
+\code{int grade0, grade1, grade2;}. Ma se le variabili necessarie sono
+cento, o mille, dichiararle tutte una per una diventa impossibile. Una
+variabile \textbf{indicizzata} è molto più comoda:
+
+\begin{lstlisting}[style=c]
+int grade[3];                        /* un array di tre interi */
+
+grade[0] = grade[1] = grade[2] = 0;
+\end{lstlisting}
+
+\code{grade} è un \term{array} di tre interi, che si chiamano
+\code{grade[0]}, \code{grade[1]} e \code{grade[2]}: un solo nome, e un
+\textbf{indice} fra parentesi quadre che seleziona l'elemento. Il primo
+indice è \textbf{sempre 0}. In memoria gli elementi occupano celle
+\textbf{consecutive} (figura~\ref{fig:tre-variabili}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \node[font=\Lato\scriptsize\bfseries] at (1.4,1.0) {tre variabili separate};
+    \variabile{g0}{(1.4,0.3)}{grade0}{0}
+    \variabile{g1}{(1.4,-0.3)}{grade1}{0}
+    \variabile{g2}{(1.4,-0.9)}{grade2}{0}
+    \node[font=\Lato\scriptsize\bfseries] at (6.6,1.0) {un array: \code{int grade[3];}};
+    \node[mnome, anchor=east] at (5.2,-0.3) {grade};
+    \celle[minimum width=1.0cm]{g}{(5.3,-0.3)}{0,0,0}
+    \node[mnota, anchor=west, align=left] at (8.6,-0.3) {celle consecutive;\\sotto, l'indice di ciascuna};
+  \end{tikzpicture}
+  \caption{Tre variabili indipendenti e un array di tre elementi.}
+  \label{fig:tre-variabili}
+\end{figure}
+
+\subsection{La dichiarazione}
+
+La dichiarazione di un array a una dimensione indica il \textbf{tipo} degli
+elementi, l'\textbf{identificatore} e, fra parentesi quadre, un'espressione
+\textbf{costante} intera: la dimensione. La dichiarazione
+\code{int a[size];} riserva lo spazio per gli elementi da \code{a[0]} a
+\code{a[size-1]}. È buona norma definire la dimensione come costante
+simbolica, così che per cambiarla basti modificare una riga:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=somma.c]
+#include <stdio.h>
+
+#define N 4
+
+int main(void)
+{
+  int a[N] = {3, 7, 1, 9}, i;
+  int sum = 0;
+
+  for (i=0; i<N; i++)
+    sum += a[i];
+  printf("Sum is %d \n", sum);
+  return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./somma
+Sum is 20
+\end{console}
+\vspace{2pt}
+\wtnota{Il ciclo \code{for} con \code{i} da 0 a \code{N-1} è il modo tipico
+di visitare tutti gli elementi.}
+\end{affianco}
+
+Come per ogni variabile, ogni elemento occupa i byte del suo tipo: gli
+elementi di un array di \code{int} stanno a 4 byte di distanza l'uno
+dall'altro (figura~\ref{fig:array-memoria}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \memoria[minimum width=1.6cm]{m}{(2,0)}{1000/3/a[0], 1004/7/a[1], 1008/1/a[2], 1012/9/a[3]}
+    \draw[wtbrace] ([xshift=1.9cm]m-1.north east) -- ([xshift=1.9cm]m-4.south east);
+    \node[mnota, anchor=west, align=left] at ([xshift=2.25cm]$(m-1.east)!0.5!(m-4.east)$)
+      {16 byte consecutivi: 4 elementi\\da 4 byte ciascuno};
+  \end{tikzpicture}
+  \caption{\code{int a[4] = \{3, 7, 1, 9\};} in memoria (indirizzi di
+           esempio).}
+  \label{fig:array-memoria}
+\end{figure}
+
+\subsection{L'inizializzazione}
+
+Gli array possono avere classe di memorizzazione automatica, esterna o
+statica, ma non \code{register} (capitolo~\ref{chap:funzioni}). Nel C
+tradizionale solo gli array esterni e statici potevano essere inizializzati
+esplicitamente; in ANSI C lo possono essere anche quelli automatici, con
+una lista di valori fra graffe:
+
+\begin{itemize}
+  \item \code{float v[5] = \{0.0, 1.0, 2.0, 3.0, 4.0\};} assegna
+        \code{v[0] = 0.0}, \code{v[1] = 1.0}, e così via;
+  \item \code{int v[5] = \{0\};} azzera l'intero vettore;
+  \item \code{int v[5] = \{1\};} assegna \code{v[0] = 1} e pone a 0 i
+        rimanenti: se i valori sono meno degli elementi, gli altri valgono 0;
+  \item se la dimensione manca e c'è l'inizializzazione, la dimensione è il
+        numero dei valori: \code{int a[] = \{1, 2, 3, 4, 5\};} equivale a
+        \code{int a[5] = \{1, 2, 3, 4, 5\};}.
+\end{itemize}
+
+Se invece un array \textbf{non} viene inizializzato, dipende dalla sua
+classe: gli array esterni e statici vengono azzerati dal sistema, quelli
+automatici no, e contengono ciò che c'era in memoria.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=init.c]
+#include <stdio.h>
+
+int v[5];
+
+int main(void)
+{
+   static int a[5];
+   int b[5];
+   int i;
+
+   for (i=0; i<5; i++)
+     printf("%d ",a[i]);
+   printf("\n");
+
+   for (i=0; i<5; i++)
+     printf("%d ",v[i]);
+   printf("\n");
+
+   for (i=0; i<5; i++)
+     printf("%d ",b[i]);
+   printf("\n");
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./init
+0 0 0 0 0
+0 0 0 0 0
+0 0 -2037142800 32652 179344864
+$ ./init
+0 0 0 0 0
+0 0 0 0 0
+0 0 744688368 32742 1091613072
+\end{console}
+\wtnota{\code{a} (statico) e \code{v} (esterno) sono azzerati; \code{b}
+(automatico) contiene valori a caso, diversi a ogni esecuzione. \code{gcc}
+con \code{-Wall} avvisa: \textit{‘b’ may be used uninitialized}.}
+\end{affianco}
+
+\subsection{Gli indici e l'errore più comune}
+
+Se \code{a} è un array, \code{a[expr]}, con \code{expr} espressione intera,
+è un suo elemento. Con la dichiarazione \code{int a[N];} gli indici validi
+vanno da 0 a \code{N-1}. Accedere ad \code{a[i]} con \code{i} fuori da
+questo intervallo è un errore di programmazione molto comune, e il C
+\textbf{non lo controlla}: si legge o si scrive memoria che non è stata
+riservata per l'array. L'effetto dipende dal sistema: il programma può
+fermarsi con un errore, oppure proseguire con risultati sbagliati.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=fuori.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int a[5] = {10, 20, 30, 40, 50};
+   int i;
+
+   for (i = 0; i <= 5; i++)      /* un giro di troppo */
+      printf("a[%d] = %d\n", i, a[i]);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./fuori
+a[0] = 10
+a[1] = 20
+a[2] = 30
+a[3] = 40
+a[4] = 50
+a[5] = 32764
+\end{console}
+\wtnota{\code{a[5]} non esiste: il programma legge senza protestare ciò che
+c'è dopo l'array.}
+\end{affianco}
+
+Errori come questo sono difficili da trovare, perché spesso il programma
+sembra funzionare. Un aiuto prezioso è l'opzione
+\code{-fsanitize=address} di \code{gcc}, che aggiunge al programma dei
+controlli sugli accessi alla memoria e lo ferma al primo accesso sbagliato,
+dicendo dove (qui il rapporto è abbreviato, e al posto del percorso della
+cartella c'è un segnaposto):
+
+\begin{console}
+$ gcc -g -fsanitize=address -o fuori fuori.c
+$ ./fuori
+a[0] = 10
+a[1] = 20
+a[2] = 30
+a[3] = 40
+a[4] = 50
+=================================================================
+==2607==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f364ce00034 at pc 0x5575a6d3d467 bp 0x7fff693a7980 sp 0x7fff693a7970
+READ of size 4 at 0x7f364ce00034 thread T0
+    #0 0x5575a6d3d466 in main (*@\textit{[percorso del file]}@*)/fuori.c:9
+(*@\textit{\dots}@*)
+    [32, 52) 'a' (line 5) <== Memory access at offset 52 overflows this variable
+(*@\textit{\dots}@*)
+\end{console}
+
+Il rapporto dice che alla riga 9 si è letto (\textit{READ}) un \code{int}
+(4 byte) appena oltre la fine dell'array \code{a}, dichiarato alla riga 5.
+
+\section{I puntatori}
+
+\subsection{Indirizzi}
+
+Una variabile è memorizzata in un certo numero di byte, in una particolare
+posizione della memoria identificata da un \textbf{indirizzo}
+(capitolo~\ref{chap:calcolatore}). L'indirizzo di una variabile \code{v} si
+ottiene con l'operatore \code{\&}: \code{\&v}. Gli indirizzi sono valori, e
+come tali si possono memorizzare e manipolare: le variabili che contengono
+indirizzi si chiamano \term{puntatori}, e servono ad accedere alla memoria e
+a manipolare gli indirizzi.
+
+\subsection{Dichiarare e usare un puntatore}
+
+La dichiarazione
+
+\begin{lstlisting}[style=c]
+int *p;
+\end{lstlisting}
+
+dichiara la variabile \code{p} come \textbf{puntatore a \code{int}}: può
+contenere l'indirizzo di una variabile \code{int}. I suoi valori possibili
+sono lo zero e gli interi positivi che sul sistema possono essere
+interpretati come indirizzi. Alcuni esempi di assegnazione:
+
+\begin{lstlisting}[style=c]
+p = 0;
+p = NULL;              /* equivalente a p = 0 */
+p = &i;
+p = (int *) 1776;      /* un indirizzo assoluto in memoria */
+\end{lstlisting}
+
+\code{NULL}, definita negli header standard, vale 0 e indica un puntatore
+che \textbf{non punta a niente}. L'ultima assegnazione impone un indirizzo
+preciso: non si fa mai nei programmi normali, perché quella cella
+probabilmente non appartiene al programma.
+
+L'operatore \code{*}, applicato a un puntatore, dà il \textbf{valore della
+variabile puntata}: \code{*p} è il valore della variabile di cui \code{p}
+contiene l'indirizzo (si dice che \code{p} viene \textit{dereferenziato}).
+\code{*} e \code{\&} sono uno l'inverso dell'altro: \code{i} e \code{*\&i}
+sono equivalenti. Seguiamo le istruzioni delle slide
+(figura~\ref{fig:puntatore}):
+
+\begin{lstlisting}[style=c]
+int a, b, *p;
+
+a = 1;
+b = 2;
+p = &a;
+b = *p;               /* equivale a b = a */
+\end{lstlisting}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \foreach \col/\testo in {0/{dopo \code{a = 1; b = 2;}}, 1/{dopo \code{p = \&a;}}, 2/{dopo \code{b = *p;}}}
+      \node[font=\Lato\scriptsize\bfseries] at (\col*5.4+1.5,1.0) {\testo};
+    \variabile{a1}{(1.4,0.3)}{a}{1}
+    \variabile{b1}{(1.4,-0.3)}{b}{2}
+    \variabile{p1}{(1.4,-0.9)}{p}{\mvuota}
+    \begin{scope}[xshift=5.4cm]
+      \variabile{a2}{(1.4,0.3)}{a}{1}
+      \variabile{b2}{(1.4,-0.3)}{b}{2}
+      \variabile{p2}{(1.4,-0.9)}{p}{}
+      \riferimento{p2}{to[out=0, in=0, looseness=1.6] (a2.east)}
+      \node[mnota, anchor=west] at (2.9,-0.9) {\code{p} contiene l'indirizzo di \code{a}};
+    \end{scope}
+    \begin{scope}[xshift=10.8cm]
+      \variabile{a3}{(1.4,0.3)}{a}{1}
+      \variabile[fill=accent!10!white]{b3}{(1.4,-0.3)}{b}{1}
+      \variabile{p3}{(1.4,-0.9)}{p}{}
+      \riferimento{p3}{to[out=0, in=0, looseness=1.6] (a3.east)}
+      \node[mnota, anchor=west, align=left] at (2.9,-0.3) {\code{*p} è il valore\\di \code{a}: 1};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Un puntatore si disegna come una freccia verso la variabile di
+           cui contiene l'indirizzo.}
+  \label{fig:puntatore}
+\end{figure}
+
+\subsection{Che cosa contiene un puntatore}
+
+Un indirizzo si stampa con la conversione \code{\%p}, in esadecimale:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=indirizzo.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int   i = 7, *p;
+
+   p = &i;
+   printf("%s%d\n%s%p\n",
+      "   Value of i: ", *p,
+      "Location of i: ",  p);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./indirizzo
+   Value of i: 7
+Location of i: 0x7ffda49df4ac
+$ ./indirizzo
+   Value of i: 7
+Location of i: 0x7ffe989ec3bc
+\end{console}
+\end{affianco}
+
+L'indirizzo cambia a ogni esecuzione: per sicurezza, il sistema operativo
+colloca la memoria del programma in posizioni diverse ogni volta. Nelle
+slide le due stringhe contengono anche un \code{\%d}
+(\code{"   Value of i: \%d"}): così, però, \code{\%d} non è una conversione
+(sta in un argomento, non nella stringa di controllo) e viene stampato tale
+e quale, \code{   Value of i: \%d7}. La versione qui sopra è quella corretta.
+
+\subsection{Espressioni con i puntatori}
+
+Con le dichiarazioni
+
+\begin{lstlisting}[style=c]
+int i = 3, j = 5, *p = &i, *q = &j, *r;
+double x;
+\end{lstlisting}
+
+ecco alcune espressioni, con l'espressione equivalente e il valore
+(verificato con il compilatore, calcolando ciascuna partendo da questi
+valori):
+
+\begin{center}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}>{\FiraCodeNL}l>{\FiraCodeNL}l l@{}}
+  \toprule
+  \normalfont\textbf{espressione} & \normalfont\textbf{equivalente} & \textbf{valore} \\
+  \midrule
+  p == \&i            & p == (\&i)                     & 1 \\
+  **\&p               & *(*(\&p))                      & 3 \\
+  *(r = \&j) *= *p    & (*(r = (\&j))) *= *p           & 15 \\
+  7 * *p / *q + 7     & (((7 * (*p))) / (*q)) + 7      & 11 \\
+  r = \&x             & r = \&x                        & illegale \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\begin{itemize}
+  \item \code{**\&p}: \code{\&p} è l'indirizzo di \code{p}; \code{*} lo
+        riporta a \code{p}, e un altro \code{*} dà il valore puntato da
+        \code{p}, cioè \code{i}: 3.
+  \item \code{*(r = \&j) *= *p}: \code{r} riceve l'indirizzo di \code{j}, e
+        \code{*r *= *p} moltiplica \code{j} per \code{i}: \code{j} diventa 15.
+  \item \code{7 * *p / *q + 7}: $(7 \cdot 3) / 5 + 7 = 21 / 5 + 7 = 4 + 7 =
+        11$ (divisione intera). Nelle slide è scritta \code{7**p / *q+7}: gli
+        spazi non contano, ma rendono leggibile.
+  \item \code{r = \&x} è illegale: \code{r} punta a \code{int}, \code{\&x} è
+        l'indirizzo di un \code{double}. \code{gcc} lo segnala (e i
+        compilatori più recenti lo considerano un errore):
+\end{itemize}
+
+\begin{console}
+$ gcc -Wall -o rx rx.c
+rx.c: In function (*@‘@*)main(*@’@*):
+rx.c:9:5: warning: assignment to (*@‘@*)int *(*@’@*) from incompatible pointer type (*@‘@*)double *(*@’@*) [-Wincompatible-pointer-types]
+    9 |   r = &x;
+      |     ^
+\end{console}
+
+\subsection{Che cosa non si può puntare}
+
+Non tutto ha un indirizzo. Non si può puntare a una \textbf{costante}
+(\code{\&3}), a un'\textbf{espressione} (\code{\&(k + 9)}) né a una
+variabile \code{register} (\code{\&v}). Le prime due non sono celle di
+memoria con un nome (sono \textit{lvalue} mancati); la terza, come abbiamo
+visto, sta in un registro:
+
+\begin{console}
+$ gcc -Wall -o nonpuntabili nonpuntabili.c
+nonpuntabili.c: In function (*@‘@*)main(*@’@*):
+nonpuntabili.c:6:8: error: lvalue required as unary (*@‘@*)&(*@’@*) operand
+nonpuntabili.c:7:8: error: lvalue required as unary (*@‘@*)&(*@’@*) operand
+nonpuntabili.c:8:4: error: address of register variable (*@‘@*)v(*@’@*) requested
+\end{console}
+
+Lo stesso vale per un cast: nella cartella degli esempi c'è un tentativo,
+\code{r = \&((int) x);}, di far puntare un \code{int *} a un
+\code{double} “convertito”. Il risultato di un cast è un valore, non una
+variabile, e il compilatore risponde ancora \textit{lvalue required as
+unary ‘\&’ operand}.
+
+\section{Il passaggio per indirizzo}
+
+\subsection{Modificare le variabili del chiamante}
+
+Una variabile passata come parametro a una funzione non cambia valore dopo
+la chiamata: è il passaggio \textbf{per valore}
+(capitolo~\ref{chap:funzioni}). Altri linguaggi hanno anche il passaggio
+\textbf{per riferimento}, in cui la funzione può modificare la variabile
+passata. In C si ottiene un effetto simile con i puntatori: si passa
+l'\textbf{indirizzo} della variabile, e la funzione lavora sulla variabile
+attraverso \code{*}.
+
+\begin{affianco}[0.5][t]
+\begin{lstlisting}[style=c, name=valore.c]
+int f(int a, int b)
+{
+  a = a+1;
+  b = b+1;
+  return (a*b);
+}
+
+int main()
+{
+  int a = 1, b = 2, c;
+
+  c = f(a,b);
+  printf("a = %d\nb = %d\nc = %d \n", a, b, c);
+}
+\end{lstlisting}
+\begin{console}
+$ ./valore
+a = 1
+b = 2
+c = 6
+\end{console}
+\risultato
+\begin{lstlisting}[style=c, name=indirizzi.c]
+int f(int *a, int *b)
+{
+  *a = *a + 1;
+  *b = *b + 1;
+  return (*a * *b);
+}
+
+int main()
+{
+  int a = 1, b = 2, c;
+
+  c = f(&a, &b);
+  printf("a = %d\nb = %d\nc = %d \n", a, b, c);
+}
+\end{lstlisting}
+\begin{console}
+$ ./indirizzi
+a = 2
+b = 3
+c = 6
+\end{console}
+\end{affianco}
+
+A sinistra \code{f} incrementa le proprie copie; a destra riceve gli
+indirizzi delle variabili di \code{main} e incrementa \textbf{quelle}
+(figura~\ref{fig:per-indirizzo}). Si noti che \code{a} e \code{b}, dentro
+\code{f}, ora sono puntatori: \code{*a} è l'intero puntato.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \variabile{ma}{(1.6,0.0)}{a}{1 \textcolor{accent!75!black}{$\rightarrow$ 2}}
+    \variabile{mb}{(1.6,-0.6)}{b}{2 \textcolor{accent!75!black}{$\rightarrow$ 3}}
+    \variabile{mc}{(1.6,-1.2)}{c}{6}
+    \scopo{2}{m}{main}{(ma-nome) (ma) (mb-nome) (mb) (mc-nome) (mc)}
+    \node[mvar, fill=accent!10!white] (fa) at (6.4,-0.2) {};
+    \node[mnome, anchor=west] (fa-nome) at ([xshift=2pt]fa.east) {a};
+    \node[mvar, fill=accent!10!white] (fb) at (6.4,-0.8) {};
+    \node[mnome, anchor=west] (fb-nome) at ([xshift=2pt]fb.east) {b};
+    \scopo{3}{f}{f}{(fa-nome) (fa) (fb-nome) (fb)}
+    \riferimento{fa}{-- (ma.east)}
+    \riferimento{fb}{-- (mb.east)}
+    \node[mnota, anchor=west, align=left] at (7.9,-0.5) {i parametri di \code{f} contengono gli indirizzi:\\\code{*a = *a + 1} incrementa la \code{a} di \code{main}};
+  \end{tikzpicture}
+  \caption{Il passaggio per indirizzo: \code{f} arriva alle variabili di
+           \code{main} attraverso i puntatori.}
+  \label{fig:per-indirizzo}
+\end{figure}
+
+\warning{Una svista nelle slide}{
+  Nella versione delle slide il corpo di \code{f} è rimasto quello di
+  prima: \code{a = a+1; b = b+1; return (a*b);}. Ma ora \code{a} e
+  \code{b} sono puntatori: \code{a = a+1} sposterebbe il puntatore, non
+  incrementerebbe il valore, e moltiplicare due puntatori non ha senso. Il
+  compilatore infatti si ferma: \textit{invalid operands to binary *
+  (have ‘int *’ and ‘int *’)}. Bisogna usare \code{*} ovunque si intenda il
+  valore puntato, come nella versione qui sopra.}
+
+\subsection{Lo scambio di due variabili}
+
+Lo scambio (\textit{swap}) dei valori di due variabili si fa di solito con
+una variabile di appoggio: \code{tmp = a; a = b; b = tmp;}. Una funzione che
+scambi due variabili del chiamante deve riceverne gli indirizzi:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=swap.c]
+#include <stdio.h>
+
+void   swap(int *, int *);
+
+int main(void)
+{
+   int    i = 3, j = 5;
+
+   swap(&i, &j);
+   printf("%d  %d\n", i, j);       /* 5  3 is printed */
+   return 0;
+}
+
+void swap(int *p, int *q)
+{
+   int   tmp;
+
+   tmp = *p;
+   *p = *q;
+   *q = tmp;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./swap
+5  3
+\end{console}
+\end{affianco}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \foreach \col/\testo/\vi/\vj/\vt in {0/{\code{tmp = *p;}}/3/5/3, 1/{\code{*p = *q;}}/5/5/3, 2/{\code{*q = tmp;}}/5/3/3} {
+      \begin{scope}[xshift=\col*5.6cm]
+        \node[font=\Lato\scriptsize\bfseries] at (2.2,1.0) {dopo \testo};
+        \variabile{i\col}{(1.0,0.3)}{i}{\vi}
+        \variabile{j\col}{(1.0,-0.3)}{j}{\vj}
+        \node[mvar, fill=accent!10!white] (p\col) at (3.6,0.3) {};
+        \node[mnome, anchor=west] at ([xshift=2pt]p\col.east) {p};
+        \node[mvar, fill=accent!10!white] (q\col) at (3.6,-0.3) {};
+        \node[mnome, anchor=west] at ([xshift=2pt]q\col.east) {q};
+        \node[mvar, fill=accent!10!white] (t\col) at (3.6,-0.9) {\vt};
+        \node[mnome, anchor=west] at ([xshift=2pt]t\col.east) {tmp};
+        \riferimento{p\col}{-- (i\col.east)}
+        \riferimento{q\col}{-- (j\col.east)}
+      \end{scope}
+    }
+  \end{tikzpicture}
+  \caption{\code{swap} passo per passo: \code{p} e \code{q} puntano a
+           \code{i} e \code{j} di \code{main}.}
+  \label{fig:swap}
+\end{figure}
+
+È anche il motivo per cui \code{scanf} riceve \code{\&x}: per scrivere in
+\code{x}, deve sapere dove si trova (capitolo~\ref{chap:primi-programmi}).
+
+\section{Array e puntatori}
+
+\subsection{Il nome di un array è un indirizzo}
+
+Il nome di un array è un indirizzo, cioè il valore di un puntatore: quello
+del suo primo elemento. Da qui le relazioni fondamentali:
+
+\begin{itemize}
+  \item se \code{a} è un array e \code{i} un intero, \code{a[i]} (l'elemento
+        di indice \code{i}) è equivalente a \code{*(a + i)} (il contenuto
+        dell'indirizzo \code{a + i});
+  \item se \code{p} è un puntatore, anche \code{p[i]} è equivalente a
+        \code{*(p + i)}: i puntatori si possono indicizzare come gli array;
+  \item con \code{int a[N], *p;}, l'istruzione \code{p = a;} equivale a
+        \code{p = \&a[0];}, e \code{p = a + 1;} equivale a
+        \code{p = \&a[1];}.
+\end{itemize}
+
+Il punto chiave è l'\textbf{aritmetica dei puntatori}: sommare 1 a un
+puntatore non lo sposta di un byte, ma di \textbf{un elemento}, cioè di
+tanti byte quanti ne occupa il tipo puntato (4 per un \code{int}).
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=c, name=aritmetica.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int a[3] = {10, 20, 30};
+   int *p = a;
+
+   printf("a     = %p\n", (void *) a);
+   printf("&a[0] = %p\n", (void *) &a[0]);
+   printf("a + 1 = %p\n", (void *) (a + 1));
+   printf("&a[1] = %p\n", (void *) &a[1]);
+   printf("a + 2 = %p\n", (void *) (a + 2));
+   printf("*(a + 2) = %d   p[2] = %d   *(p + 2) = %d\n",
+          *(a + 2), p[2], *(p + 2));
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./aritmetica
+a     = 0x7ffc5944463c
+&a[0] = 0x7ffc5944463c
+a + 1 = 0x7ffc59444640
+&a[1] = 0x7ffc59444640
+a + 2 = 0x7ffc59444644
+*(a + 2) = 30   p[2] = 30   *(p + 2) = 30
+\end{console}
+\wtnota{Da \code{a} ad \code{a + 1} l'indirizzo cresce di 4
+(\code{...63c}, \code{...640}): un \code{int}.}
+\end{affianco}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize]
+    \noindici
+    \celle[minimum width=2.0cm]{c}{(0,0)}{10,20,30}
+    \foreach \k/\ind in {0/1000, 1/1004, 2/1008}
+      \node[mindir, anchor=north] at ([yshift=-1pt]c-\k.south) {\ind};
+    \foreach \k/\testo in {0/{a\\\&a[0]\\p}, 1/{a + 1\\\&a[1]}, 2/{a + 2\\\&a[2]}} {
+      \node[font=\FiraCodeNL\scriptsize, text=mref, anchor=south, align=center] (l\k) at ([yshift=0.5cm]c-\k.north) {\testo};
+      \draw[mrif] (l\k.south) -- (c-\k.north);
+    }
+    \node[mnota, anchor=west, align=left] at ([xshift=0.5cm]c-2.east) {\code{a[i]} è \code{*(a + i)}:\\il contenuto della cella \code{a + i}};
+  \end{tikzpicture}
+  \caption{\code{a + i} è l'indirizzo dell'elemento \code{i} (indirizzi di
+           esempio): ogni passo vale 4 byte.}
+  \label{fig:aritmetica}
+\end{figure}
+
+\subsection{Quattro modi di sommare un array}
+
+Grazie a queste equivalenze, la somma degli elementi di un array si può
+scrivere in molti modi, tutti equivalenti:
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=c, name=quattro.c]
+#include <stdio.h>
+
+#define N 5
+
+int main(void)
+{
+   int a[N] = {1, 2, 3, 4, 5}, i, *p, sum;
+
+   sum = 0;
+   for (i = 0; i < N; i++)
+      sum += a[i];
+   printf("a[i]:      %d\n", sum);
+
+   sum = 0;
+   for (p = a, i = 0; i < N; i++)
+      sum += p[i];
+   printf("p[i]:      %d\n", sum);
+
+   sum = 0;
+   for (i = 0; i < N; i++)
+      sum += *(a + i);
+   printf("*(a + i):  %d\n", sum);
+
+   sum = 0;
+   for (p = a; p < &a[N]; p++)
+      sum += *p;
+   printf("*p, p++:   %d\n", sum);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./quattro
+a[i]:      15
+p[i]:      15
+*(a + i):  15
+*p, p++:   15
+\end{console}
+\vspace{2pt}
+\wtnota{Nell'ultimo ciclo è il puntatore a scorrere l'array: parte da
+\code{a} e avanza di un elemento a ogni giro, finché arriva a
+\code{\&a[N]}, l'indirizzo subito dopo l'ultimo elemento.}
+\end{affianco}
+
+\subsection{Un array non si può spostare}
+
+C'è però una differenza fra un array e un puntatore: un puntatore può
+assumere indirizzi diversi, mentre il nome di un array è un indirizzo
+\textbf{costante}, che non si può cambiare. Le istruzioni \code{a = p;},
+\code{++a;} e \code{a += 2;} sono illegali:
+
+\begin{console}
+$ gcc -Wall -o costante costante.c
+costante.c: In function (*@‘@*)main(*@’@*):
+costante.c:5:6: error: assignment to expression with array type
+costante.c:6:4: error: lvalue required as increment operand
+costante.c:7:6: error: assignment to expression with array type
+\end{console}
+
+\section{Gli array come parametri}
+
+\subsection{Si passa l'indirizzo}
+
+Nella definizione di una funzione, un parametro dichiarato come array è in
+realtà un \textbf{puntatore}. Quando si passa un array come argomento, viene
+passato per valore il suo \textbf{indirizzo base}: gli elementi
+\textbf{non vengono copiati}. Come esempio, una funzione che somma gli
+elementi di un array di \code{double}: le due intestazioni seguenti sono
+equivalenti.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c]
+double sum_array(double a[], int n)
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c]
+double sum_array(double *a, int n)
+\end{lstlisting}
+\end{affianco}
+
+Siccome la funzione riceve solo un indirizzo, non sa quanto è lungo
+l'array: la dimensione va passata come parametro (qui \code{n}). E siccome
+riceve un indirizzo qualsiasi, può lavorare anche su una \textbf{parte}
+dell'array. Con \code{double v[100];} e \code{v[i]} uguale a \code{i}:
+
+\begin{affianco}[0.6][c]
+\codicepiccolo
+\begin{lstlisting}[style=c, name=sum_array.c]
+#include <stdio.h>
+
+double sum_array(double a[], int n)   /* n e' la dimensione di a[] */
+{
+   int    i;
+   double sum = 0.0;
+
+   for (i = 0; i < n; ++i)
+      sum += a[i];
+   return sum;
+}
+
+int main(void)
+{
+   double v[100];
+   int    i, k = 10;
+
+   for (i = 0; i < 100; i++)
+      v[i] = i;                       /* v[i] vale i */
+   printf("%.0f\n", sum_array(v, 100));        /* v[0] + ... + v[99]   */
+   printf("%.0f\n", sum_array(v, 88));         /* v[0] + ... + v[87]   */
+   printf("%.0f\n", sum_array(&v[7], k - 7));  /* v[7] + ... + v[k-1]  */
+   printf("%.0f\n", sum_array(v + 7, 2 * k));  /* v[7] + ... + v[2k+6] */
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./sum_array
+4950
+3828
+24
+330
+\end{console}
+\wtnota{Con \code{k} uguale a 10: $7 + 8 + 9 = 24$, e la somma da 7 a 26
+vale 330.}
+\end{affianco}
+
+Nella chiamata \code{sum\_array(v + 7, 2 * k)} il parametro \code{a} punta
+a \code{v[7]}: per la funzione \code{a[0]} è \code{v[7]}, \code{a[1]} è
+\code{v[8]}, e così via (figura~\ref{fig:parte-array}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize]
+    \noindici
+    \celle[minimum width=0.9cm]{v}{(0,0)}{0,\ldots,6,7,8,9,\ldots,26,27,\ldots}
+    \foreach \k/\ind in {0/v[0], 2/v[6], 3/v[7], 4/v[8], 5/v[9], 7/v[26], 8/v[27]}
+      \node[mindir, anchor=north] at ([yshift=-1pt]v-\k.south) {\ind};
+    \foreach \k/\ind in {3/a[0], 4/a[1], 5/a[2], 7/a[19]}
+      \node[font=\FiraCodeNL\tiny, text=accent!75!black, anchor=south] at ([yshift=1pt]v-\k.north) {\ind};
+    \draw[wtbrace, draw=accent!70!black] ([yshift=-0.35cm]v-3.south west) -- ([yshift=-0.35cm]v-7.south east);
+    \node[mnota, anchor=north, text=accent!70!black] at ([yshift=-0.65cm]$(v-3.south)!0.5!(v-7.south)$) {i 20 elementi sommati da \code{sum\_array(v + 7, 20)}};
+    \node[font=\FiraCodeNL\scriptsize, text=mref, anchor=south] (pa) at ([yshift=0.8cm]v-3.north) {a};
+    \draw[mrif] (pa.south) -- ([yshift=0.3cm]v-3.north);
+  \end{tikzpicture}
+  \caption{La funzione vede l'array a partire dall'indirizzo che riceve.}
+  \label{fig:parte-array}
+\end{figure}
+
+\subsection{\code{sizeof} su un parametro}
+
+Una conseguenza che sorprende: dentro la funzione, \code{sizeof} applicato
+al parametro dà la dimensione di un \textbf{puntatore}, non dell'array.
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=c, name=dimensione.c]
+#include <stdio.h>
+
+void stampa_dimensione(int a[])
+{
+   printf("nella funzione: sizeof(a) = %zu\n", sizeof(a));
+}
+
+int main(void)
+{
+   int v[10];
+
+   printf("in main:        sizeof(v) = %zu\n", sizeof(v));
+   stampa_dimensione(v);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./dimensione
+in main:        sizeof(v) = 40
+nella funzione: sizeof(a) = 8
+\end{console}
+\wtnota{40 byte sono i dieci \code{int}; 8 byte sono un indirizzo.
+\code{gcc} avvisa: \textit{‘sizeof’ on array function parameter ‘a’ will
+return size of ‘int *’}.}
+\end{affianco}
+
+\section{Ordinare un array}
+
+Un'applicazione classica degli array (e dei puntatori, per gli scambi) è
+l'\textbf{ordinamento}: disporre gli elementi in ordine crescente. Le
+slide presentano due algoritmi semplici. Entrambi usano la \code{swap} vista
+sopra, a cui passano gli indirizzi di due elementi, \code{a + j - 1} e
+\code{a + j}, cioè \code{\&a[j-1]} e \code{\&a[j]}.
+
+\subsection{Il bubble sort}
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=c, name=bubblesort.c]
+void bubble(int *a, int n)     /* n is the size of a */
+{
+   int    i, j;
+
+   for (i = 0; i < n - 1; ++i)
+      for (j = n - 1; j > i; --j)
+         if (a[j-1] > a[j])
+            swap(a+j-1, a+j);
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./bubblesort
+7 3 66 3 -5 22 -77 2
+-77 -5 2 3 3 7 22 66
+\end{console}
+\wtnota{\code{main} stampa l'array prima e dopo la chiamata
+\code{bubble(v, 8)}.}
+\end{affianco}
+
+A ogni passo (un giro del ciclo esterno), il ciclo interno scorre l'array
+\textbf{dal fondo verso l'inizio} confrontando ogni coppia di elementi
+vicini, e li scambia se sono in ordine sbagliato. Così il più piccolo degli
+elementi rimasti “risale” come una bolla fino alla posizione \code{i}:
+dopo il passo $k$, i primi $k$ elementi sono definitivamente al loro posto
+(figura~\ref{fig:bubble}).
+
+\begin{figure}[H]
+  \centering
+  \setlength{\tabcolsep}{6pt}
+  \renewcommand{\arraystretch}{1.12}
+  \newcommand{\ok}[1]{\cellcolor{green-gradient-1!45!white}#1}
+  \begin{tabular}{@{}l>{\FiraCodeNL}r>{\FiraCodeNL}r>{\FiraCodeNL}r>{\FiraCodeNL}r>{\FiraCodeNL}r>{\FiraCodeNL}r>{\FiraCodeNL}r>{\FiraCodeNL}r@{}}
+    \toprule
+    Dati    & 7 & 3 & 66 & 3 & -5 & 22 & -77 & 2 \\
+    Passo 1 & \ok{-77} & 7 & 3 & 66 & 3 & -5 & 22 & 2 \\
+    Passo 2 & \ok{-77} & \ok{-5} & 7 & 3 & 66 & 3 & 2 & 22 \\
+    Passo 3 & \ok{-77} & \ok{-5} & \ok{2} & 7 & 3 & 66 & 3 & 22 \\
+    Passo 4 & \ok{-77} & \ok{-5} & \ok{2} & \ok{3} & 7 & 3 & 66 & 22 \\
+    Passo 5 & \ok{-77} & \ok{-5} & \ok{2} & \ok{3} & \ok{3} & 7 & 22 & 66 \\
+    Passo 6 & \ok{-77} & \ok{-5} & \ok{2} & \ok{3} & \ok{3} & \ok{7} & 22 & 66 \\
+    Passo 7 & \ok{-77} & \ok{-5} & \ok{2} & \ok{3} & \ok{3} & \ok{7} & \ok{22} & \ok{66} \\
+    \bottomrule
+  \end{tabular}
+  \caption{Il bubble sort passo per passo (verificato stampando l'array dopo
+           ogni giro del ciclo esterno): in verde la parte già ordinata.}
+  \label{fig:bubble}
+\end{figure}
+
+Gli ultimi passi non cambiano più nulla: l'array è già ordinato dal passo 5,
+ma l'algoritmo non se ne accorge e fa comunque tutti gli $n - 1$ passi.
+
+\subsection{Il selection sort}
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=c, name=selectionsort.c]
+void selection_sort(int *a, int n)     /* n is the size of a */
+{
+   int    i, j;
+
+   for (i = 0; i < n - 1; ++i)
+      for (j = i + 1; j < n ; j++)
+         if (a[j] < a[i])
+            swap(a+j, a+i);
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./selectionsort
+7 3 66 3 -5 22 -77 2
+-77 -5 2 3 3 7 22 66
+\end{console}
+\end{affianco}
+
+Qui al passo \code{i} si confronta l'elemento in posizione \code{i} con
+tutti quelli che seguono, scambiandolo ogni volta che se ne trova uno più
+piccolo: alla fine del passo, in posizione \code{i} c'è il più piccolo degli
+elementi rimasti, cioè quello che va lì (figura~\ref{fig:selection}).
+
+\begin{figure}[H]
+  \centering
+  \setlength{\tabcolsep}{6pt}
+  \renewcommand{\arraystretch}{1.12}
+  \newcommand{\ok}[1]{\cellcolor{green-gradient-1!45!white}#1}
+  \begin{tabular}{@{}l>{\FiraCodeNL}r>{\FiraCodeNL}r>{\FiraCodeNL}r>{\FiraCodeNL}r>{\FiraCodeNL}r>{\FiraCodeNL}r>{\FiraCodeNL}r>{\FiraCodeNL}r@{}}
+    \toprule
+    Dati    & 7 & 3 & 66 & 3 & -5 & 22 & -77 & 2 \\
+    Passo 1 & \ok{-77} & 7 & 66 & 3 & 3 & 22 & -5 & 2 \\
+    Passo 2 & \ok{-77} & \ok{-5} & 66 & 7 & 3 & 22 & 3 & 2 \\
+    Passo 3 & \ok{-77} & \ok{-5} & \ok{2} & 66 & 7 & 22 & 3 & 3 \\
+    Passo 4 & \ok{-77} & \ok{-5} & \ok{2} & \ok{3} & 66 & 22 & 7 & 3 \\
+    Passo 5 & \ok{-77} & \ok{-5} & \ok{2} & \ok{3} & \ok{3} & 66 & 22 & 7 \\
+    Passo 6 & \ok{-77} & \ok{-5} & \ok{2} & \ok{3} & \ok{3} & \ok{7} & 66 & 22 \\
+    Passo 7 & \ok{-77} & \ok{-5} & \ok{2} & \ok{3} & \ok{3} & \ok{7} & \ok{22} & \ok{66} \\
+    \bottomrule
+  \end{tabular}
+  \caption{Il selection sort passo per passo: a ogni passo il minimo dei
+           rimanenti va nella sua posizione definitiva.}
+  \label{fig:selection}
+\end{figure}
+
+\section{L'allocazione dinamica}
+
+\subsection{\code{malloc}, \code{calloc} e \code{free}}
+
+Finora la dimensione di un array era una costante, decisa scrivendo il
+programma. Spesso però la si conosce solo durante l'esecuzione (quanti
+numeri inserirà l'utente?). Per questo il C fornisce le funzioni
+\code{malloc} (\textit{memory allocation}) e \code{calloc}
+(\textit{contiguous allocation}), con i prototipi in \code{stdlib.h}: creano
+spazio \textbf{dinamicamente}, mentre il programma è in esecuzione, per
+array, strutture e unioni.
+
+\begin{itemize}
+  \item \code{calloc(n, el\_size)} riserva spazio contiguo per un array di
+        \code{n} elementi da \code{el\_size} byte ciascuno (la dimensione
+        si ottiene con \code{sizeof}), e lo inizializza con tutti i bit a
+        zero. I due parametri sono di tipo \code{size\_t}.
+  \item \code{malloc(size)} riserva \code{size} byte e non li inizializza:
+        può essere un po' più veloce.
+  \item Se riescono, entrambe restituiscono un puntatore di tipo
+        \code{void *} (un indirizzo “generico”) alla base della memoria;
+        altrimenti restituiscono \code{NULL}.
+\end{itemize}
+
+\begin{lstlisting}[style=c]
+a = (int *) calloc(n, sizeof(int));
+a = (int *) malloc(n * sizeof(int));
+\end{lstlisting}
+
+Il cast \code{(int *)} si può anche omettere, perché in C un
+\code{void *} si converte da solo in qualsiasi altro puntatore. Lo spazio
+allocato dinamicamente \textbf{non viene liberato} automaticamente
+all'uscita dalle funzioni: va restituito esplicitamente con \code{free(ptr)}.
+Se \code{ptr} è \code{NULL}, \code{free} non fa nulla; altrimenti
+\code{ptr} deve essere esattamente l'indirizzo base restituito da
+\code{malloc} o \code{calloc}, o il comportamento è indefinito (e l'effetto
+dipende dal sistema).
+
+\subsection{Un esempio}
+
+Il programma seguente chiede ripetutamente un numero \code{n}, alloca un
+array di \code{n} interi, lo riempie di numeri casuali fra $-9$ e 9, lo
+stampa con la somma e lo libera. \code{rand()} (in \code{stdlib.h})
+restituisce un intero pseudo-casuale, e \code{srand(time(NULL))} sceglie il
+seme in base all'ora, così che i numeri cambino a ogni esecuzione.
+
+\begin{lstlisting}[style=c, name=dinamico.c]
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+void   fill_array(int *a, int n);
+int    sum_array(int *a, int n);
+void   wrt_array(int *a, int n);
+
+int main(void)
+{
+   int   *a, n;
+
+   srand(time(NULL));     /* seed the random number generator */
+   printf("Input n: ");
+   while (scanf("%d", &n) == 1 && n >= 1) {
+      putchar('\n');
+      a = calloc(n, sizeof(int));     /* allocate space for a[] */
+      fill_array(a, n);
+      wrt_array(a, n);
+      printf("sum = %d\n\n", sum_array(a, n));
+      free(a);
+      printf("Input n: ");
+   }
+   printf("\nBye!\n\n");
+   return 0;
+}
+
+void fill_array(int *a, int n)
+{
+   int   i;
+
+   for (i = 0; i < n; ++i)
+      a[i] = rand() % 19 - 9;
+}
+
+int sum_array(int *a, int n)
+{
+   int   i, sum = 0;
+
+   for (i = 0; i < n; ++i)
+      sum += a[i];
+   return sum;
+}
+
+void wrt_array(int *a, int n)
+{
+   int   i;
+
+   printf("a = [");
+   for (i = 0; i < n; ++i)
+      printf("%d%s", a[i], ((i < n - 1) ? ", " : "]\n"));
+}
+\end{lstlisting}
+
+\subsection{Il programma in esecuzione}
+
+Ecco un'esecuzione (i numeri, naturalmente, cambiano ogni volta):
+
+\begin{affianco}[0.42][c]
+\begin{console}
+$ ./dinamico
+Input n: <<5>>
+
+a = [8, -1, -5, -9, -3]
+sum = -10
+
+Input n: <<3>>
+
+a = [-4, -1, 7]
+sum = 2
+
+Input n: <<0>>
+
+Bye!
+\end{console}
+\risultato
+\begin{itemize}
+  \item \code{rand() \% 19} vale da 0 a 18; togliendo 9 si va da $-9$ a 9.
+  \item In \code{wrt\_array}, \code{(i < n - 1) ? ", " : "]\textbackslash
+        n"} è l'\textbf{operatore condizionale}: vale \code{", "} se la
+        condizione è vera, \code{"]\textbackslash n"} altrimenti. Così dopo
+        l'ultimo elemento si chiude la parentesi invece di mettere la
+        virgola.
+  \item Il ciclo continua finché \code{scanf} legge un numero
+        \textbf{e} il numero è almeno 1.
+\end{itemize}
+\end{affianco}
+
+\warning{Una svista nelle slide}{
+  Nelle slide la condizione è \code{scanf("\%d", \&n) == 1 || n >= 1}, con
+  l'\textit{or}. Così, se si inserisce 0, la prima parte è vera e il ciclo
+  prosegue con un array vuoto; e se l'input finisce (\tasti{Ctrl,D}) dopo un
+  numero valido, la prima parte è falsa ma \code{n} è rimasto quello di
+  prima, la seconda è vera, e il ciclo non termina più (in una prova ha
+  stampato oltre 10 milioni di righe in un secondo). La condizione giusta,
+  quella del libro da cui viene l'esempio, è con \code{\&\&}.}
+
+\subsection{Lo stack e lo heap}
+
+Dove finisce la memoria allocata dinamicamente? La memoria di un programma
+in esecuzione è divisa in zone (figura~\ref{fig:zone-memoria}):
+
+\begin{itemize}
+  \item lo \term{stack} (la pila) è lo spazio di lavoro delle funzioni:
+        a ogni chiamata viene riservato un blocco in cima allo stack per le
+        variabili locali e alcuni dati, e viene tolto al ritorno
+        (figura~\ref{fig:pila});
+  \item lo \term{heap} è la memoria riservata all'allocazione dinamica:
+        \code{malloc} e \code{calloc} prendono spazio da lì, e \code{free}
+        lo restituisce;
+  \item le variabili globali e \code{static} hanno una loro zona, che esiste
+        per tutta l'esecuzione, e il codice del programma un'altra ancora.
+\end{itemize}
+
+Lo stack è tipicamente molto più piccolo dello heap (su Linux, di solito, 8
+MB): un array enorme dichiarato come variabile locale può esaurirlo
+(\textit{stack overflow}), mentre lo stesso array allocato con
+\code{malloc} non dà problemi.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      zona/.style={draw=primary!60!black, line width=0.7pt, minimum width=4.2cm, align=center}]
+    \node[zona, fill=accent!10!white, minimum height=1.3cm] (st) at (0,2.7) {\textbf{stack}\\variabili locali, parametri};
+    \node[zona, fill=white, minimum height=1.2cm, draw=neutral!40!white, dashed] (lib) at (0,1.45) {\color{neutral!45!black}spazio libero};
+    \node[zona, fill=green-gradient-1!40!white, minimum height=1.3cm] (hp) at (0,0.2) {\textbf{heap}\\\code{malloc}, \code{calloc}};
+    \node[zona, fill=primary!8!white, minimum height=0.75cm] (gl) at (0,-0.83) {variabili globali e \code{static}};
+    \node[zona, fill=neutral!10!white, minimum height=0.75cm] (cd) at (0,-1.6) {codice del programma};
+    \draw[wtarrowacc] ([xshift=-1.5cm]st.south) -- ++(0,-0.45) node[left, mnota, pos=0.3] {cresce verso il basso};
+    \draw[wtarrowacc] ([xshift=-1.5cm]hp.north) -- ++(0,0.45) node[left, mnota, pos=0.3] {cresce verso l'alto};
+    \node[mnota, anchor=west] at (2.4,2.7) {un blocco per ogni chiamata, tolto al ritorno};
+    \node[mnota, anchor=west] at (2.4,0.2) {resta finché non si chiama \code{free}};
+    \node[mnota, anchor=west] at (2.4,-1.2) {esistono per tutta l'esecuzione};
+  \end{tikzpicture}
+  \caption{Le zone della memoria di un programma (lo schema è semplificato).}
+  \label{fig:zone-memoria}
+\end{figure}
+
+\insintesi{
+  Un \textbf{array} raccoglie elementi dello stesso tipo in celle
+  consecutive; gli indici vanno da 0 a $N-1$, e il C non controlla gli
+  accessi fuori dai limiti (\code{-fsanitize=address} aiuta a trovarli). Gli
+  array automatici non inizializzati contengono valori casuali. Un
+  \textbf{puntatore} contiene un indirizzo: \code{\&v} è l'indirizzo di
+  \code{v}, \code{*p} il valore puntato, \code{NULL} il puntatore che non
+  punta a niente. Passando gli indirizzi una funzione può modificare le
+  variabili del chiamante (\code{swap}). Il nome di un array è l'indirizzo
+  costante del primo elemento: \code{a[i]} equivale a \code{*(a + i)}, e
+  \code{p + 1} avanza di un elemento. Un array passato a una funzione è
+  passato come indirizzo (la dimensione va passata a parte). Bubble sort e
+  selection sort ordinano con confronti e scambi. \code{malloc} e
+  \code{calloc} allocano memoria nello heap durante l'esecuzione, e
+  \code{free} la restituisce.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{A. Kelley, I. Pohl}, \textit{A Book on C}: capitolo~6
+        (array, puntatori e stringhe).
+  \item \textbf{AddressSanitizer} --- documentazione di GCC
+        (\code{-fsanitize=address}). \\
+        \urlx{https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html}
+  \item \textbf{Dynamic memory management} --- cppreference.com. \\
+        \urlx{https://en.cppreference.com/w/c/memory}
+\end{itemize}
