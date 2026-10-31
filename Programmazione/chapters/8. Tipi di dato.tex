@@ -1,0 +1,2301 @@
+\chapter{Tipi di dato}
+\label{chap:tipi}
+
+Nel capitolo~\ref{chap:calcolatore} abbiamo visto che la memoria contiene
+soltanto bit, e che lo stesso byte può essere letto come un numero, come una
+lettera o come un pezzo di qualcos'altro: è il \textbf{tipo} a stabilire
+quanti byte leggere e come interpretarli. Questo capitolo guarda da vicino i
+tipi fondamentali del C: i caratteri, gli interi e i reali. Per ciascuno
+vedremo quanta memoria occupa, quali valori può contenere e che cosa succede
+quando si superano i suoi limiti; poi come si leggono e si scrivono i
+caratteri uno alla volta, come si usano le funzioni matematiche e con quali
+regole il C converte un tipo in un altro.
+
+\section{Dichiarazioni, espressioni, assegnazioni}
+
+Tre concetti del capitolo~\ref{chap:primi-programmi} torneranno di
+continuo, quindi conviene richiamarli (figura~\ref{fig:dich-espr}):
+
+\begin{itemize}
+  \item una \textbf{dichiarazione}, come \code{int i;}, riserva in memoria lo
+        spazio per una variabile del tipo indicato e le dà un nome; finché
+        non le si assegna nulla, la variabile contiene un valore a caso;
+  \item un'\textbf{assegnazione}, come \code{i = 7;}, scrive un valore nella
+        variabile;
+  \item un'\textbf{espressione}, come \code{i * 2 + 1}, viene calcolata e
+        produce un risultato che ha un \textbf{valore} (qui 15) e un
+        \textbf{tipo} (qui \code{int}). Anche un'assegnazione è
+        un'espressione: \code{i = 7} vale 7.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      tit/.style={font=\Lato\scriptsize\bfseries, text=primary!60!black}]
+    \node[tit] at (0.8,1.3) {dichiarazione};
+    \node[mcod] at (0.8,0.8) {int i;};
+    \variabile{p1}{(1.0,0)}{i}{\mvuota}
+    \node[mnota, align=center, anchor=north] at (0.8,-0.4) {si riserva lo spazio;\\il valore è casuale};
+    \draw[wtarrow] (2.35,0) -- (3.35,0);
+    \node[tit] at (4.9,1.3) {assegnazione};
+    \node[mcod] at (4.9,0.8) {i = 7;};
+    \variabile{p2}{(5.1,0)}{i}{7}
+    \node[mnota, align=center, anchor=north] at (4.9,-0.4) {il valore 7 viene\\scritto nella casella};
+    \draw[wtarrow] (6.45,0) -- (7.45,0);
+    \node[tit] at (9.4,1.3) {espressione};
+    \node[mcod] at (9.4,0.8) {i * 2 + 1};
+    \node[wtnodeplain, font=\Lato\scriptsize] at (9.4,0) {valore \textbf{15}\qquad tipo \textbf{int}};
+    \node[mnota, align=center, anchor=north] at (9.4,-0.4) {si calcola: il risultato ha\\un valore e un tipo};
+  \end{tikzpicture}
+  \caption{Dichiarazione, assegnazione ed espressione.}
+  \label{fig:dich-espr}
+\end{figure}
+
+\section{I tipi fondamentali}
+
+\subsection{Forma completa e forma abbreviata}
+
+Il C ha dodici tipi \term{fondamentali}. Ciascuno ha una forma completa, che
+dice tutto esplicitamente, e una forma abbreviata, quella che si usa nella
+pratica:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}>{\FiraCodeNL}l>{\FiraCodeNL}l@{\hspace{1.6cm}}>{\FiraCodeNL}l>{\FiraCodeNL}l@{}}
+  \toprule
+  \normalfont\textbf{forma completa} & \normalfont\textbf{si scrive} &
+  \normalfont\textbf{forma completa} & \normalfont\textbf{si scrive} \\
+  \midrule
+  char               & char          & unsigned short int & unsigned short \\
+  signed char        & signed char   & unsigned int       & unsigned \\
+  unsigned char      & unsigned char & unsigned long int  & unsigned long \\
+  signed short int   & short         & float              & float \\
+  signed int         & int           & double             & double \\
+  signed long int    & long          & long double        & long double \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\begin{itemize}
+  \item Sono tutte \textbf{parole chiave} (capitolo~\ref{chap:sintassi}):
+        non si possono usare come nomi di variabili.
+  \item Per \code{short}, \code{int} e \code{long} il segno è sottinteso:
+        \code{signed int} è la stessa cosa di \code{int}, quindi la parola
+        \code{signed} di solito non si scrive. Anche \code{signed} da solo
+        equivale a \code{int}, ma si usa raramente.
+  \item \code{short int}, \code{long int} e \code{unsigned int} si
+        abbreviano in \code{short}, \code{long} e \code{unsigned}.
+  \item Per i caratteri, invece, \code{char}, \code{signed char} e
+        \code{unsigned char} sono tre tipi distinti: vedremo fra poco perché.
+\end{itemize}
+
+\subsection{Tipi interi e tipi reali}
+
+In base a ciò che rappresentano, i tipi fondamentali formano due famiglie
+(figura~\ref{fig:famiglie}). I \term{tipi interi} (\textit{integral types})
+contengono numeri interi e, come vedremo, caratteri; i \term{tipi reali}
+(\textit{floating types}) contengono numeri con la virgola. Insieme formano i
+\term{tipi aritmetici}, quelli su cui si fanno i calcoli.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+      tipo/.style={draw=primary!55!black, fill=white, rounded corners=2pt,
+        line width=0.6pt, minimum width=2.3cm, minimum height=0.5cm, inner sep=2pt},
+      lab/.style={font=\Lato\scriptsize, anchor=west, inner sep=1pt}]
+    \draw[rounded corners=6pt, line width=0.8pt, draw=neutral!45!white, fill=neutral!5!white]
+      (-1.7,1.55) rectangle (10.25,-2.15);
+    \draw[rounded corners=5pt, line width=0.8pt, draw=primary!45!white, fill=primary!7!white]
+      (-1.45,0.95) rectangle (6.55,-1.9);
+    \draw[rounded corners=5pt, line width=0.8pt, draw=accent!45!white, fill=accent!7!white]
+      (7.15,0.95) rectangle (10.0,-1.9);
+    \node[lab] at (-1.55,1.28) {\textbf{tipi aritmetici}\ \ {\color{neutral!45!black}ci si fanno i calcoli}};
+    \node[lab] at (-1.3,0.67) {\textbf{tipi interi}\ \ {\color{neutral!45!black}numeri interi e caratteri}};
+    \node[lab] at (7.3,0.67) {\textbf{tipi reali}};
+    \foreach \testo [count=\k from 0] in {char, signed char, unsigned char,
+                                          short, int, long,
+                                          unsigned short, unsigned, unsigned long} {
+      \pgfmathtruncatemacro{\ifam}{\k/3}
+      \pgfmathtruncatemacro{\jfam}{mod(\k,3)}
+      \node[tipo] at (\jfam*2.55, -\ifam*0.7) {\testo};
+    }
+    \foreach \testo [count=\k from 0] in {float, double, long double}
+      \node[tipo, draw=accent!60!black] at (8.575, -\k*0.7) {\testo};
+  \end{tikzpicture}
+  \caption{I tipi fondamentali raggruppati per famiglia.}
+  \label{fig:famiglie}
+\end{figure}
+
+\subsection{I tipi derivati}
+
+A partire dai tipi fondamentali se ne costruiscono altri, i \term{tipi
+derivati} (figura~\ref{fig:derivati}): gli \textbf{array} e i
+\textbf{puntatori} (capitolo~\ref{chap:puntatori}), le \textbf{strutture}
+(capitolo~\ref{chap:strutture}), le enumerazioni e le unioni. In questo
+capitolo ci occupiamo solo dei fondamentali.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      cat/.style={wtnode, font=\Lato\scriptsize\bfseries, inner sep=4pt},
+      foglia/.style={font=\Lato\scriptsize, inner sep=2pt, anchor=west}]
+    \node[cat] (t) at (0,0) {tipi di dato};
+    \node[cat] (f) at (-3.0,-1.15) {fondamentali};
+    \node[cat, draw=accent!60!black, fill=accent!8!white] (d) at (3.0,-1.15) {derivati};
+    \draw[wtarrow] (t.south) -- ++(0,-0.3) -| (f.north);
+    \draw[wtarrow] (t.south) -- ++(0,-0.3) -| (d.north);
+    \foreach \testo [count=\k] in {\code{char}, {\code{int} (e \code{short}, \code{long}, \code{unsigned})},
+                                   \code{float}, {\code{double} (e \code{long double})}} {
+      \node[foglia] (f\k) at ([xshift=16pt, yshift=-\k*0.45cm]f.south west) {\testo};
+      \draw[fsramo] ([xshift=8pt]f.south west) |- (f\k.west);
+    }
+    \foreach \testo [count=\k] in {array (capitolo~\ref{chap:puntatori}),
+                                   puntatori (capitolo~\ref{chap:puntatori}),
+                                   {strutture, \code{struct} (capitolo~\ref{chap:strutture})},
+                                   {enumerazioni, \code{enum}},
+                                   {unioni, \code{union}}} {
+      \node[foglia] (d\k) at ([xshift=16pt, yshift=-\k*0.45cm]d.south west) {\testo};
+      \draw[fsramo] ([xshift=8pt]d.south west) |- (d\k.west);
+    }
+  \end{tikzpicture}
+  \caption{Tipi fondamentali e tipi derivati.}
+  \label{fig:derivati}
+\end{figure}
+
+\section{Caratteri e il tipo \code{char}}
+
+Cominciamo dal tipo più piccolo, \code{char}, che serve a memorizzare i
+caratteri: lettere, cifre, simboli.
+
+\subsection{Un carattere è un numero}
+
+Un computer non conosce le lettere: conosce solo numeri. Per memorizzare un
+carattere lo si sostituisce con un numero, secondo una tabella stabilita una
+volta per tutte, la \term{codifica}. Un \code{char} occupa \textbf{1 byte},
+quindi può assumere $2^8 = 256$ valori diversi: abbastanza per le lettere
+maiuscole e minuscole, le cifre, la punteggiatura e alcuni caratteri
+speciali come lo spazio, la tabulazione e l'a capo. Non tutti i 256 valori,
+però, corrispondono a caratteri stampabili.
+
+In C ogni tipo intero può rappresentare un carattere; in pratica si usano
+\code{char} e \code{int}. Le funzioni \code{getchar} e \code{putchar}, che
+leggono e scrivono un carattere, lavorano con degli \code{int}; e una
+costante carattere come \code{'a'} è di tipo \code{int}, non \code{char}
+(in C++ invece è un \code{char}). Lo verificheremo con l'operatore
+\code{sizeof}.
+
+\subsection{La codifica ASCII}
+
+Quasi tutti i computer usano la codifica \term{ASCII} (\textit{American
+Standard Code for Information Interchange}), che assegna un numero da 0 a 127
+a ogni carattere (figura~\ref{fig:ascii}). Esistono altre codifiche, come la
+EBCDIC di IBM, usata sui grandi calcolatori (\textit{mainframe}), ma sono rare.
+
+% Una casella della tabella ASCII: \asc{colonna}{riga}{categoria}{carattere}
+\newcommand{\asc}[4]{%
+  \node[acella, #3] at (#1*2.2, -#2*0.4) {};
+  \pgfmathtruncatemacro{\ascn}{#1*16+#2}%
+  \node[anum] at (#1*2.2-0.22, -#2*0.4) {\ascn};
+  \node[acar] at (#1*2.2+0.42, -#2*0.4) {#4};}
+\newcommand{\ascesc}[1]{{\color{accent!75!black}\textbackslash #1}}
+\newcommand{\ascnome}[1]{{\fontsize{5}{6}\selectfont\color{neutral!45!black}#1}}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      acella/.style={minimum width=2.1cm, minimum height=0.37cm, rounded corners=1.5pt,
+        line width=0.4pt, inner sep=0pt},
+      actrl/.style={fill=neutral!9!white, draw=neutral!30!white},
+      adig/.style={fill=green-gradient-1!50!white, draw=green-gradient-6!35!white},
+      amai/.style={fill=primary!12!white, draw=primary!30!white},
+      amin/.style={fill=accent!12!white, draw=accent!30!white},
+      apun/.style={fill=white, draw=neutral!30!white},
+      anum/.style={font=\FiraCodeNL\tiny, text=neutral!45!black, anchor=east, inner sep=0pt},
+      acar/.style={font=\FiraCodeNL\scriptsize\bfseries, inner sep=0pt}]
+    \asc{0}{0}{actrl}{\ascesc{0}} \asc{0}{1}{actrl}{\ascnome{SOH}} \asc{0}{2}{actrl}{\ascnome{STX}} \asc{0}{3}{actrl}{\ascnome{ETX}}
+    \asc{0}{4}{actrl}{\ascnome{EOT}} \asc{0}{5}{actrl}{\ascnome{ENQ}} \asc{0}{6}{actrl}{\ascnome{ACK}} \asc{0}{7}{actrl}{\ascesc{a}}
+    \asc{0}{8}{actrl}{\ascesc{b}} \asc{0}{9}{actrl}{\ascesc{t}} \asc{0}{10}{actrl}{\ascesc{n}} \asc{0}{11}{actrl}{\ascesc{v}}
+    \asc{0}{12}{actrl}{\ascesc{f}} \asc{0}{13}{actrl}{\ascesc{r}} \asc{0}{14}{actrl}{\ascnome{SO}} \asc{0}{15}{actrl}{\ascnome{SI}}
+    \asc{1}{0}{actrl}{\ascnome{DLE}} \asc{1}{1}{actrl}{\ascnome{DC1}} \asc{1}{2}{actrl}{\ascnome{DC2}} \asc{1}{3}{actrl}{\ascnome{DC3}}
+    \asc{1}{4}{actrl}{\ascnome{DC4}} \asc{1}{5}{actrl}{\ascnome{NAK}} \asc{1}{6}{actrl}{\ascnome{SYN}} \asc{1}{7}{actrl}{\ascnome{ETB}}
+    \asc{1}{8}{actrl}{\ascnome{CAN}} \asc{1}{9}{actrl}{\ascnome{EM}} \asc{1}{10}{actrl}{\ascnome{SUB}} \asc{1}{11}{actrl}{\ascnome{ESC}}
+    \asc{1}{12}{actrl}{\ascnome{FS}} \asc{1}{13}{actrl}{\ascnome{GS}} \asc{1}{14}{actrl}{\ascnome{RS}} \asc{1}{15}{actrl}{\ascnome{US}}
+    \asc{2}{0}{apun}{\char"2423} \asc{2}{1}{apun}{!} \asc{2}{2}{apun}{"} \asc{2}{3}{apun}{\#}
+    \asc{2}{4}{apun}{\$} \asc{2}{5}{apun}{\%} \asc{2}{6}{apun}{\&} \asc{2}{7}{apun}{'}
+    \asc{2}{8}{apun}{(} \asc{2}{9}{apun}{)} \asc{2}{10}{apun}{*} \asc{2}{11}{apun}{+}
+    \asc{2}{12}{apun}{,} \asc{2}{13}{apun}{-} \asc{2}{14}{apun}{.} \asc{2}{15}{apun}{/}
+    \asc{3}{0}{adig}{0} \asc{3}{1}{adig}{1} \asc{3}{2}{adig}{2} \asc{3}{3}{adig}{3}
+    \asc{3}{4}{adig}{4} \asc{3}{5}{adig}{5} \asc{3}{6}{adig}{6} \asc{3}{7}{adig}{7}
+    \asc{3}{8}{adig}{8} \asc{3}{9}{adig}{9} \asc{3}{10}{apun}{:} \asc{3}{11}{apun}{;}
+    \asc{3}{12}{apun}{<} \asc{3}{13}{apun}{=} \asc{3}{14}{apun}{>} \asc{3}{15}{apun}{?}
+    \asc{4}{0}{apun}{@} \asc{4}{1}{amai}{A} \asc{4}{2}{amai}{B} \asc{4}{3}{amai}{C}
+    \asc{4}{4}{amai}{D} \asc{4}{5}{amai}{E} \asc{4}{6}{amai}{F} \asc{4}{7}{amai}{G}
+    \asc{4}{8}{amai}{H} \asc{4}{9}{amai}{I} \asc{4}{10}{amai}{J} \asc{4}{11}{amai}{K}
+    \asc{4}{12}{amai}{L} \asc{4}{13}{amai}{M} \asc{4}{14}{amai}{N} \asc{4}{15}{amai}{O}
+    \asc{5}{0}{amai}{P} \asc{5}{1}{amai}{Q} \asc{5}{2}{amai}{R} \asc{5}{3}{amai}{S}
+    \asc{5}{4}{amai}{T} \asc{5}{5}{amai}{U} \asc{5}{6}{amai}{V} \asc{5}{7}{amai}{W}
+    \asc{5}{8}{amai}{X} \asc{5}{9}{amai}{Y} \asc{5}{10}{amai}{Z} \asc{5}{11}{apun}{[}
+    \asc{5}{12}{apun}{\textbackslash} \asc{5}{13}{apun}{]} \asc{5}{14}{apun}{\textasciicircum} \asc{5}{15}{apun}{\_}
+    \asc{6}{0}{apun}{`} \asc{6}{1}{amin}{a} \asc{6}{2}{amin}{b} \asc{6}{3}{amin}{c}
+    \asc{6}{4}{amin}{d} \asc{6}{5}{amin}{e} \asc{6}{6}{amin}{f} \asc{6}{7}{amin}{g}
+    \asc{6}{8}{amin}{h} \asc{6}{9}{amin}{i} \asc{6}{10}{amin}{j} \asc{6}{11}{amin}{k}
+    \asc{6}{12}{amin}{l} \asc{6}{13}{amin}{m} \asc{6}{14}{amin}{n} \asc{6}{15}{amin}{o}
+    \asc{7}{0}{amin}{p} \asc{7}{1}{amin}{q} \asc{7}{2}{amin}{r} \asc{7}{3}{amin}{s}
+    \asc{7}{4}{amin}{t} \asc{7}{5}{amin}{u} \asc{7}{6}{amin}{v} \asc{7}{7}{amin}{w}
+    \asc{7}{8}{amin}{x} \asc{7}{9}{amin}{y} \asc{7}{10}{amin}{z} \asc{7}{11}{apun}{\{}
+    \asc{7}{12}{apun}{|} \asc{7}{13}{apun}{\}} \asc{7}{14}{apun}{\textasciitilde} \asc{7}{15}{actrl}{\ascnome{DEL}}
+    % legenda
+    \foreach \sty/\testo/\xx in {actrl/{caratteri di controllo (non stampabili)}/-0.6,
+                               apun/{spazio e simboli}/4.6, adig/cifre/8.0,
+                               amai/maiuscole/10.3, amin/minuscole/12.9} {
+      \node[acella, \sty, minimum width=0.5cm] at (\xx, -6.85) {};
+      \node[font=\Lato\scriptsize, anchor=west] at (\xx+0.35, -6.85) {\testo};
+    }
+  \end{tikzpicture}
+  \caption{La tabella ASCII: accanto a ogni codice (da 0 a 127) il carattere
+           corrispondente. I caratteri di controllo hanno un nome
+           convenzionale, o la sequenza di escape con cui si scrivono in C;
+           \code{\char"2423} è lo spazio.}
+  \label{fig:ascii}
+\end{figure}
+
+La tabella non va imparata a memoria: in C si scrive \code{'A'} e il
+compilatore lo sostituisce con 65. Conviene però capirne la struttura:
+
+\begin{itemize}
+  \item i codici da 0 a 31 e il 127 sono \textbf{caratteri di controllo}:
+        non si stampano, ma comandano il dispositivo (il 10, per esempio, è
+        l'a capo); il 32 è lo spazio;
+  \item la scelta dei numeri è una \textbf{convenzione}: nella lettera
+        \textit{A} non c'è nulla che la leghi a 65;
+  \item però le cifre, le maiuscole e le minuscole occupano ciascuna dei
+        codici \textbf{consecutivi} e in ordine: \code{'0'} < \code{'1'} <
+        \dots{} < \code{'9'}, \code{'a'} < \code{'b'} < \dots{} <
+        \code{'z'}. Confrontare i codici equivale quindi a confrontare
+        nell'ordine alfabetico, e questo servirà per ordinare i testi;
+  \item le maiuscole vengono prima delle minuscole, e ogni minuscola dista
+        dalla sua maiuscola esattamente 32 posizioni: \code{'a'} vale 97,
+        \code{'A'} vale 65;
+  \item il carattere \code{'7'} non è il numero 7: vale 55. Il numero si
+        ottiene con la differenza \code{'7' - '0'}, cioè $55 - 48 = 7$.
+\end{itemize}
+
+\info{E le lettere accentate?}{
+  La tabella ASCII non contiene \textit{è}, \textit{à}, \textit{ù}. I sistemi
+  di oggi (Linux, macOS, VS Code) usano la codifica \textbf{UTF-8}, che
+  estende l'ASCII: i primi 128 codici sono gli stessi, mentre gli altri
+  caratteri occupano da 2 a 4 byte. Una lettera accentata, quindi,
+  \textbf{non sta in un \code{char}}: \code{char c = 'è';} produce due avvisi
+  (\textit{multi-character character constant} e \textit{overflow in
+  conversion}) e un valore senza senso. Dentro una stringa, invece, non c'è
+  problema: \code{printf("Perché?\textbackslash n");} stampa correttamente,
+  perché la stringa contiene semplicemente i due byte della \textit{é}.}
+
+\subsection{Caratteri come interi, interi come caratteri}
+
+Poiché un \code{char} contiene un numero, lo si può stampare in due modi:
+con \code{\%c} \code{printf} disegna il carattere che ha quel codice, con
+\code{\%d} scrive il numero. E siccome è un numero, lo si può usare nelle
+espressioni aritmetiche: \code{c + 1} è il codice del carattere successivo.
+
+\begin{affianco}[0.56][c]
+\begin{lstlisting}[style=c]
+char c = 'a';
+
+printf("%c\n", c);
+printf("%d\n", c);
+printf("%c%c%c\n", c, c + 1, c + 2);
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+a
+97
+abc
+\end{console}
+\end{affianco}
+
+Con la stessa idea si scorrono i caratteri con un ciclo: la variabile di
+controllo parte da un codice e arriva a un altro. Nel programma seguente il
+primo ciclo usa un \code{int} che va da \code{'a'} a \code{'z'}, il secondo
+un \code{char} che va da 65 a 90 (i codici di \code{'A'} e \code{'Z'}), il
+terzo stampa con \code{\%d} i codici delle dieci cifre.
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=c, name=caratteri.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int i;
+   char c;
+
+   /* stampa abc...z */
+   for (i = 'a'; i <= 'z'; i++)
+      printf("%c", i);
+   printf("\n");
+
+   /* stampa ABC...Z */
+   for (c = 65; c <= 90; c++)
+      printf("%c", c);
+   printf("\n");
+
+   /* stampa 48 49 ... 57 */
+   for (c = '0'; c <= '9'; c++)
+      printf("%d ", c);
+   printf("\n");
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./caratteri
+abcdefghijklmnopqrstuvwxyz
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+48 49 50 51 52 53 54 55 56 57
+\end{console}
+\end{affianco}
+
+\warning{Una svista nelle slide}{
+  Nelle slide il secondo ciclo è scritto \code{for (c=65; i<=90; c++)}: la
+  condizione controlla \code{i} invece di \code{c}. Alla fine del primo
+  ciclo \code{i} vale 123 (il primo valore per cui \code{i <= 'z'} è
+  falsa), quindi \code{i <= 90} è falsa fin dall'inizio e il ciclo non stampa
+  nulla. Il compilatore non può accorgersene: il codice è corretto dal punto
+  di vista della sintassi, e fa semplicemente un'altra cosa.}
+
+\section{Le sequenze di escape}
+
+\subsection{Caratteri che non si possono scrivere}
+
+Alcuni caratteri non si possono scrivere direttamente fra apici o fra
+virgolette: o perché non sono stampabili (l'a capo, la tabulazione), o
+perché hanno già un significato (le virgolette chiudono una stringa,
+l'apice chiude una costante carattere). Per questi il C usa le
+\term{sequenze di escape}: un backslash seguito da un carattere. Sono
+\textbf{due simboli} nel codice, ma \textbf{un solo carattere} in memoria:
+\code{'\textbackslash n'} è il carattere di codice 10.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}l>{\FiraCodeNL}c c>{\raggedright\arraybackslash}p{9.2cm}@{}}
+  \toprule
+  \textbf{carattere} & \normalfont\textbf{in C} & \textbf{codice} & \textbf{che cosa fa} \\
+  \midrule
+  a capo (\textit{newline})                   & \textbackslash n & 10 & porta il cursore all'inizio della riga successiva \\
+  tabulazione (\textit{horizontal tab})       & \textbackslash t & 9  & sposta il cursore alla prossima tabulazione (ogni 8 colonne) \\
+  ritorno carrello (\textit{carriage return}) & \textbackslash r & 13 & riporta il cursore all'inizio della riga \\
+  tabulazione verticale (\textit{vertical tab}) & \textbackslash v & 11 & scende di una riga, restando nella stessa colonna \\
+  salto pagina (\textit{formfeed})            & \textbackslash f & 12 & sulla stampante cambia pagina; nel terminale fa come \code{\textbackslash v} \\
+  indietro (\textit{backspace})               & \textbackslash b & 8  & sposta il cursore indietro di una posizione \\
+  campanello (\textit{alert})                 & \textbackslash a & 7  & emette un segnale acustico (o visivo) \\
+  carattere nullo (\textit{null})             & \textbackslash 0 & 0  & il carattere di codice 0, che chiude le stringhe \\
+  backslash                                   & \textbackslash\textbackslash & 92 & il carattere \code{\textbackslash} \\
+  virgolette (\textit{double quote})          & \textbackslash" & 34 & il carattere \code{"} \\
+  apice (\textit{single quote})               & \textbackslash' & 39 & il carattere \code{'} \\
+  punto interrogativo                         & \textbackslash? & 63 & il carattere \code{?} (serve di rado) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Virgolette, apici e campanello}
+
+Per stampare delle virgolette dentro una stringa bisogna scriverle con il
+backslash, altrimenti chiuderebbero la stringa. Il programma delle lezioni
+lo fa in un modo un po' tortuoso, stampando con \code{\%c} il carattere
+\code{'\textbackslash"'}; il modo diretto è la seconda riga:
+
+\begin{affianco}[0.56][c]
+\begin{lstlisting}[style=c]
+printf("Di nome %cNemo%c\n", '\"', '\"');
+printf("Di nome \"Nemo\"\n");
+\end{lstlisting}
+\risultato
+\begin{console}
+Di nome "Nemo"
+Di nome "Nemo"
+\end{console}
+\end{affianco}
+
+Fra apici le virgolette non danno fastidio, quindi anche \code{'"'} va bene;
+viceversa, l'apice va protetto fra apici (\code{'\textbackslash'{}'}) ma non
+in una stringa (\code{"l'una"}).
+
+\code{printf("\%c", '\textbackslash a');} fa suonare il
+\textbf{campanello} del terminale: un'eredità delle telescriventi, che ne
+avevano uno vero. Nel terminale di VS Code, a seconda delle impostazioni, si
+sente un suono, la finestra lampeggia o non succede nulla.
+
+\subsection{Il cursore e i caratteri di controllo}
+
+Il programma seguente stampa la stessa stringa con in mezzo, a turno,
+diversi caratteri di controllo. Ecco che cosa compare sul terminale:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=escape.c]
+#include <stdio.h>
+
+int main(void)
+{
+  printf("abc \t abc\n");
+  printf("abc \v abc\n");
+  printf("abc \f abc\n");
+  printf("abc \r abc\n");
+  printf("abc \r \v abc\n");
+  return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./escape
+abc      abc
+abc
+     abc
+abc
+     abc
+ abc
+ bc
+  abc
+\end{console}
+\end{affianco}
+
+Per capirlo basta seguire il cursore (figura~\ref{fig:cursore}). Ogni
+carattere stampabile viene scritto dove si trova il cursore, che poi avanza
+di una colonna; i caratteri di controllo, invece, spostano soltanto il
+cursore.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+      tc/.style={mcella, minimum width=0.38cm, minimum height=0.46cm, inner xsep=0pt},
+      tcn/.style={tc, fill=accent!14!white},
+      tit/.style={font=\FiraCodeNL\scriptsize, anchor=west, inner sep=1pt},
+      esc/.style={font=\FiraCodeNL\scriptsize\bfseries, text=accent!75!black, inner sep=1.5pt},
+      lab/.style={font=\Lato\scriptsize, text=neutral!40!black, anchor=east}]
+    \noindici
+    % \t
+    \node[tit] at (0,1.35) {printf("abc \textbackslash t abc\textbackslash n");};
+    \celle[tc]{ta}{(0,0)}{a,b,c,\char"2423,{},{},{},{},\char"2423,a,b,c}
+    \draw[wtarrowacc] ([yshift=1pt]ta-4.north west) to[bend left=55]
+      node[esc, above] {\textbackslash t} ([yshift=1pt]ta-8.north west);
+    \node[mindice, anchor=north] at ([yshift=-1pt]ta-0.south) {0};
+    \node[mindice, anchor=north] at ([yshift=-1pt]ta-4.south) {4};
+    \node[mindice, anchor=north] at ([yshift=-1pt]ta-8.south) {8};
+    \node[mnota, anchor=north west, text width=4.4cm] at (-0.1,-0.6)
+      {salta alla prossima colonna multipla di 8: qui dalla 4 alla 8};
+    % \v
+    \node[tit] at (6.0,1.35) {printf("abc \textbackslash v abc\textbackslash n");};
+    \celle[tc]{tb}{(6.0,0)}{a,b,c,\char"2423,{},{},{},{}}
+    \celle[tc]{tv}{(6.0,-0.85)}{{},{},{},{},\char"2423,a,b,c}
+    \draw[wtarrowacc] (tb-4.center) -- node[esc, right=3pt, pos=0.45] {\textbackslash v} (tv-4.north);
+    \node[mnota, anchor=north west, text width=4.4cm] at (5.9,-1.25)
+      {scende di una riga e resta nella stessa colonna};
+    % \r
+    \node[tit] at (11.6,1.35) {printf("abc \textbackslash r abc\textbackslash n");};
+    \celle[tc]{tr}{(12.4,0)}{a,b,c,\char"2423}
+    \celle[tcn]{ts}{(12.4,-0.85)}{\char"2423,a,b,c}
+    \node[lab] at (12.3,0) {prima};
+    \node[lab] at (12.3,-0.85) {dopo};
+    \draw[wtarrowacc] ([yshift=1pt]tr-3.north east) to[bend right=55]
+      node[esc, above] {\textbackslash r} ([yshift=1pt]tr-0.north west);
+    \node[mnota, anchor=north west, text width=4.4cm] at (11.5,-1.25)
+      {torna all'inizio della riga: ciò che segue sovrascrive i caratteri già scritti};
+  \end{tikzpicture}
+  \caption{Il percorso del cursore con \code{\textbackslash t},
+           \code{\textbackslash v} e \code{\textbackslash r}
+           (\code{\char"2423} è uno spazio).}
+  \label{fig:cursore}
+\end{figure}
+
+\begin{itemize}
+  \item \code{\textbackslash t} sposta il cursore alla prossima
+        \textbf{tabulazione}; le tabulazioni sono ogni 8 colonne (0, 8,
+        16\dots), e per questo servono ad allineare i dati in colonna.
+  \item \code{\textbackslash v} e \code{\textbackslash f} fanno scendere il
+        cursore di una riga, ma senza riportarlo a sinistra.
+  \item \code{\textbackslash r} riporta il cursore all'inizio della riga
+        \textbf{senza} scendere: ciò che si stampa dopo sovrascrive. Così
+        \code{"abc "} diventa \code{" abc"}.
+  \item L'ultima riga combina le due cose: \code{\textbackslash r} torna
+        all'inizio, lo spazio sovrascrive la \code{a} (si legge \code{" bc"}),
+        \code{\textbackslash v} scende di una riga restando nella colonna 1,
+        e lì viene scritto \code{" abc"}.
+\end{itemize}
+
+E \code{\textbackslash n}? Nel terminale fa due cose insieme: scende di una
+riga \textbf{e} torna all'inizio. Sulle macchine da scrivere erano due
+movimenti distinti, riportare il carrello all'inizio (\textit{carriage
+return}) e far scorrere il foglio di una riga (\textit{line feed}): per
+questo i file di testo di Windows terminano ogni riga con due caratteri,
+\code{\textbackslash r\textbackslash n}, mentre Linux e macOS usano solo
+\code{\textbackslash n}.
+
+\subsection{Un'animazione con \code{\textbackslash r}}
+
+Il ritorno carrello permette di ridisegnare più volte lo stesso punto dello
+schermo. Il programma seguente stampa a ripetizione i caratteri
+\code{|}, \code{/}, \code{-} e \code{\textbackslash}, ciascuno seguito da
+\code{\textbackslash r}, con una pausa di un secondo fra l'uno e l'altro:
+ogni simbolo prende il posto del precedente e si vede una stanghetta che
+ruota.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=spinner.c]
+#include <stdio.h>
+#include <unistd.h>
+
+#define PAUSA 1
+
+void pausa(int l)
+{
+    sleep(l);
+}
+
+int main()
+{
+    setbuf(stdout, NULL);
+    while (1) {
+        printf("|\r");  pausa(PAUSA);
+        printf("/\r");  pausa(PAUSA);
+        printf("-\r");  pausa(PAUSA);
+        printf("\\\r"); pausa(PAUSA);
+    }
+}
+\end{lstlisting}
+\risultato
+\begin{itemize}
+  \item \code{"\textbackslash\textbackslash\textbackslash r"} contiene due
+        caratteri: il backslash (scritto \code{\textbackslash\textbackslash})
+        e il ritorno carrello.
+  \item \code{while (1)} è un ciclo infinito, perché la condizione è sempre
+        vera: il programma si ferma con \tasti{Ctrl,C}.
+  \item \code{sleep(l)}, dichiarata in \code{unistd.h}, sospende il
+        programma per \code{l} secondi. È disponibile su Linux, su macOS e
+        in WSL, non su Windows senza WSL.
+\end{itemize}
+\end{affianco}
+
+Nella cartella degli esempi c'è anche una versione senza \code{sleep}, in
+cui \code{pausa} perde tempo con un ciclo vuoto:
+\code{for (i = 0; i < l; i++);} (il \code{;} da solo è l'istruzione vuota).
+Funziona, ma la durata della pausa dipende dalla velocità del computer; e
+compilando con l'ottimizzazione (\code{gcc -O2}) il compilatore si accorge
+che il ciclo non fa nulla e lo elimina: in due secondi la versione ottimizzata
+ha stampato oltre 2,8 milioni di caratteri, quella normale 70.
+
+\subsection{Il buffer di \code{printf}}
+
+Resta da capire \code{setbuf(stdout, NULL)}. Per efficienza, \code{printf}
+non manda ogni carattere allo schermo appena lo riceve: lo accumula in una
+zona di memoria, il \term{buffer}, e la svuota tutta insieme quando incontra
+un \code{\textbackslash n}, quando è piena o quando il programma termina
+(figura~\ref{fig:buffer}). Il nostro programma non stampa mai un
+\code{\textbackslash n} e non termina mai: senza \code{setbuf} il buffer non
+verrebbe mai svuotato e sullo schermo \textbf{non comparirebbe nulla}.
+L'abbiamo verificato: senza quella riga, in tre secondi il programma non
+mostra niente. \code{setbuf(stdout, NULL)} elimina il buffer dell'output
+standard (\code{stdout}), e ogni carattere arriva subito allo schermo.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \noindici
+    \node[font=\Lato\scriptsize\bfseries, anchor=west] at (-0.9,0.85) {senza \code{setbuf}};
+    \node[wtnode, font=\Lato\scriptsize] (p1) at (0,0) {programma};
+    \celle[mcella, minimum width=0.55cm]{bf}{(1.7,0)}{|,\textbackslash r,/,\textbackslash r,-,\textbackslash r,{}}
+    \node[mnota, anchor=south] at (bf-box.north) {buffer di \code{stdout}: i caratteri si accumulano};
+    \node[wtnodeplain] (s1) at (9.2,0) {schermo};
+    \draw[wtarrow] (p1) -- (bf-box.west);
+    \draw[wtarrow, dashed, draw=merr] (bf-box.east) -- node[above, mnota, text=merr] {solo con \code{\textbackslash n}} (s1);
+    \node[font=\Lato\scriptsize\bfseries, anchor=west] at (-0.9,-0.95) {con \code{setbuf(stdout, NULL)}};
+    \node[wtnode, font=\Lato\scriptsize] (p2) at (0,-1.8) {programma};
+    \node[wtnodeplain] (s2) at (9.2,-1.8) {schermo};
+    \draw[wtarrow, draw=mok] (p2) -- node[above, mnota] {ogni carattere arriva subito} (s2);
+  \end{tikzpicture}
+  \caption{Con il buffer l'output arriva allo schermo a righe intere; senza,
+           un carattere alla volta.}
+  \label{fig:buffer}
+\end{figure}
+
+\section{Attenzione a \code{++} dentro \code{printf}}
+
+Le slide mettono in guardia: con gli operatori \code{++} e \code{--} a volte
+i risultati \textbf{non sono prevedibili}. Il programma seguente stampa più
+volte \code{c} e \code{a} incrementandoli dentro la stessa chiamata di
+\code{printf}. Compilato con \code{gcc} dà i risultati delle slide; compilato
+con \code{clang} dà risultati del tutto diversi:
+
+\begin{affianco}[0.5][t]
+\begin{lstlisting}[style=c, name=printf++.c]
+#include <stdio.h>
+
+int main()
+{
+  char c;  int a;
+
+  c = 'a'; a=10;
+  printf("%c%c%c\n", c, c, c++);
+  printf ("%d %d %d \n", a , a , a++);
+
+  c = 'a'; a=10;
+  printf("%c%c%c\n", c, c, ++c);
+  printf("%d %d %d \n", a , a , ++a);
+
+  c = 'a'; a=10;
+  printf("%c%c%c\n", c, ++c, ++c);
+  printf("%d %d %d \n", a , ++a , ++a);
+
+  c = 'a'; a=10;
+  printf("%c%c%c\n", c, c++, c++);
+  printf("%d %d %d \n", a , a++ , a++);
+
+  c = 'a'; a=10;
+  printf("%c%c%c \n", ++c , c++ , c);
+  printf("%d %d %d \n", ++a , a++ , a);
+}
+\end{lstlisting}
+\risultato
+\begin{minipage}[t]{0.48\linewidth}
+\begin{console}[gcc]
+bba
+11 11 10
+bbb
+11 11 11
+ccb
+12 12 12
+cba
+12 11 10
+caa
+12 10 12
+\end{console}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\linewidth}
+\begin{console}[clang]
+aaa
+10 10 10
+aab
+10 10 11
+abc
+10 11 12
+aab
+10 10 11
+bbc
+11 11 12
+\end{console}
+\end{minipage}
+\end{affianco}
+
+Nessuno dei due compilatori sbaglia. Il C non stabilisce in che ordine
+vengano calcolati gli argomenti di una funzione (qui \code{gcc} li ha
+calcolati da destra a sinistra, \code{clang} da sinistra a destra); e
+modificare una variabile con \code{++} e usarla di nuovo nella stessa
+chiamata dà un comportamento \textbf{indefinito}, come \code{a * a++} nel
+capitolo~\ref{chap:sintassi}. Con \code{-Wall}, \code{gcc} lo segnala per
+ogni riga:
+
+\begin{console}
+$ gcc -Wall -o printf++ printf++.c
+printf++.c: In function (*@‘@*)main(*@’@*):
+printf++.c:8:29: warning: operation on (*@‘@*)c(*@’@*) may be undefined [-Wsequence-point]
+    8 |   printf("%c%c%c\n", c, c, c++);
+      |                            ~^~
+\end{console}
+
+La regola pratica: una variabile incrementata con \code{++} o decrementata
+con \code{--} \textbf{non va usata altrove} nella stessa espressione o nella
+stessa chiamata. Si incrementa prima, in un'istruzione a parte.
+
+\section{Come è fatto un \code{char}}
+
+Vediamo ora che cosa c'è davvero nel byte di un \code{char}, e perché
+esistono tre tipi diversi per i caratteri.
+
+\subsection{I bit di un carattere}
+
+La notazione binaria (capitolo~\ref{chap:calcolatore}) è
+\textbf{posizionale} come quella decimale. In base 10 il numero
+$d_n d_{n-1} \dots d_1 d_0$ vale
+$d_n \cdot 10^n + \dots + d_1 \cdot 10^1 + d_0 \cdot 10^0$ (per esempio
+$20753 = 2 \cdot 10^4 + 0 \cdot 10^3 + 7 \cdot 10^2 + 5 \cdot 10^1 + 3 \cdot
+10^0$: il 3 è la cifra meno significativa, il 2 la più significativa). In
+base 2 ogni cifra $b_i$ è un bit, 0 o 1, e il numero vale
+$b_n \cdot 2^n + \dots + b_1 \cdot 2^1 + b_0 \cdot 2^0$. Dopo la
+dichiarazione \code{char c = 'a';} il byte di \code{c} contiene
+\code{01100001} (figura~\ref{fig:bit-a}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\small]
+    \foreach \p [count=\i from 0] in {128,64,32,16,8,4,2,1} {
+      \node[mcella, minimum width=1.1cm, minimum height=0.65cm] (b\i) at (\i*1.1,0) {};
+      \node[font=\FiraCodeNL\scriptsize, text=neutral!40!black] at (\i*1.1,0.58) {\p};
+      \pgfmathtruncatemacro{\e}{7-\i}
+      \node[font=\Lato\tiny, text=neutral!50!black] at (\i*1.1,0.95) {$2^{\e}$};
+    }
+    \foreach \val [count=\i from 0] in {0,1,1,0,0,0,0,1} {
+      \ifnum\val=1
+        \node[font=\FiraCodeNL\normalsize\bfseries, text=accent!80!black] at (b\i) {1};
+      \else
+        \node[font=\FiraCodeNL\normalsize, text=neutral!55!black] at (b\i) {0};
+      \fi
+    }
+    \node[anchor=west, font=\Lato\small] at (8.4,0)
+      {$= 64 + 32 + 1 = \mathbf{97}$, il codice di \code{'a'}};
+  \end{tikzpicture}
+  \caption{Il byte del carattere \code{'a'}: ogni bit a 1 aggiunge il peso
+           della sua posizione.}
+  \label{fig:bit-a}
+\end{figure}
+
+\subsection{Tre tipi per i caratteri}
+
+Il C ha tre tipi da un byte: \code{char}, \code{signed char} e
+\code{unsigned char}. Ognuno ha 256 valori distinti, ma non gli stessi:
+
+\begin{itemize}
+  \item \code{signed char} va da $-128$ a $127$;
+  \item \code{unsigned char} va da $0$ a $255$;
+  \item \code{char} è uno dei due, a seconda dell'\textbf{implementazione}
+        (cioè del compilatore e del processore).
+\end{itemize}
+
+Per i caratteri ASCII (da 0 a 127) la differenza non conta. Conta quando il
+byte si usa come numero: per capirla bisogna vedere come si rappresentano i
+numeri negativi.
+
+\subsection{I numeri negativi}
+
+L'idea più semplice è il \textbf{bit di segno}. Limitiamoci a 4 bit: il
+bit più significativo indica il segno e gli altri tre il valore, quindi
+$5 = $~\code{0101} e $-5 = $~\code{1101}. Lo zero però ha due
+rappresentazioni, \code{0000} e \code{1000}, e così un valore va sprecato.
+
+Per questo i computer usano il \term{complemento a due}: i numeri positivi si
+rappresentano normalmente, e per un negativo si \textbf{invertono} i bit del
+corrispondente positivo e si \textbf{somma 1}. Così \code{1000} non è più
+uno zero, ma $-8$ (figura~\ref{fig:complemento}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+      vn/.style={mcella, minimum width=0.95cm, font=\FiraCodeNL\scriptsize\bfseries, fill=accent!10!white},
+      vp/.style={mcella, minimum width=0.95cm, font=\FiraCodeNL\scriptsize\bfseries},
+      pn/.style={mcella, minimum width=0.95cm, fill=accent!10!white},
+      pp/.style={mcella, minimum width=0.95cm},
+      lab/.style={font=\Lato\scriptsize, anchor=east, text=neutral!40!black}]
+    \noindici
+    \celle[vn]{vn}{(0,0)}{$-8$,$-7$,$-6$,$-5$,$-4$,$-3$,$-2$,$-1$}
+    \celle[vp]{vp}{(vn-7.east)}{0,1,2,3,4,5,6,7}
+    \celle[pn]{pn}{(0,-0.5)}{1000,1001,1010,1011,1100,1101,1110,1111}
+    \celle[pp]{pp}{(pn-7.east)}{0000,0001,0010,0011,0100,0101,0110,0111}
+    \node[lab] at (-0.1,0) {valore};
+    \node[lab] at (-0.1,-0.5) {bit};
+    \draw[wtbrace] ([yshift=-3pt]pn-0.south west) -- ([yshift=-3pt]pn-7.south east);
+    \draw[wtbrace] ([yshift=-3pt]pp-0.south west) -- ([yshift=-3pt]pp-7.south east);
+    \node[mnota, anchor=north] at ([yshift=-0.32cm]$(pn-0.south)!0.5!(pn-7.south)$) {il primo bit è 1: numeri negativi};
+    \node[mnota, anchor=north] at ([yshift=-0.32cm]$(pp-0.south)!0.5!(pp-7.south)$) {il primo bit è 0: zero e numeri positivi};
+  \end{tikzpicture}
+  \caption{I 16 valori di 4 bit in complemento a due: da $-8$ a $+7$, con
+           un solo zero.}
+  \label{fig:complemento}
+\end{figure}
+
+\begin{affianco}[0.36][c]
+\begin{center}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}l>{\FiraCodeNL}r@{}}
+  \toprule
+  $5$ & 0101 \\
+  bit invertiti & 1010 \\
+  sommo 1 & + 0001 \\
+  \midrule
+  $-5$ & 1011 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\risultato
+Per esempio, $-5$ si ottiene da \code{0101}: invertendo i bit si ha
+\code{1010}, e sommando 1 si arriva a \code{1011}. Perché funziona? Un numero
+più il suo inverso dà sempre \code{1111} (in ogni colonna c'è un 1 e uno 0,
+senza riporti), cioè $-1$. Quindi l'inverso di $x$ vale $-1 - x$, e
+aggiungendo 1 si ottiene proprio $-x$.
+\end{affianco}
+
+\subsection{Lo stesso byte, due letture}
+
+Su 8 bit funziona allo stesso modo. I byte da \code{00000000} a
+\code{01111111} hanno lo stesso valore, da 0 a 127, per \code{signed char} e
+per \code{unsigned char}. Quelli che cominciano con un 1 no: per
+\code{unsigned char} vanno da 128 a 255, per \code{signed char} da $-128$ a
+$-1$ (figura~\ref{fig:due-letture}). Il byte \code{11111111}, per esempio,
+vale 255 oppure $-1$.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+      lab/.style={font=\Lato\scriptsize\bfseries, anchor=east}]
+    \fill[green-gradient-1!40!white] (0,0) rectangle (6,0.55);
+    \fill[accent!12!white] (6,0) rectangle (12,0.55);
+    \draw[primary!65!black, line width=0.7pt] (0,0) rectangle (12,0.55) (6,0) -- (6,0.55);
+    \node at (3,0.275) {00000000 \ldots\ 01111111};
+    \node at (9,0.275) {10000000 \ldots\ 11111111};
+    \node[lab] at (-0.35,0.275) {byte};
+    \node[lab] at (-0.35,1.05) {unsigned char};
+    \node[lab] at (-0.35,-0.5) {signed char};
+    \foreach \xx/\val in {0.2/0, 5.7/127, 6.3/128, 11.8/255}
+      \node at (\xx,1.05) {\val};
+    \foreach \xx/\val in {0.2/0, 5.7/127, 6.3/$-128$, 11.8/$-1$}
+      \node at (\xx,-0.5) {\val};
+    \draw[wtarrow] (0.6,1.05) -- (5.25,1.05);
+    \draw[wtarrow] (6.75,1.05) -- (11.4,1.05);
+    \draw[wtarrow] (0.6,-0.5) -- (5.25,-0.5);
+    \draw[wtarrow, draw=accent!70!black] (6.85,-0.5) -- (11.35,-0.5);
+    \node[mnota, align=center, anchor=north] at (3,-0.75) {le due letture coincidono};
+    \node[mnota, align=center, anchor=north] at (9,-0.75) {le due letture sono diverse};
+  \end{tikzpicture}
+  \caption{I 256 byte letti come \code{unsigned char} (sopra) e come
+           \code{signed char} (sotto).}
+  \label{fig:due-letture}
+\end{figure}
+
+\subsection{Il \code{char} del mio computer ha il segno?}
+
+Come si scopre se \code{char} è \code{signed} o \code{unsigned}? Si assegna
+$-1$ ai tre tipi e si stampano i valori con \code{\%d}:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=char.c]
+#include <stdio.h>
+
+int main()
+{
+    char c = -1;
+    unsigned char u = -1;
+    signed char s = -1;
+
+    printf("c = %d  u = %d   s = %d\n", c, u, s);
+
+    return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ gcc -Wall -o char char.c
+$ ./char
+c = -1  u = 255   s = -1
+$ gcc -Wall -funsigned-char -o char char.c
+$ ./char
+c = 255  u = 255   s = -1
+\end{console}
+\end{affianco}
+
+In tutte e tre le variabili il byte è \code{11111111}: $-1$ assegnato a un
+\code{unsigned char}, che non ha negativi, diventa $-1 + 256 = 255$. La
+differenza sta nella lettura: per stampare, il valore viene convertito in
+\code{int} e conserva il suo significato, quindi $-1$ per il tipo con segno e
+255 per quello senza. Sui PC (processori Intel e AMD) \code{char} ha il
+segno, e infatti \code{c} vale $-1$. Su altri sistemi, per esempio Linux sui
+processori ARM come quelli del Raspberry Pi, \code{char} è senza segno; lo si
+può simulare con l'opzione \code{-funsigned-char} di \code{gcc}, ed ecco
+\code{c = 255}.
+
+La conclusione pratica: per i caratteri si usa \code{char}; quando un byte
+serve come \textbf{numero} piccolo e il segno conta, si scrive esplicitamente
+\code{signed char} o \code{unsigned char}.
+
+\section{Il tipo \code{int}}
+
+\code{int} è il tipo principale del C, quello che si usa per qualunque
+numero intero quando non ci sono motivi per sceglierne un altro.
+
+\subsection{Quanti valori}
+
+Un \code{int} occupa 2 byte (16 bit) sui sistemi vecchi e 4 byte (32 bit)
+su quasi tutti i sistemi moderni: il numero di valori distinti, quindi,
+dipende dal sistema. In complemento a due, con $n$ bit si rappresentano gli
+interi da $-2^{n-1}$ a $2^{n-1}-1$:
+
+\begin{itemize}
+  \item con 16 bit: da $-2^{15} = -32\,768$ a $2^{15} - 1 = 32\,767$;
+  \item con 32 bit: da $-2^{31} = -2\,147\,483\,648$ a
+        $2^{31} - 1 = 2\,147\,483\,647$, circa più o meno 2 miliardi.
+\end{itemize}
+
+Il massimo è $2^{n-1}-1$ e non $2^{n-1}$ perché fra i valori con il primo
+bit a 0 c'è anche lo zero. Le slide chiamano questi estremi $N_{min\_int}$ e
+$N_{max\_int}$: ogni variabile \code{int i} soddisfa
+$N_{min\_int} \le i \le N_{max\_int}$. In C sono disponibili come costanti
+simboliche, \code{INT\_MIN} e \code{INT\_MAX}, definite nell'header
+\code{limits.h}.
+
+\subsection{L'overflow}
+
+Che cosa succede se un calcolo supera \code{INT\_MAX}? Il programma seguente
+somma due miliardi a due miliardi:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=overflow.c]
+#include <stdio.h>
+
+#define BIG 2000000000   /* 2 miliardi */
+
+int main(void)
+{
+   int a, b = BIG, c = BIG;
+
+   a = b + c;
+   printf("a = %d\n", a);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ gcc -Wall -o overflow overflow.c
+$ ./overflow
+a = -294967296
+\end{console}
+\end{affianco}
+
+Il codice è sintatticamente corretto e il compilatore non segnala nulla; ma
+in esecuzione $b + c$ vale 4 miliardi, più di \code{INT\_MAX}: è un
+\term{integer overflow} (traboccamento). Il programma prosegue come se
+niente fosse, con un risultato sbagliato. La figura~\ref{fig:overflow} mostra
+da dove viene proprio quel numero: superato il massimo si ricomincia dal
+minimo, come il contachilometri di un'auto che dopo 99999 torna a 00000 (la
+ruota del capitolo~\ref{chap:calcolatore}). Contando, si arriva a
+$4\,000\,000\,000 - 2^{32} = -294\,967\,296$.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \draw[line width=1.2pt, neutral!45!black] (0,0) -- (12,0);
+    \foreach \xx/\lab in {0/{\code{INT\_MIN}\\$-2\,147\,483\,648$}, 6/{0},
+                          12/{\code{INT\_MAX}\\$2\,147\,483\,647$}} {
+      \draw[line width=0.8pt, neutral!45!black] (\xx,-0.12) -- (\xx,0.12);
+      \node[anchor=north, align=center] at (\xx,-0.2) {\lab};
+    }
+    \fill[primary!70!black] (11.59,0) circle (2.3pt);
+    \node[anchor=north, align=center, text=primary!60!black] at (10.2,-0.2) {\code{b}\\$2\,000\,000\,000$};
+    \draw[primary!50!black, line width=0.5pt] (11.59,-0.06) -- (10.6,-0.25);
+    \draw[wtarrowacc] (11.59,0.25) -- node[above, text=accent!70!black] {$+$ \code{c}} (12.7,0.25);
+    \draw[accent!70!black, dashed, line width=0.9pt] (12.7,0.25) .. controls (14.2,2.3) and (-2.2,2.3) .. (-0.7,0.25);
+    \node[fill=white, inner sep=2pt, text=accent!70!black] at (6,1.75) {superato \code{INT\_MAX}, si ricomincia da \code{INT\_MIN}};
+    \draw[wtarrowacc] (-0.7,0.25) -- (5.18,0.25);
+    \fill[accent!80!black] (5.18,0) circle (2.3pt);
+    \node[anchor=north, align=center, text=accent!70!black] at (4.6,-0.2) {\code{a}\\$-294\,967\,296$};
+  \end{tikzpicture}
+  \caption{\code{b + c} su 32 bit: la somma esce a destra e rientra da
+           sinistra.}
+  \label{fig:overflow}
+\end{figure}
+
+Il risultato si spiega così: la somma viene fatta su 32 bit, e i bit che non
+ci stanno si perdono. Per i tipi \code{unsigned} questo “giro” è garantito
+dallo standard (i calcoli sono fatti modulo $2^n$); per i tipi con segno lo
+standard parla invece di comportamento \textbf{indefinito}, e il valore
+ottenuto qui è solo ciò che succede in pratica sui nostri computer. In ogni
+caso tocca al programmatore assicurarsi che i valori restino
+nell'intervallo, per esempio usando un tipo più grande.
+
+È quello che fa la versione di \code{overflow.c} nella cartella degli
+esempi: usa \code{unsigned long} (8 byte) e numeri ancora più grandi, 40
+miliardi, e la somma, 80 miliardi, viene giusta.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=overflow.c]
+#include <stdio.h>
+
+#define BIG	40000000000
+
+int main()
+{
+	unsigned long int a, b, c;
+
+	b = c = BIG;
+
+	a = b + c;
+
+	printf("a = %ld\n", a);
+
+	return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./overflow
+a = 80000000000
+\end{console}
+(Per un \code{unsigned long} la conversione esatta di \code{printf} sarebbe
+\code{\%lu}; qui \code{\%ld} funziona perché il valore sta anche in un
+\code{long}.)
+\end{affianco}
+
+\section{\code{short}, \code{long} e \code{unsigned}}
+
+\subsection{Più piccoli, più grandi, senza segno}
+
+Oltre a \code{char} e \code{int}, gli altri tipi interi servono per usi più
+specifici:
+
+\begin{itemize}
+  \item \code{short} occupa di solito meno memoria di un \code{int} (2
+        byte): si usa quando lo spazio conta, per esempio in tabelle con
+        milioni di numeri piccoli;
+  \item \code{long} si usa per valori grandi (8 byte su Linux e macOS a 64
+        bit);
+  \item \code{unsigned} occupa quanto un \code{int}, ma non ha negativi: con
+        4 byte va da 0 a $2^{32} - 1 = 4\,294\,967\,295$.
+\end{itemize}
+
+I limiti esatti del proprio sistema si leggono in \code{limits.h}. Questo
+programma li stampa (l'output è quello di Linux su un PC a 64 bit):
+
+\begin{lstlisting}[style=c, name=limiti.c]
+#include <stdio.h>
+#include <limits.h>
+
+int main(void)
+{
+   printf("signed char:   %d .. %d\n", SCHAR_MIN, SCHAR_MAX);
+   printf("unsigned char: %d .. %d\n", 0, UCHAR_MAX);
+   printf("char:          %d .. %d\n", CHAR_MIN, CHAR_MAX);
+   printf("short:         %d .. %d\n", SHRT_MIN, SHRT_MAX);
+   printf("int:           %d .. %d\n", INT_MIN, INT_MAX);
+   printf("unsigned:      %u .. %u\n", 0u, UINT_MAX);
+   printf("long:          %ld .. %ld\n", LONG_MIN, LONG_MAX);
+   printf("unsigned long: %lu .. %lu\n", 0ul, ULONG_MAX);
+   return 0;
+}
+\end{lstlisting}
+
+\begin{console}
+$ ./limiti
+signed char:   -128 .. 127
+unsigned char: 0 .. 255
+char:          -128 .. 127
+short:         -32768 .. 32767
+int:           -2147483648 .. 2147483647
+unsigned:      0 .. 4294967295
+long:          -9223372036854775808 .. 9223372036854775807
+unsigned long: 0 .. 18446744073709551615
+\end{console}
+
+\info{Che cosa garantisce lo standard}{
+  Lo standard del C non fissa le dimensioni dei tipi, ma solo dei
+  \textbf{minimi}: \code{char} ha almeno 8 bit, \code{short} e \code{int}
+  almeno 16, \code{long} almeno 32; inoltre un \code{short} non è più grande
+  di un \code{int}, che non è più grande di un \code{long}. Le dimensioni
+  reali le sceglie l'implementazione: su Windows, per esempio, \code{long}
+  ha 4 byte come \code{int}, mentre su Linux e macOS a 64 bit ne ha 8. Chi
+  ha bisogno di dimensioni esatte trova nell'header \code{stdint.h} (C99)
+  tipi come \code{int32\_t} e \code{int64\_t}.}
+
+\subsection{Il tipo delle costanti intere}
+
+Anche le costanti hanno un tipo. A una costante intera scritta in decimale
+viene dato il primo tipo in grado di contenerla fra \code{int} e \code{long}
+(e, se non basta, \code{long long}, un tipo introdotto dal C99). Il tipo si
+può anche imporre con un \textbf{suffisso}: \code{U} per \code{unsigned},
+\code{L} per \code{long}, \code{UL} per \code{unsigned long} (vanno bene
+anche le minuscole, ma la \code{l} si confonde facilmente con un 1). Per i
+reali, come vedremo, i suffissi sono \code{F} e \code{L}. Ecco i tipi
+assegnati dal compilatore ad alcune costanti:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}>{\FiraCodeNL}l l l@{}}
+  \toprule
+  \normalfont\textbf{costante} & \textbf{tipo} & \textbf{perché} \\
+  \midrule
+  37         & \code{int}           & sta in un \code{int} \\
+  37U        & \code{unsigned}      & suffisso \code{U} \\
+  37L        & \code{long}          & suffisso \code{L} \\
+  37UL       & \code{unsigned long} & suffissi \code{U} e \code{L} \\
+  2147483647 & \code{int}           & è \code{INT\_MAX}: sta ancora in un \code{int} \\
+  2147483648 & \code{long}          & non sta più in un \code{int} \\
+  3.7        & \code{double}        & le costanti reali sono \code{double} \\
+  3.7F       & \code{float}         & suffisso \code{F} \\
+  3.7L       & \code{long double}   & suffisso \code{L} \\
+  'a'        & \code{int}           & le costanti carattere sono \code{int} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+(Le slide indicano come candidati \code{int}, \code{long} e \code{unsigned}:
+era all'incirca la regola del C più vecchio, il C89. Nel C99 una costante
+decimale senza suffisso non diventa mai \code{unsigned}; possono diventarlo
+quelle scritte in esadecimale o in ottale.)
+
+\section{I tipi reali}
+
+\subsection{\code{float}, \code{double} e \code{long double}}
+
+L'ANSI C fornisce tre tipi reali: \code{float}, \code{double} e
+\code{long double}. Le costanti reali, come \code{3.7}, sono di tipo
+\code{double}; il tipo si può imporre con un suffisso: \code{3.7F} è un
+\code{float}, \code{3.7L} un \code{long double}.
+
+Di solito il compilatore dà più memoria ai \code{double} che ai
+\code{float}, ma non è obbligatorio; su molte macchine un \code{float}
+occupa 4 byte e un \code{double} 8. Allo stesso modo un \code{long double}
+può avere più memoria di un \code{double} (sui PC ne occupa 16), ma non è
+obbligatorio.
+
+I valori che un tipo reale può contenere si descrivono con due grandezze:
+
+\begin{itemize}
+  \item la \textbf{precisione}: quante cifre significative, in notazione
+        decimale, si possono rappresentare;
+  \item l'\textbf{intervallo} (\textit{range}): il valore più grande e il più
+        piccolo che si possono rappresentare.
+\end{itemize}
+
+\subsection{La virgola mobile}
+
+Su molte macchine un \code{float} ha una precisione di 6 cifre significative
+e un intervallo che va da circa $10^{-38}$ a $10^{38}$. Si può pensarlo come
+un numero della forma
+\[
+  0.d_1 d_2 d_3 d_4 d_5 d_6 \times 10^{n}, \qquad -38 \le n \le 38,
+\]
+dove ogni $d_i$ è una cifra decimale (figura~\ref{fig:virgola-mobile}). Le
+cifre stabiliscono la precisione, l'esponente $n$ dice dove va la virgola e
+i suoi limiti stabiliscono l'intervallo. La virgola “galleggia” a seconda
+dell'esponente: con le stesse sei cifre si rappresenta $123.451$ (esponente
+3), $0.000123451$ (esponente $-3$) o $123\,451\,000$ (esponente 9). Da qui il
+nome \textit{floating point}, virgola mobile.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\small]
+    \noindici
+    \node[anchor=east, font=\FiraCodeNL\small] at (-0.05,0) {123.451\Lato\ \ =\ \ \FiraCodeNL 0.};
+    \celle[mcella, minimum width=0.6cm, minimum height=0.6cm, font=\FiraCodeNL\small\bfseries]{m}{(0,0)}{1,2,3,4,5,1}
+    \node[anchor=west, font=\Lato\small] (x) at ([xshift=2pt]m-5.east) {$\times\ 10$};
+    \node[mcella, anchor=south west, minimum width=0.45cm, minimum height=0.42cm,
+          font=\FiraCodeNL\scriptsize\bfseries, fill=accent!12!white, draw=accent!65!black] (e)
+      at ([xshift=-1pt, yshift=-3pt]x.north east) {3};
+    \draw[wtbrace] ([yshift=-3pt]m-0.south west) -- ([yshift=-3pt]m-5.south east);
+    \node[mnota, anchor=north, align=center] at ([yshift=-0.35cm]$(m-0.south)!0.5!(m-5.south)$)
+      {le cifre significative:\\quante sono decide la \textbf{precisione}};
+    \node[mnota, anchor=west, align=left] at ([xshift=0.35cm]e.east)
+      {l'esponente dice dove va la virgola;\\i suoi limiti decidono l'\textbf{intervallo}};
+  \end{tikzpicture}
+  \caption{Un \code{float} come sei cifre più un esponente.}
+  \label{fig:virgola-mobile}
+\end{figure}
+
+In realtà la macchina usa la base 2, non la base 10: le cifre sono binarie
+(24 per un \code{float}), e “6 cifre decimali” è il modo di dire quanta
+precisione garantiscono. I limiti esatti sono nell'header \code{float.h}:
+
+\begin{lstlisting}[style=c, name=reali.c]
+#include <stdio.h>
+#include <float.h>
+
+int main(void)
+{
+   printf("float:  min %e  max %e  cifre %d\n",
+          FLT_MIN, FLT_MAX, FLT_DIG);
+   printf("double: min %e  max %e  cifre %d\n",
+          DBL_MIN, DBL_MAX, DBL_DIG);
+   return 0;
+}
+\end{lstlisting}
+
+\begin{console}
+$ ./reali
+float:  min 1.175494e-38  max 3.402823e+38  cifre 6
+double: min 2.225074e-308  max 1.797693e+308  cifre 15
+\end{console}
+
+Un \code{double}, su molte macchine, ha quindi circa 15 cifre significative
+e un intervallo da circa $10^{-308}$ a $10^{308}$: si può pensare come
+$0.d_1 d_2 \dots d_{15} \times 10^{n}$ con $-308 \le n \le 308$.
+
+\subsection{Ai confini del \code{float}}
+
+Il programma delle lezioni assegna a un \code{float} valori sempre più
+piccoli, poi due valori molto grandi e infine un numero con molte cifre:
+
+\begin{affianco}[0.56][t]
+\codicepiccolo
+\begin{lstlisting}[style=c, name=float.c]
+#include <stdio.h>
+
+int main()
+{
+   float x;
+
+   x = 1e-37; printf("x = 1e-37    x = %e\n", x);
+   x = 1e-38; printf("x = 1e-38    x = %e\n", x);
+   x = 1e-39; printf("x = 1e-39    x = %e\n", x);
+   x = 1e-40; printf("x = 1e-40    x = %e\n", x);
+   x = 1e-41; printf("x = 1e-41    x = %e\n", x);
+   x = 1e-42; printf("x = 1e-42    x = %e\n", x);
+   x = 1e-43; printf("x = 1e-43    x = %e\n", x);
+   x = 1e-44; printf("x = 1e-44    x = %e\n", x);
+   x = 1e-45; printf("x = 1e-45    x = %e\n", x);
+   x = 1e-46; printf("x = 1e-46    x = %e\n", x);
+
+   x = 1e38; printf("x = 1e38    x = %e\n", x);
+   x = 1e39; printf("x = 1e39    x = %e\n", x);
+
+   x = 123.45123451234512345;
+   printf("x = 123.45123451234512345     x = %3.17f\n", x);
+}
+\end{lstlisting}
+\risultato
+\codicepiccolo
+\begin{console}
+$ ./float
+x = 1e-37    x = 1.000000e-37
+x = 1e-38    x = 9.999999e-39
+x = 1e-39    x = 1.000000e-39
+x = 1e-40    x = 9.999946e-41
+x = 1e-41    x = 9.999666e-42
+x = 1e-42    x = 1.000527e-42
+x = 1e-43    x = 9.949219e-44
+x = 1e-44    x = 9.809089e-45
+x = 1e-45    x = 1.401298e-45
+x = 1e-46    x = 0.000000e+00
+x = 1e38    x = 1.000000e+38
+x = 1e39    x = inf
+x = 123.45123451234512345
+    x = 123.45123291015625000
+\end{console}
+\end{affianco}
+
+(L'ultima riga dell'output è stata spezzata in due per farla stare nella
+pagina.) Che cosa è successo? La figura~\ref{fig:retta-float} riassume i
+valori positivi di un \code{float}:
+
+\begin{itemize}
+  \item fino a \code{FLT\_MIN}, circa $1.18 \times 10^{-38}$, i valori sono
+        rappresentati con tutta la precisione: \code{1e-38} diventa
+        \code{9.999999e-39}, cioè il \code{float} più vicino;
+  \item sotto \code{FLT\_MIN} i numeri si possono ancora rappresentare, ma
+        con \textbf{sempre meno cifre esatte} (sono detti
+        \textit{subnormali}): \code{9.999946e-41}, \code{9.949219e-44},
+        \code{9.809089e-45};
+  \item il più piccolo \code{float} positivo è circa $1.4 \times 10^{-45}$:
+        \code{1e-45} diventa \code{1.401298e-45}, e \code{1e-46}, ancora più
+        piccolo, diventa \textbf{0};
+  \item sopra \code{FLT\_MAX}, circa $3.4 \times 10^{38}$, non c'è più
+        posto: \code{1e39} diventa \code{inf}, \textbf{infinito}.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      tick/.style={font=\FiraCodeNL\tiny, anchor=north, align=center, inner sep=1pt}]
+    \fill[red-gradient-1!40!white] (0,0) rectangle (1.4,0.55);
+    \fill[orange-gradient-1!50!white] (1.4,0) rectangle (5.0,0.55);
+    \fill[green-gradient-1!45!white] (5.0,0) rectangle (11.0,0.55);
+    \fill[red-gradient-1!40!white] (11.0,0) rectangle (12.6,0.55);
+    \draw[neutral!50!black, line width=0.6pt] (0,0) rectangle (12.6,0.55)
+      (1.4,0) -- (1.4,0.55) (5.0,0) -- (5.0,0.55) (11.0,0) -- (11.0,0.55);
+    \node at (0.7,0.275) {\textbf{0}};
+    \node at (3.2,0.275) {\textbf{subnormali}};
+    \node at (8.0,0.275) {\textbf{normali}};
+    \node at (11.8,0.275) {\textbf{inf}};
+    \node[tick] at (1.4,-0.05) {1.4e-45};
+    \node[tick] at (5.0,-0.05) {1.18e-38\\(FLT\_MIN)};
+    \node[tick] at (11.0,-0.05) {3.4e+38\\(FLT\_MAX)};
+    \node[anchor=south, align=center] at (0.7,0.6) {troppo piccoli:\\diventano 0};
+    \node[anchor=south, align=center] at (3.2,0.6) {sempre meno\\cifre esatte};
+    \node[anchor=south, align=center] at (8.0,0.6) {circa 7 cifre esatte};
+    \node[anchor=south, align=center] at (11.8,0.6) {troppo grandi:\\infinito};
+  \end{tikzpicture}
+  \caption{I valori positivi di un \code{float} (la scala non è
+           proporzionale). Per i negativi vale lo stesso, con il segno meno.}
+  \label{fig:retta-float}
+\end{figure}
+
+L'ultima riga mostra la \textbf{precisione}: del numero
+\code{123.45123451234512345} il \code{float} conserva le prime cifre, poi
+inventa. La figura~\ref{fig:cifre} confronta le cifre con quelle di un
+\code{double}, che di cifre giuste ne conserva più del doppio.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\small,
+      lab/.style={font=\Lato\scriptsize, anchor=east, text=neutral!35!black},
+      giu/.style={anchor=base west, inner sep=0pt, text=mok, font=\FiraCodeNL\small\bfseries},
+      sba/.style={anchor=base west, inner sep=0pt, text=merr, font=\FiraCodeNL\small}]
+    \node[lab] at (-0.2,0.05) {nel programma};
+    \node[anchor=base west, inner sep=0pt] at (0,0) {123.45123451234512345};
+    \node[lab] at (-0.2,-0.6) {float};
+    \node[giu] (f1) at (0,-0.65) {123.45123};
+    \node[sba] at (f1.base east) {291015625000};
+    \node[lab] at (-0.2,-1.25) {double};
+    \node[giu] (d1) at (0,-1.3) {123.45123451234512};
+    \node[sba] at (d1.base east) {402};
+    \node[mnota, anchor=west] at (4.6,-0.6) {8 cifre giuste (ne sono garantite 6)};
+    \node[mnota, anchor=west] at (4.6,-1.25) {17 cifre giuste (ne sono garantite 15)};
+  \end{tikzpicture}
+  \caption{Lo stesso numero in un \code{float} e in un \code{double}: in
+           verde le cifre esatte, in rosso quelle sbagliate.}
+  \label{fig:cifre}
+\end{figure}
+
+\subsection{Ai confini del \code{double}}
+
+La stessa prova con un \code{double} (nell'ultima riga le cifre stampate sono
+17, con \code{\%.17e}). Questa volta alcune costanti sono così estreme che
+\code{gcc} protesta già in compilazione:
+
+\begin{affianco}[0.56][t]
+\codicepiccolo
+\begin{lstlisting}[style=c, name=double.c]
+#include <stdio.h>
+
+int main()
+{
+   double x;
+
+   x = 1e-307; printf("x = 1e-307    x = %e\n", x);
+   x = 1e-308; printf("x = 1e-308    x = %e\n", x);
+   x = 1e-309; printf("x = 1e-309    x = %e\n", x);
+   x = 1e-400; printf("x = 1e-400    x = %e\n", x);
+   x = 1e-401; printf("x = 1e-401    x = %e\n", x);
+   x = 1e-402; printf("x = 1e-402    x = %e\n", x);
+   x = 1e-403; printf("x = 1e-403    x = %e\n", x);
+   x = 1e-404; printf("x = 1e-404    x = %e\n", x);
+   x = 1e-405; printf("x = 1e-405    x = %e\n", x);
+   x = 1e-406; printf("x = 1e-406    x = %e\n", x);
+
+   x = 1e308; printf("x = 1e308    x = %e\n", x);
+   x = 1e309; printf("x = 1e309    x = %e\n", x);
+
+   x = 123.45123451234512345;
+   printf("x = 123.45123451234512345     x = %.17e\n", x);
+}
+\end{lstlisting}
+\risultato
+\codicepiccolo
+\begin{console}
+$ ./double
+x = 1e-307    x = 1.000000e-307
+x = 1e-308    x = 1.000000e-308
+x = 1e-309    x = 1.000000e-309
+x = 1e-400    x = 0.000000e+00
+x = 1e-401    x = 0.000000e+00
+x = 1e-402    x = 0.000000e+00
+x = 1e-403    x = 0.000000e+00
+x = 1e-404    x = 0.000000e+00
+x = 1e-405    x = 0.000000e+00
+x = 1e-406    x = 0.000000e+00
+x = 1e308    x = 1.000000e+308
+x = 1e309    x = inf
+x = 123.45123451234512345
+    x = 1.23451234512345124e+02
+\end{console}
+\end{affianco}
+
+Le costanti da \code{1e-400} a \code{1e-406} sono troppo piccole anche per
+un \code{double}, e \code{1e309} è troppo grande: il compilatore lo dice con
+un avviso per ciascuna riga (qui ne mostriamo due su otto) e le sostituisce
+con 0 e con infinito.
+
+\begin{console}
+$ gcc -Wall -o double double.c
+double.c: In function (*@‘@*)main(*@’@*):
+double.c:10:4: warning: floating constant truncated to zero [-Woverflow]
+   10 |    x = 1e-400; printf("x = 1e-400    x = %e\n", x);
+      |    ^
+double.c:19:4: warning: floating constant exceeds range of (*@‘@*)double(*@’@*) [-Woverflow]
+   19 |    x = 1e309; printf("x = 1e309    x = %e\n", x);
+      |    ^
+\end{console}
+
+\subsection{I reali non sono esatti}
+
+Con un numero finito di bit si rappresenta un numero finito di valori: la
+maggior parte dei numeri reali \textbf{non è rappresentabile}, e viene
+sostituita dal valore rappresentabile più vicino. Succede anche a numeri
+semplicissimi come $0.1$: in base 2 è un numero periodico
+($0.000110011001100\dots$), esattamente come $1/3 = 0.333\dots$ in base 10,
+e da qualche parte va troncato. Di conseguenza le operazioni con i reali,
+a differenza di quelle con gli interi, non sono necessariamente esatte:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=decimali.c]
+#include <stdio.h>
+
+int main(void)
+{
+   double a = 0.1, b = 0.2;
+
+   printf("0.1       = %.20f\n", a);
+   printf("0.1 + 0.2 = %.20f\n", a + b);
+   printf("0.3       = %.20f\n", 0.3);
+   if (a + b == 0.3)
+      printf("uguali\n");
+   else
+      printf("diversi!\n");
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./decimali
+0.1       = 0.10000000000000000555
+0.1 + 0.2 = 0.30000000000000004441
+0.3       = 0.29999999999999998890
+diversi!
+\end{console}
+\end{affianco}
+
+$0.1 + 0.2$ e $0.3$ differiscono nella diciassettesima cifra, ma per
+\code{==} sono diversi. Per questo due reali \textbf{non si confrontano con
+\code{==}}: si controlla che la loro differenza sia piccola, per esempio con
+\code{fabs(a + b - 0.3) < 1e-9} (\code{fabs}, il valore assoluto, è descritta
+più avanti). Per i calcoli di piccola taglia questi errori sono trascurabili;
+nei problemi grandi (la risoluzione di grandi sistemi di equazioni
+differenziali, la minimizzazione di funzioni complicate) si accumulano, e
+controllarli è il compito dell'analisi numerica.
+
+\section{Dare un nome ai tipi: \code{typedef}}
+
+Il meccanismo del \code{typedef} associa un identificatore a un tipo; da quel
+momento l'identificatore si usa per dichiarare variabili (o funzioni)
+esattamente come i tipi standard:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c]
+typedef char          uppercase;
+typedef int           inches;
+typedef unsigned long size_t;
+typedef unsigned char u_char;
+
+uppercase u;
+u_char    c;
+inches    length, width;
+\end{lstlisting}
+\risultato
+A che cosa serve?
+\begin{itemize}
+  \item ad \textbf{abbreviare} le dichiarazioni lunghe (\code{u\_char} al
+        posto di \code{unsigned char});
+  \item a scrivere nomi che dicono \textbf{l'uso} delle variabili:
+        \code{length} e \code{width} sono lunghezze in pollici
+        (\textit{inches});
+  \item a gestire le \textbf{differenze fra sistemi}.
+\end{itemize}
+\end{affianco}
+
+Il terzo punto si capisce con un esempio. Un programma scritto per un sistema
+con \code{int} di 4 byte va portato su un sistema dove gli \code{int} hanno
+2 byte, troppo pochi per i suoi dati. Se il programma dichiara le sue
+variabili con un tipo proprio, basta cambiare \textbf{una riga}:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c]
+/* sul primo sistema */
+typedef int tipoInt;
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c]
+/* sul secondo sistema */
+typedef long int tipoInt;
+\end{lstlisting}
+\end{affianco}
+
+La libreria standard fa proprio così: \code{size\_t}, il tipo dei risultati di
+\code{sizeof}, è definito con un \code{typedef} e cambia da un sistema
+all'altro. Il \code{typedef} sarà molto comodo con le strutture
+(capitolo~\ref{chap:strutture}).
+
+\section{L'operatore \code{sizeof}}
+
+\subsection{Quanti byte}
+
+Il C fornisce l'operatore unario \code{sizeof}, che calcola il numero di byte
+necessari per rappresentare un oggetto. L'oggetto, fra parentesi, può essere
+un tipo (come \code{int} o \code{float}), un'espressione (come
+\code{a + b}), un array o una struttura.
+Ha la stessa priorità degli altri operatori unari. Il programma delle lezioni
+lo applica ai tipi fondamentali:
+
+\begin{lstlisting}[style=c, name=sizeofTypes.c]
+/* Compute the size of some fundamental types. */
+
+#include <stdio.h>
+
+int main(void)
+{
+   printf("The size of some fundamental types is computed.\n\n");
+   printf("       char:%3ld byte \n", sizeof(char));
+   printf("      short:%3ld bytes\n", sizeof(short));
+   printf("        int:%3ld bytes\n", sizeof(int));
+   printf("       long:%3ld bytes\n", sizeof(long));
+   printf("   unsigned:%3ld bytes\n", sizeof(unsigned));
+   printf("      float:%3ld bytes\n", sizeof(float));
+   printf("     double:%3ld bytes\n", sizeof(double));
+   printf("long double:%3ld bytes\n", sizeof(long double));
+   return 0;
+}
+\end{lstlisting}
+
+\begin{console}
+$ ./sizeofTypes
+The size of some fundamental types is computed.
+
+       char:  1 byte
+      short:  2 bytes
+        int:  4 bytes
+       long:  8 bytes
+   unsigned:  4 bytes
+      float:  4 bytes
+     double:  8 bytes
+long double: 16 bytes
+\end{console}
+
+\code{sizeof(char)} vale 1 per definizione; gli altri valori sono quelli di
+Linux su un PC a 64 bit e possono cambiare altrove. Il risultato di
+\code{sizeof} è di tipo \code{size\_t}, un intero senza segno; la conversione
+di \code{printf} pensata apposta è \code{\%zu}, ma su Linux a 64 bit
+\code{size\_t} è un \code{unsigned long} e \code{\%ld} funziona.
+
+\subsection{Una sorpresa}
+
+Con \code{sizeof} verifichiamo quello che avevamo anticipato sulle costanti
+carattere:
+
+\begin{affianco}[0.56][c]
+\begin{lstlisting}[style=c, name=dimensioni.c]
+#include <stdio.h>
+
+int main(void)
+{
+   char c = 'a';
+
+   printf("sizeof(c)     = %zu\n", sizeof(c));
+   printf("sizeof('a')   = %zu\n", sizeof('a'));
+   printf("sizeof(c + c) = %zu\n", sizeof(c + c));
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./dimensioni
+sizeof(c)     = 1
+sizeof('a')   = 4
+sizeof(c + c) = 4
+\end{console}
+\end{affianco}
+
+Una variabile \code{char} occupa 1 byte, ma la costante \code{'a'} ne
+occupa 4: è un \code{int}. E anche \code{c + c} è un \code{int}, per una
+regola che vedremo alla fine del capitolo, la \textit{promozione a intero}.
+Si noti infine che \code{sizeof} guarda solo il \textbf{tipo}
+dell'espressione, senza calcolarla: \code{sizeof(i++)} non incrementa
+\code{i}.
+
+\section{Leggere e scrivere un carattere alla volta}
+
+\subsection{\code{getchar} e \code{putchar}}
+
+Per leggere e scrivere un carattere alla volta la libreria standard offre
+due funzioni, dichiarate in \code{stdio.h}:
+
+\begin{itemize}
+  \item \code{getchar()} legge il prossimo carattere dallo
+        \textbf{standard input} (la tastiera, o un file se l'input è
+        rediretto con \code{<}) e ne restituisce il codice;
+  \item \code{putchar(c)} scrive sullo \textbf{standard output} il
+        carattere di codice \code{c}.
+\end{itemize}
+
+Di solito sono realizzate come macro (direttive per il preprocessore), ma si
+usano come funzioni. E lavorano con gli \code{int}, perché un \code{int} può
+rappresentare qualsiasi carattere e, in più, un valore speciale che segnala
+la fine dell'input.
+
+Il programma seguente legge una sequenza di caratteri e scrive ciascuno
+\textbf{due volte}. Lo proviamo redirigendo sullo standard input il file
+\code{input.txt}:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=double_out.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int c;
+
+   while ((c = getchar()) != EOF) {
+      putchar(c);
+      putchar(c);
+   }
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ cat input.txt
+abcdefghijklmno
+$ ./double_out < input.txt
+aabbccddeeffgghhiijjkkllmmnnoo
+
+$
+\end{console}
+\end{affianco}
+
+Da dove viene la riga vuota? Il file termina con un a capo, e anche
+\code{'\textbackslash n'} è un carattere: raddoppiato, produce una riga
+vuota. Se invece si lancia il programma senza redirezione, i caratteri
+arrivano dalla tastiera:
+
+\begin{console}
+$ ./double_out
+<<ciao>>
+cciiaaoo
+
+<<Ctrl+D>>
+$
+\end{console}
+
+Il programma riceve i caratteri solo dopo \tasti{Invio}, tutti insieme: il
+terminale raccoglie la riga (così la si può correggere) e la consegna quando
+la si conferma. Poi \code{getchar} li restituisce uno alla volta. Per finire,
+come nel capitolo~\ref{chap:primi-programmi}, si preme \tasti{Ctrl,D} a inizio
+riga.
+
+\subsection{Il ciclo di lettura}
+
+La condizione \code{(c = getchar()) != EOF} fa tre cose in una
+(figura~\ref{fig:ciclo-getchar}): legge un carattere, lo assegna a \code{c} e
+controlla che l'input non sia finito.
+
+\begin{figure}[H]
+  \centering
+  \setlength{\fboxsep}{1.5pt}
+  \renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}c>{\FiraCodeNL\small}l>{\raggedright\arraybackslash}p{8.4cm}@{}}
+    \wtpassonum{1} & while ((c = \colorbox{accent!16!white}{getchar()}) != EOF)
+                   & \code{getchar()} legge un carattere, per esempio \code{a}, e restituisce il suo codice, 97 \\
+    \wtpassonum{2} & while ((\colorbox{accent!16!white}{c = 97}) != EOF)
+                   & il valore viene assegnato a \code{c}; l'assegnazione vale 97 \\
+    \wtpassonum{3} & while (\colorbox{accent!16!white}{97 != EOF})
+                   & 97 è diverso da \code{EOF}: la condizione è vera \\
+    \wtpassonum{4} & while (1)
+                   & si esegue il corpo, poi si ricomincia dal passo 1 \\
+  \end{tabular}
+  \caption{Il calcolo della condizione, passo per passo. Quando l'input
+           finisce, \code{getchar()} restituisce \code{EOF}, il confronto
+           \code{EOF != EOF} è falso e il ciclo termina.}
+  \label{fig:ciclo-getchar}
+\end{figure}
+
+Tutte le parentesi sono necessarie. L'operatore \code{!=} ha la precedenza
+su \code{=} (capitolo~\ref{chap:sintassi}), quindi senza le parentesi interne
+\code{c = getchar() != EOF} verrebbe letto come
+\code{c = (getchar() != EOF)}: a \code{c} andrebbe il risultato del
+confronto, 1 o 0, e il programma stamperebbe, al posto di ogni carattere,
+due caratteri di codice 1, invisibili. \code{gcc} con \code{-Wall} intuisce
+l'errore e suggerisce le parentesi:
+
+\begin{console}
+$ gcc -Wall -o senza_parentesi senza_parentesi.c
+senza_parentesi.c: In function (*@‘@*)main(*@’@*):
+senza_parentesi.c:7:11: warning: suggest parentheses around assignment used as truth value [-Wparentheses]
+    7 |    while (c = getchar() != EOF) {
+      |           ^
+\end{console}
+
+\subsection{\code{EOF}}
+
+\code{EOF} (\textit{end of file}, fine del file) è il valore che
+\code{getchar} restituisce quando l'input è finito: alla fine di un file
+rediretto, o quando si preme \tasti{Ctrl,D} a inizio riga. È una costante
+simbolica definita in \code{stdio.h}, tipicamente come
+
+\begin{lstlisting}[style=c]
+#define EOF (-1)
+\end{lstlisting}
+
+ma su un altro sistema potrebbe valere diversamente: usare il nome
+\code{EOF} invece di $-1$ garantisce la \textbf{portabilità}. Stampandolo:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=eof.c]
+#include <stdio.h>
+
+int main()
+{
+   printf("EOF = %d\n", EOF);
+   printf("EOF = %c\n", EOF);
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./eof
+EOF = -1
+EOF = (*@\char"FFFD@*)
+\end{console}
+\end{affianco}
+
+Con \code{\%d} si vede $-1$. Con \code{\%c} viene scritto un byte che vale
+255 (\code{11111111}, la lettura senza segno di $-1$), che non corrisponde a
+nessun carattere: il terminale mostra un simbolo di carattere non valido.
+
+\subsection{Perché \code{int} e non \code{char}}
+
+Nel programma, \code{c} è dichiarata \code{int} e non \code{char}. Il motivo
+è che \code{getchar} può restituire \textbf{257 valori} diversi: i 256
+possibili byte, da 0 a 255, più \code{EOF}. Un \code{char} ne contiene solo
+256, e due valori finirebbero per confondersi (figura~\ref{fig:getchar-int}):
+\code{char} può essere \code{signed} o \code{unsigned}, e \code{EOF} potrebbe
+non valere $-1$; un \code{int} va bene in ogni caso.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+      gc/.style={mcella, minimum width=0.95cm, minimum height=0.55cm}]
+    \noindici
+    \celle[gc]{g}{(0,0)}{EOF,0,1,2,\ldots,254,255}
+    \node[mindice, anchor=north] at ([yshift=-1pt]g-0.south) {$-1$};
+    \draw[mrif, draw=merr] (g-6.north) to[out=140, in=40]
+      node[above, mnota, text=merr] {in un \code{signed char} il byte 255 diventa $-1$: sembra \code{EOF}} (g-0.north);
+    \draw[mrif, draw=merr] ([yshift=-0.3cm]g-0.south) to[out=-40, in=-140]
+      node[below, mnota, text=merr] {in un \code{unsigned char} $-1$ diventa 255: \code{c} non vale mai \code{EOF}} ([yshift=-0.1cm]g-6.south);
+    \node[mnota, anchor=west, align=left] at ([xshift=0.5cm]g-6.east)
+      {257 valori possibili:\\in un \code{int} restano tutti distinti \mok};
+  \end{tikzpicture}
+  \caption{I valori che \code{getchar} può restituire, e che cosa succede se
+           li si mette in un \code{char}.}
+  \label{fig:getchar-int}
+\end{figure}
+
+Con \code{unsigned char} il guasto è evidente:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=uchar.c]
+#include <stdio.h>
+
+int main(void)
+{
+   unsigned char c;
+
+   while ((c = getchar()) != EOF) {
+      putchar(c);
+      putchar(c);
+   }
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./uchar < input.txt
+aabbccddeeffgghhiijjkkllmmnnoo
+
+(*@\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD\char"FFFD@*)
+^C
+\end{console}
+\end{affianco}
+
+Dopo il contenuto del file il programma scrive all'infinito il byte 255
+(mostrato come carattere non valido), finché non lo si ferma con
+\tasti{Ctrl,C}. Il motivo: quando l'input finisce, \code{getchar}
+restituisce $-1$, che in \code{c} diventa 255; il confronto
+\code{255 != EOF} è sempre vero, e il ciclo non termina più. Il compilatore
+lo segnala solo con l'opzione \code{-Wextra}, che attiva altri avvisi oltre a
+quelli di \code{-Wall}:
+
+\begin{console}
+$ gcc -Wall -Wextra -o uchar uchar.c
+uchar.c: In function (*@‘@*)main(*@’@*):
+uchar.c:7:27: warning: comparison is always true due to limited range of data type [-Wtype-limits]
+    7 |    while ((c = getchar()) != EOF) {
+      |                           ^~
+\end{console}
+
+Con un \code{signed char} il guasto è più subdolo: il programma funziona,
+salvo fermarsi in anticipo se l'input contiene un byte che vale 255.
+
+\subsection{Maiuscole e minuscole}
+
+I caratteri sono ordinati come gli interi che li rappresentano, e si
+comportano come tali:
+
+\begin{itemize}
+  \item \code{'a' + 1} vale \code{'b'}, e \code{'b' + 1} vale \code{'c'};
+  \item \code{'z' - 'a'} vale 25;
+  \item \code{'A' < 'a'}, perché 65 è minore di 97;
+  \item \code{'A' - 'a'} ha lo stesso valore di \code{'B' - 'b'}: la
+        distanza fra maiuscola e minuscola è la stessa per tutte le lettere
+        (figura~\ref{fig:maiuscole}).
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+      lc/.style={mcella, minimum width=0.8cm, minimum height=0.55cm, font=\FiraCodeNL\small\bfseries},
+      cod/.style={font=\FiraCodeNL\tiny, text=neutral!45!black, inner sep=1pt}]
+    \noindici
+    \foreach \mi/\ma/\nmi/\nma [count=\k from 0] in {a/A/97/65, b/B/98/66, c/C/99/67,
+        d/D/100/68, e/E/101/69, f/F/102/70, g/G/103/71, \ldots/\ldots/{}/{}, y/Y/121/89, z/Z/122/90} {
+      \node[lc, fill=accent!12!white, draw=accent!60!black] (m\k) at (\k*1.15,0) {\mi};
+      \node[cod, anchor=south] at (m\k.north) {\nmi};
+      \node[lc, fill=primary!12!white] (M\k) at (\k*1.15,-1.5) {\ma};
+      \node[cod, anchor=north] at (M\k.south) {\nma};
+    }
+    \foreach \k in {0,1,2,3,4,5,6,8,9}
+      \draw[wtarrowacc] (m\k.south) -- (M\k.north);
+    \node[mnota, anchor=west, align=left] at ([xshift=0.4cm]$(m9.east)!0.5!(M9.east)$)
+      {ogni freccia somma\\\code{'A' - 'a'}, cioè $-32$};
+  \end{tikzpicture}
+  \caption{Minuscole e maiuscole (sotto ciascuna, il codice): ogni lettera
+           dista 32 posizioni dalla sua maiuscola.}
+  \label{fig:maiuscole}
+\end{figure}
+
+Su questa regolarità si basa \code{capitalize.c}, che trasforma in maiuscolo
+le lettere minuscole e copia senza modifiche tutti gli altri caratteri:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=capitalize.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int   c;
+
+   while ((c = getchar()) != EOF)
+      if (c >= 'a' && c <= 'z')
+         putchar(c + 'A' - 'a');
+      else
+         putchar(c);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ cat input.txt
+abcDE6ygTr56
+$ ./capitalize < input.txt
+ABCDE6YGTR56
+\end{console}
+\end{affianco}
+
+Per la \code{g}, per esempio: $103 + 65 - 97 = 71$, il codice di
+\code{'G'}. Scrivere \code{'A' - 'a'} invece di $-32$ rende il programma più
+leggibile e non obbliga a ricordare la tabella. Il corpo del \code{while} è
+un'unica istruzione, l'\code{if}-\code{else}, quindi le graffe non servono.
+(La libreria standard ha una funzione che fa la stessa cosa, \code{toupper},
+dichiarata in \code{ctype.h}.)
+
+\section{Funzioni matematiche}
+
+\subsection{La libreria matematica}
+
+Il linguaggio C non contiene funzioni matematiche predefinite: le funzioni
+matematiche si trovano nella \textbf{libreria matematica}, che fa parte della
+libreria standard. Per esempio \code{sqrt} (radice quadrata), \code{pow}
+(potenza), \code{log}, \code{sin} e \code{cos}. In genere ricevono parametri
+di tipo \code{double} e restituiscono un risultato \code{double}; i
+prototipi sono in \code{math.h}, e su Linux la libreria va collegata con
+l'opzione \code{-lm} (capitolo~\ref{chap:primi-programmi}). Il programma
+seguente usa \code{sqrt}, che ha un parametro, e \code{pow}, che ne ha due:
+
+\begin{affianco}[0.56][t]
+\codicepiccolo
+\begin{lstlisting}[style=c, name=radice.c]
+#include <math.h>
+#include <stdio.h>
+
+int main(void)
+{
+   double x;
+
+   printf("\n%s\n%s\n%s\n\n",
+      "The square root of x and x raised",
+      "to the x power will be computed.",
+      "---");
+   while (1) {                  /* do it forever */
+      printf("Input x:  ");
+      scanf("%lf", &x);
+      if (x >= 0.0)
+         printf("\n%15s%22.15e\n%15s%22.15e\n%15s%22.15e\n\n",
+            "x = ", x,
+            "sqrt(x) = ", sqrt(x),
+            "pow(x, x) = ", pow(x, x));
+      else
+         printf("\nSorry, your number must be nonnegative.\n\n");
+   }
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ gcc -Wall -o radice radice.c -lm
+$ ./radice
+
+The square root of x and x raised
+to the x power will be computed.
+---
+
+Input x:  <<2>>
+
+           x =  2.000000000000000e+00
+     sqrt(x) =  1.414213562373095e+00
+   pow(x, x) =  4.000000000000000e+00
+
+Input x:  <<-1>>
+
+Sorry, your number must be nonnegative.
+
+Input x:  ^C
+\end{console}
+\end{affianco}
+
+\begin{itemize}
+  \item La prima \code{printf} stampa tre stringhe passate come argomenti, con
+        la conversione \code{\%s}: è un modo per spezzare un testo lungo.
+  \item \code{\%15s} scrive una stringa in 15 caratteri, allineata a destra;
+        \code{\%22.15e} scrive un numero in notazione scientifica con 15
+        cifre dopo il punto, in 22 caratteri (capitolo~\ref{chap:primi-programmi}).
+        Per questo i risultati sono incolonnati.
+  \item \code{while (1)} non termina mai: si esce con \tasti{Ctrl,C}. Qui
+        \tasti{Ctrl,D} non basta: \code{scanf} non legge più nulla,
+        \code{x} conserva l'ultimo valore e il ciclo si ripete all'infinito.
+  \item Nelle slide l'esponente è scritto con tre cifre, \code{e+000}: è il
+        formato usato su Windows; su Linux le cifre sono due.
+\end{itemize}
+
+\subsection{Il valore assoluto}
+
+Per il valore assoluto la libreria standard ha due funzioni:
+\code{abs}, per gli \code{int}, con il prototipo in \code{stdlib.h}, e
+\code{fabs}, per i \code{double}, con il prototipo in \code{math.h}.
+Scambiarle è un errore insidioso:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=assoluto.c]
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+int main(void)
+{
+   printf("abs(-7)    = %d\n", abs(-7));
+   printf("fabs(-2.7) = %f\n", fabs(-2.7));
+   printf("abs(-2.7)  = %d\n", abs(-2.7));
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./assoluto
+abs(-7)    = 7
+fabs(-2.7) = 2.700000
+abs(-2.7)  = 2
+\end{console}
+\end{affianco}
+
+\code{abs(-2.7)} vale 2: il prototipo di \code{abs} dice che il parametro è
+un \code{int}, quindi $-2.7$ viene convertito in intero ($-2$) prima della
+chiamata. Con \code{-Wall} non c'è alcun avviso; con \code{-Wextra} sì:
+
+\begin{console}
+$ gcc -Wall -Wextra -o assoluto assoluto.c -lm
+assoluto.c: In function (*@‘@*)main(*@’@*):
+assoluto.c:9:32: warning: using integer absolute value function (*@‘@*)abs(*@’@*) when argument is of floating-point type (*@‘@*)double(*@’@*) [-Wabsolute-value]
+    9 |    printf("abs(-2.7)  = %d\n", abs(-2.7));
+      |                                ^~~
+\end{console}
+
+\section{Conversioni e cast}
+
+Un'espressione aritmetica come \code{x + y} ha un valore e un tipo. Se
+\code{x} e \code{y} sono entrambi \code{int}, anche \code{x + y} è un
+\code{int}. Ma che succede se i tipi sono diversi, o più piccoli di un
+\code{int}? Il C applica delle \textbf{conversioni implicite}, secondo regole
+precise; e il programmatore può chiederne di \textbf{esplicite}, con il
+\textit{cast}.
+
+\subsection{La promozione a intero}
+
+Un \code{char} o uno \code{short}, con o senza segno, si possono usare in
+qualunque espressione in cui si può usare un \code{int} o un
+\code{unsigned int}. Nelle espressioni vengono infatti \textbf{promossi}:
+se tutti i valori del tipo originale sono rappresentabili da un \code{int}
+(ed è il caso dei PC), il valore viene convertito in \code{int}; altrimenti
+in \code{unsigned int}. Il processore, del resto, lavora in modo naturale su
+valori della dimensione di un \code{int}.
+
+Così, se \code{x} e \code{y} sono \code{short}, \code{x + y} è un
+\code{int}; e in
+
+\begin{lstlisting}[style=c]
+char c = 'A';
+printf("%c\n", c);
+\end{lstlisting}
+
+il parametro passato a \code{printf} è un'espressione, \code{c}, che per la
+promozione a intero è di tipo \code{int}, con valore 65. Lo stesso motivo
+rende \code{sizeof(c + c)} uguale a 4.
+
+\subsection{Le conversioni aritmetiche}
+
+Quando un operatore binario (\code{+}, \code{-}, \code{*}, \code{/}, un
+confronto\dots) ha operandi di tipo diverso, prima del calcolo uno dei due
+viene convertito nel tipo dell'altro. Con \code{int i;} e \code{float f;},
+in \code{i + f} il valore di \code{i} viene convertito in \code{float}, e il
+risultato è un \code{float}. La regola generale è che l'operando di tipo
+\textbf{“più piccolo”} viene convertito nel tipo \textbf{“più grande”}
+(figura~\ref{fig:scala}). Nell'ordine:
+
+\begin{enumerate}
+  \item se uno dei due operandi è \code{long double}, l'altro viene
+        convertito in \code{long double};
+  \item altrimenti, se uno è \code{double}, l'altro diventa \code{double};
+  \item altrimenti, se uno è \code{float}, l'altro diventa \code{float};
+  \item altrimenti si applica la promozione a intero a entrambi, e poi:
+        \begin{itemize}
+          \item se uno è \code{unsigned long}, l'altro diventa
+                \code{unsigned long};
+          \item altrimenti, se uno è \code{long} e l'altro
+                \code{unsigned}: se un \code{long} può rappresentare tutti i
+                valori di un \code{unsigned}, l'\code{unsigned} diventa
+                \code{long}, altrimenti entrambi diventano
+                \code{unsigned long};
+          \item altrimenti, se uno è \code{long}, l'altro diventa
+                \code{long};
+          \item altrimenti, se uno è \code{unsigned}, l'altro diventa
+                \code{unsigned};
+          \item altrimenti entrambi sono \code{int}.
+        \end{itemize}
+\end{enumerate}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+      gr/.style={draw=primary!60!black, fill=primary!6!white, rounded corners=2pt,
+        line width=0.7pt, minimum width=2.7cm, minimum height=0.5cm},
+      grr/.style={gr, draw=accent!60!black, fill=accent!8!white}]
+    \foreach \testo [count=\k from 0] in {int, unsigned, long, unsigned long}
+      \node[gr] (s\k) at (0,\k*0.8) {\testo};
+    \foreach \testo [count=\k from 4] in {float, double, long double}
+      \node[grr] (s\k) at (0,\k*0.8) {\testo};
+    \foreach \k [evaluate=\k as \kk using int(\k+1)] in {0,...,5}
+      \draw[wtarrow] (s\k.north) -- (s\kk.south);
+    \node[wtnodeplain, font=\FiraCodeNL\scriptsize] (cs) at (0,-1.15) {char, short};
+    \draw[wtarrow, draw=accent!70!black] (cs.north) -- node[right, mnota] {promozione a intero} (s0.south);
+    \draw[wtbrace] ([xshift=0.3cm]s3.north east) -- ([xshift=0.3cm]s0.south east);
+    \node[mnota, anchor=west] at ([xshift=0.55cm]$(s0.east)!0.5!(s3.east)$) {tipi interi};
+    \draw[wtbrace] ([xshift=0.3cm]s6.north east) -- ([xshift=0.3cm]s4.south east);
+    \node[mnota, anchor=west] at ([xshift=0.55cm]s5.east) {tipi reali};
+    \node[mnota, anchor=east, align=right] at ([xshift=-0.5cm]s3.west)
+      {fra due operandi, quello più in basso\\viene convertito nel tipo dell'altro};
+    \node[mnota, anchor=east, align=right, text=neutral!45!black] at ([xshift=-0.5cm]$(s1.west)!0.5!(s2.west)$)
+      {\code{unsigned} con \code{long}: \code{long} su Linux e macOS\\a 64 bit, \code{unsigned long} su Windows};
+  \end{tikzpicture}
+  \caption{La scala delle conversioni aritmetiche (come su Linux a 64 bit).}
+  \label{fig:scala}
+\end{figure}
+
+Ecco l'esempio delle slide. Con le dichiarazioni
+
+\begin{lstlisting}[style=c]
+char c;  short s;  int i;  long l;  unsigned u;  unsigned long ul;
+float f;  double d;  long double ld;
+\end{lstlisting}
+
+le espressioni seguenti hanno questi tipi (verificati con il compilatore,
+su Linux a 64 bit):
+
+\begin{center}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}>{\FiraCodeNL}l l@{\hspace{1.4cm}}>{\FiraCodeNL}l l@{}}
+  \toprule
+  \normalfont\textbf{espressione} & \textbf{tipo} & \normalfont\textbf{espressione} & \textbf{tipo} \\
+  \midrule
+  c - s / i   & \code{int}    & u * 7 - i   & \code{unsigned} \\
+  u * 2.0 + 1 & \code{double} & f * 7 - i   & \code{float} \\
+  c + 3       & \code{int}    & 7 * s * ul  & \code{unsigned long} \\
+  c + 5.0     & \code{double} & ld + c      & \code{long double} \\
+  d + s       & \code{double} & u - ul      & \code{unsigned long} \\
+  2 * i / l   & \code{long}   & u - l       & dipende dal sistema \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Qualche caso commentato: in \code{c - s / i}, \code{c} e \code{s} vengono
+promossi a \code{int} e tutto il calcolo è fra \code{int}; in
+\code{u * 7 - i} la costante 7 e poi \code{i} vengono convertiti in
+\code{unsigned}; in \code{u * 2.0 + 1} la costante \code{2.0} è un
+\code{double}, e trascina tutto in \code{double}. L'ultimo dipende davvero dal
+sistema: su Linux e macOS a 64 bit un \code{long} (8 byte) contiene tutti
+i valori di un \code{unsigned} (4 byte), quindi \code{u - l} è un
+\code{long}; su Windows, dove \code{long} ha 4 byte, è un
+\code{unsigned long}.
+
+\error{Interi con e senza segno}{
+  Mescolare \code{int} e \code{unsigned} può dare risultati sorprendenti.
+  In \code{-1 < 1u}, per la regola vista, $-1$ viene convertito in
+  \code{unsigned} e diventa $4\,294\,967\,295$: il confronto è
+  \textbf{falso}. Un programma con \code{int i = -1; unsigned u = 1;} e
+  \code{if (i < u)} sceglie quindi il ramo \code{else}. Anche qui l'avviso
+  arriva solo con \code{-Wextra}: \textit{comparison of integer expressions
+  of different signedness}. Conviene compilare sempre con
+  \code{-Wall -Wextra}.}
+
+\subsection{Le conversioni nelle assegnazioni}
+
+Anche l'assegnazione converte: il valore viene trasformato nel tipo della
+variabile che lo riceve. Da reale a intero la parte decimale viene
+\textbf{troncata}, non arrotondata (cioè si va verso lo zero); da intero a
+reale non si perde nulla.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=tronca.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int i = 3.9;
+   int j = -3.9;
+   double x = 7;
+
+   printf("i = %d   j = %d   x = %f\n", i, j, x);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./tronca
+i = 3   j = -3   x = 7.000000
+\end{console}
+\end{affianco}
+
+\subsection{Il cast}
+
+Le conversioni viste finora sono \textbf{implicite}: le fa il compilatore da
+solo. Esistono anche le conversioni \textbf{esplicite}, chiamate
+\term{cast}: si scrive il tipo desiderato fra parentesi davanti a
+un'espressione.
+
+\begin{lstlisting}[style=c]
+int i;
+double f;
+
+f = (double) i;
+\end{lstlisting}
+
+La variabile \code{i} \textbf{non viene modificata}: cambia il tipo del
+valore prodotto dall'espressione \code{i}. L'uso tipico è evitare la
+divisione intera, per esempio nel calcolo di una media:
+
+\begin{affianco}[0.56][c]
+\begin{lstlisting}[style=c, name=media.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int somma = 7, n = 2;
+   double media;
+
+   media = somma / n;
+   printf("somma / n            = %f\n", media);
+   media = (double) somma / n;
+   printf("(double) somma / n   = %f\n", media);
+   media = (double) (somma / n);
+   printf("(double) (somma / n) = %f\n", media);
+   printf("somma vale ancora %d\n", somma);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./media
+somma / n            = 3.000000
+(double) somma / n   = 3.500000
+(double) (somma / n) = 3.000000
+somma vale ancora 7
+\end{console}
+\end{affianco}
+
+Nel primo caso la divisione è fra due \code{int} e vale 3; il risultato viene
+convertito in \code{double} solo dopo, nell'assegnazione. Il cast è un
+operatore unario e ha la precedenza su \code{/}: in
+\code{(double) somma / n} si converte prima \code{somma} in $7.0$, poi la
+divisione è fra un \code{double} e un \code{int}, quindi anche \code{n} viene
+convertito e il risultato è $3.5$. Nel terzo caso le parentesi fanno
+eseguire prima la divisione intera: il cast arriva quando il danno è fatto
+(figura~\ref{fig:cast}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\small,
+      op/.style={circle, draw=accent!65!black, fill=accent!8!white, line width=0.8pt,
+        minimum size=0.62cm, inner sep=0pt, font=\FiraCodeNL\small\bfseries},
+      ca/.style={draw=accent!65!black, fill=accent!8!white, line width=0.8pt,
+        rounded corners=0.3cm, minimum height=0.62cm, inner xsep=5pt, font=\FiraCodeNL\scriptsize\bfseries},
+      fo/.style={wtnodeplain, font=\FiraCodeNL\scriptsize, minimum width=1.2cm},
+      val/.style={font=\Lato\scriptsize\bfseries, text=green-gradient-6!50!black, anchor=west},
+      ord/.style={circle, fill=primary!75!black, text=white, font=\Lato\tiny\bfseries,
+        inner sep=0pt, minimum size=0.36cm},
+      tit/.style={font=\FiraCodeNL\small}]
+    % (double) somma / n
+    \node[tit] at (0.4,1.0) {(double) somma / n};
+    \node[op] (d1) at (0.4,0) {/};
+    \node[ca] (c1) at (-0.9,-1.1) {(double)};
+    \node[fo] (s1) at (-0.9,-2.2) {somma\\[-1pt]{\color{neutral!50!black}(7)}};
+    \node[fo] (n1) at (1.7,-1.1) {n\\[-1pt]{\color{neutral!50!black}(2)}};
+    \foreach \a/\b in {d1/c1, d1/n1, c1/s1} \draw[fsramo] (\a) -- (\b);
+    \node[val] at ([xshift=4pt]c1.east) {= 7.0};
+    \node[val] at ([xshift=4pt]d1.east) {= 7.0 / 2.0 = 3.5};
+    \node[ord] at ([shift={(-0.25,0.3)}]c1.north west) {1};
+    \node[ord] at ([shift={(-0.42,0.32)}]d1.center) {2};
+    % (double) (somma / n)
+    \node[tit] at (8.0,1.0) {(double) (somma / n)};
+    \node[ca] (c2) at (8.0,0) {(double)};
+    \node[op] (d2) at (8.0,-1.1) {/};
+    \node[fo] (s2) at (6.8,-2.2) {somma\\[-1pt]{\color{neutral!50!black}(7)}};
+    \node[fo] (n2) at (9.2,-2.2) {n\\[-1pt]{\color{neutral!50!black}(2)}};
+    \foreach \a/\b in {c2/d2, d2/s2, d2/n2} \draw[fsramo] (\a) -- (\b);
+    \node[val] at ([xshift=4pt]d2.east) {= 7 / 2 = 3 (divisione intera)};
+    \node[val] at ([xshift=4pt]c2.east) {= 3.0};
+    \node[ord] at ([shift={(-0.42,0.32)}]d2.center) {1};
+    \node[ord] at ([shift={(-0.25,0.3)}]c2.north west) {2};
+  \end{tikzpicture}
+  \caption{Dove sta il cast cambia tutto: a sinistra converte \code{somma}
+           prima della divisione, a destra il risultato già troncato.}
+  \label{fig:cast}
+\end{figure}
+
+\insintesi{
+  Il C ha dodici tipi fondamentali: i tipi \textbf{interi} (\code{char},
+  \code{short}, \code{int}, \code{long}, con e senza segno) e i tipi
+  \textbf{reali} (\code{float}, \code{double}, \code{long double}). Un
+  \code{char} è un intero di 1 byte che contiene il \textbf{codice} di un
+  carattere (ASCII: le cifre, le maiuscole e le minuscole hanno codici
+  consecutivi); le \textbf{sequenze di escape} scrivono i caratteri
+  speciali. Ogni tipo ha un intervallo di valori (\code{limits.h},
+  \code{float.h}): superarlo con gli interi provoca un \textbf{overflow}
+  silenzioso, i reali hanno una \textbf{precisione} limitata e non sono
+  esatti, quindi non si confrontano con \code{==}. \code{sizeof} dà i byte
+  di un tipo o di un'espressione, \code{typedef} dà un nuovo nome a un tipo.
+  \code{getchar} e \code{putchar} leggono e scrivono un carattere; la
+  variabile che riceve \code{getchar} deve essere \code{int}, per
+  distinguere \code{EOF}. Le funzioni matematiche sono in \code{math.h}
+  (\code{-lm}). Nelle espressioni \code{char} e \code{short} diventano
+  \code{int}, e l'operando di tipo più piccolo viene convertito nel tipo
+  dell'altro; il \textbf{cast} \code{(tipo)} converte esplicitamente.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{A. Kelley, I. Pohl}, \textit{A Book on C}: capitolo~3 (i
+        tipi di dato fondamentali).
+  \item \textbf{Arithmetic types} --- cppreference.com. \\
+        \urlx{https://en.cppreference.com/w/c/language/arithmetic_types}
+  \item \textbf{Implicit conversions} --- cppreference.com. \\
+        \urlx{https://en.cppreference.com/w/c/language/conversion}
+  \item \textbf{D. Goldberg}, \textit{What Every Computer Scientist Should
+        Know About Floating-Point Arithmetic} (il classico sugli errori dei
+        reali). \\
+        \urlx{https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html}
+\end{itemize}
