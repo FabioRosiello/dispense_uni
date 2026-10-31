@@ -1,0 +1,1559 @@
+\chapter{Il flusso di controllo}
+\label{chap:flusso}
+
+Le istruzioni di un programma vengono eseguite normalmente in sequenza, una
+dopo l'altra. Quasi sempre, però, bisogna alterare questo flusso: per
+\textbf{scegliere} fra azioni diverse (con \code{if}, \code{if}-\code{else} e
+\code{switch}) o per \textbf{ripetere} un'azione (con \code{while},
+\code{do}-\code{while} e \code{for}). Nel capitolo~\ref{chap:strutturata}
+abbiamo visto queste strutture nei diagrammi di flusso, e nel
+capitolo~\ref{chap:primi-programmi} le prime istruzioni del C; qui le vediamo
+tutte, a partire da ciò che le governa: le \textbf{condizioni}.
+
+\section{Vero e falso in C}
+
+\subsection{Le condizioni sono numeri}
+
+Il flusso di controllo è regolato da espressioni logiche, che possono essere
+vere (\textit{TRUE}) o false (\textit{FALSE}). Il C non ha un tipo apposito
+per i valori logici (il C99 ha aggiunto \code{\_Bool}, ma la regola resta
+quella che segue): vero e falso sono \textbf{numeri}.
+
+\begin{itemize}
+  \item \textbf{Falso} è un valore nullo: \code{0}, \code{0.0}, il carattere
+        \code{'\textbackslash 0'}.
+  \item \textbf{Vero} è qualunque valore diverso da zero: 1, ma anche 7,
+        $-3$ o \code{'A'}.
+  \item Gli operatori che producono un valore logico restituiscono sempre un
+        \code{int}: \textbf{1} se il risultato è vero, \textbf{0} se è falso.
+\end{itemize}
+
+Le condizioni si costruiscono con tre famiglie di operatori:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}l l>{\FiraCodeNL}c@{\hspace{1.4cm}}l l>{\FiraCodeNL}c@{}}
+  \toprule
+  \textbf{famiglia} & \textbf{operatore} & \normalfont\textbf{in C} &
+  \textbf{famiglia} & \textbf{operatore} & \normalfont\textbf{in C} \\
+  \midrule
+  relazionali  & minore             & <  & di uguaglianza & uguale a           & == \\
+               & maggiore           & >  &                & diverso da         & != \\
+               & minore o uguale    & <= & logici         & negazione (unario) & !  \\
+               & maggiore o uguale  & >= &                & e (\textit{and})   & \&\& \\
+               &                    &    &                & o (\textit{or})    & || \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Sono tutti operatori binari (con due operandi), tranne la negazione
+\code{!}, che è unaria.
+
+\section{Gli operatori relazionali}
+
+\subsection{Confrontare due espressioni}
+
+Gli operatori relazionali prendono due espressioni come operandi:
+\code{a < 3}, \code{a > b}, \code{-1.3 >= (2.0 * x + 3.3)}. Sono scritti con
+uno o due caratteri, sempre in quest'ordine e senza spazi in mezzo: per
+questo \code{a =< b} è sbagliato (l'ordine è \code{<=}) e \code{a < = b}
+pure (lo spazio spezza il token, capitolo~\ref{chap:sintassi}). Attenzione
+anche ad \code{a >> b}: è corretto, ma \code{>>} è un altro operatore (lo
+spostamento dei bit), con tutt'altro significato.
+
+Come li calcola la macchina? Su molte macchine \code{a < b} viene valutato
+come \code{a - b < 0}, e lo stesso per gli altri: si calcola la differenza
+e se ne guarda il segno.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}l>{\FiraCodeNL}c>{\FiraCodeNL}c>{\FiraCodeNL}c>{\FiraCodeNL}c@{}}
+  \toprule
+  \textbf{\code{a - b}} & \normalfont\textbf{a > b} & \normalfont\textbf{a >= b} &
+  \normalfont\textbf{a < b} & \normalfont\textbf{a <= b} \\
+  \midrule
+  positivo & 1 & 1 & 0 & 0 \\
+  zero     & 0 & 1 & 0 & 1 \\
+  negativo & 0 & 0 & 1 & 1 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Qualche esempio}
+
+Con le dichiarazioni
+
+\begin{lstlisting}[style=c]
+char   c = 'w';
+int    i = 1, j = 2, k = -7;
+double x = 7e+33, y = 0.001;
+\end{lstlisting}
+
+ecco alcune espressioni, l'espressione equivalente con tutte le parentesi
+(che mostra in che ordine si calcola, capitolo~\ref{chap:sintassi}) e il
+valore, verificato con il compilatore:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}>{\FiraCodeNL}l>{\FiraCodeNL}l c@{}}
+  \toprule
+  \normalfont\textbf{espressione} & \normalfont\textbf{equivalente} & \textbf{valore} \\
+  \midrule
+  'a' + 1 < c          & ('a' + 1) < c                 & 1 \\
+  -i - 5 * j >= k + 1  & ((-i) - (5 * j)) >= (k + 1)   & 0 \\
+  3 < j < 5            & (3 < j) < 5                   & 1 \\
+  x - 3.333 <= x + y   & (x - 3.333) <= (x + y)        & 1 \\
+  x < x + y            & x < (x + y)                   & 0 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\code{'a' + 1} vale 98 e \code{c} vale 119 (il codice di \code{'w'}):
+quindi 1. Nella seconda, $-1 - 10 = -11$ non è maggiore o uguale a $-6$:
+quindi 0. Le ultime tre meritano una spiegazione a parte.
+
+\subsection{\code{a < b < c} non è la matematica}
+
+In matematica $a < b < c$ significa “$a < b$ \textbf{e} $b < c$”. In C
+l'espressione è sintatticamente corretta, ma è interpretata come
+\code{(a < b) < c}: prima si calcola \code{a < b}, che vale 0 o 1, e poi si
+confronta \textbf{quel} risultato con \code{c}. Per questo \code{3 < j < 5}
+vale 1: \code{3 < j} è falso (0), e \code{0 < 5} è vero. Con numeri scelti
+apposta, il risultato è chiaramente sbagliato:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=catena.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int a = 5, b = 2, c = 3;
+
+   if (a < b < c)
+      printf("5 < 2 < 3 è vero?!\n");
+   if (a < b && b < c)
+      printf("questo non viene stampato\n");
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./catena
+5 < 2 < 3 è vero?!
+\end{console}
+\end{affianco}
+
+\begin{console}
+$ gcc -Wall -o catena catena.c
+catena.c: In function (*@‘@*)main(*@’@*):
+catena.c:7:10: warning: comparisons like (*@‘@*)X<=Y<=Z(*@’@*) do not have their mathematical meaning [-Wparentheses]
+    7 |    if (a < b < c)
+      |        ~~^~~
+\end{console}
+
+Il modo giusto di scrivere la condizione matematica è il secondo
+\code{if}: \code{a < b \&\& b < c}, con l'operatore logico \textit{and} che
+vedremo fra poco. Come si vede, \code{gcc} con \code{-Wall} si accorge
+dell'errore.
+
+\subsection{I reali e la precisione}
+
+In matematica $x < x + y$ equivale a $y > 0$. Con i reali del computer non
+sempre: se \code{x} è molto grande e \code{y} molto piccolo, l'incremento
+può andare perso. È il caso di $x = 7 \cdot 10^{33}$ e $y = 0.001$:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=precisione.c]
+#include <stdio.h>
+
+int main()
+{
+   double x = 7e+33;
+   double y = 0.001;
+
+   if (x < x + y) printf("x < x + y\n");
+   if (x > x + y) printf("x > x + y\n");
+   if (x == x + y) printf("x = x + y\n");
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./precisione
+x = x + y
+\end{console}
+\end{affianco}
+
+Per scrivere esattamente $7 \cdot 10^{33} + 0.001$ servirebbero 37 cifre
+significative; un \code{double} ne ha circa 16
+(capitolo~\ref{chap:tipi}). L'incremento dato da \code{y} è troppo piccolo
+rispetto a \code{x}: la precisione non basta a registrarlo, e la
+rappresentazione di \code{x + y} è identica a quella di \code{x}.
+
+\section{Gli operatori di uguaglianza}
+
+\subsection{\code{==} e \code{!=}}
+
+Gli operatori di uguaglianza \code{==} e \code{!=} sono binari e agiscono su
+espressioni: \code{c == 'A'}, \code{k != -2}, \code{x + y == 3 * z - 7}. Non
+sono invece esempi corretti:
+
+\begin{itemize}
+  \item \code{a = b}, che è un'\textbf{assegnazione};
+  \item \code{a = = b - 1}, perché lo spazio spezza l'operatore;
+  \item \code{(x + y) =! 44}, che il compilatore legge come
+        \code{(x + y) = (!44)}: un'assegnazione a \code{x + y}, che non è una
+        variabile. Il messaggio di errore lo dice a modo suo:
+\end{itemize}
+
+\begin{console}
+$ gcc -Wall -o errori errori.c
+errori.c: In function (*@‘@*)main(*@’@*):
+errori.c:7:12: error: lvalue required as left operand of assignment
+    7 |    (x + y) =! 44;
+      |            ^
+\end{console}
+
+(Un \textit{lvalue} è qualcosa che può stare a sinistra di un'assegnazione,
+come una variabile.) Anche l'uguaglianza si calcola con una differenza:
+\code{expr1 == expr2} equivale a \code{expr1 - expr2 == 0}, e
+\code{expr1 != expr2} a \code{expr1 - expr2 != 0}.
+
+\begin{affianco}[0.4][c]
+\begin{center}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}l>{\FiraCodeNL}c>{\FiraCodeNL}c@{}}
+  \toprule
+  \textbf{\code{expr1 - expr2}} & \normalfont\textbf{==} & \normalfont\textbf{!=} \\
+  \midrule
+  zero     & 1 & 0 \\
+  non zero & 0 & 1 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\risultato
+\begin{center}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}>{\FiraCodeNL}l>{\FiraCodeNL}l c@{}}
+  \toprule
+  \multicolumn{3}{@{}l}{con \code{int i = 1, j = 2, k = 3;}} \\
+  \midrule
+  i == j          & i - j == 0              & 0 \\
+  i != j          & i - j != 0              & 1 \\
+  i+j+k == -2*-k  & ((i+j)+k) == ((-2)*(-k)) & 1 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\end{affianco}
+
+\subsection{L'errore più comune: \code{=} al posto di \code{==}}
+
+Un errore frequentissimo è confondere \code{a == b} con \code{a = b},
+scrivendo \code{if (a = b)} invece di \code{if (a == b)}. Il compilatore lo
+accetta, perché un'assegnazione è un'espressione con un valore: il valore di
+\code{b}. Così la condizione è vera o falsa \textbf{a seconda del solo valore
+di \code{b}}, e per giunta \code{a} viene modificata:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=uguale.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int a = 5, b = 7;
+
+   if (a = b)
+      printf("uguali?! ora a vale %d\n", a);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./uguale
+uguali?! ora a vale 7
+\end{console}
+\end{affianco}
+
+Per fortuna \code{gcc} con \code{-Wall} sospetta l'errore, e suggerisce di
+mettere l'assegnazione fra parentesi se è davvero voluta:
+
+\begin{console}
+$ gcc -Wall -o uguale uguale.c
+uguale.c: In function (*@‘@*)main(*@’@*):
+uguale.c:7:8: warning: suggest parentheses around assignment used as truth value [-Wparentheses]
+    7 |    if (a = b)
+      |        ^
+\end{console}
+
+\section{Gli operatori logici}
+
+\subsection{La negazione}
+
+L'operatore logico di negazione \code{!} è unario: se un'espressione vale 0,
+la sua negata vale 1, e viceversa (se vale qualunque cosa diversa da 0, la
+negata vale 0). Sono corretti \code{!a}, \code{!(x + 7.7)},
+\code{!(a < b || c < d)}; non lo sono \code{a!} (l'ordine è sbagliato: il
+\code{!} va prima) e \code{a  !=  b} se si voleva una negazione, perché
+\code{!=} è un altro operatore.
+
+In logica, negare due volte un'affermazione la lascia invariata:
+\textit{not}(\textit{not} $A$) $= A$. In C non è sempre così: \code{!!5} vale
+\textbf{1}, non 5. La prima negazione trasforma 5 in 0, la seconda trasforma
+0 in 1: la doppia negazione “normalizza” qualunque valore vero a 1.
+
+\begin{affianco}[0.36][c]
+\begin{lstlisting}[style=c]
+char   c = 'A';
+int    i = 7, j = 7;
+double x = 0.0, y = 2.3;
+\end{lstlisting}
+\risultato
+\begin{center}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}>{\FiraCodeNL}l>{\FiraCodeNL}l c@{}}
+  \toprule
+  \normalfont\textbf{espressione} & \normalfont\textbf{equivalente} & \textbf{valore} \\
+  \midrule
+  !c        & !c                 & 0 \\
+  !(i - j)  & !(i - j)           & 1 \\
+  !i - j    & (!i) - j           & $-7$ \\
+  !!(x + y) & !(!(x + y))        & 1 \\
+  !x * !!y  & (!x) * (!(!y))     & 1 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\end{affianco}
+
+\code{!i - j} vale $-7$ perché la negazione, come tutti gli operatori unari,
+ha la precedenza sulla sottrazione: \code{!i} vale 0, e $0 - 7 = -7$.
+
+\subsection{\textit{And} e \textit{or}}
+
+Gli operatori \code{\&\&} (\textit{and}, “e”) e \code{||} (\textit{or},
+“o”) sono binari, agiscono su espressioni e restituiscono 1 (vero) o 0
+(falso): \code{a \&\& b}, \code{a || b}, \code{!(a < b) \&\& c},
+\code{3 \&\& (-2 * a + 7)}. Non sono corretti \code{a \&\&} (manca un
+operando), \code{a |  | b} (gli spazi spezzano l'operatore) e \code{\&b}, che
+è l'indirizzo di \code{b} (capitolo~\ref{chap:primi-programmi}). Il loro
+comportamento è descritto dalla \textbf{tabella di verità}:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}l l>{\FiraCodeNL}c>{\FiraCodeNL}c@{}}
+  \toprule
+  \textbf{\code{expr1}} & \textbf{\code{expr2}} &
+  \normalfont\textbf{expr1 \&\& expr2} & \normalfont\textbf{expr1 || expr2} \\
+  \midrule
+  zero     & zero     & 0 & 0 \\
+  zero     & non zero & 0 & 1 \\
+  non zero & zero     & 0 & 1 \\
+  non zero & non zero & 1 & 1 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\code{\&\&} è vero solo se \textbf{entrambi} gli operandi sono veri;
+\code{||} è vero se \textbf{almeno uno} lo è.
+
+\subsection{Precedenza}
+
+\code{\&\&} ha la precedenza su \code{||}, ed entrambi hanno priorità più
+bassa degli operatori unari, aritmetici, relazionali e di uguaglianza;
+l'associatività va da sinistra a destra. La figura~\ref{fig:priorita}
+riassume l'ordine degli operatori che si usano nelle condizioni (la tabella
+completa è nel capitolo~\ref{chap:sintassi}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      liv/.style={draw=primary!60!black, fill=primary!6!white, rounded corners=2pt,
+        line width=0.7pt, minimum width=3.6cm, minimum height=0.5cm, font=\FiraCodeNL\scriptsize},
+      des/.style={font=\Lato\scriptsize, anchor=west, text=neutral!35!black}]
+    \foreach \oper/\testo [count=\k from 0] in {{!\ \ ++\ \ --\ \ -}/{unari},
+        {*\ \ /\ \ \%}/{moltiplicativi}, {+\ \ -}/{additivi},
+        {<\ \ <=\ \ >\ \ >=}/{relazionali}, {==\ \ !=}/{di uguaglianza},
+        {\&\&}/{\textit{and} logico}, {||}/{\textit{or} logico},
+        {=\ \ +=\ \ -=\ \ \ldots}/{di assegnazione}} {
+      \node[liv] (l\k) at (0,-\k*0.62) {\oper};
+      \node[des] at ([xshift=0.3cm]l\k.east) {\testo};
+    }
+    \draw[wtarrowacc] (-2.3,0.1) -- node[left, align=right, text=accent!70!black] {precedenza\\più alta} ++(0,-1.0);
+    \draw[wtarrowacc] (-2.3,-3.3) -- node[left, align=right, text=accent!70!black] {precedenza\\più bassa} ++(0,-1.0);
+  \end{tikzpicture}
+  \caption{Gli operatori delle condizioni, dalla precedenza più alta alla più
+           bassa.}
+  \label{fig:priorita}
+\end{figure}
+
+Con le dichiarazioni \code{char c = 'B';}, \code{int i = 3, j = 3, k = 3;}
+e \code{double x = 0.0, y = 2.3;}:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}>{\FiraCodeNL}l>{\FiraCodeNL}l c@{}}
+  \toprule
+  \normalfont\textbf{espressione} & \normalfont\textbf{equivalente} & \textbf{valore} \\
+  \midrule
+  i \&\& j \&\& k                 & (i \&\& j) \&\& k                       & 1 \\
+  x || i \&\& j - 3               & x || (i \&\& (j - 3))                   & 0 \\
+  i < j \&\& x < y                & (i < j) \&\& (x < y)                    & 0 \\
+  i < j || x < y                  & (i < j) || (x < y)                      & 1 \\
+  'A' <= c \&\& c <= 'Z'          & ('A' <= c) \&\& (c <= 'Z')              & 1 \\
+  c - 1 == 'A' || c + 1 == 'Z'    & ((c - 1) == 'A') || ((c + 1) == 'Z')    & 1 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Per esempio \code{x || i \&\& j - 3}: \code{x} vale 0.0, falso; \code{j - 3}
+vale 0, quindi \code{i \&\& 0} è falso; e “falso o falso” è falso, 0. La
+quinta riga è il modo corretto di scrivere la condizione matematica
+$\text{'A'} \le c \le \text{'Z'}$: “\code{c} è una lettera maiuscola”.
+
+\subsection{La valutazione in cortocircuito}
+
+La valutazione delle espressioni con \code{\&\&} e \code{||} si
+\textbf{ferma appena il risultato è noto} (\textit{short circuit},
+cortocircuito):
+
+\begin{itemize}
+  \item in \code{expr1 \&\& expr2}, se \code{expr1} è falsa il risultato è
+        falso comunque, e \code{expr2} \textbf{non viene valutata}; solo se
+        \code{expr1} è vera si valuta anche \code{expr2};
+  \item in \code{expr1 || expr2}, se \code{expr1} è vera il risultato è vero
+        comunque, e \code{expr2} non viene valutata; solo se \code{expr1} è
+        falsa si valuta anche \code{expr2}.
+\end{itemize}
+
+La differenza si vede quando \code{expr2} ha un effetto, come un
+incremento. I due programmi seguenti differiscono solo per l'ordine degli
+operandi di \code{\&\&}, eppure stampano risultati diversi:
+
+\begin{affianco}[0.5][t]
+\begin{lstlisting}[style=c, name=sc1.c]
+#include <stdio.h>
+
+int main()
+{
+   int a, b;
+
+   a = 0;
+   b = 0;
+   while (a < 3 && ++b) {
+      a++;
+   }
+   printf("a = %d b = %d\n", a, b);
+}
+\end{lstlisting}
+\begin{console}
+$ ./sc1
+a = 3 b = 3
+\end{console}
+\risultato
+\begin{lstlisting}[style=c, name=sc2.c]
+#include <stdio.h>
+
+int main()
+{
+   int a, b;
+
+   a = 0;
+   b = 0;
+   while (++b && a < 3) {
+      a++;
+   }
+   printf("a = %d b = %d\n", a, b);
+}
+\end{lstlisting}
+\begin{console}
+$ ./sc2
+a = 3 b = 4
+\end{console}
+\end{affianco}
+
+Seguiamo i controlli della condizione (figura~\ref{fig:cortocircuito}). Nei
+primi tre entrambi i programmi valutano tutte e due le parti, e \code{b}
+cresce insieme ad \code{a}. Al quarto controllo \code{a} vale 3: in
+\code{sc1.c} la prima parte, \code{a < 3}, è già falsa, e \code{++b} non
+viene eseguito; in \code{sc2.c} la prima parte è \code{++b}, che viene
+eseguita comunque, e \code{b} arriva a 4.
+
+\begin{figure}[H]
+  \centering
+  \setlength{\tabcolsep}{5pt}
+  \renewcommand{\arraystretch}{1.12}
+  \begin{tabular}{@{}c c>{\FiraCodeNL}c>{\FiraCodeNL}c c@{}}
+    \multicolumn{5}{c}{\code{while (a < 3 \&\& ++b)}} \\
+    \toprule
+    \textbf{controllo} & \textbf{\code{a}} & \normalfont\textbf{a < 3} & \normalfont\textbf{++b} & \textbf{risultato} \\
+    \midrule
+    1 & 0 & vero  & b = 1 & vero \\
+    2 & 1 & vero  & b = 2 & vero \\
+    3 & 2 & vero  & b = 3 & vero \\
+    4 & 3 & falso & \textcolor{accent!75!black}{\Lato non valutato} & falso \\
+    \bottomrule
+  \end{tabular}
+  \hspace{1cm}
+  \begin{tabular}{@{}c>{\FiraCodeNL}c c>{\FiraCodeNL}c c@{}}
+    \multicolumn{5}{c}{\code{while (++b \&\& a < 3)}} \\
+    \toprule
+    \textbf{controllo} & \normalfont\textbf{++b} & \textbf{\code{a}} & \normalfont\textbf{a < 3} & \textbf{risultato} \\
+    \midrule
+    1 & b = 1 & 0 & vero  & vero \\
+    2 & b = 2 & 1 & vero  & vero \\
+    3 & b = 3 & 2 & vero  & vero \\
+    4 & \textcolor{accent!75!black}{b = 4} & 3 & falso & falso \\
+    \bottomrule
+  \end{tabular}
+  \caption{I controlli della condizione nei due programmi: al quarto,
+           \code{++b} viene eseguito solo nel secondo.}
+  \label{fig:cortocircuito}
+\end{figure}
+
+Il cortocircuito è anche una protezione utile. In
+\code{if (n != 0 \&\& somma / n > 10)} la divisione viene eseguita solo se
+\code{n} è diverso da zero: se \code{n} vale 0, la prima parte è falsa e la
+seconda, che dividerebbe per zero, non viene neppure calcolata.
+
+\section{\code{if} e \code{if}-\code{else}}
+
+\subsection{La forma generale}
+
+La forma generale dell'\code{if} è
+
+\begin{lstlisting}[style=c]
+if (expr)
+    statement
+statementSucc
+\end{lstlisting}
+
+Se \code{expr} è diversa da zero (vera) viene eseguito \code{statement}; se
+è zero (falsa), \code{statement} viene saltato. In entrambi i casi poi si
+prosegue con l'istruzione successiva, \code{statementSucc}: è la selezione a
+una via della figura~\ref{fig:una-via}. \code{expr} può essere qualsiasi
+espressione, ma di solito è relazionale, di uguaglianza o logica.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=voto.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int grade;
+
+   printf("Grade: ");
+   scanf("%d", &grade);
+   if (grade >= 90)
+      printf("Congratulations!\n");
+   printf("Your grade is %d.\n", grade);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./voto
+Grade: <<95>>
+Congratulations!
+Your grade is 95.
+$ ./voto
+Grade: <<70>>
+Your grade is 70.
+\end{console}
+\end{affianco}
+
+Le congratulazioni dipendono dalla condizione; la riga con il voto viene
+stampata sempre, perché è l'istruzione successiva all'\code{if}.
+
+\subsection{Le graffe, anche per un'istruzione sola}
+
+Il corpo di un \code{if} è \textbf{una} istruzione. Per eseguirne più di
+una si usa un'istruzione composta, cioè un blocco fra graffe:
+
+\begin{lstlisting}[style=c]
+if (c == ' ') {
+    ++blank_cnt;
+    printf("found another blank\n");
+}
+\end{lstlisting}
+
+Le slide consigliano di usare le graffe \textbf{sempre}, anche quando
+l'istruzione è una sola: \code{if (j < k) \{ min = j; \}} invece di
+\code{if (j < k) min = j;}. Il motivo si vede quando, più avanti, si
+aggiunge una seconda istruzione e ci si dimentica delle graffe:
+l'indentazione inganna chi legge, ma non il compilatore.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=graffe.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int j = 5, k = 3, min = k;
+
+   if (j < k)
+      min = j;
+      printf("min aggiornato\n");
+   printf("min = %d\n", min);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./graffe
+min aggiornato
+min = 3
+\end{console}
+\end{affianco}
+
+La condizione è falsa (5 non è minore di 3), eppure \code{"min aggiornato"}
+viene stampato: solo \code{min = j;} dipende dall'\code{if}, la
+\code{printf} è l'istruzione successiva. Per fortuna \code{gcc} con
+\code{-Wall} lo nota:
+
+\begin{console}
+$ gcc -Wall -o graffe graffe.c
+graffe.c: In function (*@‘@*)main(*@’@*):
+graffe.c:7:4: warning: this (*@‘@*)if(*@’@*) clause does not guard... [-Wmisleading-indentation]
+    7 |    if (j < k)
+      |    ^~
+graffe.c:9:7: note: ...this statement, but the latter is misleadingly indented as if it were guarded by the (*@‘@*)if(*@’@*)
+    9 |       printf("min aggiornato\n");
+      |       ^~~~~~
+\end{console}
+
+\subsection{\code{if}-\code{else}}
+
+La forma generale dell'\code{if}-\code{else} è
+
+\begin{lstlisting}[style=c]
+if (expr)
+    statement1
+else
+    statement2
+\end{lstlisting}
+
+Se \code{expr} è diversa da zero viene eseguito \code{statement1}, se è zero
+\code{statement2}: è la selezione a due vie della figura~\ref{fig:due-vie}.
+Esattamente una delle due istruzioni viene eseguita.
+
+\subsection{L'\code{else} pendente}
+
+Un \code{if} può contenere a sua volta un \code{if} (e lo stesso vale per
+l'\code{if}-\code{else}). Nel blocco
+
+\begin{lstlisting}[style=c]
+if (a == 1)
+    if (b == 2)
+        printf("***\n");
+\end{lstlisting}
+
+l'istruzione controllata da \code{if (a == 1)} è proprio
+\code{if (b == 2) printf("***\textbackslash n");}: le tre stelle vengono
+stampate solo se \code{a} vale 1 \textbf{e} \code{b} vale 2. Aggiungiamo un
+\code{else}. C'è differenza fra i due blocchi seguenti?
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=Esempio 1]
+if (a == 1)
+    if (b == 2)
+        printf("***\n");
+    else
+        printf("###\n");
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c, name=Esempio 2]
+if (a == 1)
+    if (b == 2)
+        printf("***\n");
+else
+    printf("###\n");
+\end{lstlisting}
+\end{affianco}
+
+L'indentazione suggerisce due significati diversi: nel primo l'\code{else}
+sembra legato a \code{if (b == 2)}, nel secondo a \code{if (a == 1)}. Ma per
+il compilatore l'indentazione \textbf{non ha alcun significato}, e la regola
+è una sola: \textbf{l'\code{else} si lega all'\code{if} più vicino} che non
+ne abbia già uno. I due blocchi sono identici, ed è il secondo a essere
+ingannevole (figura~\ref{fig:else-pendente}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\small,
+      riga/.style={anchor=west, inner sep=1.5pt}]
+    \node[riga] (r1) at (0,0) {if (a == 1)};
+    \node[riga] (r2) at (0.5,-0.55) {if (b == 2)};
+    \node[riga] (r3) at (1.0,-1.1) {printf("***\textbackslash n");};
+    \node[riga] (r4) at (0,-1.65) {else};
+    \node[riga] (r5) at (0.5,-2.2) {printf("\#\#\#\textbackslash n");};
+    \draw[wtarrowacc, rounded corners=4pt] (r4.east) -- (5.2,-1.65) -- (5.2,-0.55)
+      node[pos=0.5, right, font=\Lato\scriptsize, text=accent!70!black, align=left]
+        {si lega a questo \code{if},\\il più vicino \mok} -- (r2.east);
+    \draw[mrif, draw=merr, dashed, rounded corners=4pt] (r4.west) -- (-0.5,-1.65) -- (-0.5,0)
+      node[pos=0.5, left, font=\Lato\scriptsize, text=merr, align=right]
+        {non a questo, come fa\\credere l'indentazione \merr} -- (r1.west);
+  \end{tikzpicture}
+  \caption{L'\code{else} dell'Esempio 2 appartiene all'\code{if} interno,
+           nonostante l'indentazione.}
+  \label{fig:else-pendente}
+\end{figure}
+
+Lo verifichiamo eseguendo il blocco con valori diversi di \code{a} e
+\code{b} (con \code{-Wall}, \code{gcc} suggerisce di aggiungere le graffe:
+\textit{suggest explicit braces to avoid ambiguous ‘else’}):
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=dangling.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int a, b;
+
+   printf("a e b: ");
+   scanf("%d%d", &a, &b);
+   if (a == 1)
+      if (b == 2)
+         printf("***\n");
+   else
+      printf("###\n");
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./dangling
+a e b: <<1 2>>
+***
+$ ./dangling
+a e b: <<1 3>>
+###
+$ ./dangling
+a e b: <<2 2>>
+$
+\end{console}
+\end{affianco}
+
+Con \code{a} uguale a 2 non viene stampato nulla: se l'\code{else} fosse
+dell'\code{if} esterno, comparirebbe \code{\#\#\#}. Per ottenere davvero
+quel significato servono le graffe, che chiudono l'\code{if} interno:
+
+\begin{lstlisting}[style=c]
+if (a == 1) {
+    if (b == 2)
+        printf("***\n");
+} else
+    printf("###\n");
+\end{lstlisting}
+
+Per chiarezza, la formattazione del testo deve sempre rispecchiare il
+significato.
+
+\section{Il \code{while}}
+
+\subsection{La forma generale}
+
+La forma generale del costrutto \code{while} è
+
+\begin{affianco}[0.42][c]
+\begin{lstlisting}[style=c]
+while (expr)
+    statement1
+statement2
+\end{lstlisting}
+\risultato
+\begin{enumerate}
+  \item viene valutata \code{expr};
+  \item se è diversa da zero (vera), viene eseguito \code{statement1} e il
+        controllo torna all'inizio del ciclo, al punto 1;
+  \item se è zero (falsa), il controllo passa a \code{statement2}.
+\end{enumerate}
+\end{affianco}
+
+In sostanza \code{statement1} viene eseguito ripetutamente finché
+\code{expr} non diventa falsa: è il ciclo con la condizione in testa
+(figura~\ref{fig:while}, da confrontare con la figura~\ref{fig:testa}). Se
+\code{expr} è falsa fin dall'inizio, \code{statement1} non viene eseguito
+neppure una volta.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \node[fcgiunzione] (j) at (0,0) {};
+    \node[fcdec] (t) at (0,-1.0) {\code{expr}?};
+    \node[fcproc] (b) at (0,-2.25) {\code{statement1}};
+    \node[fcproc] (s) at (0,-3.85) {\code{statement2}};
+    \node[fcgiunzione] (u) at (0,-3.1) {};
+    \draw[fcfreccia] (0,0.4) -- (j);
+    \draw[fcfreccia] (j) -- (t);
+    \draw[fcfreccia] (t) -- node[fcsi, right] {vero} (b);
+    \draw[fcfreccia, draw=accent!70!black] (b.south) -- (0,-2.7) -- (1.9,-2.7) -- (1.9,0) -- (j.east);
+    \draw[fcfreccia] (t.west) -- node[fcno, above] {falso} (-1.9,-1.0) -- (-1.9,-3.1) -- (u.west);
+    \draw[fcfreccia] (u) -- (s);
+    \node[mnota, anchor=west, text=accent!70!black] at (2.0,-1.35) {si ripete};
+  \end{tikzpicture}
+  \caption{Il \code{while}: la condizione si controlla prima di ogni giro.}
+  \label{fig:while}
+\end{figure}
+
+\subsection{Attenti ai cicli infiniti}
+
+Il frammento delle slide
+
+\begin{lstlisting}[style=c]
+printf("Input a positive integer: ");
+scanf("%d", &n);
+while (--n) {
+    ...   /* do something */
+}
+\end{lstlisting}
+
+dovrebbe eseguire il corpo del ciclo finché \code{--n} diventa 0, cioè
+$n - 1$ volte. Si assume però che l'utente inserisca un intero positivo.
+Che cosa succede se inserisce 0, o un numero negativo? Proviamo, stampando
+\code{n} a ogni giro:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=meno.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int n;
+
+   printf("Input a positive integer: ");
+   scanf("%d", &n);
+   while (--n) {
+      printf("%d ", n);
+   }
+   printf("\n");
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./meno
+Input a positive integer: <<4>>
+3 2 1
+$ ./meno
+Input a positive integer: <<0>>
+-1 -2 -3 -4 -5 -6 -7 -8 -9 -10 -11 -12 -13 -14 -15 -16 -17 -18 -19 -20 -21 -22 -23
+^C
+\end{console}
+\end{affianco}
+
+Partendo da 0, \code{--n} vale $-1$, poi $-2$, $-3$\dots: non diventa
+\textbf{mai} 0 (o meglio, ci arriverebbe solo dopo più di 4 miliardi di giri
+e un overflow, che è un comportamento indefinito: in una prova senza
+stampe, il programma compilato normalmente ha fatto 4\,294\,967\,295 giri
+prima di fermarsi; compilato con \code{-O2} non si è fermato affatto). Il
+ciclo va controllato meglio, in due modi:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c]
+while (--n > 0) {
+    ...   /* do something */
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c]
+if (n <= 0) {
+    errore();
+}
+while (--n > 0) {
+    ...   /* do something */
+}
+\end{lstlisting}
+\end{affianco}
+
+A sinistra la condizione relazionale \code{--n > 0} ferma il ciclo anche se
+\code{n} parte da un valore non positivo; a destra, in più, si controlla
+l'input e si segnala il problema (\code{errore} sta per una funzione che lo
+gestisce). Un programma non deve mai fidarsi di ciò che scrive l'utente.
+
+\subsection{Il corpo vuoto}
+
+A volte il corpo del \code{while} è un'istruzione vuota: tutto il lavoro lo
+fa la condizione. Per esempio
+
+\begin{lstlisting}[style=c]
+while ((c = getchar()) == ' ');
+\end{lstlisting}
+
+salta tutti i caratteri spazio consecutivi: a ogni giro la condizione legge
+un carattere, e il ciclo continua finché è uno spazio. Il \code{;} attaccato
+alla parentesi però si nota poco, e potrebbe sembrare un errore di
+battitura. Per rendere evidente che è intenzionale si suggerisce di metterlo
+da solo su una riga:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=salta.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int c;
+
+   while ((c = getchar()) == ' ')
+      ;
+   printf("primo carattere non bianco: %c\n", c);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./salta
+<<     ciao>>
+primo carattere non bianco: c
+\end{console}
+\end{affianco}
+
+\subsection{Contare i caratteri}
+
+Il programma seguente legge un testo e conta gli spazi, le cifre, le lettere,
+le righe e gli altri caratteri. Il corpo del \code{while} è un'unica
+istruzione, una catena di \code{if}-\code{else} (per questo le graffe non
+sono necessarie).
+
+\begin{lstlisting}[style=c, name=cnt_char.c]
+/* Count blanks, digits, letters, newlines, and others. */
+
+#include <stdio.h>
+
+int main(void)
+{
+   int   blank_cnt = 0, c, digit_cnt = 0,
+         letter_cnt = 0, nl_cnt = 0, other_cnt = 0;
+
+   while ((c = getchar()) != EOF)     /* braces not necessary */
+      if (c == ' ')
+         ++blank_cnt;
+      else if (c >= '0' && c <= '9')
+         ++digit_cnt;
+      else if (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z')
+         ++letter_cnt;
+      else if (c == '\n')
+         ++nl_cnt;
+      else
+         ++other_cnt;
+   printf("%10s%10s%10s%10s%10s%10s\n\n",
+      "blanks", "digits", "letters", "lines", "others", "total");
+   printf("%10d%10d%10d%10d%10d%10d\n\n",
+      blank_cnt, digit_cnt, letter_cnt, nl_cnt, other_cnt,
+      blank_cnt + digit_cnt + letter_cnt + nl_cnt + other_cnt);
+   return 0;
+}
+\end{lstlisting}
+
+
+Eseguendolo sul suo stesso sorgente:
+
+\begin{console}
+$ ./cnt_char < cnt_char.c
+    blanks    digits   letters     lines    others     total
+
+       208        32       361        27       180       808
+
+\end{console}
+
+\begin{itemize}
+  \item La condizione delle lettere,
+        \code{c >= 'a' \&\& c <= 'z' || c >= 'A' \&\& c <= 'Z'}, sfrutta la
+        precedenza di \code{\&\&} su \code{||}: “minuscola oppure maiuscola”.
+        È corretta così, ma \code{gcc -Wall} suggerisce comunque di
+        aggiungere le parentesi, per chiarezza.
+  \item \code{\%10s} e \code{\%10d} scrivono ogni stringa e ogni numero in 10
+        caratteri, allineati a destra: per questo i numeri stanno in colonna
+        sotto i titoli.
+  \item I numeri dipendono dal file letto: nelle slide il sorgente aveva una
+        riga in più, e il risultato era 28 righe e 809 caratteri.
+\end{itemize}
+
+\subsection{La catena di \code{if}-\code{else}}
+
+In \code{cnt\_char.c} ogni \code{else} contiene a sua volta un \code{if}: le
+domande si fanno una dopo l'altra, e alla prima risposta vera si esegue
+l'azione corrispondente e si salta tutto il resto. Si forma così una
+selezione a più vie (figura~\ref{fig:elseif}). Per questo la catena si
+scrive con gli \code{else if} allineati, invece di indentare ogni volta di
+più: è un'unica scelta fra cinque possibilità.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \foreach \cond/\azione [count=\k from 0] in {
+        {\code{c == ' '}?}/{\code{++blank\_cnt}},
+        {è una cifra?}/{\code{++digit\_cnt}},
+        {è una lettera?}/{\code{++letter\_cnt}},
+        {\code{c == '\textbackslash n'}?}/{\code{++nl\_cnt}}} {
+      \node[fcdec] (d\k) at (0,-\k*1.25) {\cond};
+      \node[fcproc] (a\k) at (4.4,-\k*1.25) {\azione};
+      \draw[fcfreccia] (d\k.east) -- node[fcsi, above] {vero} (a\k.west);
+      \draw[fcfreccia] (a\k.east) -- (6.6,-\k*1.25);
+    }
+    \foreach \k [evaluate=\k as \kk using int(\k+1)] in {0,1,2}
+      \draw[fcfreccia] (d\k.south) -- node[fcno, right] {falso} (d\kk.north);
+    \node[fcproc] (a4) at (4.4,-5.0) {\code{++other\_cnt}};
+    \draw[fcfreccia] (d3.south) |- node[fcno, pos=0.25, right] {falso} (a4.west);
+    \draw[fcfreccia] (a4.east) -- (6.6,-5.0);
+    \draw[fclinea] (6.6,0) -- (6.6,-5.6);
+    \draw[fcfreccia] (6.6,-5.6) -- ++(0,-0.4);
+    \node[mnota, anchor=west] at (6.7,-5.85) {prossimo carattere};
+    \draw[fcfreccia] (0,0.85) -- (d0.north);
+  \end{tikzpicture}
+  \caption{La catena di \code{if}-\code{else} di \code{cnt\_char.c}: le
+           domande si fanno in ordine, e alla prima risposta vera si
+           incrementa un contatore.}
+  \label{fig:elseif}
+\end{figure}
+
+\section{Il \code{for}}
+
+\subsection{\code{for} e \code{while}}
+
+La forma del \code{for}, a sinistra, è equivalente al \code{while} a
+destra:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c]
+for (expr1; expr2; expr3)
+    statementFor
+statementSucc
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c]
+expr1;
+while (expr2) {
+    statementFor
+    expr3;
+}
+statementSucc
+\end{lstlisting}
+\end{affianco}
+
+\code{expr1} è l'\textbf{inizializzazione}, eseguita una volta sola;
+\code{expr2} è la \textbf{condizione}, controllata prima di ogni giro;
+\code{expr3} è l'\textbf{aggiornamento}, eseguito alla fine di ogni giro
+(figura~\ref{fig:for}). Il \code{for} raccoglie in una riga le tre parti di
+un ciclo su contatore, che con il \code{while} sarebbero sparse.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \node[fcproc] (e1) at (0,0) {\code{expr1}};
+    \node[fcgiunzione] (j) at (0,-0.75) {};
+    \node[fcdec] (t) at (0,-1.75) {\code{expr2}?};
+    \node[fcproc] (b) at (0,-3.0) {\code{statementFor}};
+    \node[fcproc] (e3) at (0,-4.0) {\code{expr3}};
+    \node[fcgiunzione] (u) at (0,-4.75) {};
+    \node[fcproc] (s) at (0,-5.5) {\code{statementSucc}};
+    \draw[fcfreccia] (0,0.6) -- (e1);
+    \draw[fcfreccia] (e1) -- (j);
+    \draw[fcfreccia] (j) -- (t);
+    \draw[fcfreccia] (t) -- node[fcsi, right] {vero} (b);
+    \draw[fcfreccia] (b) -- (e3);
+    \draw[fcfreccia, draw=accent!70!black] (e3.east) -- (2.0,-4.0) -- (2.0,-0.75) -- (j.east);
+    \draw[fcfreccia] (t.west) -- node[fcno, above] {falso} (-2.0,-1.75) -- (-2.0,-4.75) -- (u.west);
+    \draw[fcfreccia] (u) -- (s);
+    \node[mnota, anchor=west] at (2.6,0) {\code{for (i = 1; i <= 3; i++)}:};
+    \node[mnota, anchor=west] at (2.6,-0.45) {\code{i = 1} si esegue una volta sola};
+    \node[mnota, anchor=west] at (2.6,-1.75) {\code{i <= 3} si controlla prima di ogni giro};
+    \node[mnota, anchor=west] at (2.6,-4.4) {\code{i++} si esegue alla fine di ogni giro};
+  \end{tikzpicture}
+  \caption{Il \code{for}: inizializzazione, condizione e aggiornamento.}
+  \label{fig:for}
+\end{figure}
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=for_while.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int i;
+
+   for (i = 1; i <= 3; i++)
+      printf("for: i = %d\n", i);
+
+   i = 1;
+   while (i <= 3) {
+      printf("while: i = %d\n", i);
+      i++;
+   }
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./for_while
+for: i = 1
+for: i = 2
+for: i = 3
+while: i = 1
+while: i = 2
+while: i = 3
+\end{console}
+\end{affianco}
+
+Ognuna delle tre espressioni si può omettere (i \code{;} restano):
+\code{for (;;)} è un ciclo infinito, come \code{while (1)}.
+
+\subsection{Cicli annidati}
+
+Il corpo di un ciclo può contenere un altro ciclo. Il programma seguente
+stampa un triangolo di asterischi: il ciclo esterno scorre le righe, e per
+ogni riga il ciclo interno stampa tanti asterischi quanto vale \code{riga}.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=triangolo.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int riga, col, n = 4;
+
+   for (riga = 1; riga <= n; riga++) {
+      for (col = 1; col <= riga; col++)
+         printf("*");
+      printf("\n");
+   }
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{center}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}>{\FiraCodeNL}l>{\FiraCodeNL}l>{\FiraCodeNL\bfseries}l@{}}
+  \toprule
+  \normalfont\textbf{riga} & \normalfont\textbf{col vale} & \normalfont\textbf{stampa} \\
+  \midrule
+  1 & 1             & * \\
+  2 & 1, 2          & ** \\
+  3 & 1, 2, 3       & *** \\
+  4 & 1, 2, 3, 4    & **** \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\vspace{4pt}
+\wtnota{Per ogni giro del ciclo esterno, il ciclo interno ricomincia da
+\code{col = 1}.}
+\end{affianco}
+
+\subsection{Meglio una relazione che un'uguaglianza}
+
+Nelle condizioni dei cicli è spesso preferibile usare un operatore
+relazionale (\code{<}, \code{<=}\dots) invece di un'uguaglianza (\code{==},
+\code{!=}): il codice è più robusto. Con i \code{float} e i \code{double},
+in particolare, un test di uguaglianza può andare oltre la precisione della
+macchina. Il programma delle lezioni vorrebbe sommare i valori 0.0, 0.1,
+0.2, \dots, 9.8, fermandosi quando \code{x} arriva a 9.9:
+
+\begin{affianco}[0.56][c]
+\begin{lstlisting}[style=c, name=test.c]
+/* A test that fails. */
+
+#include <stdio.h>
+
+int main(void)
+{
+   int      cnt = 0;
+   double   sum = 0.0, x;
+
+   for (x = 0.0; x != 9.9; x += 0.1) {   /* trouble! */
+      sum += x;
+      printf("cnt = %5d\n", ++cnt);
+   }
+   printf("sum = %f\n", sum);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./test
+cnt =     1
+cnt =     2
+cnt =     3
+(*@\textit{\dots}@*)
+cnt =    99
+cnt =   100
+cnt =   101
+cnt =   102
+(*@\textit{\dots}@*)
+^C
+\end{console}
+\end{affianco}
+
+Il ciclo non termina: in un secondo ha stampato quasi 20 milioni di righe.
+Il motivo è nel capitolo~\ref{chap:tipi}: 0.1 non è rappresentabile
+esattamente, e sommandolo 99 volte si accumula un piccolo errore. \code{x} non
+è mai \textbf{esattamente} uguale alla costante 9.9: le passa accanto e va
+oltre (figura~\ref{fig:nove-nove}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize]
+    \draw[line width=1pt, neutral!45!black] (0,0) -- (13.8,0);
+    \foreach \xx/\som/\val in {1.2/98/9.79999999999998117, 5.0/99/9.89999999999998082, 12.6/100/9.99999999999998046} {
+      \fill[primary!70!black] (\xx,0) circle (2.4pt);
+      \node[anchor=north, align=center, text=primary!60!black] at (\xx,-0.15) {\val\\{\Lato dopo \som\ somme}};
+    }
+    \fill[merr] (6.2,0) circle (2.4pt);
+    \draw[merr, line width=0.5pt] (6.2,-0.06) -- (7.7,-0.3);
+    \node[anchor=north west, align=left, text=merr] at (7.6,-0.25) {9.90000000000000036\\{\Lato la costante 9.9}};
+    \draw[wtarrowacc] (5.0,0.12) to[bend left=30] node[above, font=\Lato\scriptsize, text=accent!70!black] {$+0.1$: \code{x} scavalca 9.9} (12.6,0.12);
+  \end{tikzpicture}
+  \caption{I valori di \code{x} vicino a 9.9 (la scala non è proporzionale):
+           dopo 99 somme \code{x} è più piccolo della costante, dopo 100 è più
+           grande. \code{x != 9.9} è sempre vero.}
+  \label{fig:nove-nove}
+\end{figure}
+
+Con la condizione relazionale \code{x < 9.9} il ciclo termina di sicuro. Si
+noti però che i giri diventano 100, non 99: dopo 99 somme \code{x} vale
+9.89999999999998, che è ancora minore di 9.9. Il modo più sicuro per contare
+è usare un \textbf{intero}, e ricavare da esso il reale:
+\codel{for (cnt = 0; cnt < 99; cnt++) \{ x = cnt * 0.1; \dots \}}.
+
+\section{Il \code{do}-\code{while}}
+
+\subsection{La condizione in coda}
+
+Il \code{do}-\code{while} è il ciclo con la condizione \textbf{in coda}
+(figura~\ref{fig:coda}): prima si esegue il corpo, poi si controlla la
+condizione. Il corpo viene quindi eseguito \textbf{almeno una volta}.
+
+\begin{affianco}[0.42][c]
+\begin{lstlisting}[style=c]
+do
+    statement
+while (expr);
+statementSucc
+\end{lstlisting}
+\risultato
+\begin{enumerate}
+  \item viene eseguito \code{statement};
+  \item viene valutata \code{expr}: se è vera si torna al punto 1;
+  \item se è falsa si prosegue con \code{statementSucc}.
+\end{enumerate}
+Il \code{;} dopo la parentesi della condizione è obbligatorio.
+\end{affianco}
+
+È la struttura naturale per l'\textbf{input controllato} visto nel
+capitolo~\ref{chap:strutturata}: si chiede un valore, e lo si richiede
+finché non è accettabile. Chiedere ha senso solo dopo aver chiesto almeno una
+volta.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=positivo.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int n;
+
+   do {
+      printf("Inserisci un intero positivo: ");
+      scanf("%d", &n);
+   } while (n <= 0);
+   printf("Hai inserito %d\n", n);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./positivo
+Inserisci un intero positivo: <<-3>>
+Inserisci un intero positivo: <<0>>
+Inserisci un intero positivo: <<5>>
+Hai inserito 5
+\end{console}
+\end{affianco}
+
+Con un \code{while} la domanda andrebbe scritta due volte, una prima del
+ciclo e una dentro; il \code{do}-\code{while} la scrive una volta sola.
+
+\section{Lo \code{switch}}
+
+\subsection{La selezione a \textit{n} vie}
+
+Quando una sola domanda decide fra molte strade si può usare una catena di
+\code{if}-\code{else}, come in \code{cnt\_char.c}; ma se la domanda è
+“quale valore ha questa espressione intera?”, il C offre un costrutto
+apposito, lo \code{switch} (la selezione a $n$ vie della
+figura~\ref{fig:n-vie}). Ecco una piccola calcolatrice:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=calcolatrice.c]
+#include <stdio.h>
+
+int main(void)
+{
+   double a, b;
+   char op;
+
+   printf("Operazione (es. 3 * 4): ");
+   scanf("%lf %c %lf", &a, &op, &b);
+   switch (op) {
+   case '+':
+      printf("%g\n", a + b);
+      break;
+   case '-':
+      printf("%g\n", a - b);
+      break;
+   case '*':
+      printf("%g\n", a * b);
+      break;
+   case '/':
+      if (b != 0)
+         printf("%g\n", a / b);
+      else
+         printf("divisione per zero\n");
+      break;
+   default:
+      printf("operatore sconosciuto: %c\n", op);
+   }
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./calcolatrice
+Operazione (es. 3 * 4): <<3 * 4>>
+12
+$ ./calcolatrice
+Operazione (es. 3 * 4): <<7 / 2>>
+3.5
+$ ./calcolatrice
+Operazione (es. 3 * 4): <<5 / 0>>
+divisione per zero
+$ ./calcolatrice
+Operazione (es. 3 * 4): <<2 ^ 8>>
+operatore sconosciuto: ^
+\end{console}
+\vspace{2pt}
+\wtnota{La conversione \code{\%g} sceglie da sola fra la notazione normale e
+quella scientifica, e non scrive gli zeri inutili.}
+\end{affianco}
+
+\subsection{Come funziona}
+
+\begin{itemize}
+  \item Si calcola l'espressione fra parentesi, \code{op}, che deve essere
+        di tipo intero (un \code{char} va bene).
+  \item Si salta all'etichetta \code{case} con quel valore; se non ce n'è
+        nessuna, a \code{default} (che è facoltativa: senza, non si esegue
+        nulla).
+  \item Da lì si eseguono le istruzioni \textbf{in sequenza}, finché si
+        incontra un \code{break}, che fa uscire dallo \code{switch}, o si
+        arriva alla graffa finale.
+  \item Dopo \code{case} va una \textbf{costante} intera: non una
+        variabile, non un intervallo, non una stringa.
+\end{itemize}
+
+Il terzo punto è il più importante: il \code{break} non è decorativo. Senza,
+dopo il \code{case} giusto l'esecuzione “cade” nei successivi
+(\textit{fall through}). Togliendo i \code{break} dalla calcolatrice, con
+\code{3 + 4} si ottiene:
+
+\begin{affianco}[0.5][c]
+\begin{console}
+$ ./senza_break
+Operazione (es. 3 * 4): <<3 + 4>>
+7
+-1
+12
+0.75
+operatore sconosciuto: +
+\end{console}
+\risultato
+Dopo il caso \code{'+'} sono state eseguite tutte le istruzioni seguenti,
+fino a \code{default} (figura~\ref{fig:switch}). Con \code{-Wextra} il
+compilatore avvisa:
+\end{affianco}
+
+\begin{console}
+$ gcc -Wall -Wextra -o senza_break senza_break.c
+senza_break.c: In function (*@‘@*)main(*@’@*):
+senza_break.c:12:7: warning: this statement may fall through [-Wimplicit-fallthrough=]
+   12 |       printf("%g\n", a + b);
+      |       ^~~~~~~~~~~~~~~~~~~~~
+senza_break.c:13:4: note: here
+   13 |    case '-':
+      |    ^~~~
+\end{console}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      az/.style={fcproc, minimum width=2.4cm},
+      et/.style={font=\FiraCodeNL\scriptsize, anchor=south, text=accent!70!black, inner sep=1.5pt}]
+    \foreach \lab/\testo [count=\k from 0] in {{'+'}/{\code{a + b}}, {'-'}/{\code{a - b}},
+                                               {'*'}/{\code{a * b}}, {'/'}/{\code{a / b}},
+                                               {default}/{sconosciuto}} {
+      \node[az] (s\k) at (2.5,-\k*0.85) {\testo};
+      \draw[fcfreccia] (0,-\k*0.85) -- node[et] {\lab} (s\k.west);
+      \draw[fcfreccia] (s\k.east) -- node[font=\FiraCodeNL\tiny, above, text=neutral!40!black] {\ifnum\k<4 break\fi} (4.9,-\k*0.85);
+      \node[az] (n\k) at (8.9,-\k*0.85) {\testo};
+      \draw[fcfreccia] (6.4,-\k*0.85) -- node[et] {\lab} (n\k.west);
+    }
+    \draw[fclinea] (0,0.4) -- (0,-3.4);
+    \node[font=\FiraCodeNL\scriptsize, anchor=south] at (0,0.4) {switch (op)};
+    \draw[fclinea] (4.9,0) -- (4.9,-4.0);
+    \draw[fcfreccia] (4.9,-4.0) -- ++(0,-0.35) node[below, mnota] {dopo lo \code{switch}};
+    \draw[fclinea] (6.4,0.4) -- (6.4,-3.4);
+    \node[font=\FiraCodeNL\scriptsize, anchor=south] at (6.4,0.4) {switch (op)};
+    \foreach \k [evaluate=\k as \kk using int(\k+1)] in {0,1,2,3}
+      \draw[fcfreccia, draw=merr] (n\k.south) -- (n\kk.north);
+    \draw[fcfreccia] (n4.south) -- ++(0,-0.6) node[below, mnota] {dopo lo \code{switch}};
+    \node[font=\Lato\scriptsize\bfseries] at (2.5,1.05) {con \code{break}};
+    \node[font=\Lato\scriptsize\bfseries, text=merr] at (8.3,1.05) {senza \code{break}: si “cade” nei casi seguenti};
+  \end{tikzpicture}
+  \caption{Lo \code{switch} salta al caso giusto; il \code{break} lo fa uscire,
+           altrimenti l'esecuzione prosegue con i casi successivi.}
+  \label{fig:switch}
+\end{figure}
+
+\subsection{Più casi, un'azione}
+
+La caduta da un caso al successivo è però utile quando più valori devono
+fare la stessa cosa: basta scrivere più etichette di seguito. Questo
+programma conta le vocali minuscole, gli spazi e gli altri caratteri:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=vocali.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int c, vocali = 0, spazi = 0, altri = 0;
+
+   while ((c = getchar()) != EOF) {
+      switch (c) {
+      case 'a': case 'e': case 'i': case 'o': case 'u':
+         vocali++;
+         break;
+      case ' ':
+         spazi++;
+         break;
+      default:
+         altri++;
+      }
+   }
+   printf("vocali: %d  spazi: %d  altri: %d\n",
+          vocali, spazi, altri);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./vocali
+<<ciao a tutti>>
+<<Ctrl+D>>
+vocali: 6  spazi: 2  altri: 5
+\end{console}
+Gli “altri” sono \code{c}, le tre \code{t} e l'a capo finale.
+\end{affianco}
+
+\section{\code{break} e \code{continue}}
+
+\subsection{Uscire o saltare un giro}
+
+Il \code{break} non serve solo nello \code{switch}: dentro un ciclo lo fa
+terminare subito, e l'esecuzione prosegue dopo il ciclo. Il \code{continue},
+invece, salta il resto del giro corrente e passa al controllo della
+condizione (in un \code{for}, prima esegue l'aggiornamento \code{expr3}).
+Il programma seguente somma i numeri positivi letti, salta i negativi e si
+ferma allo 0:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=somma_positivi.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int x, somma = 0;
+
+   while (1) {
+      printf("numero (0 per finire): ");
+      scanf("%d", &x);
+      if (x == 0)
+         break;          /* esce dal ciclo */
+      if (x < 0) {
+         printf("  negativo, lo salto\n");
+         continue;       /* giro successivo */
+      }
+      somma += x;
+   }
+   printf("somma dei positivi: %d\n", somma);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./somma_positivi
+numero (0 per finire): <<5>>
+numero (0 per finire): <<-2>>
+  negativo, lo salto
+numero (0 per finire): <<10>>
+numero (0 per finire): <<0>>
+somma dei positivi: 15
+\end{console}
+\end{affianco}
+
+La figura~\ref{fig:break-continue} mostra dove porta ciascuna delle due
+istruzioni. Se i cicli sono annidati, \code{break} e \code{continue}
+agiscono solo sul ciclo più interno che li contiene.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\small,
+      riga/.style={anchor=west, inner sep=1.5pt}]
+    \node[riga] (r1) at (0,0) {while (1) \{};
+    \node[riga] (r2) at (0.6,-0.5) {scanf("\%d", \&x);};
+    \node[riga] (r3) at (0.6,-1.0) {if (x == 0)};
+    \node[riga, text=merr] (r4) at (1.2,-1.5) {break;};
+    \node[riga] (r5) at (0.6,-2.0) {if (x < 0)};
+    \node[riga, text=accent!75!black] (r6) at (1.2,-2.5) {continue;};
+    \node[riga] (r7) at (0.6,-3.0) {somma += x;};
+    \node[riga] (r8) at (0,-3.5) {\}};
+    \node[riga] (r9) at (0,-4.0) {printf("somma ...");};
+    \draw[mrif, draw=merr, rounded corners=4pt] (r4.east) -- (4.6,-1.5) -- (4.6,-4.0)
+      node[pos=0.5, right, font=\Lato\scriptsize, text=merr] {\code{break}: esce dal ciclo} -- (r9.east);
+    \draw[mrif, draw=accent!75!black, rounded corners=4pt] (r6.west) -- (-0.5,-2.5) -- (-0.5,0)
+      node[pos=0.5, left, font=\Lato\scriptsize, text=accent!75!black, align=right] {\code{continue}: torna al\\controllo del ciclo} -- (r1.west);
+  \end{tikzpicture}
+  \caption{Dove saltano \code{break} e \code{continue}.}
+  \label{fig:break-continue}
+\end{figure}
+
+\code{break} e \code{continue} vanno usati con misura: un ciclo con molte
+uscite è difficile da seguire. Usati bene, però, evitano condizioni
+complicate e variabili di comodo.
+
+\insintesi{
+  In C una condizione è un numero: \textbf{zero} è falso, qualunque altro
+  valore è vero; gli operatori relazionali (\code{<} \code{>} \code{<=}
+  \code{>=}), di uguaglianza (\code{==} \code{!=}) e logici (\code{!}
+  \code{\&\&} \code{||}) restituiscono 1 o 0. \code{a < b < c} non ha il
+  significato matematico; \code{=} non è \code{==}; \code{\&\&} e \code{||}
+  si fermano appena il risultato è noto (\textbf{cortocircuito}). Il corpo di
+  \code{if}, \code{while} e \code{for} è una sola istruzione: per più
+  istruzioni servono le graffe, e conviene metterle sempre; l'\code{else} si
+  lega all'\code{if} più vicino. \code{while} controlla la condizione prima
+  di ogni giro, \code{do}-\code{while} dopo (almeno un giro); \code{for}
+  equivale a un \code{while} con inizializzazione e aggiornamento. Nei cicli
+  sono più robuste le condizioni relazionali, mai \code{==} o \code{!=} fra
+  reali. Lo \code{switch} sceglie fra costanti intere e senza \code{break}
+  prosegue nei casi seguenti; \code{break} esce da un ciclo, \code{continue}
+  salta al giro successivo.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{A. Kelley, I. Pohl}, \textit{A Book on C}: capitolo~4
+        (flusso di controllo).
+  \item \textbf{Statements} (\code{if}, \code{switch}, \code{while},
+        \code{do}-\code{while}, \code{for}, \code{break},
+        \code{continue}) --- cppreference.com. \\
+        \urlx{https://en.cppreference.com/w/c/language/statements}
+  \item \textbf{Logical operators} --- cppreference.com. \\
+        \urlx{https://en.cppreference.com/w/c/language/operator_logical}
+\end{itemize}
