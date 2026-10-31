@@ -1,0 +1,874 @@
+\chapter{Il calcolatore}
+\label{chap:calcolatore}
+
+Per imparare a guidare non serve saper costruire un motore, ma aiuta molto
+sapere che cosa fanno il volante, i pedali e il cambio. Allo stesso modo, per
+programmare non serve conoscere l'elettronica di un computer, ma bisogna
+avere un'idea chiara di come è fatto e di come esegue un programma: molte
+regole del C, che altrimenti sembrerebbero capricci, diventano ovvie. Questo
+capitolo costruisce quell'idea, partendo da che cosa significa
+\textit{programmare}.
+
+\section{Che cos'è la programmazione}
+
+Il corso si apre con la definizione del dizionario Treccani:
+
+\begin{center}
+\begin{minipage}{0.86\linewidth}
+\itshape “In informatica, la stesura di un programma in una forma
+interpretabile dal calcolatore elettronico (o direttamente o dopo una
+rielaborazione opportuna), compiuta dal programmatore sulla base delle
+specifiche di programma fornite dall'analista; la programmazione comprende
+la definizione del problema da risolvere, la preparazione del diagramma di
+flusso del programma, la sua codifica (cioè la trascrizione, in un
+linguaggio opportuno, delle varie istruzioni), la messa a punto e la
+preparazione di una documentazione a uso dell'operatore.”
+\end{minipage}
+\end{center}
+
+La definizione contiene già tutto il percorso del corso. Scrivere codice
+(la \textit{codifica}) è solo una delle fasi, e non la prima: prima bisogna
+capire il problema e progettare la soluzione, dopo bisogna verificare che
+funzioni (la \textit{messa a punto}) e spiegarla (figura~\ref{fig:fasi}).
+La parentesi “o direttamente o dopo una rielaborazione opportuna” è
+importante: il programma che scriviamo non è ancora ciò che il computer
+esegue, va \textit{rielaborato}, cioè tradotto. È il compito del
+compilatore incontrato nel capitolo precedente.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      fase/.style={wtnode, font=\Lato\scriptsize, text width=2.55cm,
+        minimum height=1.5cm}]
+    \node[fase] (a) at (0,0) {\textbf{definire il problema}\\[2pt]che cosa si deve ottenere, a partire da quali dati};
+    \node[fase] (b) at (3.6,0) {\textbf{progettare}\\[2pt]l'algoritmo, per esempio con un diagramma di flusso};
+    \node[fase, draw=accent!60!black, fill=accent!8!white] (c) at (7.2,0) {\textbf{codificare}\\[2pt]scrivere il programma in un linguaggio (il C)};
+    \node[fase] (d) at (10.8,0) {\textbf{mettere a punto}\\[2pt]provare, trovare e correggere gli errori};
+    \node[fase] (e) at (14.4,0) {\textbf{documentare}\\[2pt]spiegare come si usa e come funziona};
+    \foreach \x/\y in {a/b, b/c, c/d, d/e} \draw[wtarrow] (\x) -- (\y);
+    \draw[wtarrowacc] (d.south) -- ++(0,-0.4) -| node[wtlab, pos=0.25] {gli errori trovati riportano indietro} (b.south);
+  \end{tikzpicture}
+  \caption{Le fasi della programmazione secondo la definizione: scrivere il
+           codice è solo una di esse.}
+  \label{fig:fasi}
+\end{figure}
+
+\info{Come si impara a programmare}{
+  A lezione il docente avverte che il corso parte da zero e all'inizio va
+  piano, ma che velocità e difficoltà crescono presto, e che entro il primo
+  mese quasi tutti incontrano difficoltà serie, soprattutto negli esercizi.
+  È normale e si supera, con alcune abitudini:
+  \begin{itemize}
+    \item non dare per scontato di saper già programmare, e non saltare le
+          lezioni “facili”;
+    \item studiare con costanza: la programmazione si accumula, ogni
+          argomento usa i precedenti;
+    \item \textbf{scrivere ed eseguire} ogni esempio, poi modificarlo per
+          vedere che cosa succede: leggere un programma non basta, come non
+          basta guardare qualcuno nuotare;
+    \item chiedere appena qualcosa non è chiaro (“non siete gli unici”);
+    \item prendere appunti e fare sintesi: le slide sono, per loro natura,
+          sintetiche; questa dispensa prova a riempire gli spazi, ma non
+          sostituisce le lezioni.
+  \end{itemize}}
+
+\section{Lo schema di un calcolatore}
+
+Un computer moderno è un oggetto complicatissimo, ma il suo funzionamento si
+capisce con uno schema di tre soli blocchi (figura~\ref{fig:vonneumann}):
+
+\begin{itemize}
+  \item la \term{CPU} (\textit{Central Processing Unit}, il
+        \textit{processore}), che esegue le istruzioni;
+  \item la \term{memoria centrale} (o \textit{principale}, la RAM), che
+        contiene le istruzioni da eseguire e i dati su cui lavorano;
+  \item i \term{dispositivi di ingresso e uscita} (\textit{I/O},
+        \textit{Input/Output}): tastiera, mouse, schermo, disco, rete\dots,
+        collegati attraverso delle \textit{interfacce}.
+\end{itemize}
+
+I blocchi comunicano attraverso il \term{bus}, un insieme di collegamenti
+condiviso su cui viaggiano dati, indirizzi e comandi. Fisicamente, è la
+\textit{scheda madre} (\textit{motherboard}) a collegare fra loro processore,
+memoria e periferiche.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      dev/.style={wtnodeplain, minimum width=2.3cm, minimum height=0.75cm},
+      intf/.style={draw=green-gradient-6, fill=green-gradient-1!45!white,
+        line width=0.7pt, minimum width=2.3cm, minimum height=0.45cm,
+        font=\Lato\tiny},
+      blk/.style={wtnode, minimum width=3.4cm, minimum height=1.2cm}]
+    \foreach \x/\n in {0/tastiera, 3/mouse, 6/schermo, 9/disco (memoria secondaria)} {
+      \node[dev, text width=2.1cm] (d\x) at (\x,2.2) {\n};
+      \node[intf] (i\x) at (\x,1.1) {interfaccia di I/O};
+      \draw[wtarrow, <->] (d\x) -- (i\x);
+      \draw[wtarrow, <->] (i\x) -- (\x,0.22);
+    }
+    \fill[orange-gradient-4] (-1.4,0.2) rectangle (10.4,-0.2);
+    \node[font=\Lato\scriptsize\bfseries, text=orange-gradient-6!35!black] at (4.5,0) {bus};
+    \node[blk, draw=red-gradient-6!70!black, fill=red-gradient-1!25!white] (mem) at (2.2,-1.6) {\textbf{memoria centrale}\\istruzioni e dati};
+    \node[blk, draw=accent!60!black, fill=accent!8!white] (cpu) at (6.8,-1.6) {\textbf{CPU}\\esegue le istruzioni};
+    \draw[wtarrow, <->] (mem) -- (2.2,-0.22);
+    \draw[wtarrow, <->] (cpu) -- (6.8,-0.22);
+  \end{tikzpicture}
+  \caption{Schema semplificato di un calcolatore (architettura di von
+           Neumann): CPU, memoria e dispositivi di I/O collegati dal bus.}
+  \label{fig:vonneumann}
+\end{figure}
+
+Questo schema porta il nome di \textit{John von Neumann}, che nel 1945 ne
+descrisse l'idea centrale: le \textbf{istruzioni} del programma stanno
+nella \textbf{stessa memoria} dei \textbf{dati}. Un programma non è cablato
+nei circuiti: è una sequenza di numeri in memoria, che si può caricare,
+sostituire, copiare. È questo che rende un computer una macchina
+\textit{generale}, capace di fare cose diversissime a seconda del programma
+caricato.
+
+\section{La CPU e il linguaggio macchina}
+
+\subsection{Che cosa sa fare un processore}
+
+Tutte le elaborazioni di un calcolatore sono svolte dalla CPU, oppure da
+altri componenti su suo comando. Sorprendentemente, un processore sa
+compiere solo operazioni \textbf{molto semplici}:
+
+\begin{itemize}
+  \item leggere, scrivere o copiare una o più celle di memoria;
+  \item sommare, sottrarre, moltiplicare, dividere il contenuto di celle di
+        memoria;
+  \item leggere e scrivere in zone di memoria “speciali” per pilotare i
+        dispositivi di I/O (per esempio la scheda video);
+  \item poche altre operazioni elementari, come confrontare due numeri e
+        \textbf{saltare} a un'altra istruzione a seconda del risultato.
+\end{itemize}
+
+Il segreto è la velocità: un processore moderno esegue \textbf{miliardi} di
+queste operazioni al secondo. Ogni cosa che un computer fa, dal mostrare
+una pagina web al riprodurre un video, è scomposta in una lunghissima
+sequenza di passi elementari.
+
+\subsection{Il linguaggio macchina}
+
+Ogni processore ha un proprio insieme di istruzioni, e ogni istruzione è
+identificata da una certa configurazione di bit (di zeri e uni). L'insieme
+delle istruzioni di un processore si chiama \term{linguaggio macchina} di
+quel processore. Processori di famiglie diverse hanno linguaggi macchina
+diversi: un programma tradotto per i processori Intel e AMD dei PC (famiglia
+\textit{x86-64}) non gira su un Mac con processore Apple (famiglia
+\textit{ARM}), e viceversa.
+
+Per eseguire un programma, allora, bisogna fare due cose: mettere in
+memoria la sequenza di configurazioni di bit che rappresentano le sue
+istruzioni, e dire al processore a quale indirizzo si trova la prima. Da lì
+in poi il processore ripete sempre lo stesso ciclo
+(figura~\ref{fig:ciclo-cpu}): \textbf{preleva} l'istruzione all'indirizzo
+indicato da un suo registro speciale, il \term{program counter};
+\textbf{decodifica} l'istruzione, cioè capisce che cosa chiede;
+la \textbf{esegue}; e passa all'istruzione successiva, a meno che
+l'istruzione appena eseguita non fosse un \textit{salto}, che cambia il
+program counter.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    % memoria
+    \memoria{m}{(0,0)}{1000/MOV \ldots/, 1003/ADD \ldots/, 1005/JMP 1000/, 1008/HLT/, \ldots/\ldots/}
+    \node[mnota, anchor=south] at ([yshift=2pt]m-1.north) {\textbf{memoria}};
+    \node[mcellam, fill=yellow-gradient-1!70!white] at (m-2) {ADD \ldots};
+    % CPU
+    \node[wtnode, draw=accent!60!black, fill=accent!6!white, minimum width=4.6cm,
+          minimum height=2.75cm, minimum width=5.3cm, anchor=north west] (cpu) at (3.0,0.55) {};
+    \node[font=\Lato\scriptsize\bfseries, anchor=north west] at ([shift={(5pt,-4pt)}]cpu.north west) {CPU};
+    \node[mvar] (pc) at (4.55,-0.49) {1003};
+    \node[mnome, anchor=west] at ([xshift=3pt]pc.east) {program counter};
+    \node[mvar] (ax) at (4.55,-1.2) {42};
+    \node[mnome, anchor=west] at ([xshift=3pt]ax.east) {registro AX};
+    \node[mvar] (bx) at (4.55,-1.8) {8};
+    \node[mnome, anchor=west] at ([xshift=3pt]bx.east) {registro BX};
+    \draw[mrif] (pc.west) -- ([xshift=8pt]m-2.east);
+    \node[mpunto] at (pc.west) {};
+    % ciclo
+    \begin{scope}[shift={(10.9,-0.95)}]
+      \node[wtnodeplain] (f) at (90:1.25) {1. preleva};
+      \node[wtnodeplain] (d) at (-30:1.25) {2. decodifica};
+      \node[wtnodeplain] (e) at (210:1.25) {3. esegue};
+      \draw[wtarrow] (f) to[bend left=30] (d);
+      \draw[wtarrow] (d) to[bend left=30] (e);
+      \draw[wtarrow] (e) to[bend left=30] (f);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Il program counter indica l'indirizzo della prossima istruzione;
+           la CPU la preleva, la decodifica e la esegue, poi ricomincia. I
+           registri sono piccole celle di memoria interne alla CPU.}
+  \label{fig:ciclo-cpu}
+\end{figure}
+
+\section{L'assembly}
+
+Il linguaggio macchina è una sequenza di bit, praticamente illeggibile per
+una persona. Il primo passo per renderlo comprensibile è l'\term{assembly}:
+un linguaggio quasi identico al linguaggio macchina, in cui però ogni codice
+operativo è sostituito da un'abbreviazione (un \textit{codice mnemonico}):
+\code{MOV} per \textit{move} (copia), \code{ADD} per \textit{add} (somma),
+\code{JMP} per \textit{jump} (salta). Un programma, l'\term{assembler},
+traduce l'assembly in linguaggio macchina, un'istruzione alla volta.
+
+\subsection{Un esempio: contare i bit a 1}
+
+Il programma seguente, visto a lezione, conta quanti bit valgono 1 in un
+dato di 16 bit. A sinistra di ogni istruzione c'è il suo indirizzo in
+memoria (in esadecimale, cioè in base 16: per ora basta considerarlo un
+“numero civico”), a destra la spiegazione.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+{\FiraCodeNL\scriptsize
+\begin{tabular}{@{}l l l >{\Lato\scriptsize}l@{}}
+  \toprule
+  \normalfont\Lato\bfseries indirizzo & \normalfont\Lato\bfseries istruzione & & \normalfont\Lato\bfseries significato \\
+  \midrule
+  3F0D0100 & 00000000 00000000 & & il dato da elaborare (16 bit) \\
+  3F0D0102 & 00000000 & & qui andrà il risultato (8 bit) \\
+  \midrule
+  40B1A200 & MOV & \$0, \%AL         & azzera il contatore, il registro AL \\
+  40B1A203 & MOV & (3F0D0100), \%DX  & copia nel registro DX il dato da elaborare \\
+  40B1A207 & CMP & \%DX, \$0         & confronta DX con 0\dots \\
+  40B1A211 & JE  & 40B1A232          & \dots e se sono uguali salta alla fine \\
+  40B1A215 & SHL & \%DX              & sposta i bit di DX di un posto a sinistra: \\
+           &     &                   & il bit che “esce” finisce nel \textit{carry flag} CF \\
+  40B1A217 & JC  & 40B1A225          & se CF vale 1 (è uscito un 1) salta all'incremento \\
+  40B1A221 & JMP & 40B1A207          & altrimenti torna al confronto \\
+  40B1A225 & ADD & \$1, \%AL         & incrementa il contatore AL \\
+  40B1A228 & JMP & 40B1A207          & torna al confronto \\
+  40B1A232 & MOV & \%AL, (3F0D0102)  & scrive il risultato in memoria \\
+  40B1A236 & HLT &                   & fine (\textit{halt}) \\
+  \bottomrule
+\end{tabular}}
+\end{center}
+
+L'idea è questa: a ogni giro si fa “scivolare” il dato di un posto a
+sinistra, e si guarda il bit che cade fuori dal bordo; se è un 1, si
+incrementa il contatore. Quando nel dato non resta nessun 1 (cioè vale 0),
+si è finito. Seguiamo l'esecuzione con un dato che contiene due bit a 1,
+\code{1010000000000000}:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}c>{\FiraCodeNL\small}c>{\FiraCodeNL\small}c>{\FiraCodeNL\small}c>{\FiraCodeNL\small}c>{\raggedright\arraybackslash}p{4.4cm}@{}}
+  \toprule
+  \textbf{giro} & \normalfont\textbf{DX prima} & \normalfont\textbf{bit uscito (CF)} & \normalfont\textbf{DX dopo} & \normalfont\textbf{AL} & \textbf{che cosa succede} \\
+  \midrule
+  1 & 1010000000000000 & 1 & 0100000000000000 & 1 & è uscito un 1: \code{JC} salta all'\code{ADD} \\
+  2 & 0100000000000000 & 0 & 1000000000000000 & 1 & è uscito uno 0: \code{JMP} torna al confronto \\
+  3 & 1000000000000000 & 1 & 0000000000000000 & 2 & è uscito un 1: si incrementa \\
+  4 & 0000000000000000 & & & 2 & DX vale 0: \code{JE} salta alla fine \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Il risultato, 2, viene scritto in memoria e il programma si ferma. Si noti
+che in assembly non esiste un'istruzione “ripeti finché”: la ripetizione
+si ottiene \textbf{saltando indietro} (\code{JMP 40B1A207}) e la scelta
+\textbf{saltando avanti} se una condizione è vera (\code{JE}, \code{JC}).
+
+\subsection{I limiti dell'assembly}
+
+Con l'assembly si può scrivere qualunque programma, anche un sistema
+operativo o un'interfaccia grafica, ma è un lavoro enorme: le istruzioni
+sono di \textbf{basso livello}, cioè vicine alla macchina e lontane dal
+modo in cui ragioniamo. Per “contare gli uni” abbiamo dovuto pensare in
+termini di registri, flag e indirizzi di salto; e il programma funziona
+solo sul processore per cui è scritto.
+
+\section{I livelli di astrazione}
+
+Servono istruzioni più vicine al modo di ragionare umano. La soluzione è
+l'\term{astrazione}: costruire un linguaggio che “nasconde” la macchina
+sottostante e permette di esprimere gli algoritmi in modo simbolico. Sono i
+\term{linguaggi di alto livello}, come il C, che hanno due proprietà
+fondamentali:
+
+\begin{itemize}
+  \item sono più vicini al linguaggio umano (e matematico) che al
+        linguaggio macchina;
+  \item sono \textbf{generali}: non dipendono dal processore. Lo stesso
+        programma C si traduce per un PC, per un Mac o per un telefono.
+\end{itemize}
+
+La figura~\ref{fig:livelli} mostra la stessa istruzione ai tre livelli. È
+la traduzione reale prodotta da gcc su un PC (processore x86-64) per
+l'istruzione C \code{c = a + b;}, in cui \code{a}, \code{b} e \code{c} sono
+tre variabili intere.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      liv/.style={rounded corners=4pt, line width=0.8pt, minimum width=17.2cm,
+        inner sep=6pt, align=left, anchor=north west},
+      tit/.style={font=\Lato\scriptsize\bfseries, anchor=north west}]
+    \node[liv, draw=green-gradient-6, fill=green-gradient-1!35!white] (alto) at (0,0)
+      {\begin{tabular}{@{}p{3.5cm}l@{}}
+         \textbf{linguaggio di alto livello} & {\FiraCodeNL\small c = a + b;} \\
+         \textit{si ragiona sul problema} & \\
+       \end{tabular}};
+    \node[liv, draw=primary!65!black, fill=primary!6!white] (asm) at ([yshift=-0.35cm]alto.south west)
+      {\begin{tabular}{@{}p{3.5cm}>{\FiraCodeNL\small}l>{\Lato\scriptsize}l@{}}
+         \textbf{assembly} & mov edx, [rbp-0xc] & copia \code{a} nel registro edx \\
+         \textit{si ragiona sulla macchina:} & mov eax, [rbp-0x8] & copia \code{b} nel registro eax \\
+         \textit{registri e indirizzi} & add eax, edx & eax = eax + edx \\
+         & mov [rbp-0x4], eax & copia il risultato in \code{c} \\
+       \end{tabular}};
+    \node[liv, draw=accent!60!black, fill=accent!6!white] (mac) at ([yshift=-0.35cm]asm.south west)
+      {\begin{tabular}{@{}p{3.5cm}>{\FiraCodeNL\small}l@{}}
+         \textbf{linguaggio macchina} & 10001011 01010101 11110100 \\
+         \textit{bit, cioè numeri} & 10001011 01000101 11111000 \\
+         & 00000001 11010000 \\
+         & 10001001 01000101 11111100 \\
+       \end{tabular}};
+    \draw[wtarrowacc, line width=1.2pt] ([xshift=-0.6cm, yshift=-0.2cm]alto.north east) -- node[wtlab, left=4pt, fill=none, align=right] {traduzione\\(compilatore)} ([xshift=-0.6cm, yshift=0.2cm]mac.south east);
+  \end{tikzpicture}
+  \caption{La stessa istruzione a tre livelli di astrazione. Un'istruzione
+           di alto livello diventa più istruzioni macchina; ogni istruzione
+           assembly corrisponde a un'istruzione macchina.}
+  \label{fig:livelli}
+\end{figure}
+
+Ogni livello richiede di conoscere cose diverse:
+
+\begin{itemize}
+  \item per il \textbf{linguaggio macchina}, come sono rappresentate le
+        informazioni in bit;
+  \item per l'\textbf{assembly}, le caratteristiche della macchina:
+        registri, insieme di istruzioni, dimensione dei dati;
+  \item per un \textbf{linguaggio di alto livello}, solo il linguaggio: ci
+        si astrae dai dettagli della macchina.
+\end{itemize}
+
+Il prezzo da pagare è che un programma di alto livello non può essere
+eseguito direttamente: va \textbf{tradotto} in linguaggio macchina. È il
+compito del \term{compilatore}, l'argomento del
+capitolo~\ref{chap:dal-problema}.
+
+\subsection{Algoritmo e programma}
+
+Due parole che useremo continuamente vanno distinte con cura.
+
+\dfn{Algoritmo}{
+  Una sequenza di passi elementari che risolve un problema. La sequenza
+  deve essere \textbf{finita}, \textbf{non ambigua},
+  \textbf{deterministica} e \textbf{generale}.}
+
+\dfn{Programma}{
+  La formalizzazione di un algoritmo in un linguaggio di programmazione.}
+
+Le quattro proprietà dell'algoritmo non sono pignolerie: ciascuna esclude un
+modo concreto in cui un procedimento può fallire. Prendiamo una ricetta di
+cucina, che è quasi un algoritmo:
+
+\begin{itemize}
+  \item \textbf{finita}: deve terminare. “Mescola finché non è pronto” è
+        accettabile solo se prima o poi “è pronto”;
+  \item \textbf{non ambigua}: ogni passo deve avere un solo significato.
+        “Sale quanto basta” va bene per un cuoco, non per un computer, che
+        non ha buon senso: bisogna dire quanti grammi;
+  \item \textbf{deterministica}: in ogni momento il passo successivo è
+        determinato; con gli stessi dati si ottiene sempre lo stesso
+        risultato;
+  \item \textbf{generale}: risolve una \textit{classe} di problemi, non un
+        solo caso. Una ricetta “per 4 persone” è meno generale di una “per
+        $n$ persone”; un algoritmo che calcola l'area di un cerchio di
+        raggio 2 è inutile, ne serve uno che funzioni per qualunque raggio.
+\end{itemize}
+
+\section{La memoria}
+
+\subsection{Celle e indirizzi}
+
+La memoria centrale è il contenitore dei dati su cui lavora il processore.
+Si può immaginare come una lunghissima fila di caselle consecutive, le
+\term{locazioni} (o \textit{celle}) di memoria. Ogni cella:
+
+\begin{itemize}
+  \item è l'unità minima di memorizzazione: si legge e si scrive una cella
+        intera, non un pezzo;
+  \item contiene tipicamente \textbf{8 bit}, cioè un \term{byte};
+  \item è identificata da un numero, il suo \term{indirizzo}, come le case
+        di una strada dal numero civico.
+\end{itemize}
+
+\begin{affianco}[0.5][c]
+\begin{immagine}
+\begin{tikzpicture}
+  \memoria{m}{(0,0)}{1000/00000101/, 1001/01000001/, 1002/11111111/, 1003/00000000/, 1004/\dots/}
+  \node[mnota, anchor=west] at ([xshift=12pt]m-1.east) {il numero 5};
+  \node[mnota, anchor=west] at ([xshift=12pt]m-2.east) {il numero 65, o la lettera A};
+  \node[mnota, anchor=west] at ([xshift=12pt]m-3.east) {il numero 255};
+  \node[mnota, anchor=south] at ([yshift=3pt]m-1.north) {\textbf{contenuto} (8 bit)};
+  \node[mnota, anchor=south east] at ([yshift=3pt, xshift=-4pt]m-1.north west) {\textbf{indirizzo}};
+\end{tikzpicture}
+\end{immagine}
+\risultato
+Un \term{bit} (\textit{binary digit}, cifra binaria) è la più piccola unità
+di informazione: vale 0 oppure 1. Elettronicamente corrisponde a qualcosa
+che ha due stati, come un interruttore acceso o spento. Con un bit solo si
+distinguono due situazioni; mettendone insieme 8 se ne distinguono molte di
+più: vediamo quante, e come si usano per rappresentare i numeri.
+\end{affianco}
+
+\subsection{La notazione binaria}
+
+Siamo abituati alla notazione \textbf{decimale}: dieci cifre, da 0 a 9, e
+un sistema \textbf{posizionale}, in cui il valore di una cifra dipende dalla
+posizione. In \code{352} il 3 vale trecento perché sta nella posizione delle
+centinaia:
+\[
+  352 = 3 \cdot 100 + 5 \cdot 10 + 2 \cdot 1 = 3 \cdot 10^2 + 5 \cdot 10^1 + 2 \cdot 10^0 .
+\]
+La notazione \textbf{binaria} funziona allo stesso modo, ma con due sole
+cifre, 0 e 1, e con le potenze di \textbf{2} al posto delle potenze di 10
+(figura~\ref{fig:binario}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\small]
+    \foreach \p [count=\i from 0] in {128,64,32,16,8,4,2,1} {
+      \node[mcella, minimum width=1.25cm, minimum height=0.7cm, font=\FiraCodeNL\normalsize]
+        (b\i) at (\i*1.25,0) {};
+      \node[font=\FiraCodeNL\scriptsize, text=neutral!40!black] at (\i*1.25,0.62) {\p};
+      \pgfmathtruncatemacro{\e}{7-\i}
+      \node[font=\Lato\tiny, text=neutral!50!black] at (\i*1.25,1.0) {$2^{\e}$};
+    }
+    \foreach \val [count=\i from 0] in {0,0,1,0,1,1,0,1} {
+      \ifnum\val=1
+        \node[font=\FiraCodeNL\normalsize\bfseries, text=accent!80!black] at (b\i) {1};
+      \else
+        \node[font=\FiraCodeNL\normalsize, text=neutral!55!black] at (b\i) {0};
+      \fi
+    }
+    \node[anchor=west, font=\Lato\small] at (10.1,0)
+      {$= 32 + 8 + 4 + 1 = \mathbf{45}$};
+    \node[font=\Lato\tiny, anchor=east, text=neutral!50!black] at (-0.75,1.0) {potenza};
+    \node[font=\Lato\tiny, anchor=east, text=neutral!50!black] at (-0.75,0.62) {peso};
+    \node[font=\Lato\tiny, anchor=east, text=neutral!50!black] at (-0.75,0) {bit};
+  \end{tikzpicture}
+  \caption{Il byte \code{00101101}: ogni bit a 1 aggiunge il peso della sua
+           posizione.}
+  \label{fig:binario}
+\end{figure}
+
+Per passare dal binario al decimale, quindi, si sommano i pesi delle
+posizioni in cui c'è un 1. Il passaggio inverso si fa con le
+\textbf{divisioni successive per 2}: si divide il numero per 2, si annota il
+resto (0 o 1), si ripete sul quoziente fino ad arrivare a 0; i resti, letti
+\textbf{dal basso verso l'alto}, sono le cifre binarie.
+
+\begin{affianco}[0.36][c]
+\begin{immagine}
+\begin{tikzpicture}[font=\FiraCodeNL\small]
+  \foreach \num/\quoz/\resto [count=\i from 0] in {13/6/1, 6/3/0, 3/1/1, 1/0/1} {
+    \node[anchor=east] at (0,-\i*0.55) {\num\ : 2 = \quoz};
+    \node[anchor=west, text=accent!80!black] at (0.3,-\i*0.55) {resto \textbf{\resto}};
+  }
+  \draw[wtarrowacc] (2.75,-1.75) -- node[right, font=\Lato\scriptsize, text=accent!70!black, align=left] {leggere\\dal basso} (2.75,0.15);
+\end{tikzpicture}
+\end{immagine}
+\risultato
+Per esempio, 13 in binario è \code{1101}: lo si verifica sommando i pesi,
+$8 + 4 + 1 = 13$. Perché funziona? Ogni divisione per 2 “stacca” l'ultima
+cifra binaria del numero, esattamente come dividere per 10 un numero
+decimale ne stacca l'ultima cifra (il resto di $352 : 10$ è 2, l'ultima
+cifra). Per questo il primo resto trovato è la cifra più a destra, e i resti
+vanno letti al contrario.
+\end{affianco}
+
+\subsection{Quanti numeri in un byte}
+
+Con $n$ posizioni e 2 simboli possibili per ciascuna si formano $2^n$
+combinazioni diverse: ogni bit in più \textbf{raddoppia} le possibilità.
+Un byte ne ha $2^8 = 256$, quindi rappresenta i numeri naturali da 0 a 255:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}>{\FiraCodeNL}c c@{\hspace{1.4cm}}>{\FiraCodeNL}c c@{}}
+  \toprule
+  \normalfont\textbf{bit} & \textbf{valore} & \normalfont\textbf{bit} & \textbf{valore} \\
+  \midrule
+  00000000 & 0 & 00000100 & 4 \\
+  00000001 & 1 & 00000101 & 5 \\
+  00000010 & 2 & \dots    & \dots \\
+  00000011 & 3 & 11111111 & 255 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{I numeri negativi}
+
+E i numeri negativi? Bisogna usare una parte dell'informazione per il
+\textbf{segno}. L'idea più semplice, vista a lezione, è la
+\term{rappresentazione in modulo e segno}: il primo bit indica il segno (0
+positivo, 1 negativo) e gli altri 7 il valore assoluto. Con 7 bit si
+rappresentano $2^7 = 128$ valori assoluti, da 0 a 127, quindi l'intervallo
+è $[-127,\ 127]$.
+
+\warning{Una svista nelle slide}{
+  Le slide indicano l'intervallo $[-127 .. 128]$, ma in modulo e segno il
+  massimo è $+127$ (\code{01111111}), non $128$: con 7 bit il valore
+  assoluto più grande è $2^7 - 1 = 127$. L'intervallo è simmetrico,
+  $[-127,\ 127]$, e lo zero compare due volte: \code{00000000} ($+0$) e
+  \code{10000000} ($-0$).}
+
+Proprio quel “doppio zero”, e il fatto che le somme con numeri negativi
+richiederebbero circuiti speciali, fanno sì che i computer reali usino
+un'altra rappresentazione, il \term{complemento a due}, in cui con un byte
+si rappresentano i numeri da $-128$ a $+127$. L'idea si vede bene con 3
+bit (figura~\ref{fig:ruota}): i numeri sono disposti su una ruota, come le
+cifre del contachilometri di un'auto; partendo da \code{000} e andando
+\textbf{indietro} di un passo si arriva a \code{111}, che quindi vale $-1$.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize]
+    \draw[neutral!40!white, line width=6pt] (0,0) circle (1.75);
+    \foreach \bits/\val/\pos in {000/0/90, 001/1/45, 010/2/0, 011/3/-45,
+                                  100/-4/-90, 101/-3/-135, 110/-2/180, 111/-1/135} {
+      \node[mcella, minimum width=0.85cm] at (\pos:1.75) {\bits};
+      \node[font=\Lato\small\bfseries, text=primary!60!black] at (\pos:2.5) {\val};
+    }
+    \draw[wtarrowacc, line width=1pt] (100:1.25) arc[start angle=100, end angle=125, radius=1.25];
+    \node[font=\Lato\tiny, text=accent!70!black, align=center] at (0,0.3) {un passo indietro\\da 0 è $-1$};
+    \node[font=\Lato\tiny, text=neutral!35!black, align=center] at (0,-0.45) {il primo bit\\è 1 per i negativi};
+  \end{tikzpicture}
+  \caption{Il complemento a due su 3 bit: 8 combinazioni, da $-4$ a $+3$,
+           un solo zero. Su 8 bit si va da $-128$ a $+127$.}
+  \label{fig:ruota}
+\end{figure}
+
+Il complemento a due ha conseguenze molto concrete in C (per esempio su
+che cosa succede quando un numero “trabocca” oltre il massimo): le
+vedremo nel capitolo~\ref{chap:tipi}.
+
+\section{I tipi di dato}
+
+\subsection{Gli stessi bit, significati diversi}
+
+Il byte \code{01000001} contiene semplicemente otto bit. È il numero 65?
+È la lettera \textit{A}? Dipende da come lo si \textbf{interpreta}: la
+stessa quantità di memoria può rappresentare un numero naturale, un intero
+con segno, un numero reale o un carattere. La memoria non sa che cosa
+contiene; lo sa il programma.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \node[mcella, minimum width=2.6cm, minimum height=0.7cm, font=\FiraCodeNL\normalsize] (b) at (0,0) {01000001};
+    \foreach \ang/\testo in {150/{come naturale:\\\textbf{65}}, 30/{come carattere:\\\textbf{A} (codice ASCII 65)},
+                        -150/{come intero con segno:\\\textbf{+65}}, -30/{come parte di un \code{float}:\\dipende dagli altri 3 byte}} {
+      \node[wtnodeplain, text width=3.3cm] (n) at (\ang:3.0) {\testo};
+      \draw[wtarrow] (b) -- (n);
+    }
+  \end{tikzpicture}
+  \caption{Lo stesso byte, letto con occhiali diversi.}
+  \label{fig:occhiali}
+\end{figure}
+
+\subsection{Il tipo come astrazione}
+
+I linguaggi di alto livello risolvono il problema con i \term{tipi di
+dato}: si scrive il programma in termini di \textit{che cosa} sono i dati,
+senza preoccuparsi di come e dove saranno davvero memorizzati. In C si può
+scrivere
+
+\begin{lstlisting}[style=c]
+int variabile = 5;
+\end{lstlisting}
+
+e non ci si chiede in quali celle finirà il 5, né come sarà scritto in bit:
+si usa \code{int} nel suo significato astratto di “contenitore di numeri
+interi”. Eppure un \code{int} non sta in una cella sola: ne occupa
+\textbf{quattro consecutive} (32 bit, quindi valori ben oltre 255). È il
+tipo a stabilire che quelle quattro celle vanno lette insieme, come un
+unico numero (figura~\ref{fig:int4}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize]
+    \noindici
+    \celle{c}{(0,0)}{00000101, 00000000, 00000000, 00000000}
+    \foreach \i/\a in {0/2000, 1/2001, 2/2002, 3/2003}
+      \node[mindir, anchor=north] at ([yshift=-1pt]c-\i.south) {\a};
+    \draw[wtbrace] ([yshift=0.15cm]c-3.north east) -- ([yshift=0.15cm]c-0.north west);
+    \node[font=\Lato\scriptsize, anchor=south, align=center] at ([yshift=0.45cm]$(c-0.north)!0.5!(c-3.north)$)
+      {\FiraCodeNL variabile\Lato\ (\FiraCodeNL int\Lato): \textbf{4 byte} letti insieme come il numero 5};
+  \end{tikzpicture}
+  \caption{Un \code{int} occupa 4 celle consecutive (sui PC il byte meno
+           significativo sta all'indirizzo più basso).}
+  \label{fig:int4}
+\end{figure}
+
+Ogni linguaggio definisce i propri tipi. In C, i principali sono:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}>{\FiraCodeNL}l l l@{}}
+  \toprule
+  \normalfont\textbf{tipo} & \textbf{che cosa rappresenta} & \textbf{dimensione tipica} \\
+  \midrule
+  char   & un carattere (codice ASCII)     & 8 bit (1 byte) \\
+  int    & un numero intero                & 32 bit (4 byte) \\
+  float  & un numero reale                 & 32 bit (4 byte) \\
+  double & un numero reale, più preciso    & 64 bit (8 byte) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Le dimensioni sono quelle dei computer di oggi; lo standard del C fissa solo
+dei minimi, come vedremo nel capitolo~\ref{chap:tipi}.
+
+\section{La gerarchia di memoria}
+
+La memoria centrale può contenere molti programmi e dati, ma ha due difetti:
+
+\begin{itemize}
+  \item è \textbf{lenta} rispetto al processore: leggere una cella richiede
+        il tempo di un centinaio di operazioni della CPU;
+  \item è \textbf{volatile}: quando si spegne il computer, il contenuto si
+        perde.
+\end{itemize}
+
+Contro la lentezza si costruisce una \term{gerarchia}: piccole memorie
+velocissime vicino al processore, memorie via via più grandi e lente man
+mano che ci si allontana. Le memorie veloci costano molto per ogni bit,
+quindi sono piccole. Contro la volatilità ci sono le \term{memorie di massa}
+(dischi, SSD, chiavette), che conservano i dati anche a computer spento
+(figura~\ref{fig:gerarchia}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \def\h{0.78}
+    \foreach \n/\nome/\vel/\dim/\col [count=\i from 0] in {
+        0/registri (dentro la CPU)/circa 1 ns/centinaia di byte/accent,
+        1/cache/circa 10 ns/kilobyte\,--\,megabyte/accent,
+        2/memoria centrale (RAM)/circa 100 ns/gigabyte/primary,
+        3/memoria di massa (disco{,} SSD)/da 0{,}1 a 10 ms/terabyte/green-gradient-6,
+        4/archivio (nastri{,} cloud)/secondi/molti terabyte/neutral} {
+      \pgfmathsetmacro{\w}{2.9+\i*1.3}
+      \fill[\col!14!white, draw=\col!65!black, line width=0.7pt]
+        (-\w/2,-\i*\h) -- (\w/2,-\i*\h) -- (\w/2+0.65,-\i*\h-\h) -- (-\w/2-0.65,-\i*\h-\h) -- cycle;
+      \node[font=\Lato\scriptsize\bfseries] at (0,-\i*\h-\h/2) {\nome};
+      \node[anchor=west] at (5.2,-\i*\h-\h/2) {\vel};
+      \node[anchor=west] at (7.6,-\i*\h-\h/2) {\dim};
+    }
+    \node[anchor=west, font=\Lato\scriptsize\bfseries] at (5.2,0.3) {tempo di accesso};
+    \node[anchor=west, font=\Lato\scriptsize\bfseries] at (7.6,0.3) {dimensione};
+    \draw[wtarrow, <->] (-5.3,-0.1) -- node[wtlab, rotate=90, fill=white] {più veloci, più costose} (-5.3,-3.8);
+    \draw[neutral!50!white] (10.2,-0.25) -- (10.2,-2.25);
+    \node[font=\Lato\tiny, text=neutral!35!black, anchor=west] at (10.3,-1.25) {volatili};
+    \draw[neutral!50!white] (10.2,-2.45) -- (10.2,-3.85);
+    \node[font=\Lato\tiny, text=neutral!35!black, anchor=west] at (10.3,-3.15) {permanenti};
+  \end{tikzpicture}
+  \caption{La gerarchia di memoria (1 ns è un miliardesimo di secondo). In
+           alto memorie piccole, veloci, costose e volatili; in basso grandi,
+           lente, economiche e permanenti.}
+  \label{fig:gerarchia}
+\end{figure}
+
+Un'immagine aiuta: la CPU è un impiegato alla scrivania. I registri sono ciò
+che tiene in mano; la cache, i fogli sulla scrivania; la RAM, lo scaffale
+nella stanza; il disco, l'archivio in cantina. L'impiegato lavora solo su
+ciò che ha in mano, e se un foglio non è sulla scrivania deve alzarsi a
+prenderlo: per questo i dati usati spesso vengono tenuti vicini.
+
+\section{Il software}
+
+\subsection{Gli strati del software}
+
+Fra l'hardware e i programmi che usiamo c'è un sistema software a strati
+(figura~\ref{fig:strati}). Ogni strato usa i servizi di quello sotto e ne
+offre di più comodi a quello sopra: è ancora l'idea di astrazione.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      strato/.style={draw=#1!65!black, fill=#1!12!white, line width=0.7pt,
+        minimum width=9.5cm, minimum height=0.68cm, anchor=north},
+      es/.style={anchor=west, font=\Lato\scriptsize, text=neutral!25!black}]
+    \node[strato=accent] (app) at (0,0) {\textbf{applicazioni}};
+    \node[strato=primary] (lib) at ([yshift=-2pt]app.south) {\textbf{librerie} (per esempio la libreria standard del C)};
+    \node[strato=green-gradient-6] (int) at ([yshift=-2pt]lib.south) {\textbf{interfaccia}: a riga di comando (la shell) o grafica};
+    \node[strato=orange-gradient-6] (so) at ([yshift=-2pt]int.south) {\textbf{sistema operativo}: gestione di processi, memoria, periferiche, file};
+    \node[strato=red-gradient-6] (ker) at ([yshift=-2pt]so.south) {\textbf{nucleo} (\textit{kernel}) del sistema operativo};
+    \node[strato=neutral] (hw) at ([yshift=-2pt]ker.south) {\textbf{hardware}: CPU, memoria, dispositivi};
+    \node[es] at ([xshift=0.4cm]app.east) {browser, VS Code, i nostri programmi};
+    \node[es] at ([xshift=0.4cm]lib.east) {\code{printf}, \code{scanf}\dots};
+    \node[es] at ([xshift=0.4cm]int.east) {bash, il desktop};
+    \node[es] at ([xshift=0.4cm]so.east) {Linux, Windows, macOS};
+  \end{tikzpicture}
+  \caption{Fra l'hardware e l'ambiente in cui si sviluppano i programmi
+           c'è un sistema software stratificato.}
+  \label{fig:strati}
+\end{figure}
+
+\subsection{L'avvio del computer}
+
+Il primo programma eseguito all'accensione è il \term{sistema operativo}:
+è lui che, quando chiediamo di eseguire un programma, lo carica in memoria
+e dice al processore dove si trova la sua prima istruzione. Ma chi dice al
+processore dove si trova la prima istruzione del sistema operativo? È un
+problema dell'uovo e della gallina, risolto così
+(figura~\ref{fig:avvio}): all'accensione il computer esegue un piccolo
+programma che sta in una memoria permanente della scheda madre (il
+\textit{firmware}); questo carica in memoria il contenuto di un blocco
+predefinito di un disco, il \term{Master Boot Record} (MBR). Il codice del
+MBR, chiamato \term{bootloader}, è una sequenza di byte che si assume essere
+un programma in linguaggio macchina: il suo compito è caricare il sistema
+operativo. Il MBR è configurabile: se sul disco ci sono più sistemi
+operativi, si può scegliere quale avviare.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      passo/.style={wtnode, font=\Lato\scriptsize, text width=2.8cm, minimum height=1.3cm}]
+    \node[passo, draw=neutral!60!white, fill=neutral!8!white, text width=2.4cm] (a) at (0,0) {\textbf{accensione}};
+    \node[passo] (b) at (3.6,0) {\textbf{firmware}\\(BIOS o UEFI)\\nella scheda madre};
+    \node[passo] (c) at (7.4,0) {\textbf{bootloader}\\letto dal MBR del disco};
+    \node[passo, draw=accent!60!black, fill=accent!8!white] (d) at (11.2,0) {\textbf{sistema operativo}\\caricato in memoria};
+    \node[passo, draw=green-gradient-6, fill=green-gradient-1!45!white, text width=2.4cm] (e) at (14.8,0) {i \textbf{programmi} dell'utente};
+    \foreach \x/\y in {a/b, b/c, c/d, d/e} \draw[wtarrow] (\x) -- (\y);
+  \end{tikzpicture}
+  \caption{L'avvio: ogni programma carica il successivo, più grande e più
+           capace.}
+  \label{fig:avvio}
+\end{figure}
+
+\info{MBR e UEFI}{
+  Il Master Boot Record è il meccanismo storico dei PC. I computer recenti
+  usano il firmware \textit{UEFI}, che invece di un singolo blocco legge il
+  bootloader da una piccola partizione dedicata del disco. L'idea non
+  cambia: un programma minuscolo, che sta in un posto noto in anticipo,
+  avvia un programma più grande.}
+
+\subsection{Che cosa fa il sistema operativo}
+
+Il sistema operativo \textbf{alza il livello di astrazione} della macchina:
+è più facile da programmare dell'hardware sottostante e semplifica la
+scrittura di ogni altro programma. Le sue funzioni principali:
+
+\begin{itemize}
+  \item \textbf{gestione dei processi}, cioè dei programmi in esecuzione:
+        li crea e li termina, li sospende e li riattiva, li fa comunicare.
+        Il processore esegue un'istruzione alla volta, ma il sistema
+        operativo lo assegna a turno ai vari programmi per pochi millesimi
+        di secondo ciascuno (la \textit{schedulazione}): così sembrano
+        procedere tutti insieme;
+  \item \textbf{gestione della memoria centrale}: assegna la memoria ai
+        processi, li carica e li rimuove, e la \textbf{protegge}, cioè
+        impedisce a un programma di scrivere nella memoria di un altro;
+  \item \textbf{gestione delle periferiche}: le configura e le pilota, con
+        il \textit{buffering} (tiene i dati in memoria finché non vengono
+        elaborati) e il \textit{caching} (tiene vicini i dati usati spesso);
+  \item \textbf{gestione del file system}: nasconde all'utente come sono
+        organizzati i dati sul disco, offrendo il concetto di \textit{file}
+        e di \textit{cartella} (l'albero di cartelle del
+        capitolo~\ref{chap:ambiente}), con le operazioni di creazione,
+        lettura, scrittura, copia, ricerca e i diritti di accesso;
+  \item \textbf{interfaccia utente}: a riga di comando (l'interprete dei
+        comandi, la shell che usiamo nel terminale) o grafica;
+  \item \textbf{rilevamento degli errori}: divisione per zero, carta
+        finita, rete caduta\dots; per ogni errore serve un'azione di
+        recupero appropriata.
+\end{itemize}
+
+L'ultima voce ci riguarderà da vicino. Un programma C che divide un intero
+per zero chiede al processore un'operazione impossibile; il processore
+avvisa il sistema operativo, che \textbf{termina il programma}:
+
+\begin{affianco}[0.45][c]
+\begin{lstlisting}[style=c, name=div0.c]
+#include <stdio.h>
+
+int main(void)
+{
+    int a = 7, b = 0;
+    printf("%d\n", a / b);
+    return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ gcc -o div0 div0.c
+$ ./div0
+Floating point exception
+\end{console}
+\wtnota{Il messaggio parla di “virgola mobile” anche se la divisione è
+fra interi: è un nome storico.}
+\end{affianco}
+
+\subsection{I servizi per i programmi}
+
+Il sistema operativo offre servizi ai programmi: caricarli in memoria ed
+eseguirli, compiere le operazioni di I/O (un programma normale non può
+pilotare direttamente i dispositivi), leggere e scrivere i file, far
+comunicare processi sullo stesso computer o su computer diversi (con memoria
+condivisa o scambio di messaggi), rilevare gli errori. Ci sono poi servizi
+per gestire il sistema nel suo insieme: allocazione delle risorse fra utenti
+e processi, contabilità del loro uso, protezione e sicurezza.
+
+Anche il più semplice dei nostri programmi passa da questi servizi. Quando
+il programma del capitolo precedente esegue \code{printf}, il testo non va
+direttamente sullo schermo (figura~\ref{fig:printf-so}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      p/.style={wtnode, font=\Lato\scriptsize, text width=3.5cm, minimum height=1.15cm}]
+    \node[p] (a) at (0,0) {il nostro programma chiama \code{printf}};
+    \node[p] (b) at (4.5,0) {la \textbf{libreria} del C prepara il testo};
+    \node[p, draw=orange-gradient-6!80!black, fill=orange-gradient-1!30!white] (c) at (9.0,0) {chiede al \textbf{sistema operativo} di scriverlo};
+    \node[p, draw=green-gradient-6, fill=green-gradient-1!45!white] (d) at (13.5,0) {il testo compare nel \textbf{terminale}};
+    \foreach \x/\y in {a/b, b/c, c/d} \draw[wtarrow] (\x) -- (\y);
+  \end{tikzpicture}
+  \caption{Il percorso di una \code{printf}: dal programma alla libreria,
+           dalla libreria al sistema operativo, e infine al dispositivo.}
+  \label{fig:printf-so}
+\end{figure}
+
+\subsection{Installare e scrivere un sistema operativo}
+
+Lo stesso sistema operativo gira su macchine diverse, quindi va
+\textbf{configurato} in fase di installazione: processore, memoria,
+suddivisione del disco (partizioni), dispositivi presenti, opzioni come
+l'algoritmo di schedulazione o il numero massimo di processi.
+
+I primi sistemi operativi erano scritti in assembly; oggi si scrivono in
+linguaggi di alto livello, perché il codice si scrive più in fretta, è più
+compatto, più facile da capire e da correggere. Un sistema operativo scritto
+in un linguaggio di alto livello è molto più flessibile e manutenibile. Non
+a caso, il C nacque proprio per scrivere un sistema operativo, Unix, come
+racconta il capitolo~\ref{chap:strutturata}.
+
+\insintesi{
+  Un calcolatore è fatto di CPU, memoria e dispositivi di I/O, collegati
+  dal bus. La memoria è una fila di celle di un byte, ognuna con un
+  indirizzo, che contengono sia i dati sia le istruzioni dei programmi. La
+  CPU sa eseguire solo istruzioni elementari del proprio
+  \textbf{linguaggio macchina}, una alla volta, guidata dal program counter;
+  ripetizioni e scelte si ottengono con i salti. I linguaggi di alto
+  livello come il C nascondono questi dettagli (astrazione), ma vanno
+  \textbf{tradotti}. I bit di per sé non hanno significato: sono i
+  \textbf{tipi} a stabilire come interpretarli. Il sistema operativo, il
+  primo programma caricato all'avvio, gestisce processi, memoria, periferiche
+  e file, e offre i suoi servizi a tutti gli altri programmi.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Deitel \& Deitel}, \textit{Il linguaggio C --- Fondamenti e
+        tecniche di programmazione}, Pearson: capitolo~1 (computer,
+        hardware e software, linguaggi macchina, assembly e di alto
+        livello).
+  \item \textbf{Treccani}, voce \textit{programmazione}. \\
+        \urlx{https://www.treccani.it/vocabolario/programmazione/}
+\end{itemize}

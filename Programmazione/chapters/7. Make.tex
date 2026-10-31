@@ -1,0 +1,554 @@
+\chapter{Programmi su più file e make}
+\label{chap:make}
+
+Finora ogni programma stava in un solo file. I programmi veri sono fatti di
+molti file, a volte migliaia, e compilarli tutti a ogni modifica sarebbe
+lentissimo. Questo capitolo mostra come si divide un programma in più file,
+come si compilano separatamente e si collegano (riprendendo il
+capitolo~\ref{chap:dal-problema}), e come il programma \code{make} automatizza
+il lavoro, ricompilando solo ciò che serve.
+
+\section{Perché più file}
+
+Dividere un programma in più file sorgente ha diversi vantaggi:
+
+\begin{itemize}
+  \item \textbf{organizzazione}: ogni file raccoglie le funzioni che
+        riguardano un aspetto del problema (l'input, i calcoli, l'output),
+        come i capitoli di un libro;
+  \item \textbf{riuso}: un file con funzioni utili (per esempio di
+        geometria) si può usare in più programmi;
+  \item \textbf{lavoro di gruppo}: persone diverse lavorano su file
+        diversi;
+  \item \textbf{compilazione più rapida}: se si modifica un solo file, si
+        ricompila solo quello e si rifà il collegamento.
+\end{itemize}
+
+\subsection{Un piccolo progetto}
+
+Prendiamo un programma che calcola l'area di un cerchio e di un quadrato, e
+dividiamolo in tre file: le funzioni di calcolo in \code{aree.c}, il
+programma principale in \code{main.c}, e un \textbf{file di intestazione}
+\code{aree.h} con ciò che serve a entrambi.
+
+\begin{lstlisting}[style=h, name=aree.h]
+/* aree.h: costanti e prototipi delle funzioni sulle aree */
+
+#define PI 3.14159
+
+double area_cerchio(double raggio);
+double area_quadrato(double lato);
+\end{lstlisting}
+
+\begin{affianco}[0.46]
+\begin{lstlisting}[style=c, name=aree.c]
+/* aree.c: definizioni delle funzioni sulle aree */
+
+#include "aree.h"
+
+double area_cerchio(double raggio)
+{
+    return PI * raggio * raggio;
+}
+
+double area_quadrato(double lato)
+{
+    return lato * lato;
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c, name=main.c]
+#include <stdio.h>
+#include "aree.h"
+
+int main(void)
+{
+    double x;
+
+    printf("Inserisci una misura: ");
+    scanf("%lf", &x);
+    printf("cerchio di raggio %g: area %g\n",
+           x, area_cerchio(x));
+    printf("quadrato di lato %g: area %g\n",
+           x, area_quadrato(x));
+    return 0;
+}
+\end{lstlisting}
+\end{affianco}
+
+Il ruolo di ciascun file:
+
+\begin{itemize}
+  \item \code{aree.h} contiene le \textbf{dichiarazioni}: la costante e i
+        prototipi. Chi lo include sa \textit{che} le funzioni esistono e come
+        si chiamano;
+  \item \code{aree.c} contiene le \textbf{definizioni}: il codice delle
+        funzioni, scritto una volta sola. Include anche lui \code{aree.h},
+        così il compilatore controlla che le definizioni corrispondano ai
+        prototipi;
+  \item \code{main.c} include \code{aree.h} e può quindi chiamare le
+        funzioni, anche se il loro codice sta in un altro file.
+\end{itemize}
+
+\subsection{Compilare separatamente, collegare insieme}
+
+Ogni file \code{.c} si compila per conto suo con l'opzione \code{-c}, che
+produce il file oggetto; poi il linker unisce i file oggetto
+nell'eseguibile:
+
+\begin{console}
+$ gcc -Wall -c main.c
+$ gcc -Wall -c aree.c
+$ gcc -o aree main.o aree.o
+$ ./aree
+Inserisci una misura: <<2>>
+cerchio di raggio 2: area 12.5664
+quadrato di lato 2: area 4
+\end{console}
+
+Che cosa contengono i due file oggetto, e come fa il linker a metterli
+insieme? Lo mostra \code{nm} (capitolo~\ref{chap:dal-problema}): in
+\code{main.o} le due funzioni sono \textit{undefined} (\code{U}), cioè usate
+ma senza codice; in \code{aree.o} sono presenti (\code{T}). Il linker
+abbina ogni nome mancante con la sua definizione (schema a destra).
+
+\begin{affianco}[0.5][c]
+\begin{console}
+$ nm main.o
+                 U __isoc99_scanf
+                 U __stack_chk_fail
+                 U area_cerchio
+                 U area_quadrato
+0000000000000000 T main
+                 U printf
+$ nm aree.o
+0000000000000000 T area_cerchio
+0000000000000025 T area_quadrato
+\end{console}
+\risultato
+\begin{immagine}
+\begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+    sim/.style={anchor=west, inner sep=1.5pt},
+    box/.style={draw=primary!65!black, fill=primary!4!white, line width=0.7pt,
+      rounded corners=3pt}]
+  \draw[box] (0,0) rectangle (2.9,-2.3);
+  \node[font=\Lato\scriptsize\bfseries, anchor=south west] at (0,0.02) {main.o};
+  \node[sim] at (0.1,-0.35) {T main};
+  \node[sim, text=merr] (u1) at (0.1,-0.85) {U area\_cerchio};
+  \node[sim, text=merr] (u2) at (0.1,-1.35) {U area\_quadrato};
+  \node[sim, text=neutral!45!black] at (0.1,-1.85) {U printf, scanf\dots};
+  \draw[box] (4.6,-0.4) rectangle (7.6,-1.8);
+  \node[font=\Lato\scriptsize\bfseries, anchor=south west] at (4.6,-0.38) {aree.o};
+  \node[sim, text=mok] (t1) at (4.7,-0.85) {T area\_cerchio};
+  \node[sim, text=mok] (t2) at (4.7,-1.35) {T area\_quadrato};
+  \draw[wtarrowacc] (u1.east) -- (t1.west);
+  \draw[wtarrowacc] (u2.east) -- (t2.west);
+  \node[mnota, anchor=north, align=center] at (3.8,-2.4) {il linker abbina ogni nome usato (\code{U})\\alla sua definizione (\code{T}); \code{printf}\\e \code{scanf} le trova nella libreria standard};
+\end{tikzpicture}
+\end{immagine}
+\end{affianco}
+
+Che cosa succede se si dimentica \code{aree.o} al momento del linking? La
+compilazione di \code{main.c} era già riuscita (grazie a \code{aree.h} il
+compilatore sapeva tutto ciò che serviva), ma il linker non trova il codice
+delle due funzioni:
+
+\begin{console}
+$ gcc -o aree main.o
+/usr/bin/ld: main.o: in function `main':
+main.c:(.text+0x54): undefined reference to `area_cerchio'
+/usr/bin/ld: main.c:(.text+0x89): undefined reference to `area_quadrato'
+collect2: error: ld returned 1 exit status
+\end{console}
+
+È lo stesso errore di \code{pow} senza \code{-lm} del
+capitolo~\ref{chap:primi-programmi}: \textit{undefined reference} significa
+sempre “il linker non trova il codice di questa funzione”.
+
+\section{Il progetto delle lezioni}
+
+\subsection{I file}
+
+A lezione si usa un progetto su tre file, che gestisce un elenco di esami
+sostenuti da alcuni studenti (letti da un file di testo): \code{main.c},
+\code{funzioni.c} e \code{studente.h} (figura~\ref{fig:progetto}). Il codice
+usa strumenti che vedremo più avanti (strutture, liste, file), e verrà
+spiegato per intero nel capitolo~\ref{chap:liste}; per capire \code{make}
+basta sapere chi dipende da chi.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      f/.style={wtnodeplain, minimum width=3.2cm, minimum height=1.15cm, align=center}]
+    \node[f, draw=accent!60!black, fill=accent!7!white] (h) at (0,0) {{\FiraCodeNL\bfseries studente.h}\\la struttura \code{studente}\\e i prototipi delle funzioni};
+    \node[f] (m) at (-3.6,-1.9) {{\FiraCodeNL\bfseries main.c}\\legge i dati, filtra,\\scrive il risultato};
+    \node[f] (fu) at (3.6,-1.9) {{\FiraCodeNL\bfseries funzioni.c}\\le funzioni sulla lista\\di studenti};
+    \draw[wtarrowacc] (h) -- node[wtlab, above left, fill=none] {incluso da} (m);
+    \draw[wtarrowacc] (h) -- node[wtlab, above right, fill=none] {incluso da} (fu);
+    \draw[wtarrow, dashed] (m) -- node[wtlab, below=2pt, fill=none] {chiama le funzioni di} (fu);
+  \end{tikzpicture}
+  \caption{Il progetto delle lezioni: due sorgenti e un header condiviso.}
+  \label{fig:progetto}
+\end{figure}
+
+L'eseguibile si crea come abbiamo visto: la compilazione
+(\code{gcc -c main.c funzioni.c}, che si può fare anche con un solo comando
+per più file) produce \code{main.o} e \code{funzioni.o}; il linking
+(\code{gcc -o esercizio main.o funzioni.o}) produce l'eseguibile
+\code{esercizio}.
+
+\subsection{Il problema}
+
+Con molti file la compilazione può essere lunga, e non sempre è necessario
+ricompilare tutti i sorgenti: se si modifica solo \code{funzioni.c},
+\code{main.o} è ancora valido. Vorremmo rendere le operazioni più semplici
+e automatiche.
+
+Un primo passo è uno \term{script}: un file di testo che contiene i comandi,
+da eseguire tutti in fila.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=shell, name=compila.sh]
+#!/bin/bash
+gcc -c main.c
+gcc -c funzioni.c
+gcc -o esercizio main.o funzioni.o
+\end{lstlisting}
+\risultato
+\begin{console}
+$ chmod +x compila.sh
+$ ./compila.sh
+\end{console}
+\end{affianco}
+
+La prima riga (\code{\#!/bin/bash}, detta \textit{shebang}) dice al sistema
+quale programma deve eseguire lo script: la shell bash. \code{chmod +x}
+rende il file eseguibile, una volta per tutte; da lì in poi
+\code{./compila.sh} esegue i tre comandi. Il procedimento è automatico, ma i
+sorgenti vengono comunque compilati \textbf{tutti}, ogni volta. Vorremmo un
+meccanismo che compila solo i file che sono stati modificati.
+
+\section{make}
+
+\subsection{L'idea: dipendenze e date}
+
+Il comando \code{make} esegue la compilazione in modo automatico seguendo,
+fondamentalmente, due regole:
+
+\begin{itemize}
+  \item la \textbf{dipendenza} fra i file: \code{esercizio} si costruisce da
+        \code{main.o} e \code{funzioni.o}; \code{main.o} si costruisce da
+        \code{main.c} (e da \code{studente.h}, che \code{main.c} include), e
+        così via (figura~\ref{fig:dipendenze});
+  \item l'\textbf{ordine temporale} in cui sono stati creati o modificati i
+        file sorgente, oggetto ed eseguibile: ogni file ha una data e ora di
+        ultima modifica, che \code{ls -l} mostra.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      t/.style={wtnode, font=\FiraCodeNL\scriptsize, minimum width=2.3cm},
+      s/.style={wtnodeplain, font=\FiraCodeNL\scriptsize, minimum width=2.3cm},
+      ora/.style={font=\Lato\tiny, text=neutral!40!black}]
+    \node[t, draw=red-gradient-6!70!black, fill=red-gradient-1!20!white] (e) at (0,0) {esercizio};
+    \node[t] (mo) at (-3.0,-1.5) {main.o};
+    \node[t] (fo) at (3.0,-1.5) {funzioni.o};
+    \node[s] (mc) at (-4.6,-3.0) {main.c};
+    \node[s, draw=accent!60!black, fill=accent!7!white] (h) at (0,-3.0) {studente.h};
+    \node[s] (fc) at (4.6,-3.0) {funzioni.c};
+    \foreach \a/\b in {e/mo, e/fo, mo/mc, mo/h, fo/h, fo/fc}
+      \draw[wtarrow, <-] (\a) -- (\b);
+    \node[ora, anchor=west] at ([xshift=3pt]e.east) {modificato alle 10:07};
+    \node[ora, anchor=east] at ([xshift=-3pt]mo.west) {10:05};
+    \node[ora, anchor=west] at ([xshift=3pt]fo.east) {10:06};
+    \node[ora, anchor=north] at ([yshift=-2pt]mc.south) {10:00};
+    \node[ora, anchor=north] at ([yshift=-2pt]h.south) {9:55};
+    \node[ora, anchor=north, text=merr] at ([yshift=-2pt]fc.south) {\textbf{10:12}: modificato dopo \code{funzioni.o}!};
+  \end{tikzpicture}
+  \caption{Il grafo delle dipendenze del progetto: le frecce vanno da ciò
+           che serve a ciò che si costruisce. \code{funzioni.c} è più
+           recente di \code{funzioni.o}, quindi \code{funzioni.o} va
+           ricostruito, e di conseguenza anche \code{esercizio}.}
+  \label{fig:dipendenze}
+\end{figure}
+
+Il ragionamento di \code{make} è quello che faremmo noi: per costruire un
+file, prima si assicura che siano aggiornati i file da cui dipende (e così
+via, all'indietro); poi, se il file \textbf{non esiste} oppure è \textbf{più
+vecchio} di almeno uno dei file da cui dipende, lo ricostruisce eseguendo i
+comandi indicati. Altrimenti non fa niente. Nella situazione della
+figura~\ref{fig:dipendenze}, \code{make} ricompila solo \code{funzioni.c} e
+rifà il linking; \code{main.c} non viene toccato.
+
+\subsection{Il makefile}
+
+\code{make} esegue le operazioni descritte in un file, chiamato di solito
+\code{makefile} o \code{Makefile}, che contiene la descrizione delle
+dipendenze, i comandi da eseguire e, eventualmente, delle definizioni di
+\textit{macro}. Per usarlo basta scrivere \code{make} nella cartella che lo
+contiene; se il file ha un altro nome, per esempio \code{makeEsercizio}, lo
+si indica con l'opzione \code{-f}:
+
+\begin{console}
+$ make
+$ make -f makeEsercizio
+\end{console}
+
+Ecco il primo makefile delle lezioni. Nei listati di questo capitolo il
+carattere di tabulazione (TAB) è disegnato come una freccia
+\tikz[baseline=-2.6pt]\draw[vsclinenum, -{Stealth[length=3pt,width=3pt]}, line width=0.5pt] (0,0) -- (0.5,0);,
+come fa VS Code quando si chiede di mostrare gli spazi bianchi: il motivo
+sarà chiaro fra poco.
+
+\begin{lstlisting}[style=make, name=makefile1]
+# makefile di esempio
+# versione 1
+#
+
+eseguibile: main.o funzioni.o
+(*@\TAB@*)gcc -o esercizio main.o funzioni.o
+
+main.o: main.c
+(*@\TAB@*)gcc -c main.c
+
+funzioni.o: funzioni.c
+(*@\TAB@*)gcc -c funzioni.c
+\end{lstlisting}
+
+\subsection{I tipi di riga}
+
+In un makefile si distinguono quattro tipi di righe:
+
+\begin{itemize}
+  \item le righe di \textbf{dipendenza}: definiscono una relazione fra un
+        \term{target} (l'obiettivo, ciò che si costruisce) e uno o più file
+        da cui dipende, separati dal carattere \code{:}. Per esempio
+        \code{main.o: main.c};
+  \item le righe di \textbf{comando}: definiscono l'operazione da eseguire
+        per ottenere il target, e seguono la sua riga di dipendenza.
+        \textbf{Devono cominciare con un TAB};
+  \item le righe di \textbf{commento}: cominciano con \code{\#};
+  \item le righe di definizione di \textbf{macro}, che vedremo fra poco.
+\end{itemize}
+
+\error{Il TAB non è uno spazio}{
+  Le righe di comando devono cominciare con un carattere di
+  \textbf{tabulazione}, non con degli spazi, anche se a occhio sono
+  identici. Il file \code{makefile4} delle lezioni contiene proprio questo
+  errore (quattro spazi al posto del TAB), e \code{make} si rifiuta di
+  proseguire con un messaggio poco chiaro:
+  \textit{makefile4:9: *** missing separator. Stop.} VS Code inserisce
+  davvero un TAB solo se riconosce il file come makefile, cioè se il file si
+  chiama \code{makefile} o \code{Makefile}: in basso a destra, nella barra
+  di stato, compare allora \textit{Tab Size} invece di \textit{Spaces}.}
+
+\subsection{Che cosa fa \code{make}, passo per passo}
+
+Proviamo il primo makefile. La prima volta mancano tutti i file oggetto e
+l'eseguibile, quindi \code{make} esegue tutto, cominciando dai file da cui
+dipende il primo target:
+
+\begin{console}
+$ make -f makefile1
+gcc -c main.c
+gcc -c funzioni.c
+gcc -o esercizio main.o funzioni.o
+\end{console}
+
+\code{make} stampa ogni comando prima di eseguirlo. Si noti l'ordine: per
+costruire \code{eseguibile} servono \code{main.o} e \code{funzioni.o}, quindi
+prima vengono costruiti loro. Se ora modifichiamo soltanto
+\code{funzioni.c} (il comando \code{touch} cambia la data di un file, come
+se lo avessimo modificato e salvato) e rilanciamo \code{make}, viene
+ricompilato solo quello:
+
+\begin{console}
+$ touch funzioni.c
+$ make -f makefile1
+gcc -c funzioni.c
+gcc -o esercizio main.o funzioni.o
+\end{console}
+
+\subsection{Le dipendenze dall'header}
+
+Che cosa succede se modifichiamo \code{studente.h}? Con il primo makefile,
+niente di buono:
+
+\begin{console}
+$ touch studente.h
+$ make -f makefile1
+gcc -o esercizio main.o funzioni.o
+\end{console}
+
+Nessun file viene ricompilato, perché nel makefile i file oggetto dipendono
+solo dai rispettivi \code{.c}. Ma entrambi i \code{.c} \textbf{includono}
+\code{studente.h}: se nell'header cambia, per esempio, la struttura
+\code{studente}, i due file oggetto sono stati compilati con la versione
+vecchia e il programma risultante è incoerente, con errori imprevedibili.
+La soluzione è dichiarare la dipendenza:
+
+\begin{lstlisting}[style=make, name=makefile2]
+# makefile di esempio
+# versione 2
+
+eseguibile: main.o funzioni.o
+(*@\TAB@*)gcc -o esercizio main.o funzioni.o
+
+main.o: main.c studente.h
+(*@\TAB@*)gcc -c main.c
+
+funzioni.o: funzioni.c studente.h
+(*@\TAB@*)gcc -c funzioni.c
+\end{lstlisting}
+
+\begin{console}
+$ make -f makefile2
+gcc -c main.c
+gcc -c funzioni.c
+gcc -o esercizio main.o funzioni.o
+\end{console}
+
+Ora, dopo una modifica all'header, vengono ricompilati entrambi i sorgenti.
+La regola generale: \textbf{un file oggetto dipende dal suo \code{.c} e da
+tutti gli header (nostri) che questo include}.
+
+\subsection{Il nome del target}
+
+Un'altra stranezza: con i primi due makefile il linking viene eseguito
+\textbf{ogni volta}, anche se nulla è cambiato. Possiamo evitarlo? Il motivo
+è il nome del target: \code{eseguibile}. \code{make} controlla se esiste un
+file con quel nome e se è aggiornato; ma il comando produce un file chiamato
+\code{esercizio}, quindi un file \code{eseguibile} non esiste mai, e
+\code{make} rifà il linking per crearlo. Basta che il target abbia lo stesso
+nome del file prodotto:
+
+\begin{lstlisting}[style=make, name=makefile3]
+# makefile di esempio
+# versione 3
+
+esercizio: main.o funzioni.o
+(*@\TAB@*)gcc -o esercizio main.o funzioni.o
+
+main.o: main.c studente.h
+(*@\TAB@*)gcc -c main.c
+
+funzioni.o: funzioni.c studente.h
+(*@\TAB@*)gcc -c funzioni.c
+\end{lstlisting}
+
+\begin{console}
+$ make -f makefile3
+make: 'esercizio' is up to date.
+\end{console}
+
+Tutto è aggiornato, e \code{make} lo dice senza eseguire nulla.
+
+\subsection{Le macro}
+
+Una riga di definizione di \term{macro} definisce un nome simbolico per un
+insieme di oggetti, con la sintassi \code{NOME = valore}; il nome si usa poi
+scrivendo \code{\$(NOME)}. È l'equivalente del \code{\#define} del C: si
+scrive l'elenco una volta sola, e se cambia si modifica in un solo punto.
+
+\begin{lstlisting}[style=make, name=makefile4]
+# makefile di esempio
+# versione 4
+
+OBJ = funzioni.o main.o
+
+esercizio: $(OBJ)
+(*@\TAB@*)gcc -o esercizio $(OBJ)
+
+main.o: main.c studente.h
+(*@\TAB@*)gcc -c main.c
+
+funzioni.o: funzioni.c studente.h
+(*@\TAB@*)gcc -c funzioni.c
+\end{lstlisting}
+
+(Questa è la versione corretta, con il TAB; nel file distribuito con le
+lezioni la riga del linking comincia con quattro spazi e produce l'errore
+\textit{missing separator}.)
+
+\section{Un makefile completo}
+
+Nella pratica i makefile usano quasi sempre qualche macro in più e un
+target di servizio per fare pulizia. Ecco un makefile per il progetto
+\code{aree} di inizio capitolo:
+
+\begin{affianco}[0.5]
+\begin{lstlisting}[style=make, name=Makefile]
+CC = gcc
+CFLAGS = -Wall
+OBJ = main.o aree.o
+
+aree: $(OBJ)
+(*@\TAB@*)$(CC) $(CFLAGS) -o aree $(OBJ)
+
+main.o: main.c aree.h
+(*@\TAB@*)$(CC) $(CFLAGS) -c main.c
+
+aree.o: aree.c aree.h
+(*@\TAB@*)$(CC) $(CFLAGS) -c aree.c
+
+clean:
+(*@\TAB@*)rm -f aree $(OBJ)
+\end{lstlisting}
+\risultato
+\begin{console}
+$ make
+gcc -Wall -c main.c
+gcc -Wall -c aree.c
+gcc -Wall -o aree main.o aree.o
+$ make
+make: 'aree' is up to date.
+$ touch main.c
+$ make
+gcc -Wall -c main.c
+gcc -Wall -o aree main.o aree.o
+$ make clean
+rm -f aree main.o aree.o
+\end{console}
+\end{affianco}
+
+\begin{itemize}
+  \item \code{CC} e \code{CFLAGS} sono i nomi tradizionali delle macro per
+        il compilatore e le sue opzioni: per aggiungere un'opzione a tutte
+        le compilazioni (per esempio \code{-g}, che serve al debugger) basta
+        cambiare una riga;
+  \item senza argomenti, \code{make} costruisce il \textbf{primo} target del
+        file (qui \code{aree}); con \code{make main.o} si costruisce solo
+        quello;
+  \item \code{clean} non corrisponde a nessun file e non ha dipendenze: è un
+        target “di servizio”, che con \code{make clean} cancella
+        l'eseguibile e i file oggetto, per ripartire da zero.
+\end{itemize}
+
+\info{make non è solo per il C}{
+  \code{make} non sa nulla di C: sa solo che certi file si costruiscono da
+  altri file eseguendo dei comandi, se sono più vecchi. Per questo si usa
+  anche per compilare documenti, generare siti, elaborare dati: ovunque ci
+  sia una catena di file da ricostruire quando qualcosa cambia.}
+
+\insintesi{
+  Un programma si divide in più file \code{.c}, ciascuno compilato
+  separatamente in un file oggetto (\code{gcc -c}), e in header \code{.h}
+  con le dichiarazioni condivise; il linker unisce gli oggetti, abbinando
+  ogni funzione usata alla sua definizione (\textit{undefined reference}
+  vuol dire che una definizione manca). \code{make} legge un
+  \textbf{makefile} fatto di righe di dipendenza (\code{target: file}),
+  righe di comando (che cominciano con un \textbf{TAB}), commenti e macro, e
+  ricostruisce un target solo se non esiste o è più vecchio di qualcosa da
+  cui dipende. Gli header vanno elencati fra le dipendenze, e il nome del
+  target deve essere quello del file prodotto.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{GNU make --- An Introduction to Makefiles}, il manuale
+        ufficiale. \\
+        \urlx{https://www.gnu.org/software/make/manual/html_node/Introduction.html}
+  \item \textbf{Deitel \& Deitel}, \textit{Il linguaggio C}: appendice sulla
+        compilazione di programmi su più file.
+\end{itemize}
