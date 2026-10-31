@@ -1,0 +1,839 @@
+\chapter{Le strutture}
+\label{chap:strutture}
+
+Gli array raccolgono molti dati \textbf{dello stesso tipo}. Spesso, però,
+un'informazione è fatta di parti di tipo diverso: una carta da gioco ha un
+valore (un numero) e un seme (un carattere); uno studente ha un nome (una
+stringa), una matricola (un intero) e un voto (un carattere). Le
+\textbf{strutture} (\code{struct}) permettono di aggregare variabili non
+omogenee in un'unica struttura dati, da usare come un tutto. Sono anche il
+mattone delle liste collegate del capitolo~\ref{chap:liste}.
+
+\section{Definire una struttura}
+
+\subsection{Il tipo \code{struct carta}}
+
+Una carta da gioco italiana è identificata da un valore numerico, da 1 a 10,
+e da un seme: oro, bastoni, coppe o spade. Possiamo dichiarare il tipo
+
+\begin{lstlisting}[style=c]
+struct carta {
+    int  valore;          /* da 1 a 10 */
+    char seme;            /* 'o', 'b', 'c', 's' */
+};
+\end{lstlisting}
+
+\begin{itemize}
+  \item \code{struct} è una parola chiave;
+  \item \code{carta} è il nome assegnato alla struttura, detto
+        \textbf{tag} (etichetta);
+  \item \code{valore} e \code{seme} sono i \textbf{campi} (o membri) della
+        struttura, ciascuno con il suo tipo.
+\end{itemize}
+
+Questa dichiarazione definisce il tipo di dato derivato \code{struct carta}
+(capitolo~\ref{chap:tipi}): è un modello, e \textbf{nessuna memoria} viene
+allocata in questo momento. La memoria viene allocata dalla dichiarazione
+delle variabili:
+
+\begin{lstlisting}[style=c]
+struct carta c1, c2;     /* due variabili di tipo struct carta */
+\end{lstlisting}
+
+(Nelle slide, a questo punto, il tipo è chiamato \code{struct card}: è
+rimasto il nome dell'esempio originale in inglese, ma il tipo dichiarato è
+\code{struct carta}.)
+
+\subsection{L'operatore punto}
+
+Ai campi di una variabile struttura si accede con l'operatore \code{.}
+(punto): \code{c1.valore} è il campo \code{valore} di \code{c1}, e si usa
+come qualsiasi variabile \code{int}. Le strutture si possono anche
+\textbf{assegnare} in blocco: \code{c2 = c1;} copia tutti i campi.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=carta.c]
+#include <stdio.h>
+
+typedef struct carta {
+   int  valore;
+   char seme;
+} carta;
+
+int main(void)
+{
+   carta c1, c2;
+
+   c1.valore = 7;
+   c1.seme = 'c';
+   c2 = c1;                  /* copia tutti i campi */
+   c2.valore = 1;
+   printf("c1: %d di %c\n", c1.valore, c1.seme);
+   printf("c2: %d di %c\n", c2.valore, c2.seme);
+   printf("sizeof(carta) = %zu\n", sizeof(carta));
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./carta
+c1: 7 di c
+c2: 1 di c
+sizeof(carta) = 8
+\end{console}
+\wtnota{Dopo la copia \code{c1} e \code{c2} sono indipendenti: cambiare
+\code{c2.valore} non tocca \code{c1}.}
+\end{affianco}
+
+Il programma usa il \code{typedef} che vedremo fra poco. Ma perché la
+struttura occupa 8 byte, se un \code{int} ne occupa 4 e un \code{char} 1? Il
+processore accede più facilmente agli \code{int} che stanno a indirizzi
+multipli di 4 (su alcuni processori è addirittura obbligatorio), e il
+compilatore rispetta questa regola anche dentro le strutture. Pensiamo a un
+array di carte: se ogni carta occupasse 5 byte, la seconda inizierebbe al
+byte 5 e il suo \code{valore} non starebbe a un multiplo di 4. Per questo il
+compilatore aggiunge alla fine della struttura 3 byte di
+\textbf{riempimento} (\textit{padding}): ogni carta occupa 8 byte, e ogni
+\code{valore} cade al posto giusto (figura~\ref{fig:carta}). Ecco perché la
+dimensione di una struttura va sempre chiesta a \code{sizeof}, senza sommare
+a mano quelle dei campi.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize, x=0.78cm, y=1cm]
+    \foreach \base/\val/\sem in {0/7/c, 8/1/s} {
+      \draw[draw=primary!65!black, fill=primary!3!white, line width=0.7pt]
+        (\base,0) rectangle ++(4,0.55);
+      \foreach \j in {1,2,3}
+        \draw[draw=primary!35!white, densely dashed, line width=0.4pt]
+          (\base+\j,0) -- ++(0,0.55);
+      \node[font=\FiraCodeNL\footnotesize] at (\base+2,0.275) {\val};
+      \draw[draw=accent!65!black, fill=accent!12!white, line width=0.7pt]
+        (\base+4,0) rectangle ++(1,0.55);
+      \node[font=\FiraCodeNL\scriptsize] at (\base+4.5,0.275) {'\sem'};
+      \draw[draw=neutral!45!white, fill=neutral!12!white, line width=0.7pt]
+        (\base+5,0) rectangle ++(3,0.55);
+    }
+    \foreach \k in {0,...,15}
+      \node[mindir, anchor=north] at (\k+0.5,-0.02) {\k};
+    % che cosa contiene la prima carta
+    \draw[wtbrace] (4,0.68) -- (0,0.68);
+    \node[mnota, anchor=south, align=center] at (2,0.92) {\code{valore}\\4 byte};
+    \draw[draw=neutral!40!black, line width=0.6pt] (4.5,0.6) -- (4.5,0.9);
+    \node[mnota, anchor=south, align=center] at (4.5,0.92) {\code{seme}\\1 byte};
+    \draw[wtbrace] (8,0.68) -- (5,0.68);
+    \node[mnota, anchor=south, align=center] at (6.5,0.92) {riempimento\\3 byte};
+    \draw[wtbrace] (12,0.68) -- (8,0.68);
+    \node[mnota, anchor=south, align=center, text=accent!70!black] at (10,0.92)
+      {\code{mazzo[1].valore}\\inizia al byte 8};
+    % le due carte
+    \draw[wtbrace] (0,-0.42) -- (8,-0.42);
+    \node[mnota, anchor=north] at (4,-0.66) {\code{mazzo[0]}: byte da 0 a 7};
+    \draw[wtbrace] (8,-0.42) -- (16,-0.42);
+    \node[mnota, anchor=north] at (12,-0.66) {\code{mazzo[1]}: byte da 8 a 15};
+  \end{tikzpicture}
+  \caption{Un array \code{carta mazzo[2]}: ogni carta occupa 8 byte (4 per
+           \code{valore}, 1 per \code{seme} e 3 di riempimento), così il
+           \code{valore} di ogni carta inizia a un multiplo di 4.}
+  \label{fig:carta}
+\end{figure}
+
+\subsection{\code{typedef} e strutture}
+
+Scrivere ogni volta \code{struct carta} è scomodo. Si può usare il
+\code{typedef} (capitolo~\ref{chap:tipi}) per dare al tipo un nome più
+breve, separatamente o direttamente nella definizione:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c]
+struct carta {
+    int  valore;
+    char seme;
+};
+
+typedef struct carta carta;
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c]
+typedef struct carta {
+    int  valore;
+    char seme;
+} carta;
+\end{lstlisting}
+\end{affianco}
+
+In entrambi i casi \code{carta} diventa sinonimo di \code{struct carta}, e le
+variabili si dichiarano con \code{carta c1, c2;}. Il tag e il nome del
+\code{typedef} possono coincidere, perché il C li tiene in elenchi separati.
+
+\subsection{I nomi dei campi}
+
+All'interno di una struttura i campi devono avere nomi diversi; campi di
+strutture diverse, invece, possono avere lo stesso nome, perché si
+distinguono dalla variabile a cui appartengono:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c]
+struct fruit {
+   char   *name;
+   int    calories;
+};
+
+struct vegetable {
+   char    *name;
+   int     calories;
+};
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c]
+struct fruit      a;
+struct vegetable  b;
+
+a.calories = 38;
+b.calories = 57;
+\end{lstlisting}
+\end{affianco}
+
+\subsection{Strutture con e senza tag}
+
+Il tag si può omettere, dichiarando subito le variabili:
+
+\begin{lstlisting}[style=c]
+struct {
+   int    day, month, year;
+   char   day_name[4];
+   char   month_name[4];
+} yesterday, today, tomorrow;
+\end{lstlisting}
+
+Senza tag, però, non si possono dichiarare altre variabili di quel tipo oltre
+a \code{yesterday}, \code{today} e \code{tomorrow}: il tipo non ha un nome.
+Con un tag, \code{struct date \{ \dots \};}, si possono dichiarare
+liberamente variabili \code{struct date}. E con il \code{typedef} il tag non
+serve: il nome lo dà il \code{typedef}.
+
+\begin{affianco}[0.55][c]
+\begin{lstlisting}[style=c, name=data.c]
+#include <stdio.h>
+
+typedef struct {
+   int    day, month, year;
+   char   day_name[4];
+   char   month_name[4];
+} date;
+
+int main(void)
+{
+   date d1 = {31, 10, 2026, "Sat", "Oct"};
+
+   printf("%s %d %s %d\n", d1.day_name, d1.day,
+          d1.month_name, d1.year);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./data
+Sat 31 Oct 2026
+\end{console}
+\wtnota{Una struttura si inizializza come un array: i valori fra graffe, nello
+stesso ordine dei campi.}
+\end{affianco}
+
+\subsection{Che cosa non si può fare}
+
+Le strutture si possono assegnare, passare alle funzioni e restituire, ma non
+si possono \textbf{confrontare} con \code{==}, né stampare con un'unica
+conversione di \code{printf}. Proviamo a confrontare due carte:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=confronta.c]
+typedef struct carta {
+   int  valore;
+   char seme;
+} carta;
+
+int main(void)
+{
+   carta c1 = {7, 'c'}, c2 = {7, 'c'};
+
+   if (c1 == c2)
+      return 1;
+   return 0;
+}
+\end{lstlisting}
+\risultato
+Il compilatore non sa che cosa significhi \code{==} fra due strutture, e
+rifiuta il programma (qui sotto). Il confronto va scritto campo per campo:
+
+\vspace{4pt}
+\begin{lstlisting}[style=c]
+if (c1.valore == c2.valore
+        && c1.seme == c2.seme)
+   return 1;
+\end{lstlisting}
+\end{affianco}
+
+\begin{console}
+$ gcc -Wall -o confronta confronta.c
+confronta.c: In function (*@‘@*)main(*@’@*):
+confronta.c:10:11: error: invalid operands to binary == (have (*@‘@*)carta(*@’@*) and (*@‘@*)carta(*@’@*))
+   10 |    if (c1 == c2)
+      |           ^~
+\end{console}
+
+\section{Array di strutture}
+
+\subsection{Un tipo come gli altri}
+
+Una volta definito, un tipo struttura si usa come qualsiasi altro tipo: si
+possono dichiarare array di strutture, puntatori a strutture, e allocarle
+dinamicamente.
+
+\begin{lstlisting}[style=c]
+typedef struct {
+   float   re;
+   float   im;
+} complex;
+
+complex a, b, c[100], *d;
+...
+d = (complex *) malloc(n * sizeof(complex));
+\end{lstlisting}
+
+\code{c[100]} è un array di 100 numeri complessi: \code{c[i].re} è la parte
+reale dell'elemento \code{i}. \code{d} punta a un array di \code{n} complessi
+allocato nello heap, e anche lì si scrive \code{d[i].re}.
+
+\subsection{Il programma \code{class\_info}}
+
+L'esempio delle slide gestisce le informazioni su una classe. In un header,
+incluso da ogni modulo del programma, si definiscono la dimensione massima e
+il tipo \code{student}; la funzione \code{fail} conta gli studenti con il
+voto \code{'F'} (insufficiente, nel sistema americano):
+
+\begin{affianco}[0.5][t]
+\begin{lstlisting}[style=h, name=class_info.h]
+#define   CLASS_SIZE    100
+
+typedef struct {
+   char     *last_name;
+   int      student_id;
+   char     grade;
+} student;
+
+int fail(student *class, int N);
+\end{lstlisting}
+\begin{lstlisting}[style=c, name=fail.c]
+/* Count the failing grades. */
+#include "class_info.h"
+
+int fail(student *class, int N)
+{
+   int   i, cnt = 0;
+
+   for (i = 0; i < N; ++i)
+      cnt += class[i].grade == 'F';
+   return cnt;
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c, name=main.c]
+#include <stdio.h>
+#include <stdlib.h>
+#include "class_info.h"
+
+int main(void)
+{
+   int       cnt, i;
+   student   tmp, *class;
+
+   class = malloc(CLASS_SIZE * sizeof(student));
+   tmp.grade = 'A';
+   tmp.last_name = "Casanova";
+   tmp.student_id = 910017;
+   class[0] = tmp;
+   tmp.grade = 'F';
+   tmp.last_name = "Superman";
+   tmp.student_id = 910018;
+   class[1] = tmp;
+   tmp.grade = 'C';
+   tmp.last_name = "Wonderwoman";
+   tmp.student_id = 910019;
+   class[2] = tmp;
+   /* Enter nothing for the remainder of the class. */
+   for (i = 3; i < CLASS_SIZE; ++i) {
+      class[i].grade = ' ';
+      class[i].last_name = "";
+      class[i].student_id = 0;
+   }
+   cnt = fail(class, CLASS_SIZE);
+   printf("Number of failing grades: %d\n", cnt);
+   free(class);
+   return 0;
+}
+\end{lstlisting}
+\end{affianco}
+
+\begin{affianco}[0.5][c]
+\begin{console}
+$ gcc -Wall -o class_info main.c fail.c
+$ ./class_info
+Number of failing grades: 1
+\end{console}
+\risultato
+Nelle slide ci sono due versioni di \code{main}: una con l'array
+\code{student class[CLASS\_SIZE]} dichiarato normalmente, e questa, con
+l'array allocato dinamicamente. \code{fail} va bene per entrambe, perché
+riceve un puntatore (capitolo~\ref{chap:puntatori}).
+\end{affianco}
+
+\subsection{Come funziona}
+
+\begin{itemize}
+  \item \code{tmp} è una variabile di appoggio: se ne riempiono i campi e
+        la si copia in \code{class[0]}, poi la si riempie di nuovo e la si
+        copia in \code{class[1]}, e così via (figura~\ref{fig:classe}).
+  \item La copia \code{class[0] = tmp} copia \textbf{i campi}: per
+        \code{last\_name}, che è un puntatore, copia l'indirizzo, non la
+        stringa. Qui va bene, perché ogni studente punta a una stringa
+        costante diversa.
+  \item Gli altri 97 studenti hanno voto \code{' '}, cognome \code{""} (la
+        stringa vuota) e matricola 0.
+  \item In \code{fail}, \code{class[i].grade == 'F'} vale 1 o 0, e
+        \code{cnt += \dots} lo somma: si contano i voti \code{'F'} senza
+        bisogno di un \code{if}.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \mchiave{2.0cm}
+    \oggetto[anchor=north west]{s0}{(0,0)}{3.3cm}{class[0]}{last\_name/{}, student\_id/910017, grade/{\code{'A'}}}
+    \oggetto[anchor=north west]{s1}{([yshift=0.7pt]s0-box.south west)}{3.3cm}{class[1]}{last\_name/{}, student\_id/910018, grade/{\code{'F'}}}
+    \oggetto[anchor=north west]{s2}{([yshift=0.7pt]s1-box.south west)}{3.3cm}{class[2]}{last\_name/{}, student\_id/910019, grade/{\code{'C'}}}
+    \node[mnota, anchor=north, align=center] at ([yshift=-0.05cm]s2-box.south) {$\vdots$\\fino a \code{class[99]}};
+    % le stringhe a cui puntano i campi last_name
+    \node[mvar, anchor=west, minimum width=2.5cm] (t0) at ([xshift=1.3cm]s0-1.east) {"Casanova"};
+    \node[mvar, anchor=west, minimum width=2.5cm] (t1) at ([xshift=1.3cm]s1-1.east) {"Superman"};
+    \node[mvar, anchor=west, minimum width=2.5cm] (t2) at ([xshift=1.3cm]s2-1.east) {"Wonderwoman"};
+    \foreach \ist in {0,1,2} {
+      \draw[mrif] ([xshift=-0.45cm]s\ist-1.east) -- (t\ist.west);
+      \node[mpunto] at ([xshift=-0.45cm]s\ist-1.east) {};
+    }
+    \node[mnota, anchor=south] at ([yshift=2pt]t0.north) {stringhe costanti};
+    % il puntatore class
+    \node[mvar, minimum width=0.7cm] (pc) at ([xshift=-1.3cm]s0.west) {};
+    \node[mnome, anchor=east] at ([xshift=-2pt]pc.west) {class};
+    \riferimento{pc}{-- (s0.west)}
+  \end{tikzpicture}
+  \caption{L'array \code{class} nello heap: 100 strutture \code{student}
+           consecutive, di 16 byte ciascuna, e le prime tre contengono i dati
+           degli studenti. Il campo \code{last\_name} contiene solo
+           l'indirizzo della stringa.}
+  \label{fig:classe}
+\end{figure}
+
+\section{L'operatore freccia}
+
+\subsection{\code{p->campo}}
+
+Quando si ha un \textbf{puntatore} a una struttura, per accedere a un campo
+si dovrebbe scrivere \code{(*p).grade}: prima si dereferenzia il puntatore,
+poi si sceglie il campo. Le parentesi sono necessarie, perché \code{.} ha la
+precedenza su \code{*}: \code{*p.grade} vorrebbe dire \code{*(p.grade)}. Per
+questo il C ha un operatore apposito, la \textbf{freccia} \code{->}:
+
+\[
+  \code{p->grade} \quad\text{equivale a}\quad \code{(*p).grade}
+\]
+
+Le slide riscrivono \code{fail} in altri due modi, entrambi con la freccia:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=fail2.c]
+int fail(student *class, int N)
+{
+   int   i, cnt = 0;
+
+   for (i = 0; i < N; ++i)
+      cnt += (class + i)->grade == 'F';
+   return cnt;
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c, name=fail3.c]
+int fail(student *class, int N)
+{
+   int       i, cnt = 0;
+   student  *tmp = class;
+
+   for (i = 0; i < N; ++i, tmp++)
+      cnt += tmp->grade == 'F';
+   return cnt;
+}
+\end{lstlisting}
+\end{affianco}
+
+Nella prima \code{class + i} è l'indirizzo dell'elemento \code{i} (per
+l'aritmetica dei puntatori avanza di una \textbf{struttura} intera alla
+volta), e \code{->grade} ne prende il voto. Nella seconda un puntatore
+\code{tmp} scorre l'array: \code{tmp++} lo porta sullo studente successivo.
+Tutte e tre le versioni danno lo stesso risultato (verificato).
+
+\subsection{Espressioni con i puntatori a strutture}
+
+Le slide riportano una tabella del libro di Kelley e Pohl, nel quale il tipo
+è dichiarato con un tag, \code{struct student \{ \dots \};}, e ha gli stessi
+campi di \code{class\_info.h}. Con le dichiarazioni e le assegnazioni
+
+\begin{lstlisting}[style=c]
+struct student  tmp, *p = &tmp;
+
+tmp.grade = 'A';
+tmp.last_name = "Casanova";
+tmp.student_id = 910017;
+\end{lstlisting}
+
+valgono queste equivalenze (figura~\ref{fig:freccia}):
+
+\begin{center}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}>{\FiraCodeNL}l>{\FiraCodeNL}l l@{}}
+  \toprule
+  \normalfont\textbf{espressione} & \normalfont\textbf{equivalente} & \textbf{valore} \\
+  \midrule
+  tmp.grade               & p->grade               & \code{A} \\
+  tmp.last\_name          & p->last\_name          & \code{Casanova} \\
+  (*p).student\_id        & p->student\_id         & 910017 \\
+  *p->last\_name + 1      & (*(p->last\_name)) + 1 & \code{D} \\
+  *(p->last\_name + 2)    & (p->last\_name)[2]     & \code{s} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Le ultime due sono le più istruttive. In \code{*p->last\_name + 1} la freccia
+lega più di tutti: si prende \code{p->last\_name}, la stringa; \code{*} ne
+dà il primo carattere, \code{'C'}; e \code{+ 1} dà il carattere successivo,
+\code{'D'}. In \code{*(p->last\_name + 2)}, invece, si avanza di due caratteri
+nella stringa e si prende quello che c'è: la \code{s} di Ca\textbf{s}anova.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \mchiave{2.3cm}
+    \oggetto{t}{(3.0,0)}{3.6cm}{tmp}{last\_name/{}, student\_id/910017, grade/{\code{'A'}}}
+    \node[mnome, anchor=east] at (-0.15,-0.6) {p};
+    \node[mvar, minimum width=0.7cm] (pp) at (0.3,-0.6) {};
+    \riferimento{pp}{-- (t-box.west)}
+    \noindici
+    \celle[mcella, minimum width=0.45cm, inner xsep=0pt]{nm}{(7.0,-0.1)}{C,a,s,a,n,o,v,a,\textbackslash 0}
+    \draw[mrif] ([xshift=-0.45cm]t-1.east) to[out=0, in=180] (nm-0.west);
+    \node[mpunto] at ([xshift=-0.45cm]t-1.east) {};
+    \draw[wtarrow] ([yshift=-0.6cm]nm-0.south) -- ([yshift=-1pt]nm-0.south);
+    \node[mnota, anchor=north west] at ([xshift=-0.3cm, yshift=-0.6cm]nm-0.south)
+      {\code{*p->last\_name} è la \code{C}; \code{+ 1} dà la \code{D}};
+    \draw[wtarrowacc] ([yshift=0.55cm]nm-2.north) -- ([yshift=1pt]nm-2.north);
+    \node[mnota, anchor=south, text=accent!70!black] at ([yshift=0.55cm]nm-2.north)
+      {\code{p->last\_name + 2}: la \code{s}};
+  \end{tikzpicture}
+  \caption{\code{p} punta alla struttura \code{tmp}; il campo
+           \code{last\_name} punta a sua volta alla stringa.}
+  \label{fig:freccia}
+\end{figure}
+
+\subsection{Una verifica}
+
+Il programma seguente dichiara il tipo con il tag, come nel libro, e stampa i
+valori delle espressioni della tabella:
+
+\begin{affianco}[0.6][c]
+\begin{lstlisting}[style=c, name=puntatori.c]
+#include <stdio.h>
+
+struct student {
+   char *last_name;
+   int   student_id;
+   char  grade;
+};
+
+int main(void)
+{
+   struct student tmp, *p = &tmp;
+
+   tmp.grade = 'A';
+   tmp.last_name = "Casanova";
+   tmp.student_id = 910017;
+   printf("%c\n", p -> grade);
+   printf("%s\n", p -> last_name);
+   printf("%d\n", (*p).student_id);
+   printf("%c\n", *p -> last_name + 1);
+   printf("%c\n", *(p -> last_name + 2));
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./puntatori
+A
+Casanova
+910017
+D
+s
+\end{console}
+\wtnota{Come nella tabella delle slide, attorno a \code{->} ci sono degli
+spazi: sono permessi, perché \code{->} è un unico token, ma di solito si
+scrive \code{p->grade}.}
+\end{affianco}
+
+\code{*p -> last\_name + 1} è un numero, il codice del carattere
+\code{'C'} più 1, cioè quello di \code{'D'}: per vederlo come carattere si
+stampa con \code{\%c}.
+
+\section{Strutture di strutture}
+
+\subsection{Campi che sono strutture}
+
+Un campo può essere a sua volta una struttura, o un puntatore a una
+struttura. L'esempio delle slide descrive un dipendente:
+
+\begin{lstlisting}[style=c]
+typedef struct {
+   char           name[20];
+   int            number;
+} department;
+
+typedef struct {
+   char           street_name[30];
+   int            no;
+   char           postcode[10];
+} address;
+
+typedef struct {
+   char           name[25];
+   int            employee_id;
+   department     dept;          /* una struttura dentro la struttura */
+   address        *home;         /* un puntatore a un'altra struttura */
+   double         salary;
+} employee_data;
+\end{lstlisting}
+
+(Nelle slide \code{name} di \code{department} e \code{street\_name} di
+\code{address} sono dichiarati \code{char}, cioè un solo carattere: per
+contenere un nome servono degli array, come qui.) Il reparto è contenuto
+nella struttura del dipendente; l'indirizzo di casa, invece, sta altrove, e
+il dipendente ne contiene solo il puntatore (figura~\ref{fig:annidate}).
+Per arrivare a un campo interno si concatenano gli operatori, da sinistra a
+destra: \code{e.dept.number} equivale a \code{(e.dept).number}, e con un
+puntatore \code{p->dept.number} equivale a \code{(p->dept).number};
+\code{e.home->no} è il numero civico.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      riga/.style={mriga, minimum width=5.9cm,
+        text width=\dimexpr5.9cm-6pt\relax, anchor=north}]
+    % la struttura e, con la struttura dept al suo interno
+    \node[mtesta, minimum width=5.9cm, anchor=north west] (e) at (0,0) {employee\_data e};
+    \node[riga] (e-1) at ([yshift=0.7pt]e.south)
+      {\makebox[2.1cm][l]{\color{primary!55!black}name}\code{"Mario Rossi"}};
+    \node[riga] (e-2) at ([yshift=0.7pt]e-1.south)
+      {\makebox[2.1cm][l]{\color{primary!55!black}employee\_id}1234};
+    \node[riga, minimum height=1.85cm] (e-3) at ([yshift=0.7pt]e-2.south) {};
+    \node[anchor=north west, font=\FiraCodeNL\scriptsize, text=primary!55!black,
+          inner sep=3pt] at ([yshift=-2pt]e-3.north west) {dept};
+    \mchiave{1.2cm}
+    \oggetto[anchor=north west, fill=accent!12!white]{d}{([xshift=2.2cm, yshift=-0.2cm]e-3.north west)}{3.2cm}{department}{name/{\code{"Vendite"}}, number/1}
+    \node[riga] (e-4) at ([yshift=0.7pt]e-3.south)
+      {\makebox[2.1cm][l]{\color{primary!55!black}home}};
+    \node[riga] (e-5) at ([yshift=0.7pt]e-4.south)
+      {\makebox[2.1cm][l]{\color{primary!55!black}salary}1850.0};
+    % la struttura address, altrove in memoria
+    \mchiave{2.0cm}
+    \oggetto[anchor=west]{a}{([xshift=1.6cm]e-4.east)}{4.1cm}{address}{street\_name/{\code{"Via Roma"}}, no/12, postcode/{\code{"80100"}}}
+    \draw[mrif] ([xshift=-0.5cm]e-4.east) -- (a.west);
+    \node[mpunto] at ([xshift=-0.5cm]e-4.east) {};
+    % come si arriva a due campi interni
+    \node[mnota, anchor=west, text=accent!70!black] (l1) at ([xshift=0.6cm]e-3.east |- d-2) {\code{e.dept.number}};
+    \draw[wtarrowacc] (l1.west) -- (d-2.east);
+    \node[mnota, anchor=west, text=accent!70!black] (l2) at ([xshift=0.6cm]a-2.east) {\code{e.home->no}};
+    \draw[wtarrowacc] (l2.west) -- (a-2.east);
+  \end{tikzpicture}
+  \caption{\code{dept} è una struttura dentro \code{e}; \code{home} punta a una
+           struttura che sta altrove. Le etichette mostrano le espressioni che
+           arrivano a due campi interni.}
+  \label{fig:annidate}
+\end{figure}
+
+\section{Strutture e funzioni}
+
+\subsection{Due modi di passare una struttura}
+
+Supponiamo di voler scrivere una funzione che aggiorna le informazioni di un
+dipendente, per esempio il numero del reparto. Si può procedere in due
+maniere:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c]
+employee_data update(employee_data e)
+{
+   ...
+   e.dept.number = n;
+   ...
+   return e;
+}
+
+/* uso: */
+e = update(e);
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c]
+void update(employee_data *p)
+{
+   ...
+   p->dept.number = n;
+   ...
+}
+
+/* uso: */
+update(&e);
+\end{lstlisting}
+\end{affianco}
+
+\begin{itemize}
+  \item Nel primo metodo \code{e} è passata \textbf{per valore}: la funzione
+        riceve una copia di tutta la struttura, la modifica e la restituisce,
+        e il chiamante deve assegnare il risultato. Se la struttura è grande,
+        creare la copia (due volte: all'andata e al ritorno) può essere
+        oneroso.
+  \item Nel secondo metodo si passa l'\textbf{indirizzo} di \code{e}: non si
+        crea nessuna copia, e la funzione modifica direttamente la struttura
+        del chiamante. È il metodo in generale più efficiente.
+\end{itemize}
+
+\subsection{Una prova}
+
+Il programma seguente completa le due funzioni (con il nuovo numero di
+reparto come parametro \code{n}) e mostra la differenza. In cima al file ci
+sono i tre \code{typedef} della sezione precedente, che qui non sono
+ripetuti:
+
+\begin{affianco}[0.58][c]
+\codicepiccolo
+\begin{lstlisting}[style=c, name=impiegati.c]
+#include <stdio.h>
+
+/* ... i typedef di department, address ed employee_data ... */
+
+employee_data update(employee_data e, int n)    /* per valore */
+{
+   e.dept.number = n;
+   return e;
+}
+
+void update_p(employee_data *p, int n)          /* per indirizzo */
+{
+   p->dept.number = n;
+}
+
+int main(void)
+{
+   employee_data e = {"Mario Rossi", 1234, {"Vendite", 1}, NULL, 1850.0};
+
+   update(e, 2);                    /* il risultato non viene usato */
+   printf("dopo update(e, 2):       reparto %d\n", e.dept.number);
+   e = update(e, 3);
+   printf("dopo e = update(e, 3):   reparto %d\n", e.dept.number);
+   update_p(&e, 4);
+   printf("dopo update_p(&e, 4):    reparto %d\n", e.dept.number);
+   printf("sizeof(employee_data) = %zu byte\n", sizeof(employee_data));
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./impiegati
+dopo update(e, 2):       reparto 1
+dopo e = update(e, 3):   reparto 3
+dopo update_p(&e, 4):    reparto 4
+sizeof(employee_data) = 72 byte
+\end{console}
+\end{affianco}
+
+\begin{itemize}
+  \item \code{update(e, 2)} da sola non cambia nulla: modifica la copia, che
+        poi viene buttata via perché il risultato non è assegnato.
+  \item \code{e = update(e, 3)} funziona, ma copia 72 byte all'andata e 72
+        al ritorno.
+  \item \code{update\_p(\&e, 4)} copia solo un indirizzo, 8 byte, e modifica
+        \code{e} direttamente (figura~\ref{fig:struct-funzioni}).
+  \item La struttura si inizializza con le graffe, anche quella interna
+        (\code{\{"Vendite", 1\}}); \code{home} vale \code{NULL}, perché in
+        questa prova l'indirizzo non c'è.
+\end{itemize}
+
+\subsection{Copia o indirizzo}
+
+La figura~\ref{fig:struct-funzioni} mette a confronto i due modi. Per valore,
+\code{update} lavora su una copia di tutti i 72 byte della struttura, e il
+risultato va ricopiato in \code{e}; per indirizzo, \code{update\_p} riceve
+soltanto gli 8 byte di un puntatore e, attraverso di esso, modifica proprio
+la \code{e} di \code{main}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \node[font=\Lato\scriptsize\bfseries] at (2.2,1.1) {\code{e = update(e, 3)}: per valore};
+    \node[wtnodeplain, minimum width=2.0cm, minimum height=1.0cm] (m1) at (0.9,0) {\code{e}\\72 byte};
+    \node[wtnodeplain, minimum width=2.0cm, minimum height=1.0cm, fill=accent!10!white] (f1) at (3.9,0) {copia di \code{e}\\72 byte};
+    \draw[mcerca] ([yshift=0.15cm]m1.east) -- node[above, mnota] {copia} ([yshift=0.15cm]f1.west);
+    \draw[mcerca] ([yshift=-0.15cm]f1.west) -- node[below, mnota] {copia} ([yshift=-0.15cm]m1.east);
+    \node[mnota] at (0.9,-0.8) {\code{main}};
+    \node[mnota] at (3.9,-0.8) {\code{update}};
+    \begin{scope}[xshift=7.6cm]
+      \node[font=\Lato\scriptsize\bfseries] at (2.2,1.1) {\code{update\_p(\&e, 4)}: per indirizzo};
+      \node[wtnodeplain, minimum width=2.0cm, minimum height=1.0cm] (m2) at (0.9,0) {\code{e}\\72 byte};
+      \node[mvar, fill=accent!10!white] (p2) at (3.9,0) {};
+      \node[mnome, anchor=west] at ([xshift=2pt]p2.east) {p};
+      \riferimento{p2}{-- (m2.east)}
+      \node[mnota] at (0.9,-0.8) {\code{main}};
+      \node[mnota] at (3.9,-0.8) {\code{update\_p}: 8 byte};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Passare una struttura per valore copia tutti i suoi byte;
+           passarla per indirizzo copia solo un puntatore.}
+  \label{fig:struct-funzioni}
+\end{figure}
+
+Quando una funzione deve solo \textbf{leggere} una struttura grande, si passa
+comunque l'indirizzo, ma dichiarando il parametro \code{const}:
+
+\begin{lstlisting}[style=c]
+void stampa(const employee_data *p);    /* legge *p, ma non può modificarlo */
+\end{lstlisting}
+
+Così si evita la copia, e il compilatore garantisce che la funzione non
+modifichi la struttura (capitolo~\ref{chap:stringhe}).
+
+\insintesi{
+  Una \textbf{struttura} aggrega campi di tipo diverso: la dichiarazione
+  \code{struct tag \{ \dots \};} definisce un tipo (senza allocare memoria),
+  le variabili si dichiarano con \code{struct tag v;} o, con un
+  \code{typedef}, con il solo nome del tipo. Ai campi si accede con il
+  \textbf{punto} (\code{v.campo}) e, attraverso un puntatore, con la
+  \textbf{freccia} (\code{p->campo}, cioè \code{(*p).campo}). Le strutture si
+  inizializzano con le graffe, si assegnano in blocco (copiando i campi, e
+  per i puntatori solo l'indirizzo) ma non si confrontano con \code{==}; la
+  loro dimensione, che può includere byte di riempimento, va chiesta a
+  \code{sizeof}. Si possono fare array di strutture, anche dinamici, e
+  strutture che contengono strutture o puntatori a strutture. Alle funzioni
+  conviene passare l'indirizzo di una struttura, invece di una copia.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{A. Kelley, I. Pohl}, \textit{A Book on C}: capitolo~9
+        (strutture e unioni).
+  \item \textbf{Struct declaration} --- cppreference.com. \\
+        \urlx{https://en.cppreference.com/w/c/language/struct}
+\end{itemize}

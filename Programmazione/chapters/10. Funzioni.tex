@@ -1,0 +1,1325 @@
+\chapter{Le funzioni}
+\label{chap:funzioni}
+
+Scomporre un problema in sotto-problemi più semplici è quasi sempre il modo
+migliore per risolverlo (lo sviluppo top-down del
+capitolo~\ref{chap:strutturata}), e per scrivere programmi grandi è vitale.
+In C questo approccio si realizza con le \textbf{funzioni}. Nel
+capitolo~\ref{chap:primi-programmi} ne abbiamo scritte alcune e abbiamo
+incontrato prototipi e passaggio per valore; qui vediamo tutto in dettaglio:
+come si definisce una funzione, come restituisce un risultato, che cosa
+succede se il compilatore non la conosce, dove “vivono” le sue variabili.
+
+\section{Programmi fatti di funzioni}
+
+Un programma C è costituito da uno o più file (capitolo~\ref{chap:make}).
+Ogni file contiene zero funzioni (come gli header) o più funzioni, e uno
+solo contiene la funzione \code{main}, da cui comincia l'esecuzione;
+\code{main} può chiamare altre funzioni, che a loro volta ne chiamano altre,
+e tutte operano sulle variabili del programma.
+
+Perché scrivere i programmi usando le funzioni?
+
+\begin{itemize}
+  \item è più facile scrivere \textbf{corrette} delle funzioni brevi;
+  \item scrittura e ricerca degli errori (\textit{debugging}) sono più
+        semplici, perché ogni funzione si prova da sola;
+  \item le modifiche sono più semplici: si riscrivono solo le funzioni da
+        cambiare;
+  \item il codice è più comprensibile: funzioni brevi, con un nome che dice
+        che cosa fanno, si leggono e si capiscono più facilmente.
+\end{itemize}
+
+\section{La definizione di una funzione}
+
+\subsection{Intestazione e corpo}
+
+Il codice che descrive che cosa fa una funzione è la sua
+\term{definizione}. La forma generale è
+
+\begin{lstlisting}[style=c]
+type function_name(parameters)
+{
+    declarations
+    statements
+}
+\end{lstlisting}
+
+La parte prima della graffa aperta è l'\term{intestazione}
+(\textit{header}); la parte fra le graffe è il \term{corpo} della funzione.
+I \textbf{parametri} sono una lista di dichiarazioni di variabili separate da
+virgole: sono detti anche \textbf{parametri formali}, perché ricevono i valori
+(i \textit{parametri attuali}, o argomenti) solo al momento della chiamata.
+La figura~\ref{fig:anatomia-funzione} mostra le parti nella funzione
+fattoriale delle slide.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\small,
+      pz/.style={anchor=base west, inner sep=0pt},
+      lab/.style={font=\Lato\scriptsize, text=accent!70!black, align=center, inner sep=1pt}]
+    \node[pz] (t) at (0,0) {int};
+    \node[pz] (n) at ([xshift=5.4pt]t.base east) {factorial};
+    \node[pz] (p) at (n.base east) {(int n)};
+    \node[pz] (l2) at (0,-0.55) {\{};
+    \node[pz] (l3) at (0,-1.1) {\ \ \ int i, product = 1;};
+    \node[pz] (l4) at (0,-1.65) {\ \ \ for (i = 2; i <= n; i++)};
+    \node[pz] (l5) at (0,-2.2) {\ \ \ \ \ \ product *= i;};
+    \node[pz] (l6) at (0,-2.75) {\ \ \ return product;};
+    \node[pz] (l7) at (0,-3.3) {\}};
+    \draw[wtbrace] ([yshift=3pt]t.north east) -- ([yshift=3pt]t.north west);
+    \draw[wtbrace] ([yshift=3pt]n.north east) -- ([yshift=3pt]n.north west);
+    \draw[wtbrace] ([yshift=3pt]p.north east) -- ([yshift=3pt]p.north west);
+    \node[lab, anchor=south] at ([yshift=0.32cm]t.north) {tipo del\\risultato};
+    \node[lab, anchor=south] at ([yshift=0.32cm]n.north) {nome};
+    \node[lab, anchor=south] at ([yshift=0.32cm]p.north) {parametro\\formale};
+    \draw[wtbrace] (6.0,-0.12) -- (6.0,0.3);
+    \node[lab, anchor=west] at (6.25,0.09) {intestazione (\textit{header})};
+    \draw[wtbrace] (6.0,-3.4) -- (6.0,-0.4);
+    \node[lab, anchor=west] at (6.25,-1.9) {corpo: dichiarazioni e istruzioni};
+    \draw[wtarrowacc] (8.9,-2.75) -- ([xshift=4pt]l6.east);
+    \node[lab, anchor=west] at (9.0,-2.75) {restituisce il risultato\\a chi ha chiamato};
+  \end{tikzpicture}
+  \caption{Le parti della definizione di una funzione.}
+  \label{fig:anatomia-funzione}
+\end{figure}
+
+\code{factorial} riceve un \code{int} e restituisce un \code{int}: il
+prodotto dei numeri da 2 a \code{n}, cioè $n!$ (per \code{n} uguale a 0 o 1
+il ciclo non fa nessun giro, e il risultato è 1). Il valore restituito, se
+necessario, viene convertito nel tipo della funzione, qui \code{int}; e
+grazie alla lista dei parametri anche l'argomento, se necessario, viene
+convertito in \code{int}.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=fattoriale.c]
+#include <stdio.h>
+
+int factorial(int n)              /* header */
+{                                 /* body starts here */
+   int i, product = 1;
+
+   for (i = 2; i <= n; i++)
+      product *= i;
+   return product;
+}
+
+int main(void)
+{
+   int k;
+
+   for (k = 0; k <= 5; k++)
+      printf("%d! = %d\n", k, factorial(k));
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./fattoriale
+0! = 1
+1! = 1
+2! = 2
+3! = 6
+4! = 24
+5! = 120
+\end{console}
+\end{affianco}
+
+Il corpo di una funzione è un blocco, e può contenere dichiarazioni di
+variabili: \code{i} e \code{product} sono visibili \textbf{solo} dentro
+\code{factorial}.
+
+\subsection{\code{void}: niente risultato, niente parametri}
+
+Una funzione può non restituire nulla, e può non avere parametri. In
+entrambi i casi si usa la parola chiave \code{void} (“vuoto”):
+
+\begin{affianco}[0.6][c]
+\codicepiccolo
+\begin{lstlisting}[style=c, name=santa.c]
+#include <stdio.h>
+
+void wrt_address(void)
+{
+  printf(" \n%s \n%s \n%s \n%s \n\n",
+    "            ************************",
+    "            **    SANTA CLAUS     **",
+    "            **    NORTH POLE      **",
+    "            **    EARTH           **");
+}
+
+int main(void)
+{
+  wrt_address();
+  return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./santa
+
+            ************************
+            **    SANTA CLAUS     **
+            **    NORTH POLE      **
+            **    EARTH           **
+
+\end{console}
+\end{affianco}
+
+Il primo \code{void} dice al compilatore che la funzione non restituisce
+alcun valore; il secondo, fra le parentesi, che non ha parametri. La funzione
+si chiama con l'istruzione \code{wrt\_address();}, con le parentesi vuote.
+E se si scrivesse \code{a = wrt\_address();}? Non c'è nessun valore da
+assegnare, e il compilatore si rifiuta:
+
+\begin{console}
+$ gcc -Wall -o santa2 santa2.c
+santa2.c: In function (*@‘@*)main(*@’@*):
+santa2.c:12:5: error: void value not ignored as it ought to be
+   12 |   a = wrt_address();
+      |     ^
+\end{console}
+
+\warning{Una svista nelle slide}{
+  In una delle slide la funzione è scritta con \code{Printf}, con la P
+  maiuscola. Il C distingue maiuscole e minuscole, e \code{Printf} non è
+  \code{printf}: il compilatore lo tratta come una funzione sconosciuta
+  (e suggerisce \textit{did you mean ‘printf’?}), poi il linker non la trova
+  da nessuna parte e la compilazione fallisce con \textit{undefined reference
+  to ‘Printf’}.}
+
+\subsection{Altri esempi}
+
+Ecco tre definizioni delle slide: una funzione che non fa nulla, una che
+raddoppia un reale e una che somma tre interi.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=esempi.c]
+#include <stdio.h>
+
+void nothing(void)
+{
+}
+
+double twice(double x)
+{
+   return (2.0 * x);
+}
+
+int all_add(int a, int b, int c)
+{
+   return (a + b + c);
+}
+
+int main(void)
+{
+   nothing();
+   printf("%f\n", twice(3.5));
+   printf("%d\n", all_add(1, 2, 3));
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./esempi
+7.000000
+6
+\end{console}
+\vspace{2pt}
+\wtnota{\code{nothing} ha il corpo vuoto: chiamarla non fa nulla, ma è una
+funzione lecita (può servire come segnaposto, in attesa di scriverla).}
+\end{affianco}
+
+Se il tipo della funzione non è indicato, il C tradizionale lo considera
+\code{int}: \code{all\_add(int a, int b, int c) \{ \dots \}} equivale a
+\code{int all\_add(\dots)}. Dal C99 questa regola non vale più, e
+\code{gcc} protesta (\textit{return type defaults to ‘int’}); i compilatori
+più recenti la considerano un errore. Specificare sempre il tipo della
+funzione è comunque una buona pratica.
+
+\subsection{Le definizioni nel C tradizionale}
+
+Nel C tradizionale (quello precedente all'ANSI C) la definizione aveva una
+sintassi diversa: fra le parentesi c'erano solo i nomi dei parametri, e le
+loro dichiarazioni venivano dopo, prima della graffa aperta. L'ordine delle
+dichiarazioni non contava, e senza parametri si mettevano solo le parentesi:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c]
+void f(a, b, c, x, y)
+int     a, b, c;
+double  x, y;
+{
+    ...
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c]
+void f()
+{
+    ...
+}
+\end{lstlisting}
+\end{affianco}
+
+Questa forma è obsoleta, e fra poco vedremo perché è pericolosa. Si
+incontra ancora nei programmi vecchi.
+
+\section{L'istruzione \code{return}}
+
+\subsection{Terminare e restituire}
+
+Con l'istruzione \code{return} la funzione termina e il controllo torna
+all'ambiente da cui è stata chiamata. \code{return} non deve
+necessariamente contenere un'espressione: \code{return;},
+\code{return ++a;} e \code{return (a * b);} sono tutte istruzioni lecite (le
+parentesi attorno all'espressione sono facoltative).
+
+\begin{itemize}
+  \item Se c'è un'espressione, il suo valore viene passato all'ambiente
+        chiamante, convertito se necessario nel tipo della funzione.
+  \item In una funzione ci possono essere zero o più \code{return}.
+  \item Se non ce n'è nessuno, il controllo torna al chiamante quando si
+        raggiunge la graffa di chiusura.
+\end{itemize}
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=assoluto.c]
+#include <stdio.h>
+
+double absolute_value(double x)
+{
+  if (x >= 0)
+    return x;
+  else
+    return -x;
+}
+
+int main(void)
+{
+  printf("%f %f\n", absolute_value(-2.5),
+                    absolute_value(4.0));
+  return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./assoluto
+2.500000 4.000000
+\end{console}
+\vspace{2pt}
+\wtnota{Due \code{return}: a seconda del segno di \code{x}, la funzione
+termina con l'uno o con l'altro.}
+\end{affianco}
+
+\subsection{Il valore si può ignorare}
+
+Non sempre si usa il valore restituito. Nel frammento delle slide
+
+\begin{lstlisting}[style=c]
+while (...) {
+    getchar();        /* il carattere letto viene scartato */
+    c = getchar();
+    ...
+}
+\end{lstlisting}
+
+il primo \code{getchar()} serve solo a saltare un carattere. Lo facciamo
+anche con \code{printf}, senza saperlo: anche \code{printf} restituisce un
+valore, il numero di caratteri scritti, che di solito si ignora.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=ritorno.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int n;
+
+   n = printf("ciao\n");
+   printf("caratteri scritti: %d\n", n);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./ritorno
+ciao
+caratteri scritti: 5
+\end{console}
+\wtnota{I caratteri sono 5: \code{c}, \code{i}, \code{a}, \code{o} e l'a
+capo.}
+\end{affianco}
+
+\section{I prototipi}
+
+\subsection{Dichiarare prima di usare}
+
+Le funzioni devono essere \textbf{dichiarate prima di essere usate}. L'ANSI C
+fornisce per questo il \term{prototipo}, che informa il compilatore sul
+numero e sul tipo dei parametri e sul tipo del valore restituito. Il
+prototipo
+
+\begin{lstlisting}[style=c]
+double sqrt(double);
+\end{lstlisting}
+
+dice che \code{sqrt} è una funzione, che prende un solo argomento di tipo
+\code{double} e che restituisce un valore di tipo \code{double}. La forma
+generale è
+
+\begin{lstlisting}[style=c]
+type function_name(parameter type list);
+\end{lstlisting}
+
+Gli identificatori dei parametri sono facoltativi: \code{void f(char c, int
+i);} e \code{void f(char, int);} sono equivalenti. Il compilatore non li
+usa, ma servono da documentazione, soprattutto se i nomi sono significativi:
+conviene metterli sempre.
+
+Nel C tradizionale la dichiarazione non conteneva la lista dei parametri:
+\code{double sqrt();}. I prototipi sono preferibili perché, conoscendo i
+tipi dei parametri, il compilatore \textbf{converte} opportunamente i valori
+passati alla funzione.
+
+\subsection{Che cosa succede senza prototipo}
+
+Consideriamo la chiamata \code{sqrt(a)}, con \code{a} intero e uguale a 4.
+Con il prototipo il compilatore sa che \code{sqrt} vuole un \code{double}, e
+converte 4 in 4.0; senza, non sa nulla, e il risultato non è corretto:
+
+\begin{affianco}[0.5][t]
+\begin{lstlisting}[style=c, name=prova.c]
+#include <stdio.h>
+
+double sqrt();
+
+int main()
+{
+  int a = 4;
+
+  printf("sqrt(4) = %f \n", sqrt(a));
+}
+\end{lstlisting}
+\begin{console}
+$ gcc -o prova prova.c -lm
+$ ./prova
+sqrt(4) = 0.000000
+\end{console}
+\risultato
+\begin{lstlisting}[style=c, name=prova.c]
+#include <stdio.h>
+
+double sqrt(double);
+
+int main()
+{
+  int a = 4;
+
+  printf("sqrt(4) = %f \n", sqrt(a));
+}
+\end{lstlisting}
+\begin{console}
+$ gcc -o prova prova.c -lm
+$ ./prova
+sqrt(4) = 2.000000
+\end{console}
+\end{affianco}
+
+Perché zero? Sui PC a 64 bit gli argomenti interi e quelli reali viaggiano in
+due registri diversi del processore. Senza prototipo il valore 4 viene
+consegnato come intero, nel registro degli interi; \code{sqrt} va a prendere
+il suo \code{double} nell'altro registro, e ci trova un valore che non
+c'entra (qui, per caso, 0). Con il prototipo il compilatore converte 4 in
+4.0 e lo consegna dove \code{sqrt} lo cerca (figura~\ref{fig:registri}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      reg/.style={draw=primary!60!black, fill=primary!5!white, line width=0.7pt,
+        minimum width=2.4cm, minimum height=0.55cm, font=\FiraCodeNL\scriptsize},
+      vuoto/.style={reg, fill=white, draw=neutral!40!white},
+      chi/.style={wtnode, font=\Lato\scriptsize, minimum width=1.9cm}]
+    \node[font=\Lato\scriptsize\bfseries, anchor=west] at (-1.6,1.05) {senza prototipo};
+    \node[chi] (m1) at (-0.6,0) {\code{main}};
+    \node[reg] (ri1) at (3.6,0.35) {4};
+    \node[reg] (rr1) at (3.6,-0.45) {0.0};
+    \node[mnota, anchor=west] at ([xshift=3pt]ri1.east) {registro degli interi};
+    \node[mnota, anchor=west] at ([xshift=3pt]rr1.east) {registro dei reali};
+    \node[chi] (s1) at (9.4,0) {\code{sqrt}};
+    \draw[wtarrow] (m1.east) -- node[above, mnota, pos=0.45] {consegna 4} (ri1.west);
+    \draw[wtarrow, draw=merr] (rr1.south) |- node[pos=0.75, below, mnota, text=merr]
+      {\code{sqrt} cerca qui il suo \code{double} e trova 0.0} (9.4,-1.0) -- (s1.south);
+    \begin{scope}[yshift=-2.9cm]
+      \node[font=\Lato\scriptsize\bfseries, anchor=west] at (-1.6,1.05) {con prototipo};
+      \node[chi] (m2) at (-0.6,0) {\code{main}};
+      \node[vuoto] (ri2) at (3.6,0.35) {};
+      \node[reg] (rr2) at (3.6,-0.45) {4.0};
+      \node[mnota, anchor=west] at ([xshift=3pt]ri2.east) {registro degli interi};
+      \node[mnota, anchor=west] at ([xshift=3pt]rr2.east) {registro dei reali};
+      \node[chi] (s2) at (9.4,0) {\code{sqrt}};
+      \draw[wtarrow] (m2.east) -- node[below left, mnota, pos=0.55] {converte e consegna 4.0} (rr2.west);
+      \draw[wtarrow, draw=mok] (rr2.south) |- node[pos=0.75, below, mnota, text=mok]
+        {\code{sqrt} trova 4.0} (9.4,-1.0) -- (s2.south);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Senza prototipo l'argomento viene consegnato nel posto sbagliato.}
+  \label{fig:registri}
+\end{figure}
+
+\code{sqrt}, in realtà, è una funzione che \code{gcc} conosce bene: anche
+senza \code{-Wall} avvisa che l'argomento è un \code{int} dove ci si
+aspetta un \code{double}. Con \code{clang}, che la conosce altrettanto bene,
+il primo programma stampa addirittura 2.000000. Con una funzione qualsiasi,
+però, nessun compilatore può rimediare: senza prototipo il risultato non è
+garantito.
+
+\subsection{Come il compilatore scopre le funzioni}
+
+Per il compilatore una funzione può essere dichiarata in tre modi: da una
+\textbf{chiamata}, da una \textbf{definizione} o da un \textbf{prototipo}.
+
+\begin{itemize}
+  \item Se incontra una chiamata \code{f(x)} prima di qualunque altra
+        dichiarazione, il compilatore assume la dichiarazione
+        \code{int f();}: un risultato \code{int} e nessuna ipotesi sui
+        parametri, che il programmatore deve passare del tipo giusto (dal
+        C99 è un errore, che \code{gcc} segnala con un avviso, come abbiamo
+        visto nel capitolo~\ref{chap:primi-programmi}).
+  \item Una definizione in stile tradizionale dichiara solo il nome e il tipo
+        del risultato, non i parametri.
+  \item Una definizione in stile ANSI, come un prototipo, dichiara tutto.
+\end{itemize}
+
+Le slide lo mostrano con tre versioni della stessa funzione, che calcola la
+radice quadrata del suo parametro, chiamata con un \code{int}, un
+\code{double} e un \code{long double} che valgono tutti 4. Ecco la prima,
+con la definizione tradizionale:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=kr1.c]
+#include <stdio.h>
+#include <math.h>
+
+float f(x)
+long double x;
+{
+  return sqrt(x);
+}
+
+int main()
+{
+  int a = 4;
+  double b = 4;
+  long double c = 4;
+
+  printf("parametro intero: %f \n", f(a));
+  printf("parametro double: %f \n", f(b));
+  printf("parametro long double: %f \n", f(c));
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./kr1
+parametro intero: 0.000000
+parametro double: 0.000000
+parametro long double: 2.000000
+\end{console}
+\end{affianco}
+
+Il codice contiene la definizione di \code{f}, ma solo la riga
+\code{float f(x)} vale come dichiarazione: non si assume nulla sui
+parametri, che vanno passati del tipo giusto, perché il compilatore non può
+fare nessuna conversione. Così solo la terza chiamata, che passa davvero un
+\code{long double}, dà il risultato corretto.
+
+\subsection{Un parametro senza tipo}
+
+Nella seconda versione il tipo di \code{x} manca del tutto. Il compilatore
+assume la dichiarazione \code{int x;} (e avvisa: \textit{type of ‘x’
+defaults to ‘int’}); ora funziona solo la chiamata con l'intero:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=kr2.c]
+#include <stdio.h>
+#include <math.h>
+
+float f(x)
+{
+  return sqrt(x);
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./kr2
+parametro intero: 2.000000
+parametro double: -nan
+parametro long double: -nan
+\end{console}
+\wtnota{\code{main} è identico a quello di \code{kr1.c}.}
+\end{affianco}
+
+Nelle slide le due chiamate sbagliate stampano 0.000000; sul nostro
+computer stampano \code{-nan} (\textit{not a number}: la radice di un
+numero negativo). Sono valori presi a caso dalla memoria, e possono cambiare
+da un computer all'altro.
+
+\subsection{La definizione ANSI}
+
+Nella terza versione l'intestazione è \code{float f(long double x)}: questa
+volta la riga che fa da dichiarazione è un \textbf{prototipo}. Il
+compilatore conosce la lista dei parametri, e può convertire l'\code{int} e
+il \code{double} in \code{long double}:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=ansi.c]
+#include <stdio.h>
+#include <math.h>
+
+float f(long double x)
+{
+  return sqrt(x);
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./ansi
+parametro intero: 2.000000
+parametro double: 2.000000
+parametro long double: 2.000000
+\end{console}
+\end{affianco}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}l c c c@{}}
+  \toprule
+  \textbf{definizione di \code{f}} & \textbf{con un \code{int}} &
+  \textbf{con un \code{double}} & \textbf{con un \code{long double}} \\
+  \midrule
+  \code{float f(x) long double x;} & \textcolor{merr}{0.000000} & \textcolor{merr}{0.000000} & \textcolor{mok}{2.000000} \\
+  \code{float f(x)}                & \textcolor{mok}{2.000000}  & \textcolor{merr}{-nan}     & \textcolor{merr}{-nan} \\
+  \code{float f(long double x)}    & \textcolor{mok}{2.000000}  & \textcolor{mok}{2.000000}  & \textcolor{mok}{2.000000} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+In definitiva: la definizione della funzione in stile ANSI, oppure il suo
+prototipo, deve comparire \textbf{prima} che la funzione sia usata. È anche
+uno dei motivi per cui si includono gli header: contengono i prototipi delle
+funzioni di libreria.
+
+\section{Il passaggio per valore}
+
+\subsection{Una copia per ogni argomento}
+
+Gli argomenti delle funzioni sono passati \textbf{per valore}: ogni argomento
+viene calcolato, e il suo valore viene usato localmente al posto del
+parametro corrispondente. Se a una funzione si passa una variabile, il suo
+valore nell'ambiente chiamante \textbf{non cambia}, anche se la funzione
+modifica il valore che riceve (lo abbiamo visto nella
+figura~\ref{fig:per-valore}). L'esempio delle slide:
+
+\begin{affianco}[0.58][c]
+\codicepiccolo
+\begin{lstlisting}[style=c, name=compute_sum.c]
+#include <stdio.h>
+
+int compute_sum(int n)       /* sum the integers from 1 to n */
+{
+   int   sum = 0;
+
+   for ( ; n > 0; --n)       /* stored value of n is changed */
+      sum += n;
+   return sum;
+}
+
+int main(void)
+{
+   int   n = 3, sum, compute_sum(int);
+
+   printf("%d\n", n);
+   sum = compute_sum(n);
+   printf("%d\n", n);
+   printf("%d\n", sum);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./compute_sum
+3
+3
+6
+\end{console}
+\wtnota{\code{compute\_sum(int)}, fra le dichiarazioni di \code{main}, è un
+prototipo: lecito anche lì.}
+\end{affianco}
+
+\subsection{La pila delle chiamate}
+
+Dove si trovano le variabili di una funzione? Ogni chiamata riceve una
+propria zona di memoria (un \textit{record di attivazione}), che contiene i
+parametri e le variabili locali; le zone si impilano una sull'altra, come
+piatti, e ognuna viene tolta quando la sua funzione termina: è la
+\term{pila delle chiamate} (\textit{call stack}). La
+figura~\ref{fig:pila} la segue durante l'esecuzione di
+\code{compute\_sum.c}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \foreach \col/\testo in {0/{1. prima della chiamata}, 1/{2. inizio di \code{compute\_sum}},
+                             2/{3. al \code{return}}, 3/{4. dopo il ritorno}}
+      \node[font=\Lato\scriptsize\bfseries] at (\col*4.7+1.4,1.25) {\testo};
+    % 1
+    \variabile{a1}{(1.6,0.0)}{n}{3}
+    \variabile{b1}{(1.6,-0.6)}{sum}{\mvuota}
+    \scopo{2}{m1}{main}{(a1-nome) (a1) (b1-nome) (b1)}
+    % 2
+    \begin{scope}[xshift=4.7cm]
+      \variabile{a2}{(1.6,0.0)}{n}{3}
+      \variabile{b2}{(1.6,-0.6)}{sum}{\mvuota}
+      \scopo{2}{m2}{main}{(a2-nome) (a2) (b2-nome) (b2)}
+      \variabile[fill=accent!10!white]{c2}{(1.6,-1.95)}{n}{3}
+      \variabile[fill=accent!10!white]{d2}{(1.6,-2.55)}{sum}{0}
+      \scopo{3}{f2}{compute\_sum}{(c2-nome) (c2) (d2-nome) (d2)}
+      \draw[mcerca] (a2.east) to[out=-10, in=10] node[wtlab, right, fill=none] {copia} (c2.east);
+    \end{scope}
+    % 3
+    \begin{scope}[xshift=9.4cm]
+      \variabile{a3}{(1.6,0.0)}{n}{3}
+      \variabile{b3}{(1.6,-0.6)}{sum}{\mvuota}
+      \scopo{2}{m3}{main}{(a3-nome) (a3) (b3-nome) (b3)}
+      \variabile[fill=accent!10!white]{c3}{(1.6,-1.95)}{n}{0}
+      \variabile[fill=accent!10!white]{d3}{(1.6,-2.55)}{sum}{6}
+      \scopo{3}{f3}{compute\_sum}{(c3-nome) (c3) (d3-nome) (d3)}
+      \draw[mcerca] (d3.east) to[out=10, in=-10] node[wtlab, right, fill=none] {6} (b3.east);
+    \end{scope}
+    % 4
+    \begin{scope}[xshift=14.1cm]
+      \variabile{a4}{(1.6,0.0)}{n}{3}
+      \variabile{b4}{(1.6,-0.6)}{sum}{6}
+      \scopo{2}{m4}{main}{(a4-nome) (a4) (b4-nome) (b4)}
+      \node[mnota, align=center] at (1.4,-2.25) {la zona di \code{compute\_sum}\\è stata tolta dalla pila};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{La pila delle chiamate: \code{compute\_sum} ha la sua \code{n}
+           (una copia) e la sua \code{sum}; modifica la propria \code{n}, e
+           quando termina la sua zona scompare.}
+  \label{fig:pila}
+\end{figure}
+
+\code{compute\_sum} porta la \textbf{sua} \code{n} da 3 a 0 mentre somma; la
+\code{n} di \code{main} è un'altra variabile, e resta 3. Se si vuole che una
+funzione modifichi una variabile del chiamante, ci sono due strade:
+restituire il nuovo valore come risultato (e assegnarlo nel chiamante), oppure
+passare l'\textbf{indirizzo} della variabile, cioè un puntatore
+(capitolo~\ref{chap:puntatori}).
+
+\section{Visibilità: variabili locali e globali}
+
+\subsection{Locali e globali}
+
+Le variabili dichiarate nel corpo di una funzione sono dette
+\term{locali}: esistono e sono visibili solo lì. Le variabili dichiarate
+fuori da ogni funzione sono dette \term{globali} (o esterne): sono visibili
+da tutte le funzioni del file che vengono dopo la dichiarazione. Che cosa
+stampa questo programma?
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=globale.c]
+#include <stdio.h>
+
+int a = 33;
+
+int all_add(int a, int b, int c)
+{
+  return (a+b+c);
+}
+
+int main(void)
+{
+  int b = 15, c = 34;
+  printf("%d \n", all_add(a,b,c));
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./globale
+82
+\end{console}
+\vspace{2pt}
+\wtnota{In \code{main} non c'è una \code{a} locale: \code{a} è quella globale,
+che vale 33, e $33 + 15 + 34 = 82$.}
+\end{affianco}
+
+Ora aggiungiamo una \code{a} locale in \code{main}, con valore 7:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=locale.c]
+int main(void)
+{
+  int a=7, b = 15, c = 34;
+  printf("%d \n", all_add(a,b,c));
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./locale
+56
+\end{console}
+\vspace{2pt}
+\wtnota{La \code{a} locale \textbf{nasconde} quella globale: $7 + 15 + 34 = 56$.}
+\end{affianco}
+
+Dentro \code{main}, il nome \code{a} indica la variabile locale, che
+nasconde la globale; dentro \code{all\_add}, \code{a} è il parametro, che a
+sua volta nasconde la globale (figura~\ref{fig:visibilita}). In ogni punto
+del programma vale la dichiarazione \textbf{più vicina}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    % globale.c
+    \node[font=\Lato\scriptsize\bfseries] at (2.4,2.4) {globale.c};
+    \variabile{g1}{(1.0,1.55)}{a}{33}
+    \variabile{mb1}{(1.0,0.2)}{b}{15}
+    \variabile{mc1}{(1.0,-0.4)}{c}{34}
+    \scopo{2}{mm1}{main}{(mb1-nome) (mb1) (mc1-nome) (mc1)}
+    \variabile[fill=accent!10!white]{fa1}{(3.9,0.5)}{a}{33}
+    \variabile[fill=accent!10!white]{fb1}{(3.9,-0.1)}{b}{15}
+    \variabile[fill=accent!10!white]{fc1}{(3.9,-0.7)}{c}{34}
+    \scopo{3}{ff1}{all\_add}{(fa1-nome) (fa1) (fb1-nome) (fb1) (fc1-nome) (fc1)}
+    \scopo{1}{file1}{il file: variabili globali}{(g1-nome) (g1) (mm1) (ff1)}
+    \draw[mcerca] (g1.east) to[out=0, in=90] (fa1.north);
+    \node[mnota, text=mok] at (2.5,-1.75) {risultato: $33 + 15 + 34 = 82$};
+    % locale.c
+    \begin{scope}[xshift=7.6cm]
+      \node[font=\Lato\scriptsize\bfseries] at (2.4,2.4) {locale.c};
+      \variabile[draw=neutral!35!white, text=neutral!45!black]{g2}{(1.0,1.55)}{a}{33}
+      \variabile{ma2}{(1.0,0.5)}{a}{7}
+      \variabile{mb2}{(1.0,-0.1)}{b}{15}
+      \variabile{mc2}{(1.0,-0.7)}{c}{34}
+      \scopo{2}{mm2}{main}{(ma2-nome) (ma2) (mb2-nome) (mb2) (mc2-nome) (mc2)}
+      \variabile[fill=accent!10!white]{fa2}{(3.9,0.5)}{a}{7}
+      \variabile[fill=accent!10!white]{fb2}{(3.9,-0.1)}{b}{15}
+      \variabile[fill=accent!10!white]{fc2}{(3.9,-0.7)}{c}{34}
+      \scopo{3}{ff2}{all\_add}{(fa2-nome) (fa2) (fb2-nome) (fb2) (fc2-nome) (fc2)}
+      \scopo{1}{file2}{il file: variabili globali}{(g2-nome) (g2) (mm2) (ff2)}
+      \draw[mcerca] (ma2.east) -- (fa2-nome.west);
+      \node[mnota, anchor=west, text=neutral!45!black] at ([xshift=4pt]g2.east) {nascosta in \code{main}};
+      \node[mnota, text=mok] at (2.5,-1.75) {risultato: $7 + 15 + 34 = 56$};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Da dove viene la \code{a} passata ad \code{all\_add}: a sinistra
+           è la globale, a destra quella locale di \code{main}.}
+  \label{fig:visibilita}
+\end{figure}
+
+\subsection{I blocchi}
+
+Più in generale, un \textbf{blocco} è una parte di codice delimitata da
+graffe, e può contenere dichiarazioni di variabili, visibili solo
+all'interno del blocco. Il corpo di una funzione è un blocco, ma un blocco
+può stare anche dentro un altro:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=blocchi.c]
+#include <stdio.h>
+
+int main(void)
+{
+   int a = 1;
+
+   {
+      int a = 2;              /* nasconde la a esterna */
+      int b = 3;
+
+      printf("dentro il blocco: a = %d, b = %d\n", a, b);
+   }
+   printf("fuori dal blocco: a = %d\n", a);
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./blocchi
+dentro il blocco: a = 2, b = 3
+fuori dal blocco: a = 1
+\end{console}
+\wtnota{Fuori dal blocco \code{b} non esiste più: usarla sarebbe un errore.
+L'opzione \code{-Wshadow} di \code{gcc} segnala le variabili che ne
+nascondono altre.}
+\end{affianco}
+
+\section{Le classi di memorizzazione}
+
+Ogni variabile e ogni funzione del C ha due attributi: il \textbf{tipo} e la
+\term{classe di memorizzazione} (\textit{storage class}), che stabilisce
+\textbf{dove} e \textbf{per quanto tempo} esiste e \textbf{da dove} è
+visibile. Le classi sono quattro, corrispondenti alle parole chiave
+\code{auto}, \code{extern}, \code{register} e \code{static}.
+
+\subsection{\code{auto}}
+
+Le variabili dichiarate dentro un blocco sono \code{auto} per default.
+Quando si entra nel blocco, il sistema alloca la memoria per le sue variabili
+locali; quando se ne esce, la libera (è la pila della
+figura~\ref{fig:pila}). Poiché è la classe più comune, la parola chiave
+\code{auto} non si scrive quasi mai.
+
+\subsection{\code{extern}}
+
+Un modo semplice, ma sconsigliato, di passare informazioni fra blocchi e
+funzioni sono le variabili esterne. Una variabile è esterna se è definita
+fuori da ogni blocco, e riceve automaticamente la classe \code{extern}. La
+parola chiave \code{extern}, invece, dice al compilatore di cercare la
+variabile \textbf{da un'altra parte}. Un esempio su due file:
+
+\begin{affianco}[0.5][t]
+\begin{lstlisting}[style=c, name=file1.c]
+#include <stdio.h>
+
+int a = 1, b = 2, c = 3;        /* variabili esterne */
+int f(void);
+
+int main(void)
+{
+  printf("%3d\n", f());
+  printf("%3d %3d %3d\n", a, b, c);
+  return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c, name=file2.c]
+extern int a;              /* definita altrove */
+
+int f(void)
+{
+  int b, c;                  /* variabili locali */
+
+  a = b = c = 4;
+  return (a + b + c);
+}
+\end{lstlisting}
+\begin{console}
+$ gcc -Wall -c file1.c
+$ gcc -Wall -c file2.c
+$ gcc -o esterne file1.o file2.o
+$ ./esterne
+ 12
+  4   2   3
+\end{console}
+\end{affianco}
+
+\begin{itemize}
+  \item I due file sono compilati separatamente
+        (capitolo~\ref{chap:make}). In \code{file1.c}, \code{a}, \code{b} e
+        \code{c} sono variabili esterne.
+  \item Compilando \code{file2.c}, la riga \code{extern int a;} dice al
+        compilatore che \code{a} è globale e definita in un altro file.
+  \item Il linker mette insieme le informazioni e fa sì che \code{f} usi la
+        cella di memoria giusta (figura~\ref{fig:extern}).
+  \item \code{f} assegna 4 alla \code{a} globale e alle sue \code{b} e
+        \code{c} locali, e restituisce 12; le \code{b} e \code{c} globali
+        restano 2 e 3.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+      sim/.style={anchor=west, inner sep=1.5pt},
+      box/.style={draw=primary!65!black, fill=primary!4!white, line width=0.7pt,
+        rounded corners=3pt}]
+    \draw[box] (0,0) rectangle (3.2,-2.6);
+    \node[font=\Lato\scriptsize\bfseries, anchor=south west] at (0,0.02) {file1.o};
+    \node[sim, text=mok] (da) at (0.1,-0.35) {D a};
+    \node[sim, text=mok] at (0.1,-0.75) {D b};
+    \node[sim, text=mok] at (0.1,-1.15) {D c};
+    \node[sim] at (0.1,-1.55) {T main};
+    \node[sim, text=merr] (uf) at (0.1,-1.95) {U f};
+    \node[sim, text=neutral!45!black] at (0.1,-2.35) {U printf};
+    \draw[box] (5.6,-0.6) rectangle (8.4,-1.8);
+    \node[font=\Lato\scriptsize\bfseries, anchor=south west] at (5.6,-0.58) {file2.o};
+    \node[sim, text=merr] (ua) at (5.7,-0.95) {U a};
+    \node[sim, text=mok] (tf) at (5.7,-1.45) {T f};
+    \draw[wtarrowacc] (ua.west) -- (da.east);
+    \draw[wtarrowacc] (uf.east) -- (tf.west);
+    \node[mnota, anchor=north, align=center] at (4.2,-2.75)
+      {\code{nm}: \code{D} è una variabile definita nel file, \code{T} una funzione definita,\\
+       \code{U} un nome usato ma definito altrove: il linker collega ogni \code{U} alla sua definizione};
+  \end{tikzpicture}
+  \caption{Che cosa vede il linker: \code{file2.o} usa la \code{a} definita in
+           \code{file1.o}, e \code{file1.o} usa la \code{f} definita in
+           \code{file2.o}.}
+  \label{fig:extern}
+\end{figure}
+
+Le informazioni si possono passare anche come parametri delle funzioni, ed
+è la strada da preferire: bisogna cercare di evitare le variabili globali.
+Con i parametri il codice è più chiaro e si capisce meglio dove i valori
+vengono modificati; una variabile globale, invece, può essere cambiata da
+qualunque funzione di qualunque file.
+
+Anche le funzioni hanno per default la classe \code{extern}: sono visibili
+ovunque nel programma, anche se è scritto su più file. Si può aggiungere
+\code{extern} alla definizione o al prototipo
+(\code{extern double sin(double);}), ma in generale non serve.
+
+\subsection{\code{register}}
+
+La classe \code{register} chiede al compilatore di tenere la variabile, se
+possibile, in un \textbf{registro} del processore, la memoria più veloce
+(capitolo~\ref{chap:calcolatore}). I registri sono pochi e servono anche al
+sistema, quindi la richiesta non sempre è soddisfatta: in quel caso la
+variabile diventa \code{auto}. Le variabili globali e le funzioni non
+possono essere \code{register}.
+
+\code{register} è un tentativo di velocizzare il programma, e le variabili
+vanno scelte con cura: poche, usate molto spesso. I candidati tipici sono
+le variabili di controllo dei cicli. Dichiarata all'inizio di \code{main},
+però, la variabile occupa il registro per tutta l'esecuzione della
+funzione; è più efficiente racchiudere dichiarazione e ciclo in un blocco:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c]
+int main(void)
+{
+    register int i;
+    ...
+    for (i = 0; i < LIMIT; i++) {
+        ...
+    }
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c]
+int main(void)
+{
+    ...
+    {
+        register int i;
+        for (i = 0; i < LIMIT; i++) {
+            ...
+        }
+    }
+}
+\end{lstlisting}
+\end{affianco}
+
+Una variabile \code{register} non ha un indirizzo in memoria, quindi non le
+si può applicare \code{\&}: \textit{address of register variable ‘i’
+requested}, risponde \code{gcc}. Oggi i compilatori scelgono da soli, e
+molto bene, quali variabili tenere nei registri: la parola chiave
+\code{register} è di fatto superata.
+
+\subsection{\code{static} per le variabili locali}
+
+Le dichiarazioni \code{static} hanno due usi distinti. Il primo è
+\textbf{conservare il valore} di una variabile locale anche dopo l'uscita
+dal blocco: una variabile locale \code{static} viene inizializzata una sola
+volta, e non sta nella pila ma in una zona di memoria che esiste per tutta
+l'esecuzione del programma.
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=statica.c]
+#include <stdio.h>
+
+void f(void)
+{
+   static int cnt = 0;
+   int volte = 0;
+
+   ++cnt;
+   ++volte;
+   printf("cnt = %d   volte = %d\n", cnt, volte);
+}
+
+int main(void)
+{
+   f();
+   f();
+   f();
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./statica
+cnt = 1   volte = 1
+cnt = 2   volte = 1
+cnt = 3   volte = 1
+\end{console}
+\end{affianco}
+
+La prima volta \code{cnt} viene inizializzata a 0 e incrementata a 1. La
+seconda volta che \code{f} viene chiamata, \code{cnt} \textbf{non} viene
+inizializzata di nuovo: conserva il valore 1 e lo porta a 2. \code{volte},
+che è \code{auto}, nasce e muore a ogni chiamata, e vale sempre 1
+(figura~\ref{fig:statica}). Le slide usano questa idea per fare una cosa sì
+e una no: \code{if (cnt \% 2 == 0)} distingue le chiamate pari da quelle
+dispari.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \foreach \k in {1,2,3} {
+      \node[font=\Lato\scriptsize\bfseries] at (\k*3.6-1.0,1.3) {chiamata \k};
+      \variabile[fill=accent!10!white]{v\k}{(\k*3.6-0.8,-1.3)}{volte}{1}
+      \scopo{3}{fr\k}{f}{(v\k-nome) (v\k)}
+    }
+    \variabile{c1}{(2.8,0.35)}{cnt}{1}
+    \variabile{c2}{(6.4,0.35)}{cnt}{2}
+    \variabile{c3}{(10.0,0.35)}{cnt}{3}
+    \draw[wtarrowacc] (c1.east) -- node[above, mnota, text=accent!70!black] {$+1$} (c2-nome.west);
+    \draw[wtarrowacc] (c2.east) -- node[above, mnota, text=accent!70!black] {$+1$} (c3-nome.west);
+    \node[mnota, anchor=west, align=left] at (11.2,0.35) {\code{static}: la stessa variabile,\\fuori dalla pila, conserva il valore};
+    \node[mnota, anchor=west, align=left] at (11.2,-1.3) {\code{auto}: una variabile nuova\\a ogni chiamata, che riparte da 0};
+  \end{tikzpicture}
+  \caption{\code{cnt} attraversa le chiamate; \code{volte} viene creata e
+           distrutta ogni volta.}
+  \label{fig:statica}
+\end{figure}
+
+\subsection{\code{static} per le variabili globali}
+
+Il secondo uso riguarda le variabili esterne. Una variabile globale
+\code{static} ha una visibilità più ristretta: è visibile solo dalle
+funzioni del suo file definite dopo di lei, e non da quelle di altri file.
+Tentare di raggiungerla con \code{extern} non serve. L'esempio delle slide è
+una famiglia di generatori di numeri pseudo-casuali:
+
+\begin{lstlisting}[style=c, name=random.c]
+/* A family of pseudo random number generators. */
+
+#define    INITIAL_SEED         17
+#define    MULTIPLIER           25173
+#define    INCREMENT            13849
+#define    MODULUS              65536
+#define    FLOATING_MODULUS     65536.0
+
+static unsigned seed = INITIAL_SEED;   /* esterna, ma privata di questo file */
+
+unsigned random(void)
+{
+   seed = (MULTIPLIER * seed + INCREMENT) % MODULUS;
+   return seed;
+}
+
+double probability(void)
+{
+   seed = (MULTIPLIER * seed + INCREMENT) % MODULUS;
+   return (seed / FLOATING_MODULUS);
+}
+\end{lstlisting}
+
+\begin{itemize}
+  \item \code{random()} produce un intero fra 0 e \code{MODULUS} (escluso),
+        \code{probability()} un reale fra 0 e 1.
+  \item Entrambe usano il vecchio valore di \code{seed} (il \textit{seme})
+        per calcolare il nuovo, e lo aggiornano: ogni numero dipende dal
+        precedente.
+  \item Se \code{seed} venisse modificata per errore da un'altra parte del
+        programma, la sequenza cambierebbe. Siccome è \code{static}, è
+        privata di questo file e nessun altro modulo può toccarla.
+\end{itemize}
+
+Lo verifichiamo con un programma di prova, e poi con uno che prova a
+“rubare” il seme:
+
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=c, name=prova.c]
+#include <stdio.h>
+
+unsigned random(void);
+double probability(void);
+
+int main(void)
+{
+   int i;
+
+   for (i = 0; i < 5; i++)
+      printf("%u ", random());
+   printf("\n%f\n", probability());
+   return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ gcc -c random.c
+$ gcc -o prova prova.c random.o
+$ ./prova
+48574 61999 40372 31453 39802
+0.537521
+$ nm random.o
+000000000000002a T probability
+0000000000000000 T random
+0000000000000000 d seed
+\end{console}
+\end{affianco}
+
+Il primo numero è proprio $(25173 \cdot 17 + 13849) \bmod 65536 = 48574$.
+In \code{nm} il seme compare con la \code{d} \textbf{minuscola}: la
+minuscola indica un simbolo locale al file, che il linker non mostra agli
+altri. Infatti un programma che dichiara \code{extern unsigned seed;} e
+prova ad assegnargli 0 non viene collegato:
+
+\begin{affianco}[0.42][c]
+\begin{lstlisting}[style=c, name=ruba.c]
+#include <stdio.h>
+
+extern unsigned seed;
+unsigned random(void);
+
+int main(void)
+{
+   seed = 0;
+   printf("%u\n", random());
+   return 0;
+}
+\end{lstlisting}
+\risultato
+Il compilatore accetta \code{ruba.c}: \code{extern} promette che \code{seed}
+è definita da qualche parte. È il linker a non trovarla, perché in
+\code{random.o} il seme non è visibile da fuori (le righe con
+\textit{warning} sono avvisi secondari, conseguenza dello stesso problema).
+\end{affianco}
+
+\begin{console}
+$ gcc -o ruba ruba.c random.o
+/usr/bin/ld: /tmp/ccEe4NI7.o: warning: relocation against `seed' in read-only section `.text'
+/usr/bin/ld: /tmp/ccEe4NI7.o: in function `main':
+ruba.c:(.text+0xa): undefined reference to `seed'
+/usr/bin/ld: warning: creating DT_TEXTREL in a PIE
+collect2: error: ld returned 1 exit status
+\end{console}
+
+\subsection{\code{static} per le funzioni}
+
+Anche una funzione può essere \code{static}: allora è visibile solo nel file
+in cui è definita, e solo le funzioni dello stesso file possono chiamarla.
+Serve a definire moduli con funzioni \textbf{private}. Nell'esempio delle
+slide due file definiscono ciascuno la propria \code{sf}, \code{static}, e
+non c'è alcun conflitto:
+
+\begin{affianco}[0.5][t]
+\begin{lstlisting}[style=c, name=main.c]
+#include <stdio.h>
+
+void a(void);
+void f() { puts("main f"); }
+static void sf() { puts("main sf"); }
+
+void m() {
+    f();
+    sf();
+}
+
+int main() {
+    m();
+    a();
+    return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=c, name=file.c]
+#include <stdio.h>
+
+void f(void);
+static void sf() { puts("a sf"); }
+
+void a() {
+    f();
+    sf();
+}
+\end{lstlisting}
+\begin{console}
+$ gcc -c file.c -o file.o
+$ gcc -c main.c -o main.o
+$ gcc -o main main.o file.o
+$ ./main
+main f
+main sf
+main f
+a sf
+\end{console}
+\end{affianco}
+
+\code{puts} scrive una stringa e va a capo. \code{main} chiama \code{m}, che
+chiama \code{f} e la \code{sf} del suo file; poi chiama \code{a}, che sta in
+\code{file.c}: \code{a} chiama \code{f}, che esiste solo in \code{main.c} ed
+è visibile ovunque, e la \code{sf} del \textbf{proprio} file
+(figura~\ref{fig:static-funzioni}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\scriptsize,
+      fn/.style={draw=primary!60!black, fill=white, rounded corners=2pt, line width=0.6pt,
+        minimum width=1.5cm, minimum height=0.5cm},
+      fs/.style={fn, draw=accent!65!black, fill=accent!10!white}]
+    \node[fn] (main) at (0,0) {main};
+    \node[fn] (m) at (0,-1.1) {m};
+    \node[fn] (f) at (-1.3,-2.3) {f};
+    \node[fs] (sf1) at (1.3,-2.3) {sf};
+    \scopo{1}{fm}{main.c}{(main) (m) (f) (sf1)}
+    \node[fn] (a) at (5.4,-1.1) {a};
+    \node[fs] (sf2) at (5.4,-2.3) {sf};
+    \scopo{1}{ff}{file.c}{(a) (sf2)}
+    \draw[wtarrow] (main) -- (m);
+    \draw[wtarrow] (m) -- (f);
+    \draw[wtarrow] (m) -- (sf1);
+    \draw[wtarrow] (main.east) -| (a.north);
+    \draw[wtarrow] (a) -- (sf2);
+    \draw[wtarrow, draw=accent!70!black, rounded corners=3pt] (a.west) -- (3.4,-1.1) |- (0.2,-3.15)
+      node[pos=0.75, below, mnota, text=accent!70!black] {\code{a} chiama la \code{f} di \code{main.c}} -| (f.south);
+    \node[mnota, anchor=west, align=left] at (7.0,-2.3) {\code{static}: visibile\\solo nel suo file};
+  \end{tikzpicture}
+  \caption{Chi chiama chi: \code{f} è visibile da entrambi i file, ciascuna
+           \code{sf} solo dal proprio.}
+  \label{fig:static-funzioni}
+\end{figure}
+
+\subsection{Riassunto}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{5.2cm}>{\raggedright\arraybackslash}p{4.6cm}@{}}
+  \toprule
+  \textbf{classe} & \textbf{dove si dichiara} & \textbf{da dove è visibile} & \textbf{quanto vive} \\
+  \midrule
+  \code{auto}                 & in un blocco (è il default)       & nel blocco                          & dall'ingresso all'uscita dal blocco \\
+  \code{register}             & in un blocco                      & nel blocco                          & come \code{auto} \\
+  \code{static}               & in un blocco                      & nel blocco                          & per tutto il programma \\
+  esterna (\code{extern})     & fuori dalle funzioni              & nel file; negli altri file con \code{extern} & per tutto il programma \\
+  \code{static}               & fuori dalle funzioni              & solo nel suo file                   & per tutto il programma \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\insintesi{
+  Una funzione ha un'\textbf{intestazione} (tipo del risultato, nome,
+  parametri formali) e un \textbf{corpo}; \code{void} indica che non
+  restituisce nulla o che non ha parametri. \code{return} termina la funzione
+  e restituisce un valore, convertito nel tipo della funzione; il valore si
+  può ignorare. Una funzione va dichiarata \textbf{prima} dell'uso, con la
+  definizione in stile ANSI o con un \textbf{prototipo}: senza, il
+  compilatore non converte gli argomenti e i risultati sono sbagliati. Gli
+  argomenti sono passati \textbf{per valore}: ogni chiamata ha la sua zona
+  nella pila, con copie dei valori. Le variabili locali sono visibili solo
+  nel loro blocco e nascondono quelle esterne con lo stesso nome. Le classi
+  di memorizzazione stabiliscono durata e visibilità: \code{auto} (il
+  default), \code{extern} (variabili definite altrove), \code{register}
+  (superata), \code{static} (variabili locali che conservano il valore,
+  variabili e funzioni private di un file).}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{A. Kelley, I. Pohl}, \textit{A Book on C}: capitolo~5
+        (funzioni e classi di memorizzazione).
+  \item \textbf{Function declarations} e \textbf{Storage-class specifiers}
+        --- cppreference.com. \\
+        \urlx{https://en.cppreference.com/w/c/language/function_declaration} \\
+        \urlx{https://en.cppreference.com/w/c/language/storage_duration}
+\end{itemize}
