@@ -1,0 +1,964 @@
+\chapter{La programmazione strutturata}
+\label{chap:strutturata}
+
+Prima di scrivere programmi in C conviene sapere da dove viene il linguaggio
+e, soprattutto, quale \textbf{disciplina} segue: la programmazione
+strutturata. È un'idea semplice e potentissima: \textit{ogni} programma si
+può costruire combinando tre soli schemi, la sequenza, la selezione e
+l'iterazione. Questo capitolo li presenta con i diagrammi di flusso, prima
+con esempi della vita di tutti i giorni e poi con problemi di informatica;
+nei capitoli successivi ciascuno diventerà un'istruzione del C.
+
+\section{Il linguaggio C}
+
+\subsection{Da dove viene}
+
+Il C è stato creato da \textbf{Dennis Ritchie}, ai Bell Labs, nel 1972,
+come linguaggio per scrivere il sistema operativo \textbf{Unix}. La prima
+versione di Unix, opera di \textbf{Ken Thompson}, era scritta in assembly e
+in un linguaggio chiamato \textbf{B}. Il B aveva dei limiti seri:
+
+\begin{itemize}
+  \item non era \textbf{tipizzato}: conosceva un solo tipo di dato, la
+        \textit{parola macchina} (il gruppo di bit su cui lavora il
+        processore), e non distingueva fra numeri interi, caratteri o
+        indirizzi;
+  \item faceva un uso pesante di puntatori e indirizzi di memoria.
+\end{itemize}
+
+Il C nasce per superare questi limiti: è un'evoluzione del B che incorpora
+i \textbf{tipi} (ricordate gli “occhiali” del
+capitolo~\ref{chap:calcolatore}: è il tipo a dire come interpretare i
+bit), e rispetta i canoni della programmazione strutturata. Nel tempo il
+linguaggio si è evoluto (figura~\ref{fig:storia-c}):
+
+\begin{itemize}
+  \item il \textbf{C tradizionale} (\textit{Traditional C}), descritto nel
+        1978 nel libro di Kernighan e Ritchie e diffuso all'inizio degli anni
+        '80, introduce fra l'altro i tipi \code{void} ed \code{enum};
+  \item l'\textbf{ANSI C}, della fine degli anni '80, aggiunge il tipo
+        \code{void *}, i \textbf{prototipi} delle funzioni e una definizione
+        del linguaggio molto più precisa.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    \draw[neutral!45!black, line width=1pt, -{Stealth[length=6pt]}] (0,0) -- (17.6,0);
+    \foreach \x/\anno/\cosa/\h in {
+        0.6/1967/{BCPL\\(Martin Richards)}/0.45,
+        2.6/1969/{B\\(Ken Thompson)}/1.3,
+        4.6/1972/{\textbf{C}\\(Dennis Ritchie)}/0.45,
+        6.6/1978/{libro di Kernighan\\e Ritchie: il C\\tradizionale}/1.3,
+        8.6/1989/{ANSI C\\(ISO nel 1990)}/0.45,
+        10.6/1999/{C99}/1.3,
+        12.6/2011/{C11}/0.45,
+        14.6/2018/{C17}/1.3,
+        16.6/2024/{C23}/0.45} {
+      \fill[primary!70!black] (\x,0) circle (2.3pt);
+      \node[anchor=north, font=\Lato\scriptsize\bfseries, text=primary!55!black] at (\x,-0.12) {\anno};
+      \draw[neutral!55!white] (\x,0.1) -- (\x,\h);
+      \node[anchor=south, align=center, inner sep=1.5pt] at (\x,\h) {\cosa};
+    }
+  \end{tikzpicture}
+  \caption{Le tappe del C, dai suoi antenati alle versioni dello standard.}
+  \label{fig:storia-c}
+\end{figure}
+
+\warning{Una precisazione storica}{
+  Le slide datano il B al 1967. Il 1967 è l'anno del suo antenato, il
+  \textit{BCPL} di Martin Richards; il B fu sviluppato da Ken Thompson
+  intorno al 1969, partendo proprio dal BCPL.}
+
+\subsection{Lo standard}
+
+L'\textbf{ANSI} (\textit{American National Standards Institute}) è l'ente
+statunitense che definisce gli standard per molti tipi di sistemi, compresi
+i linguaggi di programmazione. Lo standard ANSI del C (1989) fu approvato
+nel 1990 dall'\textbf{ISO} (\textit{International Organization for
+Standardization}), e l'ANSI C divenne così lo standard internazionale.
+
+Uno standard specifica il \textbf{formalismo} del linguaggio (quali testi
+sono programmi C corretti, cioè la sua \textit{sintassi}) e la sua
+\textbf{semantica} (che cosa significa ciascun costrutto, cioè che cosa
+deve fare il programma). Lo scopo è triplice:
+
+\begin{itemize}
+  \item \textbf{portabilità}: lo stesso programma si compila ed esegue allo
+        stesso modo con compilatori diversi, su macchine diverse;
+  \item \textbf{affidabilità}: il comportamento è definito, non lasciato
+        all'interpretazione di chi scrive il compilatore;
+  \item \textbf{manutenibilità}: chiunque conosca lo standard può leggere e
+        modificare il programma.
+\end{itemize}
+
+Dopo il 1990 lo standard è stato aggiornato più volte (C99, C11, C17, C23).
+Le versioni recenti di gcc seguono per default una di queste, con alcune
+estensioni proprie; i programmi di questa dispensa funzionano con tutte.
+
+\section{La programmazione strutturata}
+
+\subsection{Il problema: gli spaghetti}
+
+Nel capitolo~\ref{chap:calcolatore} abbiamo visto che in assembly
+ripetizioni e scelte si ottengono con i \textbf{salti}: “vai
+all'istruzione all'indirizzo tale”. I primi linguaggi di alto livello
+ereditarono questa abitudine con l'istruzione \code{GOTO} (“vai a”), che
+permette di saltare in qualunque punto del programma. In un programma
+grande, pieno di salti in avanti e all'indietro, seguire l'esecuzione
+diventa come seguire uno spaghetto nel piatto: è il cosiddetto
+\term{spaghetti code} (figura~\ref{fig:spaghetti}, a sinistra), di bassa
+qualità e leggibilità.
+
+Nel 1968--1969 \textbf{Edsger W. Dijkstra} criticò duramente l'uso del
+\code{GOTO} e propose di regolamentare e standardizzare le metodologie di
+programmazione: è la \term{programmazione strutturata}. L'obiettivo è
+rendere più facile la \textbf{lettura}, la \textbf{modifica} e la
+\textbf{manutenzione} dei programmi.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    % spaghetti
+    \node[font=\Lato\small\bfseries, text=red-gradient-6!60!black] at (0,0.9) {con i GOTO};
+    \foreach \i in {0,...,5}
+      \node[fcproc, minimum width=2.2cm] (s\i) at (0,-\i*0.85) {istruzione \pgfmathparse{int(\i+1)}\pgfmathresult};
+    \foreach \i/\j in {0/1, 1/2, 2/3, 3/4, 4/5}
+      \draw[fcfreccia] (s\i) -- (s\j);
+    \begin{scope}[red-gradient-6!70!black]
+      \draw[fcfreccia, draw=red-gradient-6!70!black] (s3.east) to[out=0, in=0, looseness=1.7] (s0.east);
+      \draw[fcfreccia, draw=red-gradient-6!70!black] (s1.west) to[out=180, in=180, looseness=1.5] (s4.west);
+      \draw[fcfreccia, draw=red-gradient-6!70!black] (s5.east) to[out=0, in=0, looseness=1.3] (s2.east);
+      \draw[fcfreccia, draw=red-gradient-6!70!black] (s2.west) to[out=180, in=180, looseness=1.3] (s3.west);
+      \draw[fcfreccia, draw=red-gradient-6!70!black] (s4.east) to[out=-10, in=0, looseness=1.6] (s1.east);
+    \end{scope}
+    \node[mnota, align=center, anchor=north] at (0,-4.75) {per sapere che cosa viene\\eseguito dopo, bisogna\\seguire ogni freccia};
+    % strutturato
+    \begin{scope}[xshift=8.6cm]
+      \node[font=\Lato\small\bfseries, text=green-gradient-6!50!black] at (0,0.9) {strutturato};
+      \draw[green-gradient-6!80!black, line width=0.8pt, rounded corners=5pt, fill=green-gradient-1!25!white]
+        (-3.6,0.45) rectangle (3.6,-4.4);
+      \node[font=\Lato\scriptsize\bfseries, anchor=north west] at (-3.5,0.4) {sequenza};
+      \node[fcproc, minimum width=2.4cm] (a) at (0,0.05) {istruzione};
+      \draw[accent!60!black, line width=0.8pt, rounded corners=5pt, fill=accent!7!white]
+        (-3.1,-0.5) rectangle (3.1,-3.35);
+      \node[font=\Lato\scriptsize\bfseries, anchor=north west] at (-3.0,-0.55) {iterazione: ripeti finché\dots};
+      \draw[primary!60!black, line width=0.8pt, rounded corners=5pt, fill=primary!6!white]
+        (-2.6,-1.05) rectangle (2.6,-3.05);
+      \node[font=\Lato\scriptsize\bfseries, anchor=north west] at (-2.5,-1.1) {selezione: se\dots altrimenti\dots};
+      \node[fcproc, minimum width=1.9cm] at (-1.2,-2.2) {istruzione};
+      \node[fcproc, minimum width=1.9cm] at (1.2,-2.2) {istruzione};
+      \node[fcproc, minimum width=2.4cm] (z) at (0,-3.85) {istruzione};
+      \node[mnota, align=center, anchor=north] at (0,-4.75) {blocchi annidati, ciascuno con\\\textbf{una sola entrata e una sola uscita}:\\si legge dall'alto in basso};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Lo stesso tipo di logica scritto con salti arbitrari (a
+           sinistra) e con le strutture di controllo (a destra).}
+  \label{fig:spaghetti}
+\end{figure}
+
+\subsection{Il teorema di Böhm e Jacopini}
+
+Si può davvero fare a meno dei salti arbitrari? La risposta è un teorema,
+dimostrato nel 1966 da due informatici italiani, \textbf{Corrado Böhm} e
+\textbf{Giuseppe Jacopini}.
+
+\dfn{Teorema di Böhm-Jacopini}{
+  Qualsiasi programma scritto usando il \code{GOTO} può essere riscritto
+  senza, a patto di avere a disposizione tre tipi di \textbf{strutture di
+  controllo}: la \textbf{sequenza}, la \textbf{selezione} e
+  l'\textbf{iterazione}.}
+
+Le tre strutture bastano, quindi, per \textit{qualunque} algoritmo. Hanno
+una caratteristica comune decisiva: ciascuna ha \textbf{una sola entrata e
+una sola uscita}. Per questo si possono incastrare l'una dentro l'altra
+come scatole (figura~\ref{fig:spaghetti}, a destra), e un programma si
+legge dall'alto in basso, capendo ogni blocco senza dover guardare il resto.
+
+\info{Che fine ha fatto il \code{GOTO}?}{
+  Il C ha ancora un'istruzione \code{goto}, per ragioni storiche e per pochi
+  casi molto particolari. In questo corso \textbf{non si usa}: tutto ciò che
+  serve si scrive con le strutture di controllo.}
+
+\section{Le tre strutture di controllo}
+
+Le strutture di controllo del flusso sono dunque tre
+(figura~\ref{fig:tre-strutture}). Vediamole nel dettaglio, ciascuna con un
+problema del mondo reale e un problema di informatica.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize]
+    % sequenza
+    \node[font=\Lato\small\bfseries, text=primary!55!black] at (0,0.75) {sequenza};
+    \node[fcproc] (a1) at (0,0) {passo};
+    \node[fcproc] (a2) at (0,-0.9) {passo};
+    \node[fcproc] (a3) at (0,-1.8) {passo};
+    \draw[fcfreccia] (0,0.5) -- (a1); \draw[fcfreccia] (a1) -- (a2);
+    \draw[fcfreccia] (a2) -- (a3); \draw[fcfreccia] (a3) -- (0,-2.5);
+    \node[mnota, align=center, anchor=north] at (0,-2.75) {i passi vengono eseguiti\\uno dopo l'altro,\\incondizionatamente};
+    % selezione
+    \begin{scope}[xshift=6cm]
+      \node[font=\Lato\small\bfseries, text=primary!55!black] at (0,0.75) {selezione};
+      \node[fcdec] (c) at (0,-0.15) {condizione};
+      \node[fcproc, minimum width=1.6cm] (v) at (-1.5,-1.2) {passo};
+      \node[fcproc, minimum width=1.6cm] (f) at (1.5,-1.2) {passo};
+      \node[fcgiunzione] (g) at (0,-2.0) {};
+      \draw[fcfreccia] (0,0.5) -- (c);
+      \draw[fcfreccia] (c.west) -| node[fcsi, above, pos=0.3] {vero} (v.north);
+      \draw[fcfreccia] (c.east) -| node[fcno, above, pos=0.3] {falso} (f.north);
+      \draw[fcfreccia] (v.south) |- (g.west);
+      \draw[fcfreccia] (f.south) |- (g.east);
+      \draw[fcfreccia] (g) -- (0,-2.5);
+      \node[mnota, align=center, anchor=north] at (0,-2.75) {i passi vengono eseguiti\\solo dopo aver verificato\\una condizione};
+    \end{scope}
+    % iterazione
+    \begin{scope}[xshift=12cm]
+      \node[font=\Lato\small\bfseries, text=primary!55!black] at (0,0.75) {iterazione};
+      \node[fcgiunzione] (j) at (0,0.3) {};
+      \node[fcdec] (t) at (0,-0.5) {condizione};
+      \node[fcproc] (b) at (0,-1.6) {passo};
+      \draw[fcfreccia] (0,0.6) -- (j);
+      \draw[fcfreccia] (j) -- (t);
+      \draw[fcfreccia] (t) -- node[fcsi, right] {vero} (b);
+      \draw[fcfreccia] (b.south) -- (0,-2.15) -- (1.7,-2.15) -- (1.7,0.3) -- (j.east);
+      \draw[fcfreccia] (t.west) -- node[fcno, above] {falso} (-1.6,-0.5) -- (-1.6,-2.5);
+      \node[mnota, align=center, anchor=north] at (0,-2.75) {i passi elementari\\vengono eseguiti\\più volte};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Le tre strutture di controllo del flusso.}
+  \label{fig:tre-strutture}
+\end{figure}
+
+\subsection{La sequenza}
+
+La \term{sequenza} è la struttura più banale: i passi vengono eseguiti
+\textbf{uno dopo l'altro}, incondizionatamente, nell'ordine in cui sono
+scritti. Ma l'ordine conta: per alzarsi dal letto bisogna prima mettersi a
+sedere, e per stampare un risultato bisogna prima averlo calcolato
+(figura~\ref{fig:sequenza}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      tit/.style={font=\Lato\scriptsize\bfseries, text=neutral!25!black, align=center}]
+    \node[tit] at (0,0.98) {Svegliarsi\\{\mdseries\itshape problema del mondo reale}};
+    \foreach \t [count=\i from 0] in {apri gli occhi, stiracchiati, mettiti a sedere sul letto,
+                                       infila le ciabatte, alzati}
+      \node[fcproc, minimum width=3.0cm] (s\i) at (0,-\i*0.85) {\t};
+    \foreach \i/\j in {0/1, 1/2, 2/3, 3/4} \draw[fcfreccia] (s\i) -- (s\j);
+    \begin{scope}[xshift=8.4cm]
+      \node[tit] at (0,0.98) {Calcolare l'area di un quadrato\\{\mdseries\itshape problema di informatica}};
+      \node[fcterm] (a) at (0,0) {Inizio};
+      \node[fcio, text width=3.6cm] (b) at (0,-0.95) {prendi in input il valore della variabile \code{lato}};
+      \node[fcproc, text width=3.6cm] (c) at (0,-2.05) {calcola il prodotto di \code{lato} per \code{lato} e metti il valore nella variabile \code{area}};
+      \node[fcio, text width=3.6cm] (d) at (0,-3.15) {metti in output il valore della variabile \code{area}};
+      \node[fcterm] (e) at (0,-4.1) {Fine};
+      \foreach \x/\y in {a/b, b/c, c/d, d/e} \draw[fcfreccia] (\x) -- (\y);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Due sequenze.}
+  \label{fig:sequenza}
+\end{figure}
+
+Nel quadrato compare per la prima volta la parola \term{variabile}: un
+contenitore con un nome (\code{lato}, \code{area}) in cui si mette un
+valore. È una cella di memoria (o un gruppo di celle) a cui diamo un nome,
+così da non doverci occupare del suo indirizzo.
+
+\subsection{La selezione a una via}
+
+La \term{selezione} esegue dei passi \textbf{solo dopo aver verificato una
+condizione}. Ne esistono tre tipi; il più semplice è la \textbf{selezione a
+una via}: se la condizione è vera si eseguono dei passi, se è falsa non si
+fa niente di particolare e si prosegue (figura~\ref{fig:una-via}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      tit/.style={font=\Lato\scriptsize\bfseries, text=neutral!25!black, align=center}]
+    \node[tit] at (0,0.98) {Fare una telefonata\\{\mdseries\itshape problema del mondo reale}};
+    \node[fcproc] (a) at (0,0) {componi il numero};
+    \node[fcdec] (c) at (0,-1.1) {risponde?};
+    \node[fcproc, minimum width=1.6cm] (p) at (-1.6,-2.15) {parla};
+    \node[fcgiunzione] (g) at (0,-2.85) {};
+    \node[fcproc] (r) at (0,-3.6) {riaggancia};
+    \draw[fcfreccia] (a) -- (c);
+    \draw[fcfreccia] (c.west) -| node[fcsi, above, pos=0.3] {vero} (p.north);
+    \draw[fcfreccia] (p.south) |- (g.west);
+    \draw[fcfreccia] (c.east) -- node[fcno, above] {falso} ++(0.55,0) |- (g.east);
+    \draw[fcfreccia] (g) -- (r);
+    \begin{scope}[xshift=8.4cm]
+      \node[tit] at (0,0.98) {Simulare la roulette\\{\mdseries\itshape problema di informatica}};
+      \node[fcproc, text width=4.2cm] (a) at (0,-0.05) {estrai un numero casuale fra 0 e 36 e assegnalo alla variabile \code{x}};
+      \node[fcproc, text width=4.2cm] (b) at (0,-1.15) {assegna alla variabile \code{msg} il testo “È uscito il” seguito dal valore di \code{x}};
+      \node[fcdec] (c) at (0,-2.3) {\code{x} vale 0?};
+      \node[fcproc, text width=2.4cm] (d) at (-2.3,-3.3) {aggiungi a \code{msg} “Vince il banco”};
+      \node[fcgiunzione] (g) at (0,-4.05) {};
+      \node[fcio, text width=3.0cm] (e) at (0,-4.8) {metti in output la variabile \code{msg}};
+      \draw[fcfreccia] (a) -- (b);
+      \draw[fcfreccia] (b) -- (c);
+      \draw[fcfreccia] (c.west) -| node[fcsi, above, pos=0.3] {vero} (d.north);
+      \draw[fcfreccia] (d.south) |- (g.west);
+      \draw[fcfreccia] (c.east) -- node[fcno, above] {falso} ++(0.55,0) |- (g.east);
+      \draw[fcfreccia] (g) -- (e);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Due selezioni a una via: il ramo “falso” non contiene passi.}
+  \label{fig:una-via}
+\end{figure}
+
+Il pallino dove le strade si ricongiungono è importante: qualunque cosa
+succeda alla domanda, dopo si riaggancia. La selezione ha una sola entrata
+(la domanda) e una sola uscita (il pallino), proprio come una singola
+istruzione.
+
+\subsection{La selezione a due vie}
+
+La \textbf{selezione a due vie} prevede delle operazioni da svolgere sia nel
+caso in cui la condizione risulti \textbf{vera}, sia nel caso in cui risulti
+\textbf{falsa}: viene eseguito sempre \textit{uno} dei due rami, mai
+entrambi, mai nessuno (figura~\ref{fig:due-vie}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      tit/.style={font=\Lato\scriptsize\bfseries, text=neutral!25!black, align=center}]
+    \node[tit] at (0,0.98) {Fare un viaggio in autobus\\{\mdseries\itshape problema del mondo reale}};
+    \node[fcproc] (a) at (0,0) {sali sull'autobus};
+    \node[fcproc] (b) at (0,-0.85) {oblitera};
+    \node[fcdec] (c) at (0,-1.95) {c'è posto?};
+    \node[fcproc, minimum width=2.4cm] (v) at (-1.85,-3.05) {fai il viaggio seduto};
+    \node[fcproc, minimum width=2.4cm] (f) at (1.85,-3.05) {fai il viaggio in piedi};
+    \node[fcgiunzione] (g) at (0,-3.8) {};
+    \node[fcproc] (s) at (0,-4.55) {scendi dall'autobus};
+    \draw[fcfreccia] (a) -- (b); \draw[fcfreccia] (b) -- (c);
+    \draw[fcfreccia] (c.west) -| node[fcsi, above, pos=0.3] {vero} (v.north);
+    \draw[fcfreccia] (c.east) -| node[fcno, above, pos=0.3] {falso} (f.north);
+    \draw[fcfreccia] (v.south) |- (g.west);
+    \draw[fcfreccia] (f.south) |- (g.east);
+    \draw[fcfreccia] (g) -- (s);
+    \begin{scope}[xshift=8.6cm]
+      \node[tit] at (0,0.98) {Il segno di un numero casuale\\{\mdseries\itshape problema di informatica}};
+      \node[fcproc, text width=4.2cm] (a) at (0,-0.05) {estrai un intero casuale fra $-50$ e $50$ e assegnalo alla variabile \code{x}};
+      \node[fcdec] (c) at (0,-1.3) {\code{x < 0}?};
+      \node[fcio, text width=2.5cm] (v) at (-1.95,-2.5) {metti in output il valore di \code{x} e “è negativo”};
+      \node[fcio, text width=2.5cm] (f) at (1.95,-2.5) {metti in output il valore di \code{x} e “è positivo”};
+      \node[fcgiunzione] (g) at (0,-3.45) {};
+      \draw[fcfreccia] (a) -- (c);
+      \draw[fcfreccia] (c.west) -| node[fcsi, above, pos=0.3] {vero} (v.north);
+      \draw[fcfreccia] (c.east) -| node[fcno, above, pos=0.3] {falso} (f.north);
+      \draw[fcfreccia] (v.south) |- (g.west);
+      \draw[fcfreccia] (f.south) |- (g.east);
+      \draw[fcfreccia] (g) -- (0,-4.0);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Due selezioni a due vie.}
+  \label{fig:due-vie}
+\end{figure}
+
+\warning{E se esce lo zero?}{
+  L'algoritmo del segno, così com'è, ha un caso particolare: se il numero
+  estratto è 0, la condizione \code{x < 0} è falsa e viene stampato “0 è
+  positivo”. Lo zero però non è né positivo né negativo. Per trattarlo
+  correttamente servono \textbf{tre} strade, come nell'esempio 3 del
+  capitolo~\ref{chap:dal-problema}. È un buon esempio di come si verifica un
+  algoritmo: si prova ogni ramo, e si cercano i \textbf{casi limite} (qui,
+  il confine fra le due strade).}
+
+\subsection{La selezione a n vie}
+
+La \textbf{selezione a n vie} prevede operazioni diverse in \textbf{diversi
+casi}, a seconda del valore di qualcosa: invece di una domanda con risposta
+vero o falso, c'è una domanda con molte risposte possibili, ciascuna con la
+sua strada (figura~\ref{fig:n-vie}).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      tit/.style={font=\Lato\scriptsize\bfseries, text=neutral!25!black, align=center},
+      caso/.style={fcproc, minimum width=2.25cm, text width=2.05cm, minimum height=0.9cm},
+      val/.style={font=\Lato\tiny\bfseries, text=accent!65!black, fill=white, inner sep=1pt}]
+    \node[tit] at (-5.0,0.1) {Decidere cosa indossare\\{\mdseries\itshape problema del mondo reale}};
+    \node[fcproc] (a) at (0,0.35) {guarda fuori dalla finestra};
+    \node[fcdec] (c) at (0,-0.75) {che tempo fa?};
+    \foreach \x/\valore/\testo [count=\i] in {-3.9/30 gradi/esci a mezze maniche, -1.3/15 gradi/esci con la giacca a vento,
+                                     1.3/0 gradi/esci con il piumino, 3.9/$-15$ gradi/non uscire} {
+      \node[caso] (k\i) at (\x,-2.25) {\testo};
+      \draw[fcfreccia] (c.south) -- node[val, pos=0.62] {\valore} (k\i.north);
+      \draw[fcfreccia] (k\i.south) -- (0,-3.3);
+    }
+    \node[fcgiunzione] at (0,-3.3) {};
+    \draw[fcfreccia] (a) -- (c);
+    \draw[fcfreccia] (0,-3.38) -- (0,-3.8);
+    \begin{scope}[yshift=-5.1cm]
+      \node[tit] at (-5.6,0.1) {Estrarre un giorno\\lavorativo a caso\\{\mdseries\itshape problema di informatica}};
+      \node[fcproc, text width=4.4cm] (a) at (0,0.35) {estrai un intero casuale fra 1 e 5 e assegnalo alla variabile \code{x}};
+      \node[fcdec, minimum width=1.6cm, minimum height=0.8cm] (c) at (0,-0.85) {valore di \code{x}};
+      \foreach \x/\valore/\testo [count=\i] in {-5.0/1/Lunedì, -2.5/2/Martedì, 0/3/Mercoledì, 2.5/4/Giovedì, 5.0/5/Venerdì} {
+        \node[fcio, minimum width=1.9cm, text width=1.7cm, minimum height=0.9cm] (k\i) at (\x,-2.45) {metti in output “\testo”};
+        \draw[fcfreccia] (c.south) -- node[val, pos=0.6] {\valore} (k\i.north);
+        \draw[fcfreccia] (k\i.south) -- (0,-3.5);
+      }
+      \node[fcgiunzione] at (0,-3.5) {};
+      \draw[fcfreccia] (a) -- (c);
+      \draw[fcfreccia] (0,-3.58) -- (0,-4.0);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Due selezioni a n vie: le etichette sulle frecce sono i valori
+           possibili.}
+  \label{fig:n-vie}
+\end{figure}
+
+Si potrebbe ottenere lo stesso risultato con una catena di selezioni a due
+vie (“\code{x} vale 1? altrimenti, vale 2? altrimenti\dots”), ma la
+selezione a n vie dice in modo più diretto che \textbf{una sola} domanda
+decide fra molte strade. In C esistono entrambe le forme
+(capitolo~\ref{chap:flusso}).
+
+\subsection{L'iterazione}
+
+Il concetto di \term{ciclo} (o \textit{iterazione}) è stato introdotto per
+alleggerire situazioni come questa: dipingere le statuette dei sette nani.
+Scritto come sequenza, l'algoritmo ripete sette volte lo stesso passo
+(figura~\ref{fig:nani}, a sinistra). Una volta isolata l'istruzione da
+eseguire \textbf{più volte}, si può scrivere un algoritmo che la esegue
+semplicemente quante volte serve (a destra).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      tit/.style={font=\Lato\scriptsize\bfseries, text=neutral!25!black, align=center}]
+    \node[tit] at (0,0.98) {come sequenza};
+    \foreach \n [count=\i from 0] in {Mammolo, Cucciolo, Dotto, Eolo, Brontolo, Gongolo, Pisolo}
+      \node[fcproc, minimum width=3.4cm] (s\i) at (0,-\i*0.72) {dipingi la statuetta di \n};
+    \foreach \i in {0,...,5} {\pgfmathtruncatemacro{\j}{\i+1}\draw[fcfreccia] (s\i) -- (s\j);}
+    \draw[wtarrowacc, line width=1.4pt] (2.3,-2.2) -- node[wtlab, above=3pt, fill=none] {diventa} (4.6,-2.2);
+    \begin{scope}[xshift=7.6cm]
+      \node[tit] at (0,0.98) {come ciclo};
+      \node[fcproc] (i0) at (0,0.1) {\code{i = 0}};
+      \node[fcgiunzione] (j) at (0,-0.6) {};
+      \node[fcdec] (t) at (0,-1.45) {\code{i < 7}?};
+      \node[fcproc] (b1) at (0,-2.6) {dipingi una statuetta};
+      \node[fcproc] (b2) at (0,-3.45) {incrementa \code{i}};
+      \node[fcgiunzione] (u) at (0,-4.55) {};
+      \draw[fcfreccia] (i0) -- (j);
+      \draw[fcfreccia] (j) -- (t);
+      \draw[fcfreccia] (t) -- node[fcsi, right] {vero} (b1);
+      \draw[fcfreccia] (b1) -- (b2);
+      \draw[fcfreccia, draw=accent!70!black] (b2.south) -- (0,-3.95) -- (1.85,-3.95) -- (1.85,-0.6) -- (j.east);
+      \draw[fcfreccia] (t.west) -- node[fcno, above] {falso} (-1.75,-1.45) -- (-1.75,-4.55) -- (u.west);
+      \draw[fcfreccia] (u) -- (0,-5.0);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Dipingere le statuette dei sette nani: la ripetizione viene
+           isolata in un ciclo.}
+  \label{fig:nani}
+\end{figure}
+
+Per sapere quando fermarsi, il ciclo usa una variabile, \code{i}, che
+\textbf{conta} quante volte il corpo del ciclo è già stato eseguito. Una
+variabile di questo tipo si chiama \term{contatore} e per tradizione si
+chiama \code{i}. Esistono però due grandi famiglie di cicli, e la difficoltà
+sta nel capire in quale circostanza conviene usare l'una o l'altra:
+
+\begin{itemize}
+  \item il \textbf{ciclo su contatore}, quando si sa \textit{quante volte}
+        ripetere;
+  \item il \textbf{ciclo su condizione}, quando non lo si sa, ma si sa
+        \textit{quando} continuare e quando smettere.
+\end{itemize}
+
+\subsection{Il ciclo su contatore}
+
+Nel ciclo su contatore la variabile contatore viene
+\textbf{inizializzata} prima di fare il ciclo, \textbf{testata} prima di
+ripetere il ciclo e \textbf{modificata} ogni volta che il ciclo è stato
+eseguito (figura~\ref{fig:contatore}, a sinistra). Dimenticare uno dei tre
+passi è un errore classico: senza inizializzazione il conto parte da un
+valore a caso, senza modifica il test resta sempre vero e il ciclo non
+finisce mai.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      tit/.style={font=\Lato\scriptsize\bfseries, text=neutral!25!black, align=center}]
+    \node[tit] at (0,0.98) {lo schema generale};
+    \node[fcproc, fill=green-gradient-1!40!white] (i0) at (0,0.1) {inizializzazione};
+    \node[fcgiunzione] (j) at (0,-0.6) {};
+    \node[fcdec, fill=yellow-gradient-1!60!white] (t) at (0,-1.45) {test};
+    \node[fcproc] (b1) at (0,-2.6) {passi da ripetere};
+    \node[fcproc, fill=accent!10!white] (b2) at (0,-3.45) {modifica};
+    \node[fcgiunzione] (u) at (0,-4.55) {};
+    \draw[fcfreccia] (i0) -- (j); \draw[fcfreccia] (j) -- (t);
+    \draw[fcfreccia] (t) -- node[fcsi, right] {vero} (b1);
+    \draw[fcfreccia] (b1) -- (b2);
+    \draw[fcfreccia, draw=accent!70!black] (b2.south) -- (0,-3.95) -- (1.85,-3.95) -- (1.85,-0.6) -- (j.east);
+    \draw[fcfreccia] (t.west) -- node[fcno, above] {falso} (-1.75,-1.45) -- (-1.75,-4.55) -- (u.west);
+    \draw[fcfreccia] (u) -- (0,-5.0);
+    \begin{scope}[xshift=7.6cm]
+      \node[tit] at (0,0.98) {Stampare la tabellina del 3\\{\mdseries\itshape problema di informatica}};
+      \node[fcproc] (i0) at (0,0.1) {\code{i = 0}};
+      \node[fcgiunzione] (j) at (0,-0.6) {};
+      \node[fcdec] (t) at (0,-1.45) {\code{i < 11}?};
+      \node[fcio, text width=2.8cm] (b1) at (0,-2.6) {metti in output il prodotto di 3 per \code{i}};
+      \node[fcproc] (b2) at (0,-3.6) {incrementa \code{i}};
+      \node[fcgiunzione] (u) at (0,-4.55) {};
+      \draw[fcfreccia] (i0) -- (j); \draw[fcfreccia] (j) -- (t);
+      \draw[fcfreccia] (t) -- node[fcsi, right] {vero} (b1);
+      \draw[fcfreccia] (b1) -- (b2);
+      \draw[fcfreccia, draw=accent!70!black] (b2.south) -- (0,-4.05) -- (2.1,-4.05) -- (2.1,-0.6) -- (j.east);
+      \draw[fcfreccia] (t.west) -- node[fcno, above] {falso} (-1.9,-1.45) -- (-1.9,-4.55) -- (u.west);
+      \draw[fcfreccia] (u) -- (0,-5.0);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Il ciclo su contatore: lo schema e un esempio.}
+  \label{fig:contatore}
+\end{figure}
+
+Seguiamo l'esecuzione della tabellina, scrivendo a ogni giro il valore di
+\code{i}, l'esito del test e l'output. È la tecnica più utile per capire un
+ciclo (e per trovarne gli errori): \textbf{simularlo a mano}, una riga per
+giro.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\setlength{\tabcolsep}{5.2pt}
+\begin{tabular}{@{}l*{12}{c}@{}}
+  \toprule
+  \textbf{valore di \code{i}} & 0 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 & 11 \\
+  \textbf{\code{i < 11}?} & vero & vero & vero & vero & vero & vero & vero & vero & vero & vero & vero & \textbf{falso} \\
+  \textbf{output} & 0 & 3 & 6 & 9 & 12 & 15 & 18 & 21 & 24 & 27 & 30 & --- \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Il corpo viene eseguito 11 volte (per \code{i} da 0 a 10), e il test viene
+valutato 12 volte: l'ultima, con \code{i} che vale 11, è quella che fa
+uscire dal ciclo.
+
+\subsection{Il ciclo su condizione}
+
+Se non sappiamo a priori \textbf{quante} volte dobbiamo eseguire il ciclo,
+sicuramente sappiamo \textbf{quando} eseguirlo e quando no: serve allora un
+\term{ciclo su condizione}, che si ripete finché una condizione è vera.
+Anche qui ci sono due casi, a seconda di quando si fa il test:
+
+\begin{itemize}
+  \item prima eseguiamo il ciclo e poi facciamo il test (\textbf{condizione
+        in coda});
+  \item oppure prima facciamo il test e poi eseguiamo il ciclo
+        (\textbf{condizione in testa}).
+\end{itemize}
+
+La differenza sembra piccola, ma non lo è: con la condizione in coda il
+corpo del ciclo viene eseguito \textbf{almeno una volta}; con la condizione
+in testa può essere eseguito \textbf{zero volte}.
+
+\subsection{Condizione in coda}
+
+Si pensi a mangiare un piatto di spaghetti: si mangia una forchettata, poi
+ci si chiede se ce n'è ancora; se sì, si mangia un'altra forchettata, e
+così via. Chiedersi “ce n'è ancora?” ha senso solo \textbf{dopo} aver
+cominciato (figura~\ref{fig:coda}, a sinistra).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      tit/.style={font=\Lato\scriptsize\bfseries, text=neutral!25!black, align=center}]
+    \node[tit] at (0,0.98) {Mangiare un piatto di spaghetti\\{\mdseries\itshape problema del mondo reale}};
+    \node[fcgiunzione] (j) at (0,0.0) {};
+    \node[fcproc] (b) at (0,-0.75) {mangia una forchettata};
+    \node[fcdec] (t) at (0,-1.95) {ce n'è ancora?};
+    \draw[fcfreccia] (0,0.35) -- (j);
+    \draw[fcfreccia] (j) -- (b); \draw[fcfreccia] (b) -- (t);
+    \draw[fcfreccia, draw=accent!70!black] (t.east) -- node[fcsi, above] {vero} (2.25,-1.95) -- (2.25,0) -- (j.east);
+    \draw[fcfreccia] (t.south) -- node[fcno, right] {falso} (0,-3.0);
+    \begin{scope}[xshift=8.0cm]
+      \node[tit] at (0,0.98) {Tenere sotto controllo le calorie\\{\mdseries\itshape problema di informatica}};
+      \node[fcio, text width=3.9cm] (a) at (0,0.05) {chiedi in input quante calorie si possono mangiare e acquisiscile nella variabile \code{tot}};
+      \node[fcgiunzione] (j) at (0,-0.85) {};
+      \node[fcio, text width=3.9cm] (b) at (0,-1.7) {chiedi in input le calorie della pietanza mangiata e acquisiscile nella variabile \code{x}};
+      \node[fcproc] (c) at (0,-2.75) {decrementa \code{tot} di \code{x}};
+      \node[fcdec] (t) at (0,-3.8) {\code{tot > 0}?};
+      \draw[fcfreccia] (a) -- (j); \draw[fcfreccia] (j) -- (b);
+      \draw[fcfreccia] (b) -- (c); \draw[fcfreccia] (c) -- (t);
+      \draw[fcfreccia, draw=accent!70!black] (t.east) -- node[fcsi, above] {vero} (2.75,-3.8) -- (2.75,-0.85) -- (j.east);
+      \draw[fcfreccia] (t.south) -- node[fcno, right] {falso} (0,-4.8);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Cicli con la condizione in coda: il corpo viene eseguito almeno
+           una volta.}
+  \label{fig:coda}
+\end{figure}
+
+Il ciclo su condizione con verifica in coda si presta a due casi:
+
+\begin{itemize}
+  \item quando ha senso porsi la domanda \textbf{solo dopo} aver già
+        eseguito una prima volta il ciclo, come per gli spaghetti e le
+        calorie;
+  \item quando c'è un obiettivo da raggiungere mediante uno o più
+        \textbf{tentativi}: si tenta, e si ripete finché il tentativo non
+        riesce (figura~\ref{fig:tentativi}).
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      tit/.style={font=\Lato\scriptsize\bfseries, text=neutral!25!black, align=center}]
+    \node[tit] at (0,0.98) {Richiamare qualcuno che se ne va\\{\mdseries\itshape problema del mondo reale}};
+    \node[fcgiunzione] (j) at (0,0.0) {};
+    \node[fcproc, text width=2.8cm] (b) at (0,-0.8) {chiama a gran voce chi se ne sta andando via};
+    \node[fcdec] (t) at (0,-2.05) {continua ad\\andare via?};
+    \draw[fcfreccia] (0,0.35) -- (j);
+    \draw[fcfreccia] (j) -- (b); \draw[fcfreccia] (b) -- (t);
+    \draw[fcfreccia, draw=accent!70!black] (t.east) -- node[fcsi, above] {vero} (2.35,-2.05) -- (2.35,0) -- (j.east);
+    \draw[fcfreccia] (t.south) -- node[fcno, right] {falso} (0,-3.2);
+    \begin{scope}[xshift=8.0cm]
+      \node[tit] at (0,0.98) {Input controllato\\{\mdseries\itshape problema di informatica}};
+      \node[fcgiunzione] (j) at (0,0.0) {};
+      \node[fcio, text width=3.9cm] (a) at (0,-0.8) {mostra in output un messaggio che chiede di inserire un intero di 3 cifre};
+      \node[fcio, text width=3.9cm] (b) at (0,-1.85) {acquisisci l'input da tastiera nella variabile \code{x}};
+      \node[fcdec] (t) at (0,-3.15) {\code{x < 100} oppure\\\code{x > 999}?};
+      \draw[fcfreccia] (0,0.35) -- (j);
+      \draw[fcfreccia] (j) -- (a); \draw[fcfreccia] (a) -- (b); \draw[fcfreccia] (b) -- (t);
+      \draw[fcfreccia, draw=accent!70!black] (t.east) -- node[fcsi, above] {vero} (2.85,-3.15) -- (2.85,0) -- (j.east);
+      \draw[fcfreccia] (t.south) -- node[fcno, right] {falso} (0,-4.35);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Cicli con la condizione in coda per raggiungere un obiettivo con
+           più tentativi.}
+  \label{fig:tentativi}
+\end{figure}
+
+L'input controllato è un caso che ritroveremo spesso: un programma non può
+fidarsi di ciò che scrive l'utente. Chiede un numero di tre cifre e, finché
+il numero ricevuto è fuori dall'intervallo da 100 a 999, lo richiede.
+
+\subsection{Condizione in testa}
+
+Quando invece ha senso porsi la domanda \textbf{prima} di eseguire la
+prima volta il ciclo, allora si pone la verifica della condizione in testa:
+è il \textbf{ciclo su condizione con verifica in testa}. Per alzare tutte
+le tapparelle di casa ci si chiede prima se ce ne sono ancora da alzare:
+potrebbero essere già tutte aperte, e allora non si fa nulla
+(figura~\ref{fig:testa}). Si noti che il ciclo su contatore visto prima è
+un caso particolare di questo schema, con il test in testa.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      tit/.style={font=\Lato\scriptsize\bfseries, text=neutral!25!black, align=center}]
+    \node[tit] at (0,0.98) {Alzare tutte le tapparelle di casa\\{\mdseries\itshape problema del mondo reale}};
+    \node[fcgiunzione] (j) at (0,0.0) {};
+    \node[fcdec] (t) at (0,-0.95) {ci sono tapparelle\\da alzare?};
+    \node[fcproc] (b) at (0,-2.25) {alza una tapparella};
+    \node[fcgiunzione] (u) at (0,-3.25) {};
+    \draw[fcfreccia] (0,0.35) -- (j); \draw[fcfreccia] (j) -- (t);
+    \draw[fcfreccia] (t) -- node[fcsi, right] {vero} (b);
+    \draw[fcfreccia, draw=accent!70!black] (b.south) -- (0,-2.75) -- (2.3,-2.75) -- (2.3,0) -- (j.east);
+    \draw[fcfreccia] (t.west) -- node[fcno, above] {falso} (-2.2,-0.95) -- (-2.2,-3.25) -- (u.west);
+    \draw[fcfreccia] (u) -- (0,-3.7);
+    \begin{scope}[xshift=8.0cm]
+      \node[tit] at (0,0.98) {Contare le cifre di un numero\\{\mdseries\itshape problema di informatica}};
+      \node[fcio, text width=3.9cm] (a) at (0,0.05) {chiedi in input un intero positivo e acquisiscilo nella variabile \code{num}};
+      \node[fcproc] (z) at (0,-0.95) {azzera la variabile \code{tot}};
+      \node[fcgiunzione] (j) at (0,-1.6) {};
+      \node[fcdec] (t) at (0,-2.45) {\code{num > 0}?};
+      \node[fcproc, text width=3.6cm] (b1) at (0,-3.7) {calcola il quoziente di \code{num} diviso 10 e metti la parte intera in \code{num}};
+      \node[fcproc] (b2) at (0,-4.75) {incrementa \code{tot} di 1};
+      \node[fcgiunzione] (u) at (0,-5.7) {};
+      \draw[fcfreccia] (a) -- (z); \draw[fcfreccia] (z) -- (j); \draw[fcfreccia] (j) -- (t);
+      \draw[fcfreccia] (t) -- node[fcsi, right] {vero} (b1);
+      \draw[fcfreccia] (b1) -- (b2);
+      \draw[fcfreccia, draw=accent!70!black] (b2.south) -- (0,-5.2) -- (2.55,-5.2) -- (2.55,-1.6) -- (j.east);
+      \draw[fcfreccia] (t.west) -- node[fcno, above] {falso} (-2.45,-2.45) -- (-2.45,-5.7) -- (u.west);
+      \draw[fcfreccia] (u) -- (0,-6.15);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Cicli con la condizione in testa: il corpo può non essere mai
+           eseguito.}
+  \label{fig:testa}
+\end{figure}
+
+Perché il secondo algoritmo conta le cifre? Dividere per 10 un numero
+intero, tenendo solo la parte intera, \textbf{toglie l'ultima cifra}: da
+4072 si passa a 407. Quindi le cifre sono tante quante le divisioni che
+servono per arrivare a 0. Simuliamo con \code{num} che vale 4072:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}cccc@{}}
+  \toprule
+  \textbf{giro} & \textbf{\code{num} prima} & \textbf{\code{num > 0}?} & \textbf{dopo il giro} \\
+  \midrule
+  1 & 4072 & vero  & \code{num} = 407, \code{tot} = 1 \\
+  2 & 407  & vero  & \code{num} = 40, \code{tot} = 2 \\
+  3 & 40   & vero  & \code{num} = 4, \code{tot} = 3 \\
+  4 & 4    & vero  & \code{num} = 0, \code{tot} = 4 \\
+  5 & 0    & \textbf{falso} & si esce: le cifre sono \textbf{4} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+L'algoritmo chiede un intero \textbf{positivo}, ed è importante: con
+\code{num} uguale a 0 il test sarebbe subito falso e \code{tot} resterebbe
+0, mentre il numero 0 ha una cifra. Ancora una volta, i casi limite.
+
+\section{Combinare le strutture}
+
+Le strutture di controllo possono essere \textbf{combinate} tra loro:
+ovunque un diagramma contiene un passo, quel passo può essere sostituito da
+un'intera struttura, perché ogni struttura ha una sola entrata e una sola
+uscita, esattamente come un passo.
+
+Riprendiamo la telefonata. In realtà, il passo “componi il numero” non è
+esattamente un passo elementare, in quanto è scomponibile: si digita una
+cifra, e si continua finché ci sono ancora cifre (un ciclo con la
+condizione in coda). Sostituendo il passo con il suo ciclo si ottiene il
+diagramma della figura~\ref{fig:combinazione}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      tit/.style={font=\Lato\scriptsize\bfseries, text=neutral!25!black, align=center}]
+    % prima
+    \node[tit] at (0,0.98) {prima};
+    \node[fcproc, fill=yellow-gradient-1!70!white] (a) at (0,0) {componi il numero};
+    \node[fcdec] (c) at (0,-1.1) {risponde?};
+    \node[fcproc, minimum width=1.6cm] (p) at (-1.6,-2.15) {parla};
+    \node[fcgiunzione] (g) at (0,-2.85) {};
+    \node[fcproc] (r) at (0,-3.6) {riaggancia};
+    \draw[fcfreccia] (a) -- (c);
+    \draw[fcfreccia] (c.west) -| node[fcsi, above, pos=0.3] {vero} (p.north);
+    \draw[fcfreccia] (p.south) |- (g.west);
+    \draw[fcfreccia] (c.east) -- node[fcno, above] {falso} ++(0.55,0) |- (g.east);
+    \draw[fcfreccia] (g) -- (r);
+    \draw[wtarrowacc, line width=1.4pt] (2.6,-1.6) -- node[wtlab, above=3pt, fill=none] {si espande} (4.6,-1.6);
+    % dopo
+    \begin{scope}[xshift=8.2cm, yshift=0.6cm]
+      \node[tit] at (0,0.15) {dopo};
+      \draw[yellow-gradient-6!90!black, dashed, line width=0.8pt, fill=yellow-gradient-1!35!white, rounded corners=4pt]
+        (-2.6,-0.2) rectangle (2.6,-2.75);
+      \node[font=\Lato\tiny\bfseries, anchor=north west, text=yellow-gradient-6!40!black] at (-2.55,-0.25) {componi il numero};
+      \node[fcgiunzione] (j) at (0,-0.5) {};
+      \node[fcproc] (d) at (0,-1.15) {digita una cifra};
+      \node[fcdec] (t) at (0,-2.15) {ci sono ancora\\cifre?};
+      \draw[fcfreccia] (0,0.0) -- (j); \draw[fcfreccia] (j) -- (d); \draw[fcfreccia] (d) -- (t);
+      \draw[fcfreccia, draw=accent!70!black] (t.east) -- node[fcsi, above] {vero} (2.25,-2.15) -- (2.25,-0.5) -- (j.east);
+      \node[fcdec] (c) at (0,-3.55) {risponde?};
+      \node[fcproc, minimum width=1.6cm] (p) at (-1.6,-4.6) {parla};
+      \node[fcgiunzione] (g) at (0,-5.3) {};
+      \node[fcproc] (r) at (0,-6.05) {riaggancia};
+      \draw[fcfreccia] (t.south) -- node[fcno, right] {falso} (c);
+      \draw[fcfreccia] (c.west) -| node[fcsi, above, pos=0.3] {vero} (p.north);
+      \draw[fcfreccia] (p.south) |- (g.west);
+      \draw[fcfreccia] (c.east) -- node[fcno, above] {falso} ++(0.55,0) |- (g.east);
+      \draw[fcfreccia] (g) -- (r);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Il passo “componi il numero” sostituito dal ciclo che lo
+           realizza: una selezione che segue un ciclo.}
+  \label{fig:combinazione}
+\end{figure}
+
+Questo principio, sostituire un passo con la struttura che lo realizza, è
+alla base dell'approccio \textbf{top-down}.
+
+\section{Lo sviluppo top-down}
+
+\subsection{Dividere il problema}
+
+Per \term{sviluppo top-down} (“dall'alto verso il basso”) si intende un
+approccio alla soluzione di un problema che prevede la sua
+\textbf{scomposizione in sotto-problemi}, più piccoli e quindi più semplici
+da risolvere. Ogni sotto-problema, a sua volta, si può scomporre ancora,
+finché non si arriva a passi abbastanza semplici da scrivere direttamente.
+
+Ogni sotto-problema sarà risolto con la realizzazione di un
+\term{sotto-programma} (in C, una \textit{funzione}), e uno dei passi
+elementari del nostro algoritmo potrebbe essere proprio l'esecuzione di
+uno dei sotto-programmi. Lo svolgimento di un compito ben preciso (anche
+piccolo) può avvenire in autonomia, ma spesso il sotto-programma ha bisogno
+di scambiare dei dati con chi lo usa. Per esempio, “componi il numero”
+richiede che gli si fornisca il numero da comporre.
+
+\begin{itemize}
+  \item I dati che un sotto-programma riceve da chi lo invoca si chiamano
+        \term{parametri}.
+  \item Il dato che un sotto-programma fornisce in output a chi lo ha
+        invocato si chiama \term{valore restituito}.
+\end{itemize}
+
+Un'analogia: in un libro di cucina, la ricetta delle lasagne dice
+“prepara un litro di besciamella (vedi pagina 112)”. La ricetta della
+besciamella è un sotto-programma; “un litro” è il parametro, e la
+besciamella pronta è il valore restituito. La ricetta delle lasagne non deve
+sapere come si fa la besciamella: le basta sapere che cosa darle e che cosa
+riceverà.
+
+\subsection{Come si invoca un sotto-programma}
+
+Supponiamo di avere un programma (che questo sia il programma principale o
+un sotto-programma non ha alcuna importanza) e un sotto-programma qualsiasi.
+Quando progettiamo il sotto-programma dobbiamo, fra l'altro, indicare i
+parametri di cui necessita: sono i \term{parametri formali}, i nomi con cui
+il sotto-programma si riferisce ai dati ricevuti. Supponiamo che siano
+\code{a}, \code{b}, \code{c} e \code{d}.
+
+L'\textbf{invocazione} (da parte del programma chiamante) avviene indicando
+il nome del sotto-programma, fornendo i parametri con cui lavorare (i
+\term{parametri attuali}) e indicando che cosa fare del valore restituito.
+La figura~\ref{fig:sottoprogramma} segue l'invocazione passo per passo.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      passo/.style={font=\Lato\tiny, anchor=west, inner sep=1pt, text=neutral!35!black},
+      par/.style={draw=neutral!55!black, fill=neutral!25!white, minimum size=0.36cm,
+        inner sep=0pt, font=\FiraCodeNL\tiny\bfseries},
+      num/.style={circle, fill=accent!75!black, text=white, font=\Lato\scriptsize\bfseries,
+        inner sep=0pt, minimum size=0.4cm}]
+    % programma chiamante
+    \node[font=\Lato\scriptsize\bfseries, anchor=south west] at (0,0.05) {programma chiamante};
+    \draw[neutral!50!black, fill=white, line width=0.7pt] (0,0) rectangle (4.4,-6.2);
+    \foreach \k [count=\i] in {1,2,3} \node[passo] at (0.1,-\i*0.32) {\k.\ \ passo elementare};
+    \node[passo] at (0.1,-1.25) {\dots};
+    \node[passo] at (0.1,-1.6) {138.\ \ passo elementare};
+    \node[draw=accent!70!black, fill=accent!8!white, line width=0.8pt, text width=4.0cm,
+          font=\Lato\tiny, align=left, anchor=north west] (inv) at (0.1,-1.85)
+      {139.\ \ invoca il sotto-programma qui a lato con i parametri \code{n1}, \code{n2},
+       \code{n3}, \code{n4} e metti il valore restituito nella variabile \code{x}};
+    \node[passo] (p140) at (0.1,-3.2) {140.\ \ passo elementare};
+    \node[passo] at (0.1,-3.55) {\dots};
+    \node[passo] at (0.1,-5.9) {1865.\ \ passo elementare};
+    \foreach \n [count=\i] in {n1,n2,n3,n4}
+      \node[par] (q\i) at (4.75,-1.85-\i*0.38) {\n};
+    \node[par, fill=accent!25!white] (qx) at (4.75,-3.85) {x};
+    % sotto-programma
+    \node[font=\Lato\scriptsize\bfseries, anchor=south west] at (10.6,-0.95) {sotto-programma};
+    \draw[neutral!50!black, fill=white, line width=0.7pt] (10.6,-1.0) rectangle (14.6,-5.4);
+    \foreach \k [count=\i] in {1,2,3} \node[passo] at (10.7,-1.0-\i*0.32) {\k.\ \ passo elementare};
+    \node[passo] at (10.7,-2.3) {\dots};
+    \node[passo] at (10.7,-4.75) {130.\ \ passo elementare};
+    \node[passo] at (10.7,-5.1) {131.\ \ restituisce il risultato};
+    \foreach \n [count=\i] in {a,b,c,d}
+      \node[par, fill=primary!25!white] (f\i) at (10.2,-1.0-\i*0.38) {\n};
+    % frecce
+    \foreach \i in {1,...,4}
+      \draw[wtarrow, draw=dbgblu] (q\i.east) -- (f\i.west);
+    \draw[wtarrow, draw=red-gradient-6!75!black] (10.6,-5.1) -- (qx.east);
+    \node[num] at (7.4,-1.35) {1};
+    \node[num] at (12.6,-3.5) {2};
+    \node[num] at (7.6,-4.75) {3};
+    \draw[wtarrow, draw=green-gradient-6!70!black, dashed] (inv.south) ++(-1.0,0) -- ([xshift=0.9cm]p140.north west);
+    \node[num] at (-0.45,-3.0) {4};
+  \end{tikzpicture}
+  \caption{L'invocazione di un sotto-programma con quattro parametri.}
+  \label{fig:sottoprogramma}
+\end{figure}
+
+\begin{passi}
+  \item All'invocazione, il controllo del flusso passa al sotto-programma,
+        e ogni parametro formale riceve una \textbf{copia} del valore del
+        parametro attuale corrispondente: in \code{a} viene copiato il
+        valore di \code{n1}, in \code{b} quello di \code{n2}, e così via.
+  \item Il sotto-programma esegue i suoi passi, lavorando con \code{a},
+        \code{b}, \code{c} e \code{d}.
+  \item Quando ha eseguito la sua ultima istruzione, fornisce al programma
+        chiamante il suo \textbf{valore di restituzione}, che finisce in
+        \code{x}\dots
+  \item \dots e l'esecuzione riprende dall'istruzione successiva a quella
+        dell'invocazione (la 140) del programma chiamante.
+\end{passi}
+
+Due osservazioni importanti. I nomi dei parametri attuali e formali
+\textbf{possono anche non coincidere} (qui \code{n1} e \code{a}): il
+sotto-programma è scritto una volta sola e deve funzionare con qualunque
+dato gli venga passato, quindi usa nomi suoi. Invece devono
+\textbf{assolutamente coincidere} il numero, il \textbf{tipo} di ogni
+parametro e l'\textbf{ordine}: il primo parametro attuale va nel primo
+formale, il secondo nel secondo. Scambiare l'ordine non produce un errore
+visibile, produce un risultato sbagliato.
+
+\section{I tipi di istruzione}
+
+Riassumendo, ogni passo elementare di un algoritmo sarà un'istruzione di uno
+di questi tipi: \textbf{input}, \textbf{output}, \textbf{assegnazione}
+(mettere un valore in una variabile), \textbf{selezione},
+\textbf{iterazione}, \textbf{invocazione di funzione}. Selezione e
+iterazione si dividono a loro volta come nella figura~\ref{fig:istruzioni}.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      r/.style={wtnode, font=\Lato\scriptsize\bfseries, minimum width=2.6cm},
+      f/.style={wtnodeplain, minimum width=1.8cm}]
+    \node[r] (s) at (0,0) {istruzioni di selezione};
+    \node[f] (s1) at (-2.2,-1.2) {a 1 via};
+    \node[f] (s2) at (0,-1.2) {a 2 vie};
+    \node[f] (s3) at (2.2,-1.2) {a n vie};
+    \foreach \x in {s1,s2,s3} \draw[fsramo] (s.south) -- ++(0,-0.3) -| (\x.north);
+    \begin{scope}[xshift=8.6cm]
+      \node[r] (i) at (0,0) {istruzioni di iterazione};
+      \node[f] (i1) at (-1.6,-1.2) {su contatore};
+      \node[f] (i2) at (1.6,-1.2) {su condizione};
+      \node[f] (i3) at (0.6,-2.4) {in testa};
+      \node[f] (i4) at (2.6,-2.4) {in coda};
+      \foreach \x in {i1,i2} \draw[fsramo] (i.south) -- ++(0,-0.3) -| (\x.north);
+      \foreach \x in {i3,i4} \draw[fsramo] (i2.south) -- ++(0,-0.3) -| (\x.north);
+    \end{scope}
+  \end{tikzpicture}
+  \caption{I tipi di istruzioni di selezione e di iterazione.}
+  \label{fig:istruzioni}
+\end{figure}
+
+Ognuno di questi concetti diventerà un costrutto preciso del C. La tabella
+seguente anticipa la corrispondenza, per avere fin d'ora una mappa del
+percorso: non serve ricordarla, la ritroveremo pezzo per pezzo.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}ll>{\FiraCodeNL\small}lc@{}}
+  \toprule
+  \textbf{istruzione} & & \normalfont\textbf{in C} & \textbf{capitolo} \\
+  \midrule
+  input                   & & scanf, getchar & \ref{chap:primi-programmi}, \ref{chap:tipi} \\
+  output                  & & printf, putchar & \ref{chap:primi-programmi}, \ref{chap:tipi} \\
+  assegnazione            & & x = valore; & \ref{chap:primi-programmi} \\
+  selezione               & a 1 via & if & \ref{chap:primi-programmi}, \ref{chap:flusso} \\
+                          & a 2 vie & if \dots\ else & \ref{chap:primi-programmi}, \ref{chap:flusso} \\
+                          & a n vie & switch & \ref{chap:flusso} \\
+  iterazione              & su contatore & for & \ref{chap:primi-programmi}, \ref{chap:flusso} \\
+                          & su condizione, in testa & while & \ref{chap:primi-programmi}, \ref{chap:flusso} \\
+                          & su condizione, in coda & do \dots\ while & \ref{chap:flusso} \\
+  invocazione di funzione & & nome(parametri) & \ref{chap:funzioni} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\insintesi{
+  Il C nasce nel 1972 per scrivere Unix, come evoluzione tipizzata del B;
+  lo standard (ANSI e ISO, dal 1989--90) ne garantisce portabilità,
+  affidabilità e manutenibilità. La programmazione strutturata rinuncia ai
+  salti arbitrari: per il teorema di Böhm-Jacopini bastano
+  \textbf{sequenza}, \textbf{selezione} (a una, due o n vie) e
+  \textbf{iterazione} (su contatore, o su condizione con il test in testa o
+  in coda). Ogni struttura ha una sola entrata e una sola uscita, quindi le
+  strutture si annidano come scatole; sostituire un passo con la struttura
+  che lo realizza è l'idea dello sviluppo \textbf{top-down}, in cui i
+  sotto-problemi diventano sotto-programmi che ricevono \textbf{parametri}
+  (copiati, nell'ordine) e restituiscono un \textbf{valore}.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{Kernighan \& Ritchie}, \textit{Il linguaggio C}: prefazione e
+        introduzione (storia del linguaggio).
+  \item \textbf{E. W. Dijkstra}, \textit{Go To Statement Considered Harmful},
+        Communications of the ACM, 1968.
+  \item \textbf{C. Böhm, G. Jacopini}, \textit{Flow diagrams, Turing machines
+        and languages with only two formation rules}, Communications of the
+        ACM, 1966.
+\end{itemize}
