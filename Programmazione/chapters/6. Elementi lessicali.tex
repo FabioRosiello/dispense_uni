@@ -1,0 +1,694 @@
+\chapter{Elementi lessicali e operatori}
+\label{chap:sintassi}
+
+% Un token disegnato come una casella colorata secondo la sua categoria
+\tikzset{
+  tokbase/.style={rounded corners=2pt, line width=0.6pt, inner xsep=2.5pt,
+    inner ysep=2pt, font=\FiraCodeNL\small},
+  tokkw/.style={tokbase, draw=primary!70!black, fill=primary!18!white},
+  tokid/.style={tokbase, draw=green-gradient-6!85!black, fill=green-gradient-1!45!white},
+  tokop/.style={tokbase, draw=accent!65!black, fill=accent!12!white},
+  tokpu/.style={tokbase, draw=neutral!60!black, fill=neutral!12!white},
+  tokco/.style={tokbase, draw=orange-gradient-6!85!black, fill=orange-gradient-1!35!white},
+}
+\newcommand{\tk}[2]{\tikz[baseline=(t.base)]\node[#1] (t) {\strut #2};}
+
+Il C è un linguaggio, e come ogni linguaggio ha un \textbf{alfabeto}, delle
+regole per formare le \textbf{parole} e delle regole per comporre le parole
+in \textbf{frasi} corrette, la \term{sintassi}. Il compilatore, per prima
+cosa, verifica che il programma sia sintatticamente corretto: la
+correttezza sintattica è necessaria per la traduzione (un programma con un
+errore di sintassi non viene tradotto). Non è però sufficiente: un programma
+sintatticamente perfetto può comunque fare la cosa sbagliata, come la
+divisione intera della maratona nel capitolo~\ref{chap:primi-programmi}.
+
+Questo capitolo guarda il C “al microscopio”: come il compilatore legge
+il testo, quali parole sono riservate, come si scelgono i nomi, in che
+ordine si calcolano le espressioni.
+
+\section{Dai caratteri ai token}
+
+\subsection{I token}
+
+Un programma è una sequenza di caratteri leciti (lettere, cifre, simboli,
+spazi). Il compilatore, per prima cosa, raggruppa i caratteri in unità
+dotate di significato, i \term{token}, come noi raggruppiamo le lettere in
+parole. Prendiamo un programma che legge due interi e ne stampa la somma:
+
+\begin{affianco}[0.58]
+\begin{lstlisting}[style=c, name=somma.c]
+/* Read in two integers and print their sum. */
+
+#include <stdio.h>
+
+int main(void)
+{
+    int   a, b, sum;
+
+    printf("Input two integers:  ");
+    scanf("%d%d", &a, &b);
+    sum = a + b;
+    printf("%d + %d = %d\n", a, b, sum);
+    return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./somma
+Input two integers:  <<7 35>>
+7 + 35 = 42
+\end{console}
+\end{affianco}
+
+I token sono di alcune categorie (figura~\ref{fig:token}):
+
+\begin{itemize}
+  \item gli \textbf{identificatori}, i nomi: \code{main}, \code{a},
+        \code{b}, \code{sum}, \code{printf}, \code{scanf};
+  \item le \textbf{parole chiave}: \code{int}, \code{void}, \code{return};
+  \item gli \textbf{operatori}: \code{=}, \code{+}, \code{\&}, e le
+        parentesi \code{( )} dopo \code{main}, che dicono che \code{main} è
+        una funzione;
+  \item la \textbf{punteggiatura}: \code{\{ \}}, \code{;} e \code{,};
+  \item le \textbf{costanti}: i numeri come \code{0} e le stringhe come
+        \code{"Input two integers:  "}, che il compilatore tratta come un
+        \textbf{unico} token, spazi compresi.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \begin{minipage}{15cm}
+    \centering
+    \tk{tokkw}{int}\ \ \tk{tokid}{a}\tk{tokpu}{,}\ \tk{tokid}{b}\tk{tokpu}{,}\ \tk{tokid}{sum}\tk{tokpu}{;}
+    \\[7pt]
+    \tk{tokid}{scanf}\tk{tokop}{(}\tk{tokco}{"\%d\%d"}\tk{tokpu}{,}\ \tk{tokop}{\&}\tk{tokid}{a}\tk{tokpu}{,}\ \tk{tokop}{\&}\tk{tokid}{b}\tk{tokop}{)}\tk{tokpu}{;}
+    \\[7pt]
+    \tk{tokid}{sum}\ \tk{tokop}{=}\ \tk{tokid}{a}\ \tk{tokop}{+}\ \tk{tokid}{b}\tk{tokpu}{;}
+    \\[7pt]
+    \tk{tokkw}{return}\ \tk{tokco}{0}\tk{tokpu}{;}
+    \\[12pt]
+    {\Lato\scriptsize
+     \tk{tokkw}{\Lato\scriptsize parola chiave}\quad
+     \tk{tokid}{\Lato\scriptsize identificatore}\quad
+     \tk{tokop}{\Lato\scriptsize operatore}\quad
+     \tk{tokpu}{\Lato\scriptsize punteggiatura}\quad
+     \tk{tokco}{\Lato\scriptsize costante}}
+  \end{minipage}
+  \caption{Alcune righe di \code{somma.c} scomposte in token, colorati per
+           categoria.}
+  \label{fig:token}
+\end{figure}
+
+\subsection{Gli spazi}
+
+Il compilatore usa gli spazi bianchi (spazi, tabulazioni, a capo) per
+distinguere i token. Dove due token si “toccherebbero” formando una parola
+diversa, lo spazio è \textbf{necessario}: non si può scrivere
+\code{inta, b, sum;}, perché il compilatore non riesce a staccare
+\code{int} da \code{a} e vede un unico identificatore, \code{inta}, mai
+dichiarato:
+
+\begin{console}
+$ gcc -Wall -c somma.c
+somma.c: In function (*@‘@*)main(*@’@*):
+somma.c:7:5: error: (*@‘@*)inta(*@’@*) undeclared (first use in this function); did you mean (*@‘@*)int(*@’@*)?
+    7 |     inta, b, sum;
+      |     ^~~~
+      |     int
+\end{console}
+
+Non tutti gli spazi però sono necessari: \code{int a,b,sum;} va benissimo,
+perché le virgole separano già i token. E dove servono, servono davvero:
+\code{int absum;} dichiara un'unica variabile chiamata \code{absum}.
+
+Al contrario, gli spazi \textbf{in più} sono ignorati: \code{sum=a+b;} e
+\code{sum   =     a     +      b   ;} sono la stessa istruzione. Ma uno
+spazio \textbf{dentro} un token lo spezza: \code{s u m = a + b;} non è
+lecito, perché il compilatore tratta \code{s}, \code{u} e \code{m} come tre
+token diversi.
+
+\begin{console}
+$ gcc -Wall -c somma.c
+somma.c:11:5: error: unknown type name (*@‘@*)s(*@’@*)
+   11 |     s u m = a + b;
+      |     ^
+\end{console}
+
+Lo stesso vale per l'operatore di indirizzo: in \code{\&a} il carattere
+\code{\&} è un token a sé, separato dalla variabile, quindi \code{\& a} o
+\code{\&  b} sono scritture lecite (anche se insolite). Però i due argomenti
+devono comunque essere separati dalla virgola: \code{\& a \& b} non è lecito,
+perché viene letto come \code{\&a \& b}, cioè l'operatore \code{\&} (che fra
+due operandi ha un altro significato) applicato all'indirizzo di \code{a} e
+a \code{b}, e il compilatore protesta:
+
+\begin{console}
+$ gcc -Wall -c somma.c
+somma.c:10:23: error: invalid operands to binary & (have (*@‘@*)int *(*@’@*) and (*@‘@*)int(*@’@*))
+   10 |     scanf("%d%d", & a & b);
+      |                   ~~~ ^
+\end{console}
+
+\subsection{Identificatori della libreria}
+
+\code{printf} e \code{scanf} sono identificatori come gli altri; le
+parentesi che li seguono indicano che sono funzioni. Il compilatore non ne
+conosce il codice: dopo la compilazione, il linker crea l'eseguibile
+prendendo la loro definizione dalla libreria standard. Non sono parole
+chiave, ma andrebbero considerati \textbf{riservati}: usarli per altri scopi
+è una pessima idea, come mostra l'ultimo esempio di questo capitolo.
+
+\section{I commenti}
+
+I \term{commenti} sono sequenze arbitrarie di testo fra i delimitatori
+\code{/*} e \code{*/}, oppure da \code{//} alla fine della riga. I commenti
+\textbf{non sono token}: il compilatore trasforma ogni commento in uno
+spazio. Lo si può verificare con un esempio un po' estremo, in cui un
+commento separa \code{int} da \code{x}:
+
+\begin{affianco}[0.6][c]
+\begin{lstlisting}[style=c, name=commenti.c]
+#include <stdio.h>
+
+int main(void)
+{
+    int/* un commento vale come uno spazio */x = 5;
+
+    printf("%d\n", x);   // un commento su una riga
+    return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./commenti
+5
+\end{console}
+\end{affianco}
+
+I commenti \code{/* */} \textbf{non si annidano}: il primo \code{*/}
+chiude il commento, qualunque cosa ci sia prima. Con
+\codel{/* esterno /* interno */ ancora esterno? */} il commento finisce dopo
+\code{interno}, e “ancora esterno?” viene letto come codice (gcc avvisa:
+\textit{"/*" within comment}).
+
+I commenti sono la documentazione del codice. Andrebbero scritti
+\textbf{insieme} al codice: una volta che il programma funziona si tende a
+scriverne di brevissimi, o a non scriverne affatto. Un buon commento spiega
+il \textit{perché}, non ripete il \textit{che cosa}: \code{i = i + 1;
+/* incrementa i */} non aiuta nessuno, \code{/* il primo elemento è già
+stato letto */} sì.
+
+\section{Le parole chiave}
+
+Le \term{parole chiave} sono parole riservate, che non possono essere usate
+in altri contesti (per esempio come nomi di variabili). Il C ne ha, nel
+complesso, poche; l'ANSI C ne definisce 32:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+{\FiraCodeNL\small
+\begin{tabular}{@{}*{8}{l}@{}}
+  \toprule
+  auto & break & case & char & const & continue & default & do \\
+  double & else & enum & extern & float & for & goto & if \\
+  int & long & register & return & short & signed & sizeof & static \\
+  struct & switch & typedef & union & unsigned & void & volatile & while \\
+  \bottomrule
+\end{tabular}}
+\end{center}
+
+\warning{Le parole chiave sono minuscole}{
+  Nella tabella delle slide compaiono \code{Volatile} e \code{Unsigned} con
+  l'iniziale maiuscola: è un effetto della correzione automatica. Le parole
+  chiave sono tutte \textbf{minuscole}, e siccome il C distingue maiuscole e
+  minuscole, \code{Unsigned} non sarebbe una parola chiave ma un
+  identificatore qualunque.}
+
+Alcune implementazioni hanno parole chiave aggiuntive (gcc, per esempio,
+riconosce \code{asm} e \code{typeof}), e le versioni successive dello
+standard ne hanno aggiunte poche altre (fra cui \code{inline}, e nel C23
+\code{bool}, \code{true} e \code{false}). Non serve impararle a memoria:
+VS Code le colora in blu o in viola, e l'errore di usarne una come nome si
+vede subito.
+
+\section{Gli identificatori}
+
+\subsection{La regola}
+
+Un \term{identificatore} (un nome di variabile, di funzione, di tipo\dots)
+è una sequenza di caratteri composta da \textbf{lettere}, \textbf{cifre} e
+dal carattere speciale \code{\_} (\textit{underscore}), che \textbf{non
+comincia con una cifra}. Formalmente, nella notazione delle slide:
+
+\begin{center}
+  \FiraCodeNL identifier ::= \{letter | underscore\}$_1$ \{letter | underscore | digit\}$_{0+}$
+\end{center}
+
+dove \code{|} significa “oppure”, il pedice $_1$ “esattamente una volta”
+e il pedice $_{0+}$ “zero o più volte”. La stessa regola si può disegnare
+come un percorso da seguire, un \textit{diagramma sintattico}
+(figura~\ref{fig:sintattico}): un nome è lecito se lo si può ottenere
+percorrendo le frecce dall'inizio alla fine e raccogliendo un carattere a
+ogni casella attraversata.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\scriptsize,
+      cas/.style={rounded corners=6pt, draw=primary!65!black, fill=primary!8!white,
+        line width=0.8pt, minimum width=1.6cm, minimum height=0.5cm},
+      bin/.style={line width=0.9pt, draw=neutral!35!black},
+      fr/.style={bin, -{Stealth[length=5pt,width=4pt]}}]
+    % binario principale
+    \draw[fr] (0,0) -- (1.0,0);
+    \node[anchor=east, font=\Lato\scriptsize\bfseries] at (0,0) {inizio};
+    % prima casella: lettera oppure _
+    \node[cas] (l1) at (2.4,0.45) {lettera};
+    \node[cas] (u1) at (2.4,-0.45) {\code{\_}};
+    \draw[bin] (1.0,0) to[out=0, in=180] (l1.west);
+    \draw[bin] (1.0,0) to[out=0, in=180] (u1.west);
+    \draw[bin] (l1.east) to[out=0, in=180] (3.8,0);
+    \draw[bin] (u1.east) to[out=0, in=180] (3.8,0);
+    % binario dritto: zero ripetizioni
+    \draw[fr] (3.8,0) -- (11.2,0);
+    \node[anchor=west, font=\Lato\scriptsize\bfseries] at (11.2,0) {fine};
+    % ciclo delle ripetizioni
+    \node[cas] (l2) at (7.5,-0.9) {lettera};
+    \node[cas] (u2) at (7.5,-1.6) {\code{\_}};
+    \node[cas] (d2) at (7.5,-2.3) {cifra};
+    \draw[bin] (4.6,0) to[out=0, in=180] (5.6,-0.9);
+    \foreach \n in {l2,u2,d2} {
+      \draw[bin] (5.6,-0.9) to[out=-90, in=180] (\n.west);
+      \draw[bin] (\n.east) to[out=0, in=-90] (9.4,-0.9);
+    }
+    \draw[fr] (9.4,-0.9) to[out=0, in=180] (10.4,0);
+    \draw[fr] (9.4,-0.9) -- (9.4,-2.85) -- (5.6,-2.85) -- (5.6,-1.0);
+    \node[mnota, anchor=north] at (7.5,-2.9) {si può ripetere quante volte si vuole};
+    \node[mnota, anchor=south] at (7.5,0.05) {oppure nessuna volta};
+    \node[mnota, anchor=north] at (2.4,-0.8) {esattamente una volta};
+  \end{tikzpicture}
+  \caption{Il diagramma sintattico di un identificatore.}
+  \label{fig:sintattico}
+\end{figure}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}>{\FiraCodeNL}l l@{\hspace{1.4cm}}>{\FiraCodeNL}l l@{}}
+  \toprule
+  \multicolumn{2}{@{}l}{\textbf{identificatori leciti}} & \multicolumn{2}{l@{}}{\textbf{identificatori non leciti}} \\
+  \midrule
+  K                & una lettera sola      & not\#me     & \code{\#} non è ammesso \\
+  \_id             & comincia con \code{\_} & 101\_south & comincia con una cifra \\
+  iamanidentifier2 & cifre dopo l'inizio   & -plus       & \code{-} è un operatore \\
+  so\_am\_i        &                       & int         & è una parola chiave \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Maiuscole, lunghezza, scelta dei nomi}
+
+Il C è \textit{case sensitive}: le lettere maiuscole e minuscole sono
+considerate \textbf{diverse}, quindi \code{sum}, \code{Sum} e \code{SUM} sono
+tre identificatori distinti.
+
+Sulla lunghezza: nei sistemi più vecchi contavano solo i primi 8 caratteri,
+per cui \codel{i\_am\_an\_identifier} e \codel{i\_am\_an\_elephant} sarebbero
+stati lo stesso nome (i primi 8 caratteri sono \code{i\_am\_an\_} in
+entrambi). L'ANSI C garantisce che siano considerati almeno i primi 31
+caratteri, e i compilatori moderni ne considerano molti di più: in pratica,
+la lunghezza non è un problema.
+
+Gli identificatori vanno scelti in modo che contribuiscano alla
+\textbf{leggibilità} e alla \textbf{documentazione} del programma. Per
+calcolare l'IVA di un prodotto,
+
+\begin{lstlisting}[style=c]
+float tax_iva, price, tax_iva_rate;
+
+tax_iva = price * tax_iva_rate;
+\end{lstlisting}
+
+si capisce da sé, mentre \code{t = p * r;} richiede un commento per ogni
+variabile. Infine, per convenzione gli identificatori di sistema (della
+libreria, del compilatore) cominciano con uno o due underscore: per evitare
+conflitti, conviene non creare identificatori che cominciano con \code{\_}.
+
+\section{Gli operatori}
+
+\subsection{Precedenza e associatività}
+
+Gli operatori hanno regole di \term{precedenza} e di \term{associatività}
+che determinano come vengono calcolate le espressioni. Le espressioni fra
+parentesi sono calcolate per prime; le parentesi si possono usare sia per
+\textbf{chiarire} l'ordine delle operazioni, sia per \textbf{modificarlo}.
+
+\begin{itemize}
+  \item In \code{1 + 2 * 3} l'operatore \code{*} ha una precedenza più alta
+        di \code{+}: il risultato è 7, come in \code{1 + (2 * 3)}.
+  \item In \code{(1 + 2) * 3} le parentesi hanno la priorità: il risultato è
+        9.
+  \item In \code{1 + 2 - 3 + 4 - 5} gli operatori binari \code{+} e
+        \code{-} hanno la \textbf{stessa} precedenza: l'ordine lo stabilisce
+        la regola di associatività, che per loro è \textbf{da sinistra a
+        destra}. L'espressione equivale a \code{(((1 + 2) - 3) + 4) - 5},
+        cioè $-1$.
+\end{itemize}
+
+La figura~\ref{fig:alberi} mostra gli alberi delle tre espressioni:
+precedenza e associatività servono proprio a stabilire, senza ambiguità,
+quale albero corrisponde a una sequenza di token.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\FiraCodeNL\small,
+      op/.style={circle, draw=accent!65!black, fill=accent!8!white, line width=0.8pt,
+        minimum size=0.58cm, inner sep=0pt, font=\FiraCodeNL\small\bfseries},
+      nu/.style={font=\FiraCodeNL\small},
+      val/.style={font=\Lato\tiny\bfseries, text=green-gradient-6!50!black, anchor=west},
+      tit/.style={font=\FiraCodeNL\scriptsize\bfseries, text=primary!55!black}]
+    % 1 + 2 * 3
+    \node[tit] at (0.6,0.8) {1 + 2 * 3};
+    \node[op] (a) at (0,0) {+};
+    \node[nu] (a1) at (-0.7,-0.9) {1};
+    \node[op] (a2) at (0.7,-0.9) {*};
+    \node[nu] (a3) at (0.2,-1.8) {2};
+    \node[nu] (a4) at (1.2,-1.8) {3};
+    \foreach \x/\y in {a/a1, a/a2, a2/a3, a2/a4} \draw[fsramo] (\x) -- (\y);
+    \node[val] at ([xshift=3pt]a.east) {7};
+    \node[val] at ([xshift=3pt]a2.east) {6};
+    % (1 + 2) * 3
+    \begin{scope}[xshift=4.2cm]
+      \node[tit] at (0.2,0.8) {(1 + 2) * 3};
+      \node[op] (b) at (0,0) {*};
+      \node[op] (b1) at (-0.7,-0.9) {+};
+      \node[nu] (b2) at (0.7,-0.9) {3};
+      \node[nu] (b3) at (-1.2,-1.8) {1};
+      \node[nu] (b4) at (-0.2,-1.8) {2};
+      \foreach \x/\y in {b/b1, b/b2, b1/b3, b1/b4} \draw[fsramo] (\x) -- (\y);
+      \node[val] at ([xshift=3pt]b.east) {9};
+      \node[val] at ([xshift=3pt]b1.east) {3};
+    \end{scope}
+    % 1 + 2 - 3 + 4 - 5
+    \begin{scope}[xshift=9.6cm]
+      \node[tit] at (0.4,0.8) {1 + 2 - 3 + 4 - 5};
+      \node[op] (c) at (0,0) {-};
+      \node[op] (c1) at (-0.7,-0.75) {+};
+      \node[op] (c2) at (-1.4,-1.5) {-};
+      \node[op] (c3) at (-2.1,-2.25) {+};
+      \node[nu] (n1) at (-2.6,-3.0) {1};
+      \node[nu] (n2) at (-1.6,-3.0) {2};
+      \node[nu] (n3) at (-0.9,-2.25) {3};
+      \node[nu] (n4) at (-0.2,-1.5) {4};
+      \node[nu] (n5) at (0.5,-0.75) {5};
+      \foreach \x/\y in {c/c1, c/n5, c1/c2, c1/n4, c2/c3, c2/n3, c3/n1, c3/n2} \draw[fsramo] (\x) -- (\y);
+      \node[val] at ([xshift=3pt]c.east) {$-1$};
+      \node[val] at ([xshift=3pt]c1.east) {4};
+      \node[val] at ([xshift=3pt]c2.east) {0};
+      \node[val] at ([xshift=3pt]c3.east) {3};
+    \end{scope}
+  \end{tikzpicture}
+  \caption{Gli alberi delle tre espressioni, con il valore di ogni
+           operazione: si calcola dal basso verso l'alto.}
+  \label{fig:alberi}
+\end{figure}
+
+\subsection{La tabella degli operatori}
+
+La tabella seguente riassume precedenza e associatività degli operatori
+visti finora, dalla precedenza più alta (in alto) alla più bassa. Gli
+operatori sulla stessa riga hanno la stessa precedenza.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}>{\FiraCodeNL}l l l@{}}
+  \toprule
+  \normalfont\textbf{operatori} & \textbf{significato} & \textbf{associatività} \\
+  \midrule
+  () \ ++ \ -{}- & parentesi; incremento e decremento \textbf{postfissi} & da sinistra a destra \\
+  + \ - \ ++ \ -{}- & più e meno \textbf{unari}; incremento e decremento \textbf{prefissi} & da destra a sinistra \\
+  * \ / \ \% & moltiplicazione, divisione, resto & da sinistra a destra \\
+  + \ - & somma e sottrazione & da sinistra a destra \\
+  = \ += \ -= \ *= \ /= & assegnazioni & da destra a sinistra \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Qualche commento:
+
+\begin{itemize}
+  \item gli operatori \textbf{unari} hanno un solo operando: in \code{-x} il
+        meno è unario (cambia segno), in \code{a - x} è binario (sottrae).
+        Gli unari hanno precedenza più alta dei binari: \code{-a * b} è
+        \code{(-a) * b};
+  \item \code{\%} è il \term{resto} della divisione fra interi (detto anche
+        \textit{modulo}): \code{7 / 2} vale 3 e \code{7 \% 2} vale 1, perché
+        $7 = 3 \cdot 2 + 1$. Si usa spesso per sapere se un numero è pari
+        (\code{n \% 2 == 0}) o divisibile per un altro;
+  \item le assegnazioni hanno la precedenza più bassa (si calcola prima
+        tutto il lato destro) e associano da \textbf{destra} a sinistra: è
+        il motivo per cui \code{min = max = sum = avg = x;} del
+        capitolo~\ref{chap:primi-programmi} funziona, perché equivale a
+        \code{min = (max = (sum = (avg = x)));}.
+\end{itemize}
+
+\begin{affianco}[0.62][c]
+\begin{lstlisting}[style=c]
+printf("%d %d %d\n", 1 + 2 * 3, (1 + 2) * 3, 1 + 2 - 3 + 4 - 5);
+printf("%d %d %d\n", 7 / 2, 7 % 2, -7 / 2);
+\end{lstlisting}
+\risultato
+\begin{console}
+7 9 -1
+3 1 -3
+\end{console}
+\end{affianco}
+
+Si noti l'ultimo valore: la divisione fra interi \textbf{tronca verso lo
+zero}, quindi $-7/2 = -3{,}5$ diventa $-3$ (non $-4$).
+
+\info{Nel dubbio, parentesi}{
+  Nessuno ricorda a memoria tutta la tabella delle precedenze del C (che
+  conta una quindicina di livelli). Quando l'ordine non è ovvio, le
+  parentesi lo rendono esplicito per il compilatore e, soprattutto, per chi
+  legge: \code{(a * b) + c} non costa nulla e non lascia dubbi.}
+
+\section{Incremento e decremento}
+
+\subsection{Prefisso e postfisso}
+
+Gli operatori di incremento \code{++} e decremento \code{-{}-} sono
+\textbf{unari} e si possono usare in due modi: come operatore
+\textbf{prefisso} (\code{++i}, prima della variabile) o \textbf{postfisso}
+(\code{i++}, dopo). Si applicano a \textbf{variabili}, non a costanti o a
+espressioni: \code{++i} e \code{cnt-{}-} sono usi leciti, \code{777++} e
+\code{++(a * b - 1)} no, perché non c'è una variabile da modificare. Il
+compilatore lo dice così (\textit{lvalue}, “valore a sinistra”, è
+qualcosa che può stare a sinistra di un'assegnazione, cioè una variabile):
+
+\begin{console}
+$ gcc -Wall -c costanti.c
+costanti.c:4:8: error: lvalue required as increment operand
+costanti.c:5:5: error: lvalue required as increment operand
+\end{console}
+
+Le due forme non hanno lo stesso comportamento, e per capire la differenza
+bisogna ricordare che in C \textbf{ogni espressione ha un valore}:
+
+\begin{itemize}
+  \item \code{++i}: la variabile \code{i} viene incrementata di 1, e
+        l'espressione vale il \textbf{nuovo} valore di \code{i} (“prima
+        incrementa, poi usa”);
+  \item \code{i++}: l'espressione vale il \textbf{vecchio} valore di
+        \code{i}, e poi la variabile viene incrementata (“prima usa, poi
+        incrementa”).
+\end{itemize}
+
+Allo stesso modo \code{-{}-i} decrementa e vale il nuovo valore,
+\code{i-{}-} vale il vecchio valore e poi decrementa. Come istruzioni a sé
+(\code{i++;}) le due forme sono equivalenti, perché il valore
+dell'espressione non viene usato da nessuno.
+
+\subsection{Un esempio da simulare}
+
+\begin{affianco}[0.48][c]
+\begin{lstlisting}[style=c, name=incr.c]
+#include <stdio.h>
+
+int main(void)
+{
+    int a, b, c = 0;
+
+    a = ++c;
+    b = c++;
+    printf("%d %d %d\n", a, b, ++c);
+    return 0;
+}
+\end{lstlisting}
+\risultato
+\begin{console}
+$ ./incr
+1 1 3
+\end{console}
+\wtnota{Nelle slide la dichiarazione è scritta \code{int a, b, c==0;}: è
+un refuso, \code{==} è il confronto; serve \code{=}.}
+\end{affianco}
+
+Simuliamo l'esecuzione, istruzione per istruzione:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}>{\FiraCodeNL\small}l>{\raggedright\arraybackslash}p{6.6cm}ccc@{}}
+  \toprule
+  \normalfont\textbf{istruzione} & \textbf{che cosa succede} & \textbf{\code{a}} & \textbf{\code{b}} & \textbf{\code{c}} \\
+  \midrule
+  int a, b, c = 0; & dichiarazioni, solo \code{c} è inizializzata & ? & ? & 0 \\
+  a = ++c; & \code{c} diventa 1; \code{++c} vale 1, che va in \code{a} & 1 & ? & 1 \\
+  b = c++; & \code{c++} vale 1 (il vecchio valore), che va in \code{b}; poi \code{c} diventa 2 & 1 & 1 & 2 \\
+  printf(\dots, ++c); & \code{c} diventa 3; \code{++c} vale 3 e viene stampato & 1 & 1 & 3 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Quando \code{++} diventa pericoloso}
+
+\code{++} e \code{-{}-} \textbf{modificano} la variabile su cui operano.
+Usati da soli non danno problemi; in espressioni più complesse bisogna
+prestare molta attenzione. Le slide mostrano questo programma, con l'intento
+di calcolare $a \cdot (a+1)$ in tre modi:
+
+\begin{lstlisting}[style=c, name=ub.c]
+#include <stdio.h>
+
+int main(void)
+{
+    int a = 1;
+
+    printf("a*(a+1) = %d\n", a * (a + 1));
+    printf("a*(a+1) = %d\n", a * a++);
+    a = 1;
+    printf("a*(a+1) = %d\n", a * ++a);
+    return 0;
+}
+\end{lstlisting}
+
+Ecco che cosa succede compilandolo con gcc (su Linux) e con clang (il
+compilatore di macOS):
+
+\begin{affianco}[0.5]
+\begin{console}[gcc]
+$ gcc -Wall -o ub ub.c
+ub.c:8:35: warning: operation on (*@‘@*)a(*@’@*) may be undefined [-Wsequence-point]
+ub.c:10:34: warning: operation on (*@‘@*)a(*@’@*) may be undefined [-Wsequence-point]
+$ ./ub
+a*(a+1) = 2
+a*(a+1) = 2
+a*(a+1) = 4
+\end{console}
+\risultato
+\begin{console}[clang]
+$ clang -Wall -o ub ub.c
+ub.c:8:35: warning: unsequenced modification and access to 'a' [-Wunsequenced]
+ub.c:10:34: warning: unsequenced modification and access to 'a' [-Wunsequenced]
+$ ./ub
+a*(a+1) = 2
+a*(a+1) = 1
+a*(a+1) = 2
+\end{console}
+\end{affianco}
+
+\textbf{Lo stesso programma dà risultati diversi con compilatori diversi}, e
+nessuno dei due ha torto. In \code{a * a++} il C non stabilisce se il primo
+\code{a} vada letto prima o dopo l'incremento: il programma legge e modifica
+la stessa variabile nella stessa espressione, senza un ordine definito, e lo
+standard dice che in questo caso il comportamento è \textbf{indefinito}
+(\textit{undefined behavior}): il compilatore può fare qualunque cosa. Le
+slide mostrano i risultati di gcc (2, 2, 4) come se fossero “quelli
+giusti”; in realtà non esistono risultati giusti, e infatti entrambi i
+compilatori avvisano.
+
+\error{Una variabile modificata con \code{++} non va usata altrove nella stessa espressione}{
+  Espressioni come \code{a * a++}, \code{i = i++} o
+  \code{printf("\%d \%d", n, n++)} hanno comportamento indefinito. La regola
+  pratica delle slide è la migliore: \textbf{meglio evitarle} e scrivere
+  esplicitamente ciò che si intende, per esempio \code{a * (a + 1)}. E i
+  warning di \code{-Wall} vanno sempre letti.}
+
+\section{La libreria standard e i nomi riservati}
+
+Che cosa succede se si \textbf{ridefinisce} una funzione della libreria
+standard? Le slide lo provano con \code{scanf}, scrivendo una funzione con lo
+stesso nome che stampa la stringa ricevuta. Per non avere conflitti con il
+prototipo vero, il file \textbf{non} include \code{stdio.h}:
+
+\begin{lstlisting}[style=c, name=main.c]
+void scanf(const char *s)
+{
+    printf(s);
+}
+
+int main()
+{
+    scanf("The printing scanf\n");
+    return 0;
+}
+\end{lstlisting}
+
+\begin{console}
+$ gcc -o ridef main.c
+main.c:1:6: warning: conflicting types for built-in function (*@‘@*)scanf(*@’@*); expected (*@‘@*)int(const char *, ...)(*@’@*) [-Wbuiltin-declaration-mismatch]
+main.c:3:5: warning: implicit declaration of function (*@‘@*)printf(*@’@*) [-Wimplicit-function-declaration]
+main.c:3:5: warning: incompatible implicit declaration of built-in function (*@‘@*)printf(*@’@*)
+main.c:3:5: warning: format not a string literal and no format arguments [-Wformat-security]
+$ ./ridef
+The printing scanf
+\end{console}
+
+Il risultato è istruttivo:
+
+\begin{itemize}
+  \item anche senza \code{stdio.h}, il compilatore si accorge che si sta
+        usando il nome di una funzione “predefinita” (\textit{built-in})
+        con un tipo diverso da quello che conosce;
+  \item dà però solo dei \textbf{warning}, non degli errori: l'eseguibile
+        viene creato;
+  \item e viene usata la \textbf{nuova} definizione: la “\code{scanf}”
+        stampa invece di leggere.
+\end{itemize}
+
+Le slide mostrano anche la variante con la funzione in un file separato
+(\code{scanf.c}) e il solo prototipo in \code{main.c}: il risultato è lo
+stesso, perché il linker, trovando \code{scanf} già definita nei nostri file
+oggetto, non va a cercarla nella libreria. (Si notino anche i warning su
+\code{printf}: senza \code{stdio.h} il compilatore non ne conosce il
+prototipo. Le versioni di gcc dalla 14 in poi considerano questa
+dichiarazione implicita un errore, e il programma non si compila più.)
+
+La morale: i nomi delle funzioni della libreria standard \textbf{non sono
+parole chiave}, quindi il compilatore non ne impedisce l'uso, ma vanno
+trattati come se lo fossero. Un programma che ridefinisce \code{scanf} fa
+qualcosa di diverso da ciò che chiunque si aspetta leggendolo.
+
+\insintesi{
+  Il compilatore legge il programma come una sequenza di \textbf{token}:
+  identificatori, parole chiave, operatori, punteggiatura, costanti; gli
+  spazi separano i token quando serve e altrimenti sono ignorati, i
+  commenti valgono come spazi. Le 32 parole chiave dell'ANSI C sono
+  riservate e minuscole; un identificatore è fatto di lettere, cifre e
+  \code{\_} e non comincia con una cifra, e maiuscole e minuscole contano.
+  \textbf{Precedenza} e \textbf{associatività} stabiliscono l'albero di
+  un'espressione (le parentesi lo rendono esplicito). \code{++i} vale il
+  nuovo valore, \code{i++} il vecchio; leggere e modificare la stessa
+  variabile nella stessa espressione dà un comportamento
+  \textbf{indefinito}. I nomi della libreria standard vanno trattati come
+  riservati.}
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{A. Kelley, I. Pohl}, \textit{A Book on C}: capitolo~2
+        (elementi lessicali, operatori e il sistema C).
+  \item \textbf{C Operator Precedence} --- cppreference.com. \\
+        \urlx{https://en.cppreference.com/w/c/language/operator_precedence}
+  \item \textbf{Order of evaluation} (comportamento indefinito di
+        \code{i++ + i++} e simili) --- cppreference.com. \\
+        \urlx{https://en.cppreference.com/w/c/language/eval_order}
+\end{itemize}
