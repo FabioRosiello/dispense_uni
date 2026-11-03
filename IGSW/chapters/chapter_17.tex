@@ -1,0 +1,1176 @@
+\chapter{Container}
+\label{cap:container}
+\emergencystretch=2.5em
+
+Nel Capitolo 13 abbiamo visto come la virtualizzazione trasformi un server fisico in tante macchine virtuali; nel
+capitolo precedente, come la build automation trasformi il codice in un prodotto installabile. Questo capitolo mette
+insieme i due temi: i \textbf{container} impacchettano un'applicazione con tutto ciò che le serve per girare, e la
+fanno girare allo stesso modo sul portatile dello sviluppatore, sul server di collaudo e nel cloud. Gli esempi sono
+stati eseguiti davvero, con Docker 29.9 e Docker Compose 5.6: gli output riportati sono quelli reali.
+
+% Stili delle figure di questo capitolo
+\tikzset{
+  cbox/.style={rectangle, rounded corners=2pt, draw=#1!70!black, fill=#1!12, line width=0.7pt,
+               font=\scriptsize, align=center, inner sep=3pt, minimum height=0.55cm},
+  cbox/.default=swblue,
+  cstrato/.style={rectangle, draw=#1!75!black, fill=#1!25, line width=0.6pt, font=\scriptsize\bfseries,
+                  align=center, minimum height=0.5cm, inner sep=2pt},
+  cfreccia/.style={-{Stealth[length=2.2mm]}, line width=0.8pt, draw=swgray},
+  ccontainer/.style={rectangle, draw=swblue!80!black, fill=swblue!55, line width=0.7pt,
+                     minimum width=#1, minimum height=0.5cm, text=white, font=\scriptsize\bfseries},
+  ccontainer/.default=0.9cm,
+}
+
+% ============================================================
+\section{Il software è cambiato}
+
+L'industria del software è cambiata, e con lei il modo di consegnarlo:
+
+\begin{center}
+\begin{tikzpicture}
+  \node[card=swgray, text width=5.2cm, align=left, anchor=east] (prima) at (-0.8,0) {%
+    \textbf{Prima}\\[2pt]
+    \textbullet\ software monolitico\\
+    \textbullet\ cicli di sviluppo lunghi\\
+    \textbullet\ un solo ambiente di destinazione\\
+    \textbullet\ crescita lenta};
+  \node[card=swblue, text width=5.2cm, align=left, anchor=west] (ora) at (0.8,0) {%
+    \textbf{Ora}\\[2pt]
+    \textbullet\ servizi disaccoppiati\\
+    \textbullet\ miglioramenti rapidi e iterativi\\
+    \textbullet\ molti ambienti di destinazione\\
+    \textbullet\ si deve crescere in fretta};
+  \draw[cfreccia, line width=2pt] (prima.east) -- (ora.west);
+\end{tikzpicture}
+\end{center}
+
+E i deployment diventano sempre più complessi:
+
+\begin{itemize}
+  \item ogni servizio o componente indipendente usa molti \textbf{stack} tecnologici: linguaggi, framework, database;
+  \item ci sono molti \textbf{ambienti} di destinazione diversi: gli ambienti di sviluppo; quelli di pre-produzione, di
+        collaudo (\textit{QA}), di \textit{staging}; la produzione, che può essere in sede (\textit{on premises}), in un
+        cloud pubblico o in una soluzione ibrida.
+\end{itemize}
+
+% ============================================================
+\section{La sfida: la «matrice infernale»}
+
+Si immagini un'applicazione fatta di sei servizi, ognuno con il suo stack. Da una parte c'è la molteplicità degli
+\textbf{stack}, dall'altra quella degli \textbf{ambienti hardware} su cui devono girare:
+
+\begin{center}
+\begin{tikzpicture}[
+    srv/.style={cbox=swblue, text width=2.15cm, minimum height=1.25cm},
+    amb/.style={cbox=sworange, minimum width=2.2cm}]
+  \node[srv] at (0,1.5)    {\textbf{Preprocessing}\\ {\tiny Python 3.10, ffmpeg, libopencv, nodejs, vips, imagemagick}};
+  \node[srv] at (2.45,1.5) {\textbf{Analytics}\\ {\tiny OpenJDK 17, Elasticsearch, Grafana}};
+  \node[srv] at (4.9,1.5)  {\textbf{Web App}\\ {\tiny Python 3.8, Django, psycopg, libcurl}};
+  \node[srv] at (0,0)      {\textbf{App DB}\\ {\tiny PostgreSQL, Postgis, timescale}};
+  \node[srv] at (2.45,0)   {\textbf{Queue}\\ {\tiny Redis, redis-sentinel}};
+  \node[srv] at (4.9,0)    {\textbf{API Endpoint}\\ {\tiny Python 2.7, Flask, psycopg, gensim}};
+  \draw[dashed, line width=0.8pt, draw=swgray] (6.55,2.4) -- (6.55,-0.9);
+  \node[font=\Large\bfseries, text=swred] at (6.55,0.75) {?};
+  \foreach \y/\t in {1.95/Dev laptop, 1.15/Production server, 0.35/Public cloud, -0.45/QA server} {
+    \node[amb] at (8.0,\y) {\t};
+  }
+  \node[amb] at (10.5,0.75) {Disaster recovery};
+  \node[note, align=center] at (2.45,-1.25) {I servizi interagiscono come devono?};
+  \node[note, align=center] at (9.2,-1.25) {Si può migrare facilmente da un ambiente all'altro?};
+\end{tikzpicture}
+\end{center}
+
+\Needspace{14\baselineskip}
+Il risultato è la «matrice infernale» (\textit{the Matrix from Hell}): per ogni coppia (servizio, ambiente) bisogna
+chiedersi se funzionerà, e con trenta caselle le sorprese sono garantite.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{l|ccccc}
+ & \textbf{Dev laptop} & \textbf{Production server} & \textbf{Disaster recovery} & \textbf{Public cloud} &
+   \textbf{QA server} \\
+\hline
+Web App & ? & ? & ? & ? & ? \\
+API Endpoint & ? & ? & ? & ? & ? \\
+Analytics & ? & ? & ? & ? & ? \\
+App DB & ? & ? & ? & ? & ? \\
+Queue & ? & ? & ? & ? & ? \\
+Preprocessing & ? & ? & ? & ? & ? \\
+\end{tabular}
+\end{center}
+
+% ============================================================
+\section{Un'idea dal trasporto merci}
+
+Lo stesso problema l'ha avuto, prima degli anni Sessanta, il \textbf{trasporto merci}. Da una parte una moltitudine di
+merci (automobili, pianoforti, televisori, caffè, banane, \ldots), dall'altra una moltitudine di mezzi di trasporto e di
+immagazzinamento (treni, camion, gru, carrelli elevatori, navi). Le merci interagiscono fra loro (le banane accanto al
+caffè?), e passare da un mezzo all'altro richiede ogni volta di caricare e scaricare tutto, pezzo per pezzo.
+
+La soluzione è stata il \textbf{container}:
+
+\begin{itemize}
+  \item è \textbf{standardizzato}: tutti hanno le stesse dimensioni;
+  \item può essere caricato con praticamente \textbf{qualunque merce};
+  \item viene preparato da chi si occupa della spedizione, che si assicura che all'interno non avvengano interazioni
+        indesiderate;
+  \item resta \textbf{sigillato} fino alla consegna;
+  \item durante il trasporto tutti i container sono uguali: facili da caricare, scaricare, impilare.
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}
+  \foreach \y/\t [count=\i] in {1.2/automobili, 0.6/pianoforti, 0/televisori, -0.6/caffè, -1.2/banane}
+    \node[cbox=sworange, minimum width=2.0cm] (m\i) at (0,\y) {\t};
+  \node[ccontainer=2.2cm, minimum height=1.6cm] (c) at (3.6,0) {container};
+  \foreach \y/\t [count=\i] in {1.2/nave, 0.6/treno, 0/camion, -0.6/gru, -1.2/magazzino}
+    \node[cbox=swteal, minimum width=2.0cm] (t\i) at (7.2,\y) {\t};
+  \foreach \i in {1,...,5} {
+    \draw[cfreccia] (m\i.east) -- (c.west);
+    \draw[cfreccia] (c.east) -- (t\i.west);
+  }
+  \node[note] at (0,-1.85) {qualunque merce};
+  \node[note] at (3.6,-1.85) {una scatola standard};
+  \node[note] at (7.2,-1.85) {qualunque mezzo};
+\end{tikzpicture}
+\end{center}
+
+% ============================================================
+\section{Container per il codice}
+
+L'idea si applica al software così com'è: ogni servizio, con tutto il suo stack, viene chiuso in un
+\textbf{container}, e i container si spostano senza cambiamenti su qualunque ambiente.
+
+\begin{center}
+\begin{tikzpicture}
+  \foreach \y/\t [count=\i] in {1.25/Analytics, 0.75/Preprocessing, 0.25/App DB, -0.25/Web App, -0.75/Queue,
+                               -1.25/API Endpoint}
+    \node[cbox, minimum width=2.2cm] (s\i) at (0,\y) {\t};
+  \node[ccontainer=2.4cm, minimum height=1.6cm] (c) at (3.8,0) {container};
+  \foreach \y/\t [count=\i] in {1.2/Dev laptop, 0.6/Production server, 0/Public cloud, -0.6/QA server,
+                               -1.2/Disaster recovery}
+    \node[cbox=sworange, minimum width=2.6cm] (e\i) at (7.6,\y) {\t};
+  \foreach \i in {1,...,6} \draw[cfreccia] (s\i.east) -- (c.west);
+  \foreach \i in {1,...,5} \draw[cfreccia] (c.east) -- (e\i.west);
+\end{tikzpicture}
+\end{center}
+
+Perché darsi la pena? I vantaggi sono diversi per chi sviluppa e per chi gestisce i sistemi:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{P{7.4cm}P{7.4cm}}
+\toprule
+\textbf{Sviluppatori} & \textbf{Operazioni (\textit{operations})} \\
+\midrule
+devono occuparsi solo di ciò che sta \textbf{dentro} il container &
+devono occuparsi solo di ciò che sta \textbf{fuori} dal container \\
+l'ambiente di sviluppo si prepara più facilmente &
+ogni container si gestisce allo stesso modo \\
+niente conflitti fra librerie e dipendenze &
+la gestione del ciclo di vita si semplifica \\
+\textbf{si costruisce una volta, si esegue ovunque}* &
+\textbf{si configura una volta, si esegue qualunque cosa}** \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent{\footnotesize * ovunque ci siano la stessa architettura e un kernel Linux moderno.
+** qualunque cosa costruita per la stessa architettura e lo stesso kernel.}
+
+\medskip
+\Needspace{17\baselineskip}
+La matrice infernale si risolve così: in ogni casella c'è lo stesso oggetto, un container, che si comporta allo stesso
+modo ovunque.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{l|ccccc}
+ & \textbf{Dev laptop} & \textbf{Production server} & \textbf{Disaster recovery} & \textbf{Public cloud} &
+   \textbf{QA server} \\
+\hline
+Web App & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; &
+  \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; &
+  \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; \\
+API Endpoint & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; &
+  \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; &
+  \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; \\
+Analytics & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; &
+  \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; &
+  \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; \\
+App DB & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; &
+  \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; &
+  \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; \\
+Queue & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; &
+  \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; &
+  \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; \\
+Preprocessing & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; &
+  \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; & \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; &
+  \tikz\node[ccontainer=0.7cm, minimum height=0.32cm]{}; \\
+\end{tabular}
+\end{center}
+
+% ============================================================
+\section{Macchine virtuali e container}
+
+Le macchine virtuali del Capitolo 13 non risolvono gli stessi problemi? Sì, ma non sono altrettanto
+\textbf{leggere}: i container permettono deployment, riavvii e spostamenti molto più rapidi. La differenza si vede
+negli strati:
+
+\begin{center}
+\begin{tikzpicture}[x=1.25cm, y=0.55cm]
+  % macchine virtuali
+  \node[font=\scriptsize\bfseries] at (1.5,6.0) {Macchine virtuali};
+  \node[cstrato=swgray, minimum width=4.6cm] at (1.5,0) {Infrastruttura};
+  \node[cstrato=swblue, minimum width=4.6cm] at (1.5,1) {Hypervisor};
+  \foreach \x/\a in {0.25/App A, 1.5/App B, 2.75/App B'} {
+    \node[cstrato=swteal, minimum width=1.45cm] at (\x,2) {Guest OS};
+    \node[cstrato=sworange, minimum width=1.45cm] at (\x,3) {Bins/Libs};
+    \node[cstrato=swgreen, minimum width=1.45cm] at (\x,4) {\a};
+  }
+  % container
+  \node[font=\scriptsize\bfseries] at (6.5,6.0) {Container};
+  \node[cstrato=swgray, minimum width=4.6cm] at (6.5,0) {Infrastruttura};
+  \node[cstrato=swteal, minimum width=4.6cm] at (6.5,1) {Sistema operativo (kernel)};
+  \node[cstrato=swblue, minimum width=4.6cm] at (6.5,2) {Container engine};
+  \node[cstrato=sworange, minimum width=1.45cm] at (5.25,3) {Bins/Libs};
+  \node[cstrato=sworange, minimum width=3.0cm] at (7.125,3) {Bins/Libs};
+  \foreach \x/\a in {5.25/App A, 6.5/App B, 7.75/App B'}
+    \node[cstrato=swgreen, minimum width=1.45cm] at (\x,4) {\a};
+\end{tikzpicture}
+\end{center}
+
+Ogni macchina virtuale contiene un intero \textbf{sistema operativo ospite}, con il suo kernel, avviato
+dall'hypervisor. I container invece \textbf{condividono il kernel} del sistema che li ospita: ognuno porta con sé solo
+le librerie e i programmi dell'applicazione (e due applicazioni possono anche condividerli, come B e B'). Lo si verifica
+in un attimo: un container con la distribuzione Alpine Linux, su un host Ubuntu, vede lo stesso kernel dell'host.
+
+\Needspace{11\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ grep PRETTY_NAME /etc/os-release
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+$ uname -r
+6.18.44-fc-v230
+$ docker run --rm alpine:3.22 grep PRETTY_NAME /etc/os-release
+PRETTY_NAME="Alpine Linux v3.22"
+$ docker run --rm alpine:3.22 uname -r
+6.18.44-fc-v230
+\end{lstlisting}
+
+\Needspace{20\baselineskip}
+Il file system del container è quello di Alpine, ma il kernel (\texttt{uname -r}) è lo stesso. È il senso
+dell'asterisco nella tabella di prima: un container Linux gira ovunque ci sia un kernel Linux compatibile (su Windows e
+su macOS, Docker Desktop ne avvia uno in una piccola macchina virtuale). E un container porta con sé il proprio
+\textbf{runtime}, indipendente da quello installato sull'host:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ java -version
+openjdk version "21.0.12.1" 2026-08-18
+OpenJDK Runtime Environment (build 21.0.12.1+1-1-24.04.4-Ubuntu)
+OpenJDK 64-Bit Server VM (build 21.0.12.1+1-1-24.04.4-Ubuntu, mixed mode, sharing)
+$ docker run --rm eclipse-temurin:21-jre java -version
+Unable to find image 'eclipse-temurin:21-jre' locally
+21-jre: Pulling from library/eclipse-temurin
+Digest: sha256:0b99b3376fbb50dbf9c0af8535fdd5b8eb0d3fdfc8b1e4967f383b6919f6901a
+Status: Downloaded newer image for eclipse-temurin:21-jre
+openjdk version "21.0.13" 2026-10-20 LTS
+OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)
+\end{lstlisting}
+
+Sull'host c'è il Java 21.0.12 di Ubuntu, nel container il 21.0.13 della distribuzione Temurin: un'applicazione nel
+container usa sempre il secondo, qualunque cosa sia installata sulla macchina.
+
+% ============================================================
+\section{Docker}
+
+\textbf{Docker} (\url{https://www.docker.com/}) è il motore di container (\textit{container engine}) più diffuso:
+progetto nato nel 2013, usato da più di 13 milioni di sviluppatori, con più di 9 milioni di applicazioni
+«dockerizzate». È lo \textbf{standard de facto} per la containerizzazione del software, ma esistono alternative: LXD,
+BuildKit, Buildah, Podman, \ldots
+
+\subsection{L'architettura di Docker}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[card=swgray, minimum width=3.3cm, minimum height=3.6cm, anchor=north] (cl) at (0,1.8) {};
+  \node[font=\scriptsize\bfseries, anchor=north] at (cl.north) {Client};
+  \foreach \y/\c in {1.0/docker build, 0.35/docker pull, -0.3/docker run}
+    \node[cbox=sworange, font=\scriptsize\ttfamily, minimum width=2.6cm] at (0,\y) {\c};
+  \node[note, align=center] at (0,-1.15) {riga di comando,\\ Docker Desktop};
+  \node[card=swblue, minimum width=5.4cm, minimum height=3.6cm, anchor=north] (ho) at (4.8,1.8) {};
+  \node[font=\scriptsize\bfseries, anchor=north] at (ho.north) {Docker host};
+  \node[cbox, minimum width=4.6cm] (d) at (4.8,1.0) {demone Docker (\texttt{dockerd})};
+  \node[cbox=swteal, minimum width=2.1cm, minimum height=1.3cm] (im) at (3.65,-0.35) {immagini};
+  \node[cbox=swgreen, minimum width=2.1cm, minimum height=1.3cm] (co) at (5.95,-0.35) {container};
+  \draw[cfreccia] (im) -- node[font=\tiny, above]{run} (co);
+  \node[card=swteal, minimum width=3.4cm, minimum height=3.6cm, anchor=north] (re) at (9.4,1.8) {};
+  \node[font=\scriptsize\bfseries, anchor=north] at (re.north) {Registry};
+  \node[note, align=center] at (9.4,0.3) {Docker Hub, JFrog,\\ Quay.io, \ldots};
+  \draw[cfreccia] (cl.east |- d) -- (d.west);
+  \draw[cfreccia] (re.west |- d) -- node[font=\tiny, above]{pull} (d.east);
+\end{tikzpicture}
+\end{center}
+
+\Needspace{28\baselineskip}
+Il \textbf{client} (la riga di comando \texttt{docker}, o l'interfaccia grafica Docker Desktop) manda i comandi al
+\textbf{demone} \texttt{dockerd}, che gira sul \textbf{Docker host} e gestisce immagini e container; le immagini che
+non ha, il demone le scarica da un \textbf{registry}, come Docker Hub. L'immagine \texttt{hello-world} lo racconta da
+sé:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ docker run --rm hello-world
+
+Hello from Docker!
+This message shows that your installation appears to be working correctly.
+
+To generate this message, Docker took the following steps:
+ 1. The Docker client contacted the Docker daemon.
+ 2. The Docker daemon pulled the "hello-world" image from the Docker Hub.
+    (amd64)
+ 3. The Docker daemon created a new container from that image which runs the
+    executable that produces the output you are currently reading.
+ 4. The Docker daemon streamed that output to the Docker client, which sent it
+    to your terminal.
+
+To try something more ambitious, you can run an Ubuntu container with:
+ $ docker run -it ubuntu bash
+
+Share images, automate workflows, and more with a free Docker ID:
+ https://hub.docker.com/
+
+For more examples and ideas, visit:
+ https://docs.docker.com/get-started/
+\end{lstlisting}
+
+L'opzione \texttt{--rm} cancella il container appena il programma termina.
+
+\subsection{Le immagini}
+
+\dfn{Immagine Docker}{
+  Un'\textbf{immagine} è un modello (\textit{template}) \textbf{portabile} e \textbf{di sola lettura}, che contiene
+  tutte le istruzioni per creare un container. Un \textbf{container} è un'istanza in esecuzione di un'immagine, come un
+  oggetto lo è di una classe.}
+
+\Needspace{13\baselineskip}
+Un'immagine si può ottenere in tre modi:
+
+\begin{center}
+\begin{tikzpicture}
+  \node[cbox=swgray, minimum width=2.4cm] (ar) at (0,0) {archivio \texttt{.tar}};
+  \node[cbox=sworange, minimum width=2.4cm] (df) at (3.6,0.6) {Dockerfile};
+  \node[cbox=swteal, minimum width=2.4cm] (rg) at (7.2,0) {registry};
+  \node[cbox, minimum width=2.6cm, minimum height=0.8cm] (im) at (3.6,-1.4) {\textbf{immagine}};
+  \node[ccontainer=2.6cm, minimum height=0.8cm] (co) at (3.6,-3.0) {container};
+  \draw[cfreccia] (ar) -- node[font=\tiny\ttfamily, below left]{load} (im);
+  \draw[cfreccia] (df) -- node[font=\tiny\ttfamily, right]{build} (im);
+  \draw[cfreccia] (rg) -- node[font=\tiny\ttfamily, below right]{pull} (im);
+  \draw[cfreccia] (im) -- node[font=\tiny\ttfamily, right]{run} (co);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item si \textbf{carica} da un archivio \texttt{tar} (\texttt{docker load}), creato per esempio con
+        \texttt{docker save};
+  \item si \textbf{scarica} da un registry (\texttt{docker pull});
+  \item si \textbf{costruisce} estendendo un'immagine esistente con un elenco di istruzioni scritte in un file di testo,
+        il \textbf{Dockerfile} (\texttt{docker build}).
+\end{itemize}
+
+\Needspace{21\baselineskip}
+Le prime due, all'opera:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ docker pull postgres:17-alpine
+17-alpine: Pulling from library/postgres
+dddde5442af4: Pulling fs layer
+e018eb860c5e: Pulling fs layer
+...
+d6e09b1bfe5f: Pull complete
+Digest: sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+Status: Downloaded newer image for postgres:17-alpine
+docker.io/library/postgres:17-alpine
+$ docker save alpine:3.22 -o alpine.tar
+$ du -h alpine.tar
+3.8M	alpine.tar
+$ docker rmi alpine:3.22
+Untagged: alpine:3.22
+Deleted: sha256:2e0b81d60597f449baa56dc25d355367869d2dca4cd57e866f1e2b52af3eb55f
+$ docker load -i alpine.tar
+Loaded image: alpine:3.22
+\end{lstlisting}
+
+Un'immagine è fatta di \textbf{strati} (\textit{layer}): \texttt{docker pull} ne scarica una decina per PostgreSQL. Il
+\textbf{nome} di un'immagine ha la forma \texttt{nome:etichetta} (\texttt{postgres:17-alpine}: PostgreSQL 17, costruito
+su Alpine), e l'impronta \texttt{sha256} ne identifica esattamente il contenuto. L'immagine di Alpine, salvata in un
+archivio, occupa meno di 4 MB: è uno dei motivi per cui i container sono leggeri.
+
+% ============================================================
+\Needspace{56\baselineskip}
+\section{Un esempio: un servizio Spring Boot}
+
+L'esempio delle slide è un microservizio, \texttt{servizi-tasse}, che calcola tasse e agevolazioni per l'«Ateneo
+Futura». È scritto con \textbf{Spring Boot}, un framework Java per applicazioni web, e costruito con Maven (capitolo
+precedente). Ecco il suo POM, dalle slide:
+
+\begin{lstlisting}[style=xml, name=servizi-tasse/pom.xml]
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.2.3</version>
+    <relativePath/>
+  </parent>
+  <groupId>it.unifutura</groupId>
+  <artifactId>servizi-tasse</artifactId>
+  <version>1.0.0</version>
+  <name>servizi-tasse</name>
+  <description>Microservizi calcolo tasse e agevolazioni per Ateneo
+Futura</description>
+  <properties>
+    <java.version>21</java.version>
+    <springdoc.version>2.3.0</springdoc.version>
+  </properties>
+  <dependencies>
+    <dependency>
+       <groupId>org.springframework.boot</groupId>
+       <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>${springdoc.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>
+\end{lstlisting}
+
+Il POM \textbf{eredita} da un POM \texttt{parent}, \texttt{spring-boot-starter-parent}, che fissa le versioni di tutte
+le librerie di Spring: per questo le dipendenze non indicano la versione, tranne \texttt{springdoc}, che di Spring non
+fa parte (genera la documentazione OpenAPI del servizio, Capitolo 14). Gli \textit{starter} sono dipendenze che ne
+raccolgono molte altre: \texttt{web} porta con sé anche il server web Tomcat. Il plugin di Spring Boot, infine,
+trasforma il \texttt{jar} in un \textbf{eseguibile autosufficiente}, con tutte le dipendenze dentro.
+
+Il codice del servizio non è nelle slide: qui ne usiamo uno minimo, con regole inventate per l'esempio.
+
+\Needspace{14\baselineskip}
+\begin{lstlisting}[style=java, name=ServiziTasseApplication.java]
+package it.unifutura.servizitasse;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class ServiziTasseApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(ServiziTasseApplication.class, args);
+    }
+}
+\end{lstlisting}
+
+\Needspace{21\baselineskip}
+\begin{lstlisting}[style=java, name=TasseController.java]
+package it.unifutura.servizitasse;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class TasseController {
+
+    record Tassa(int isee, String fascia, int importo) {}
+
+    // regole inventate per l'esempio: esonero fino a 22.000 euro di ISEE
+    @GetMapping("/tasse")
+    public Tassa calcola(@RequestParam int isee) {
+        if (isee <= 22000) return new Tassa(isee, "esonero", 0);
+        if (isee <= 40000) return new Tassa(isee, "intermedia", 900);
+        return new Tassa(isee, "massima", 2000);
+    }
+}
+\end{lstlisting}
+
+\Needspace{18\baselineskip}
+\texttt{@RestController} e \texttt{@GetMapping} dicono a Spring che il metodo risponde alle richieste \texttt{GET} per
+\texttt{/tasse}, e il record restituito viene convertito in JSON (è un servizio REST, Capitolo 14). Con Maven si ottiene
+il jar:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ mvn -ntp clean package
+...
+[INFO] Building jar: [cartella del progetto]/target/servizi-tasse-1.0.0.jar
+[INFO]
+[INFO] --- spring-boot:3.2.3:repackage (repackage) @ servizi-tasse ---
+[INFO] Replacing main artifact [cartella del progetto]/target/servizi-tasse-1.0.0.jar with repackaged archive, adding nested dependencies in BOOT-INF/.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+...
+$ du -h target/servizi-tasse-1.0.0.jar
+26M	target/servizi-tasse-1.0.0.jar
+\end{lstlisting}
+
+(L'opzione \texttt{-ntp} nasconde l'avanzamento dei download.) 26 MB, perché dentro ci sono Spring, Tomcat e tutte le
+altre dipendenze.
+
+\Needspace{15\baselineskip}
+\subsection{Il Dockerfile}
+
+L'immagine si descrive con un \textbf{Dockerfile}:
+
+\begin{lstlisting}[style=docker, name=servizi-tasse/Dockerfile]
+# si parte da un'immagine che contiene solo il runtime di Java 21
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+# il jar prodotto da "mvn package", con tutte le dipendenze dentro
+COPY target/servizi-tasse-1.0.0.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{FROM} sceglie l'immagine di partenza, che si estende: qui una con il solo runtime di Java (JRE, senza il
+        compilatore);
+  \item \texttt{WORKDIR} imposta la cartella di lavoro dentro l'immagine;
+  \item \texttt{COPY} copia un file dalla cartella del progetto (il \textbf{contesto} della build) nell'immagine;
+  \item \texttt{EXPOSE} documenta la porta su cui il servizio ascolta;
+  \item \texttt{ENTRYPOINT} è il comando eseguito all'avvio del container.
+\end{itemize}
+
+\Needspace{33\baselineskip}
+Ogni istruzione produce uno strato dell'immagine. Si costruisce con \texttt{docker build} e si avvia con
+\texttt{docker run}:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ docker build -t servizi-tasse:1.0 .
+...
+#5 [1/3] FROM docker.io/library/eclipse-temurin:21-jre@sha256:0b99b3376fbb50dbf9c0af8535fdd5b8eb0d3fdfc8b1e4967f383b6919f6901a
+#5 resolve docker.io/library/eclipse-temurin:21-jre@sha256:0b99b3376fbb50dbf9c0af8535fdd5b8eb0d3fdfc8b1e4967f383b6919f6901a done
+#5 DONE 0.0s
+
+#6 [2/3] WORKDIR /app
+#6 CACHED
+
+#7 [3/3] COPY target/servizi-tasse-1.0.0.jar app.jar
+#7 CACHED
+...
+#8 naming to docker.io/library/servizi-tasse:1.0 done
+#8 unpacking to docker.io/library/servizi-tasse:1.0 done
+#8 DONE 0.1s
+$ docker images servizi-tasse
+IMAGE               ID             DISK USAGE   CONTENT SIZE   EXTRA
+servizi-tasse:1.0   5f446832236f        509MB          140MB
+$ docker run -d --name tasse -p 8090:8080 servizi-tasse:1.0
+10adc5ebeea14f9f434c190da07d40d589f2984c707556d3f6767f17c0de8e86
+$ docker ps
+CONTAINER ID   IMAGE                         COMMAND               CREATED         STATUS         PORTS                    NAMES
+10adc5ebeea1   servizi-tasse:1.0             "java -jar app.jar"   3 seconds ago   Up 2 seconds   0.0.0.0:8090->8080/tcp   tasse
+3c16f233d104   servizi-tasse-servizi-tasse   "java -jar app.jar"   6 minutes ago   Up 5 minutes   0.0.0.0:8080->8080/tcp   unifutura-servizi-tasse
+$ curl -s 'localhost:8090/tasse?isee=30000'; echo
+{"isee":30000,"fascia":"intermedia","importo":900}
+$ docker stop tasse
+tasse
+$ docker rm tasse
+tasse
+\end{lstlisting}
+
+I passi della build segnati \texttt{CACHED} non sono stati rifatti: Docker riusa gli strati già costruiti, come Make e
+Gradle riusano i file già prodotti. \texttt{-t} dà il nome all'immagine; \texttt{docker run -d} avvia il container
+in background (e ne stampa l'identificativo), \texttt{--name} gli dà un nome, \texttt{-p 8090:8080} collega la porta
+8090 dell'host alla porta 8080 del container. \texttt{docker ps} elenca i container in esecuzione: il secondo è quello
+avviato con Docker Compose, che vediamo fra poco. \texttt{docker stop} ferma il container, \texttt{docker rm} lo
+cancella.
+
+\Needspace{17\baselineskip}
+\subsection{Docker Compose}
+
+Con più opzioni, o più container, la riga di comando diventa scomoda: \textbf{Docker Compose} descrive l'intera
+applicazione in un file YAML, \texttt{docker-compose.yml}. Quello delle slide:
+
+\begin{lstlisting}[style=yaml, name=servizi-tasse/docker-compose.yml]
+version: '3.8'
+services:
+ servizi-tasse:
+  build: .
+  container_name: unifutura-servizi-tasse
+  ports:
+   - "8080:8080"
+  restart: always
+\end{lstlisting}
+
+\begin{itemize}
+  \item c'è un solo \textbf{servizio}, \texttt{servizi-tasse};
+  \item la sua immagine si costruisce (\texttt{build}) dalla cartella corrente, cioè con il Dockerfile che vi si trova;
+  \item il container si chiama \texttt{unifutura-servizi-tasse};
+  \item è raggiungibile su \texttt{localhost}, alla porta 8080;
+  \item viene riavviato sempre (\texttt{restart: always}), anche a ogni riavvio di Docker.
+\end{itemize}
+
+\Needspace{27\baselineskip}
+\texttt{docker compose up --build} controlla (o scarica) le risorse necessarie, costruisce le immagini, crea i
+container e li avvia; \texttt{-d} lo fa in background:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ docker compose up --build -d
+time="2026-11-03T19:11:04Z" level=warning msg="[cartella del progetto]/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Image servizi-tasse-servizi-tasse Building
+...
+#8 [3/3] COPY target/servizi-tasse-1.0.0.jar app.jar
+#8 DONE 0.1s
+...
+ Image servizi-tasse-servizi-tasse Built
+ Network servizi-tasse_default Creating
+ Network servizi-tasse_default Creating
+ Network servizi-tasse_default Created
+ Network servizi-tasse_default Created
+ Container unifutura-servizi-tasse Creating
+ Container unifutura-servizi-tasse Created
+ Container unifutura-servizi-tasse Starting
+ Container unifutura-servizi-tasse Started
+$ curl -s 'localhost:8080/tasse?isee=15000'; echo
+{"isee":15000,"fascia":"esonero","importo":0}
+$ curl -s 'localhost:8080/tasse?isee=35000'; echo
+{"isee":35000,"fascia":"intermedia","importo":900}
+$ curl -s 'localhost:8080/tasse?isee=60000'; echo
+{"isee":60000,"fascia":"massima","importo":2000}
+\end{lstlisting}
+
+(Alcune righe sono ripetute: è l'output di Compose quando non scrive su un terminale interattivo, dove invece mostra un
+riepilogo che si aggiorna sul posto.) Compose ha costruito l'immagine, chiamandola con il nome del progetto (quello della cartella)
+seguito da quello del servizio, ha creato una \textbf{rete} per i container del progetto e ha avviato il container.
+
+\warning{L'attributo \texttt{version} è obsoleto}{
+  L'avviso iniziale riguarda la prima riga del file: nelle versioni attuali di Compose l'attributo \texttt{version}
+  non serve più, e viene ignorato. Basta toglierlo, come faremo nell'esempio successivo.}
+
+\warning{Una svista nelle slide: \texttt{mvn build}}{
+  Nelle slide il servizio è «costruito per impostazione predefinita chiamando \texttt{mvn build}». Ma \texttt{build}
+  non è una fase di Maven, e \texttt{mvn build} termina con l'errore \texttt{Unknown lifecycle phase "build"} (capitolo
+  precedente); né Compose chiama Maven da sé: \texttt{build: .} costruisce l'immagine seguendo il Dockerfile. Maven va
+  eseguito prima, come qui (\texttt{mvn package}), oppure dentro il Dockerfile stesso, con una build in più stadi
+  (\textit{multi-stage}): un primo stadio basato su un'immagine con Maven compila il jar, e il secondo, con il solo
+  runtime, lo copia dal primo.}
+
+\Needspace{19\baselineskip}
+I log del container mostrano Spring Boot che si avvia:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ docker compose logs --no-log-prefix servizi-tasse
+...
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::                (v3.2.3)
+
+2026-11-03T19:11:07.513Z  INFO 1 --- [           main] i.u.s.ServiziTasseApplication            : Starting ServiziTasseApplication v1.0.0 using Java 21.0.13 with PID 1 (/app/app.jar started by root in /app)
+...
+2026-11-03T19:11:09.381Z  INFO 1 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path ''
+2026-11-03T19:11:09.397Z  INFO 1 --- [           main] i.u.s.ServiziTasseApplication            : Started ServiziTasseApplication in 2.32 seconds (process running for 2.728)
+...
+\end{lstlisting}
+
+\Needspace{15\baselineskip}
+Due dettagli: il Java è il 21.0.13 dell'immagine, e il programma ha \textbf{PID 1}. Dentro il container,
+l'applicazione è il primo e unico processo: vede solo sé stessa. Se termina, termina anche il container; e qui
+entra in gioco \texttt{restart: always}. Simuliamo un crash, mandando al processo 1 il segnale di terminazione:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ docker exec unifutura-servizi-tasse kill 1
+$ docker inspect -f '{{.RestartCount}}' unifutura-servizi-tasse
+1
+$ docker ps --format 'table {{.Names}}\t{{.Status}}'
+NAMES                     STATUS
+unifutura-servizi-tasse   Up 2 seconds
+$ curl -s 'localhost:8080/tasse?isee=15000'; echo
+{"isee":15000,"fascia":"esonero","importo":0}
+\end{lstlisting}
+
+\texttt{docker exec} esegue un comando dentro un container in funzione. Il container si è fermato ed è stato
+riavviato da Docker (\texttt{RestartCount} vale 1, ed è «su» da due secondi), e il servizio risponde di nuovo; nei log
+compare un secondo avvio di Spring Boot.
+
+% ============================================================
+\section{Due container che collaborano}
+
+Il secondo esempio delle slide ha due servizi: uno gestisce gli utenti (\texttt{st-user-service}), l'altro
+l'autenticazione (\texttt{st-auth-service}), e il secondo interroga il primo.
+
+\Needspace{23\baselineskip}
+\begin{lstlisting}[style=yaml, name=st-microservices/docker-compose.yml]
+version: '3.8'
+
+services:
+ st-user-service:
+  build:
+    context: ./st-user-service
+    dockerfile: Dockerfile
+  container_name: st-user-service
+  ports:
+    - "0.0.0.0:8082:8082"
+
+ st-auth-service:
+  build:
+    context: ./st-auth-service
+    dockerfile: Dockerfile
+  container_name: st-auth-service
+  ports:
+    - "0.0.0.0:8081:8081"
+  environment:
+    - ST_USER_SERVICE_URL=http://st-user-service:8082
+  depends_on:
+    - st-user-service
+\end{lstlisting}
+
+\begin{itemize}
+  \item ogni servizio ha la sua cartella (\texttt{context}), con il suo Dockerfile e il suo \texttt{pom.xml};
+  \item \texttt{0.0.0.0:8082:8082} pubblica la porta su tutte le interfacce di rete dell'host;
+  \item \texttt{environment} passa al servizio di autenticazione una \textbf{variabile d'ambiente} con l'indirizzo
+        dell'altro servizio: il codice non contiene indirizzi scritti a mano;
+  \item \texttt{depends\_on} fa avviare \texttt{st-user-service} prima di \texttt{st-auth-service}. Attenzione: decide
+        solo l'\textbf{ordine di avvio}, non aspetta che l'altro servizio sia pronto a rispondere.
+\end{itemize}
+
+\Needspace{35\baselineskip}
+I due POM, dalle slide, sono quasi identici: cambia l'\texttt{artifactId}. Quello del primo servizio (qui completato con
+la dipendenza \texttt{web} e il plugin di Spring Boot, che nelle slide sono omessi):
+
+\begin{lstlisting}[style=xml, name=st-user-service/pom.xml]
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-parent</artifactId>
+      <version>3.2.3</version>
+    </parent>
+    <groupId>com.edu.microservices</groupId>
+    <artifactId>st-user-service</artifactId>
+    <version>1.0.0</version>
+    <properties>
+      <java.version>17</java.version>
+    </properties>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+      </dependency>
+    </dependencies>
+    <build>
+      <plugins>
+        <plugin>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-maven-plugin</artifactId>
+        </plugin>
+      </plugins>
+    </build>
+</project>
+\end{lstlisting}
+
+Anche qui il codice è nostro. Il servizio degli utenti tiene i dati in memoria e li restituisce per nome utente;
+ascolta sulla porta 8082 (lo dice il file \texttt{application.properties}, con \texttt{server.port=8082}).
+
+\Needspace{31\baselineskip}
+\begin{lstlisting}[style=java, name=UserServiceApplication.java]
+package com.edu.microservices;
+
+import java.util.Map;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+
+@SpringBootApplication
+@RestController
+public class UserServiceApplication {
+
+    record Utente(String username, String nome, String ruolo) {}
+
+    // i dati degli utenti: in un servizio vero starebbero in un database
+    private final Map<String, Utente> utenti = Map.of(
+        "janet", new Utente("janet", "Janet Weiss", "studente"),
+        "frank", new Utente("frank", "Frank Furter", "docente"));
+
+    @GetMapping("/users/{username}")
+    public ResponseEntity<Utente> utente(@PathVariable String username) {
+        Utente u = utenti.get(username);
+        return u == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(u);
+    }
+
+    public static void main(String[] args) {
+        SpringApplication.run(UserServiceApplication.class, args);
+    }
+}
+\end{lstlisting}
+
+\Needspace{41\baselineskip}
+Il servizio di autenticazione (porta 8081) legge l'indirizzo dell'altro dalla variabile d'ambiente
+\texttt{ST\_USER\_SERVICE\_URL} e lo interroga con un client HTTP (\texttt{RestClient}):
+
+\begin{lstlisting}[style=java, name=AuthServiceApplication.java]
+package com.edu.microservices;
+
+import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClient;
+
+@SpringBootApplication
+@RestController
+public class AuthServiceApplication {
+
+    private final RestClient userService;
+
+    // l'indirizzo dell'altro servizio arriva da una variabile d'ambiente
+    public AuthServiceApplication(@Value("${ST_USER_SERVICE_URL}") String url) {
+        this.userService = RestClient.create(url);
+    }
+
+    @GetMapping("/auth/{username}")
+    public Map<String, Object> verifica(@PathVariable String username) {
+        try {
+            Map<?, ?> utente = userService.get().uri("/users/{u}", username)
+                                          .retrieve().body(Map.class);
+            return Map.of("username", username, "autorizzato", true,
+                          "ruolo", utente.get("ruolo"));
+        } catch (HttpClientErrorException.NotFound e) {
+            return Map.of("username", username, "autorizzato", false);
+        }
+    }
+
+    public static void main(String[] args) {
+        SpringApplication.run(AuthServiceApplication.class, args);
+    }
+}
+\end{lstlisting}
+
+\Needspace{10\baselineskip}
+I Dockerfile sono come quello di prima, con il runtime di Java 17:
+
+\begin{lstlisting}[style=docker, name=st-auth-service/Dockerfile]
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+COPY target/st-auth-service-1.0.0.jar app.jar
+EXPOSE 8081
+ENTRYPOINT ["java", "-jar", "app.jar"]
+\end{lstlisting}
+
+\Needspace{30\baselineskip}
+Compilati i due servizi con \texttt{mvn package}, un solo comando costruisce e avvia tutto:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ docker compose up --build -d
+time="2026-11-03T19:12:16Z" level=warning msg="[cartella del progetto]/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Image st-microservices-st-user-service Building
+ Image st-microservices-st-auth-service Building
+...
+ Image st-microservices-st-user-service Built
+ Image st-microservices-st-auth-service Built
+...
+ Network st-microservices_default Created
+...
+ Container st-user-service Created
+...
+ Container st-auth-service Created
+...
+ Container st-user-service Started
+...
+ Container st-auth-service Started
+$ curl -s localhost:8081/auth/janet; echo
+{"username":"janet","ruolo":"studente","autorizzato":true}
+$ curl -s localhost:8081/auth/frank; echo
+{"username":"frank","ruolo":"docente","autorizzato":true}
+$ curl -s localhost:8081/auth/riff; echo
+{"username":"riff","autorizzato":false}
+$ curl -s localhost:8082/users/janet; echo
+{"username":"janet","nome":"Janet Weiss","ruolo":"studente"}
+$ curl -s -o /dev/null -w '%{http_code}\n' localhost:8082/users/riff
+404
+\end{lstlisting}
+
+Le immagini sono costruite in parallelo, e i container avviati nell'ordine voluto da \texttt{depends\_on}. Una
+richiesta a \texttt{st-auth-service} produce una richiesta a \texttt{st-user-service}: per \texttt{riff}, che non
+esiste, il servizio degli utenti risponde \texttt{404} e quello di autenticazione nega l'accesso.
+
+\Needspace{17\baselineskip}
+\subsection{Come si trovano i container}
+
+L'indirizzo \texttt{http://st-user-service:8082} usa il \textbf{nome} del container come nome di host. Funziona perché
+Compose ha creato una \textbf{rete} per il progetto, e dentro quella rete Docker fa da DNS: ogni container è
+raggiungibile con il suo nome. Fuori dalla rete, invece, quel nome non significa nulla:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ docker network ls --filter name=st-microservices
+NETWORK ID     NAME                       DRIVER    SCOPE
+2a0f62ae1107   st-microservices_default   bridge    local
+$ docker exec st-auth-service getent hosts st-user-service
+172.19.0.2      st-user-service
+$ getent hosts st-user-service || echo 'nome sconosciuto fuori dalla rete di Compose'
+nome sconosciuto fuori dalla rete di Compose
+\end{lstlisting}
+
+Dentro il container di autenticazione il nome si risolve nell'indirizzo privato dell'altro container (172.19.0.2);
+sull'host no. La rete è di tipo \texttt{bridge}: una rete virtuale, interna alla macchina, che collega i container fra
+loro.
+
+\Needspace{26\baselineskip}
+\subsection{Servizi interni}
+
+Il servizio degli utenti serve solo a quello di autenticazione: non c'è motivo di renderlo raggiungibile da fuori.
+Basta \textbf{non pubblicarne la porta}, togliendo \texttt{ports} (e già che ci siamo l'attributo \texttt{version}):
+
+\begin{lstlisting}[style=yaml, name=st-microservices/docker-compose.interno.yml]
+services:
+ st-user-service:
+  build:
+    context: ./st-user-service
+    dockerfile: Dockerfile
+  container_name: st-user-service
+
+ st-auth-service:
+  build:
+    context: ./st-auth-service
+    dockerfile: Dockerfile
+  container_name: st-auth-service
+  ports:
+    - "0.0.0.0:8081:8081"
+  environment:
+    - ST_USER_SERVICE_URL=http://st-user-service:8082
+  depends_on:
+    - st-user-service
+\end{lstlisting}
+
+\Needspace{14\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ docker compose -f docker-compose.interno.yml up -d
+...
+ Container st-auth-service Started
+$ curl -s localhost:8081/auth/janet; echo
+{"username":"janet","ruolo":"studente","autorizzato":true}
+$ curl -sS localhost:8082/users/janet
+curl: (7) Failed to connect to localhost port 8082 after 0 ms: Couldn't connect to server
+$ docker compose -f docker-compose.interno.yml ps
+NAME              IMAGE                              COMMAND               SERVICE           CREATED         STATUS         PORTS
+st-auth-service   st-microservices-st-auth-service   "java -jar app.jar"   st-auth-service   4 seconds ago   Up 4 seconds   0.0.0.0:8081->8081/tcp
+st-user-service   st-microservices-st-user-service   "java -jar app.jar"   st-user-service   4 seconds ago   Up 4 seconds   8082/tcp
+\end{lstlisting}
+
+\Needspace{20\baselineskip}
+Il servizio di autenticazione funziona come prima, perché parla con l'altro dentro la rete di Compose; dall'host, la
+porta 8082 non risponde più. Nell'elenco la differenza si legge nella colonna \texttt{PORTS}: \texttt{8082/tcp} è la
+porta esposta dal container (l'\texttt{EXPOSE} del Dockerfile), \texttt{0.0.0.0:8081->8081/tcp} una porta
+\textbf{pubblicata} sull'host. Alla fine, \texttt{docker compose down} ferma e cancella container e rete:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ docker compose down
+time="2026-11-03T19:14:34Z" level=warning msg="[cartella del progetto]/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Container st-auth-service Stopping
+ Container st-auth-service Stopped
+ Container st-auth-service Removing
+ Container st-auth-service Removed
+ Container st-user-service Stopping
+ Container st-user-service Stopped
+ Container st-user-service Removing
+ Container st-user-service Removed
+ Network st-microservices_default Removing
+ Network st-microservices_default Removed
+\end{lstlisting}
+
+(L'ultimo comando è stato eseguito con il file originale, prima della prova con il servizio interno.) I container
+vengono fermati nell'ordine inverso a quello di avvio.
+
+% ============================================================
+\Needspace{40\baselineskip}
+\section{Un esempio più complesso}
+
+L'ultimo esempio delle slide è un gioco didattico sui \textit{test smell} (i difetti nel codice dei test), fatto di sei
+servizi. Le immagini non vengono costruite, ma scaricate da Docker Hub, già pronte. Il file \texttt{docker-compose.yml},
+ricomposto dalle due slide:
+
+\begin{lstlisting}[style=yaml, name=docker-compose.yml (1/2)]
+networks:
+ testSmell-network:
+  driver: bridge
+
+services:
+ userservice:
+  image: mick0974/testsmellsgame:user_service
+  container_name: user-service
+  ports:
+   - '8081:8081'
+  environment:
+   - SPRING_DATASOURCE_URL=jdbc:h2:file:./database/userdb
+  networks:
+   - testSmell-network
+
+ compilerservice:
+  image: mick0974/testsmellsgame:compiler_service
+  container_name: compiler-service
+  ports:
+   - '8083:8083'
+  networks:
+   - testSmell-network
+
+ leaderboardservice:
+  image: mick0974/testsmellsgame:leaderboard_service
+  container_name: leaderboard-service
+  ports:
+   - '8087:8087'
+  environment:
+   - SPRING_DATASOURCE_URL=jdbc:h2:file:./database/leaderboarddb
+  networks:
+   - testSmell-network
+\end{lstlisting}
+
+\Needspace{34\baselineskip}
+\begin{lstlisting}[style=yaml, name=docker-compose.yml (2/2), firstnumber=34]
+ exerciseservice:
+  image: mick0974/testsmellsgame:exercise_service
+  container_name: exercise-service
+  ports:
+   - '9090:9090'
+  volumes:
+   - assets:/usr/src/app/assets
+  networks:
+   - testSmell-network
+
+ apigateway:
+  image: mick0974/testsmellsgame:api_gateway
+  container_name: api-gateway
+  environment:
+   - USER_SERVICE=http://user-service:8081
+   - LEADERBOARD_SERVICE=http://leaderboard-service:8087
+   - EXERCISE_SERVICE=http://exercise-service:9090
+   - COMPILER_SERVICE=http://compiler-service:8083
+  ports:
+   - '9000:9000'
+  networks:
+   - testSmell-network
+
+ frontend:
+  image: mick0974/testsmellsgame:frontend
+  container_name: frontend
+  environment:
+   - API_GATEWAY=http://api-gateway:9000
+  ports:
+   - '8080:8080'
+  networks:
+   - testSmell-network
+
+volumes:
+ assets:
+  external: true
+\end{lstlisting}
+
+Le novità rispetto agli esempi precedenti:
+
+\begin{itemize}
+  \item \texttt{networks} dichiara una \textbf{rete virtuale} riservata alle connessioni fra i container,
+        \texttt{testSmell-network}, e ogni servizio vi si collega;
+  \item \texttt{image} indica un'immagine che non viene generata, ma è disponibile su Docker Hub
+        (\texttt{utente/repository:etichetta});
+  \item \texttt{environment} associa variabili d'ambiente al container: per i servizi con un database H2, il file in cui
+        tenerlo; per il gateway, gli indirizzi degli altri servizi;
+  \item il servizio degli esercizi espone una sua cartella come \textbf{volume}, uno spazio di memoria
+        \textbf{persistente}: i file in \texttt{/usr/src/app/assets} sopravvivono alla cancellazione del container;
+  \item il volume \texttt{assets} è \texttt{external}: non lo crea Compose, deve esistere già, e si può usare anche
+        dall'esterno (per esempio dall'interfaccia di Docker);
+  \item l'\textbf{API gateway} è l'unico servizio che il frontend contatta: instrada le richieste verso gli altri
+        servizi, attraverso la rete interna (è lo schema del Capitolo 12);
+  \item il \textbf{frontend} comunica con il gateway, ed è il servizio da raggiungere dall'esterno, alla porta 8080
+        (della visibilità di quella porta si occuperà un altro software).
+\end{itemize}
+
+\info{Porte esposte e porte pubblicate}{
+  Le slide descrivono il gateway come l'unico servizio accessibile dal frontend, e il frontend come l'unico accessibile
+  dall'esterno. Nel file però \textbf{tutti} i servizi hanno una sezione \texttt{ports}, e quindi sono raggiungibili
+  anche dall'host, e da lì dall'esterno. Per renderli davvero interni basta togliere \texttt{ports} dai servizi che non
+  devono essere visibili, come nella sezione precedente: dentro \texttt{testSmell-network} si parlerebbero comunque.}
+
+\Needspace{16\baselineskip}
+Il \textbf{diagramma di deployment} (Capitolo 9) del sistema:
+
+\begin{center}
+\begin{tikzpicture}[
+    nodo3d/.style={rectangle, draw=black!70, fill=#1!8, line width=0.7pt, font=\scriptsize, align=center,
+                   minimum height=0.75cm, inner sep=3pt},
+    nodo3d/.default=swblue,
+    conn/.style={line width=0.7pt, draw=black!60}]
+  % il nodo host
+  \draw[line width=0.8pt, fill=swlight] (-0.4,-4.3) rectangle (13.4,1.3);
+  \draw[line width=0.8pt, fill=swlight!60] (-0.4,1.3) -- (-0.1,1.6) -- (13.7,1.6) -- (13.4,1.3);
+  \draw[line width=0.8pt, fill=swlight!40] (13.4,1.3) -- (13.7,1.6) -- (13.7,-4.0) -- (13.4,-4.3);
+  \node[font=\scriptsize\bfseries, anchor=north west] at (-0.3,1.25) {Docker Host Machine};
+  \node[nodo3d=swgreen] (fe) at (2.0,0.2) {frontend\\ \texttt{\guillemotleft container\guillemotright}};
+  \node[nodo3d=sworange] (gw) at (6.5,0.2) {api-gateway\\ \texttt{\guillemotleft container\guillemotright}};
+  \node[nodo3d] (us) at (0.9,-2.6) {user-service\\ \texttt{\guillemotleft container\guillemotright}\\ {\tiny userdb (H2)}};
+  \node[nodo3d] (lb) at (4.2,-2.6) {leaderboard-service\\ \texttt{\guillemotleft container\guillemotright}\\ {\tiny leaderboarddb (H2)}};
+  \node[nodo3d] (cs) at (7.6,-2.6) {compiler-service\\ \texttt{\guillemotleft container\guillemotright}};
+  \node[nodo3d] (es) at (10.9,-2.6) {exercise-service\\ \texttt{\guillemotleft container\guillemotright}};
+  \draw[conn] (fe) -- node[font=\tiny, above]{HTTP (API\_GATEWAY)} (gw);
+  \draw[conn] (gw) -- (us); \draw[conn] (gw) -- (lb); \draw[conn] (gw) -- (cs); \draw[conn] (gw) -- (es);
+  \node[font=\tiny, text=swgray, align=center] at (10.4,-0.9) {testSmell-network\\ (bridge Docker)};
+  \node[font=\tiny, anchor=south] at (fe.north) {porta 8080};
+  % il volume esterno
+  \node[draw=swteal!80!black, fill=swteal!12, cylinder, shape border rotate=90, aspect=0.25, minimum width=1.4cm,
+        minimum height=1.0cm, font=\tiny, align=center] (vol) at (12.6,-5.6) {assets\\ (volume\\ esterno)};
+  \draw[conn, dashed] (es) -- (vol);
+\end{tikzpicture}
+\end{center}
+
+Tutti i container girano sullo stesso nodo, la macchina che ospita Docker, collegati dalla rete \texttt{bridge};
+fuori dal nodo c'è soltanto il volume esterno con le risorse degli esercizi.
+
+% ============================================================
+\Needspace{24\baselineskip}
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item Il software moderno è fatto di molti servizi, con stack diversi, da far girare in molti ambienti: la
+        \textbf{matrice infernale} delle combinazioni.
+  \item Come i container del trasporto merci, i \textbf{container} del software impacchettano un servizio con tutto ciò
+        che gli serve, in un formato standard che si esegue allo stesso modo ovunque.
+  \item A differenza delle macchine virtuali, i container \textbf{condividono il kernel} dell'host: sono più leggeri e
+        si avviano in pochi secondi, ma richiedono la stessa architettura e un kernel Linux.
+  \item \textbf{Docker}: il client parla con il demone \texttt{dockerd}, che gestisce immagini e container e scarica
+        le immagini da un registry. Un'\textbf{immagine} (di sola lettura, a strati) si ottiene con \texttt{pull},
+        \texttt{load} o \texttt{build} da un \textbf{Dockerfile}; un container è un'immagine in esecuzione.
+  \item \textbf{Docker Compose} descrive un'applicazione in un file YAML: servizi, porte pubblicate, variabili
+        d'ambiente, dipendenze di avvio, politiche di riavvio, reti e volumi.
+  \item I container di un progetto Compose si trovano \textbf{per nome} sulla rete del progetto; un servizio senza
+        \texttt{ports} resta interno.
+\end{itemize}
+}
