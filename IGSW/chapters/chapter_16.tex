@@ -1,0 +1,1604 @@
+\chapter{Build automation}
+\emergencystretch=2.5em
+
+Fra il codice sorgente e un programma che gira sulla macchina dell'utente c'è una lunga serie di passi: compilare,
+collegare, eseguire i test, controllare la qualità del codice, impacchettare, installare, pubblicare la documentazione.
+Farli a mano ogni volta è lento e, soprattutto, porta a errori: basta dimenticarne uno. Questo capitolo racconta come
+quei passi si \textbf{automatizzano}, dagli script di shell ai sistemi di build di Java (Make, Ant, Maven, Gradle), fino
+agli script YAML di GitHub Actions che eseguono tutto a ogni modifica del codice. Gli esempi sono stati eseguiti davvero
+(GNU Make 4.3, Ant 1.10.18, Maven 3.9.11, Gradle 8.14.3, Java 21): gli output riportati sono quelli reali.
+
+% Stili delle figure di questo capitolo
+\tikzset{
+  bnodo/.style={rectangle, rounded corners=2pt, draw=#1!70!black, fill=#1!10, line width=0.7pt,
+                font=\scriptsize\ttfamily, align=center, inner sep=3pt, minimum height=0.55cm},
+  bnodo/.default=swblue,
+  bfreccia/.style={-{Stealth[length=2.2mm]}, line width=0.8pt, draw=swgray},
+  betich/.style={font=\tiny\ttfamily, text=swgray!90!black, fill=white, inner sep=1pt},
+}
+
+% ============================================================
+\section{Che cos'è la build automation}
+
+\dfn{Build automation}{
+  La \textbf{build automation} è l'insieme delle attività che automatizzano alcuni compiti del ciclo di vita del
+  software: la \textbf{compilazione}, il \textbf{collegamento} (\textit{linking}), l'\textbf{esecuzione dei test},
+  l'\textbf{analisi statica}, il \textbf{deployment}, la \textbf{generazione della documentazione}, e altri ancora.}
+
+Per automatizzare questi compiti di solito si scrive codice in un linguaggio di scripting, o si usano programmi
+visuali. Ed è un punto da non sottovalutare: \textbf{il codice di build fa parte a pieno titolo del codice del
+programma}. Va versionato, letto, mantenuto e corretto come il resto.
+
+Con i linguaggi e gli strumenti di build automation si può, per esempio:
+
+\begin{itemize}
+  \item generare e distribuire automaticamente versioni diverse del programma: in lingue diverse, con insiemi diversi di
+        funzionalità, adatte a sistemi operativi diversi;
+  \item produrre versioni di test o di debug in cui alcune parti del codice sono sostituite da moduli fittizi
+        (\textit{dummy});
+  \item trovare da soli le risorse (librerie, file) che servono a completare l'esecuzione del programma.
+\end{itemize}
+
+\Needspace{11\baselineskip}
+Gli strumenti sono molti (Wikipedia ne tiene un elenco, \textit{List of build automation software}). In questo
+capitolo li incontreremo più o meno nell'ordine in cui sono nati, che è anche il passaggio da uno stile
+\textbf{imperativo} (si elencano i comandi da eseguire) a uno \textbf{dichiarativo} (si descrive il risultato voluto, e lo
+strumento decide i comandi):
+
+\begin{center}
+\begin{tikzpicture}[x=2.25cm]
+  \draw[bfreccia, line width=1pt] (-0.2,0) -- (6.35,0);
+  \foreach \x/\nome/\anno in {0/Script di shell/anni '70, 1/Make/1976, 2/Ant/2000, 3/Maven/2004,
+                              4/Gradle/2008, 5/GitHub Actions/2019} {
+    \fill[swblue] (\x,0) circle (2.2pt);
+    \node[font=\scriptsize\bfseries, above=3pt] at (\x,0) {\nome};
+    \node[font=\tiny, below=3pt, text=swgray!90!black] at (\x,0) {\anno};
+  }
+  \node[font=\scriptsize\itshape, text=swgray, anchor=west] at (-0.2,-0.75) {più imperativo};
+  \node[font=\scriptsize\itshape, text=swgray, anchor=east] at (6.35,-0.75) {più dichiarativo};
+\end{tikzpicture}
+\end{center}
+
+Fra gli altri strumenti ci sono Visual Build (visuale) e Jenkins (un server di integrazione continua); anche Python si
+presta allo scopo.
+
+% ============================================================
+\section{Gli script di shell}
+
+La soluzione tradizionale ai problemi di build automation è scrivere \textbf{script di shell}. Ha i suoi buoni motivi:
+quasi tutti gli strumenti necessari (compilatore, linker) si eseguono dalla riga di comando, e tutte le shell (Bash, il
+prompt dei comandi di Windows, \ldots) offrono comandi a sufficienza per gestire il file system. Ma ha anche limiti
+evidenti:
+
+\begin{itemize}
+  \item i linguaggi di shell sono \textbf{interpretati}, offrono poco supporto alla programmazione strutturata e nessuno
+        a quella a oggetti;
+  \item non supportano il test e il debugging;
+  \item non hanno tipi (con qualche eccezione parziale).
+\end{itemize}
+
+\Needspace{18\baselineskip}
+Il prompt dei comandi di Windows (la «shell DOS») offre, per esempio, questi comandi:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{lP{11.6cm}}
+\toprule
+\textbf{Comando} & \textbf{A che cosa serve} \\
+\midrule
+\texttt{call} & richiama un altro file batch (\texttt{.bat}) \\
+\texttt{start} & avvia un eseguibile, eventualmente in un'altra istanza della shell \\
+\texttt{choice} & realizza una specie di \texttt{switch} \\
+\texttt{for} & ciclo su un insieme di valori prestabilito \\
+\texttt{forfiles} & ciclo su un insieme di file \\
+\texttt{goto} & salto incondizionato a un'etichetta \\
+\texttt{if} & condizione: uguaglianza di stringhe (\texttt{==}), esistenza di un file (\texttt{EXIST}), codice d'errore
+              restituito dall'ultimo comando (\texttt{ERRORLEVEL}) \\
+\texttt{set} & assegnamento di variabili \\
+\texttt{copy}, \texttt{xcopy}, \texttt{dir}, \texttt{del}, \texttt{rename}, \texttt{cd}, \texttt{md}, \texttt{rd} &
+              gestione dei file e delle cartelle \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\Needspace{25\baselineskip}
+Esiste anche un costrutto a blocchi (fra parentesi tonde), che però può entrare in conflitto con \texttt{goto}. Le shell
+Unix (Bash e le altre) offrono funzionalità diverse, ma seguono la stessa filosofia. Ecco un esempio di script per
+Windows, dalle slide:
+
+\begin{lstlisting}[style=plain, name=esempio.bat]
+REM Lettura dei parametri dalla linea di comando
+set name=%1
+REM setta una variabile in funzione di data e ora
+for /f "tokens=1-6 delims=.,:/ " %%a in ("%date% %time%") do set mydatetime=%%c-%%b-%%a_%%d-%%e-%%f
+set seedvalue=!RANDOM!
+REM Esempio di ciclo do-while
+set /a cycle=0
+:START
+set /a cycle+=1
+if !cycle!==1 goto END
+goto START
+:END
+REM Esempio di ciclo for
+for /L %%N in (1,1,%seedvalue%) do (
+      (
+      echo Number
+      echo %%N
+      ) >> list.txt
+)
+\end{lstlisting}
+
+\texttt{\%1} è il primo parametro della riga di comando; il \texttt{for /f} spezza data e ora in sei pezzi
+(\texttt{\%\%a}\ldots\texttt{\%\%f}) per comporre una stringa come \texttt{2026-11-03\_19-05-24}; il ciclo do-while è
+fatto con un'etichetta e due \texttt{goto}; l'ultimo \texttt{for /L} conta da 1 a \texttt{seedvalue} e accoda ogni numero
+al file \texttt{list.txt}.
+
+\warning{L'espansione ritardata}{
+  La sintassi \texttt{!variabile!} (invece di \texttt{\%variabile\%}) è l'\textbf{espansione ritardata}, che il prompt dei
+  comandi esegue solo se è stata attivata, di norma con \texttt{setlocal EnableDelayedExpansion} all'inizio dello script
+  (lo script delle slide la dà per attiva). Senza, \texttt{!cycle!} resta il testo letterale «!cycle!», il confronto con
+  \texttt{1} è sempre falso e il ciclo do-while non termina più. È proprio il genere di errore che un linguaggio senza
+  tipi né strumenti di debug rende difficile da trovare.}
+
+Lo stesso spirito, in Bash. Lo script compila un programma C, lo esegue e controlla che stampi ciò che deve: una piccola
+build con collaudo, «fatta a mano».
+
+\Needspace{9\baselineskip}
+\begin{lstlisting}[style=c, name=helloworld.c]
+#include <stdio.h>
+
+int main(void) {
+    printf("Hello, World!\n");
+    return 0;
+}
+\end{lstlisting}
+
+\Needspace{18\baselineskip}
+\begin{lstlisting}[style=shell, name=build.sh]
+#!/bin/bash
+# una build "fatta a mano": compila, collega e controlla il risultato
+set -e                                  # si ferma al primo comando che fallisce
+
+echo "Compilo..."
+gcc -g -c -o helloworld.o helloworld.c
+gcc -o helloworld helloworld.o
+
+echo "Collaudo..."
+risultato=$(./helloworld)
+if [ "$risultato" = "Hello, World!" ]; then
+  echo "Test superato"
+else
+  echo "Test fallito: ottenuto '$risultato'"
+  exit 1
+fi
+\end{lstlisting}
+
+\Needspace{15\baselineskip}
+La seconda esecuzione avviene dopo aver cambiato il messaggio nel sorgente in «Ciao, mondo!»:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ ./build.sh; echo "codice di uscita: $?"
+Compilo...
+Collaudo...
+Test superato
+codice di uscita: 0
+$ ./build.sh; echo "codice di uscita: $?"
+Compilo...
+Collaudo...
+Test fallito: ottenuto 'Ciao, mondo!'
+codice di uscita: 1
+\end{lstlisting}
+
+Il \textbf{codice di uscita} (0 se tutto va bene, diverso da 0 in caso di errore) è il modo in cui uno script comunica
+il risultato agli strumenti che lo lanciano: lo useranno tutti i sistemi di build e di integrazione continua di questo
+capitolo. Si noti però che lo script ricompila \textbf{tutto, ogni volta}, anche se nulla è cambiato: non sa quali file
+dipendono da quali. In un progetto con migliaia di sorgenti è un problema serio.
+
+I limiti degli script di shell, riassumendo:
+
+\begin{itemize}
+  \item dipendono dal \textbf{sistema operativo} (lo script per Windows qui sopra non gira su Linux, e viceversa);
+  \item il linguaggio è povero: imperativo, interpretato, quasi senza tipi né strutture dati, senza supporto al
+        debugging, senza controlli statici, senza incapsulamento né \textit{information hiding}.
+\end{itemize}
+
+% ============================================================
+\section{Python}
+
+\textbf{Python} è un'altra soluzione per scrivere build imperative in forma di script, \textbf{indipendenti} (almeno in
+parte) dal sistema operativo e con costrutti decisamente più potenti di quelli della shell. L'esempio delle slide
+automatizza una campagna di test su Android: avvia un emulatore, lancia uno strumento di test (\texttt{AndroLeak.py}) con
+diverse combinazioni di eventi e di ripetizioni, e alla fine spegne l'emulatore.
+
+\Needspace{19\baselineskip}
+\begin{lstlisting}[style=plain, name=test_campagna.py]
+import os
+import sys
+import shutil
+import time
+
+def startEmulator():
+   os.popen("emulator -avd leakAVD -wipe-data")
+   time.sleep(50)
+startEmulator()
+les=["doc","bf","stai"]
+nevent=[1,2,10]
+for event in les:
+   for number in nevent:
+      os.system("python AndroLeak.py emulator-5554 "+event+" "+str(number))
+os.popen("adb -s emulator-5554 emu kill")
+time.sleep(50)
+print("Testing Accomplished!")
+\end{lstlisting}
+
+Lo script richiede l'SDK di Android e lo strumento \texttt{AndroLeak}, quindi qui non è stato eseguito. I due cicli
+annidati lanciano \(3 \times 3 = 9\) esecuzioni, una per ogni coppia (evento, numero di ripetizioni). Le attese fisse di
+50 secondi (\texttt{time.sleep(50)}) sono il punto debole tipico di questi script: se l'emulatore impiega di più ad
+avviarsi, i test partono comunque e falliscono. Oggi, inoltre, per lanciare comandi esterni si preferisce
+\texttt{subprocess.run}, che restituisce il codice di uscita e può sollevare un'eccezione se il comando fallisce.
+
+% ============================================================
+\section{Make}
+
+Sotto il nome \textbf{make} si raccolgono diverse utilità diffuse su Linux e su Windows; la più nota è \textbf{GNU Make}.
+Si usa dalla riga di comando, e il suo comportamento dipende da un file di script chiamato \textbf{makefile}. L'unico
+parametro, facoltativo, è un \textbf{target}: l'etichetta del punto del makefile da cui comincia l'esecuzione.
+
+\dfn{Makefile}{
+  Il \textbf{makefile} è uno script in un linguaggio \textbf{dichiarativo}, non imperativo, con cui si specifica come
+  devono avvenire la costruzione e l'installazione di un software. È organizzato in \textbf{regole}: ogni regola ha
+  un'etichetta (il \textbf{target}), seguita da un elenco facoltativo di componenti da cui dipende (i
+  \textbf{prerequisiti}) e da un elenco di comandi di shell.
+  \begin{center}\texttt{target : prerequisiti ; comando}\end{center}}
+
+\Needspace{16\baselineskip}
+Il caso più semplice è una regola che copia un file. Nelle slide è scritta per Windows, con \texttt{copy}; su Linux il
+comando è \texttt{cp}:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ cat makefile
+copia: originale.txt; cp originale.txt copia.txt
+$ make copia
+cp originale.txt copia.txt
+$ make copia
+cp originale.txt copia.txt
+$ ls
+copia.txt
+makefile
+originale.txt
+\end{lstlisting}
+
+\Needspace{14\baselineskip}
+La copia viene rifatta \textbf{ogni volta}. Il motivo dice molto su come ragiona make: un target è, prima di tutto, il
+\textbf{nome di un file}. Make esegue i comandi di una regola solo se il file del target non esiste, o se è più vecchio
+di uno dei prerequisiti. Qui il target si chiama \texttt{copia}, ma il comando crea \texttt{copia.txt}: il file
+\texttt{copia} non esiste mai, e la regola scatta sempre. Basta dare al target il nome del file prodotto:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ cat makefile
+copia.txt: originale.txt; cp originale.txt copia.txt
+$ make copia.txt
+cp originale.txt copia.txt
+$ make copia.txt
+make: 'copia.txt' is up to date.
+\end{lstlisting}
+
+Ora make confronta le date di modifica di \texttt{copia.txt} e di \texttt{originale.txt}, e non rifà un lavoro già
+fatto. È esattamente ciò che mancava allo script di shell.
+
+\Needspace{22\baselineskip}
+\subsection{Un makefile per un programma C}
+
+L'esempio delle slide costruisce il programma \texttt{helloworld} di prima. Nel makefile vero le righe dei comandi
+cominciano con un carattere di \textbf{tabulazione}, mostrato qui come rientro:
+
+\begin{lstlisting}[style=make, name=makefile]
+#Variabili
+CC = gcc
+CFLAGS = -g
+
+all: helloworld
+
+helloworld: helloworld.o
+	$(CC) $(LDFLAGS) -o $@ $^
+
+helloworld.o: helloworld.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+clean:
+	rm -f helloworld helloworld.o
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{CC} e \texttt{CFLAGS} sono \textbf{variabili}: \texttt{\$(CC)} vale \texttt{gcc}, \texttt{\$(CFLAGS)}
+        vale \texttt{-g} (le informazioni per il debugger). \texttt{LDFLAGS} non è definita, quindi vale la stringa vuota;
+  \item \texttt{all} è il target predefinito (il primo del file): richiede che esista il file \texttt{helloworld}, e se
+        non esiste esegue prima il target omonimo;
+  \item \texttt{helloworld} richiede a sua volta \texttt{helloworld.o}, e così via fino al sorgente;
+  \item \texttt{\$@} è il nome del target, \texttt{\$\textasciicircum} l'elenco di \textbf{tutti} i prerequisiti,
+        \texttt{\$<} il \textbf{primo} prerequisito;
+  \item \texttt{clean} non produce file: è un target «di servizio», che cancella ciò che la build ha generato.
+\end{itemize}
+
+\warning{Una svista nelle slide: \texttt{\$<}}{
+  Nelle slide si legge che \texttt{\$<} «rappresenta i parametri di ingresso della chiamata a make». In realtà
+  \texttt{\$<} è il \textbf{primo prerequisito} della regola: nella regola di \texttt{helloworld.o} vale
+  \texttt{helloworld.c}, come si vede nel comando che make stampa qui sotto. Il valore non dipende da come si invoca
+  make.}
+
+\Needspace{8\baselineskip}
+Le regole formano un \textbf{grafo delle dipendenze}, che make percorre a partire dal target richiesto:
+
+\begin{center}
+\begin{tikzpicture}
+  \node[bnodo=swgray] (all) at (0,0) {all};
+  \node[bnodo] (hw) at (3.6,0) {helloworld};
+  \node[bnodo] (o) at (7.6,0) {helloworld.o};
+  \node[bnodo=swgreen] (c) at (11.4,0) {helloworld.c};
+  \draw[bfreccia] (all) -- (hw);
+  \draw[bfreccia] (hw) -- node[betich, above=2pt]{gcc  -o \$@ \$\textasciicircum} (o);
+  \draw[bfreccia] (o) -- node[betich, above=2pt]{gcc -g -c -o \$@ \$<} (c);
+  \node[note, below=4pt] at (hw.south) {programma eseguibile};
+  \node[note, below=4pt] at (o.south) {file oggetto};
+  \node[note, below=4pt] at (c.south) {sorgente};
+\end{tikzpicture}
+\end{center}
+
+\Needspace{18\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ make
+gcc -g -c -o helloworld.o helloworld.c
+gcc  -o helloworld helloworld.o
+$ ./helloworld
+Hello, World!
+$ make
+make: Nothing to be done for 'all'.
+$ touch helloworld.c
+$ make
+gcc -g -c -o helloworld.o helloworld.c
+gcc  -o helloworld helloworld.o
+$ make clean
+rm -f helloworld helloworld.o
+$ ls
+helloworld.c
+makefile
+\end{lstlisting}
+
+Make stampa ogni comando prima di eseguirlo, già con le variabili sostituite (il doppio spazio dopo \texttt{gcc} è il
+posto di \texttt{LDFLAGS}, vuota). Alla seconda invocazione non c'è nulla da fare. \texttt{touch} aggiorna la data di
+modifica del sorgente senza cambiarlo: per make è un sorgente nuovo, e la catena viene rifatta. \texttt{make clean}
+riporta la cartella allo stato iniziale.
+
+\warning{{Tabulazioni, non spazi}}{
+  Le righe dei comandi devono cominciare con un carattere di tabulazione. Con gli spazi (per esempio copiando il makefile
+  da un PDF), GNU Make si ferma subito:
+  \begin{center}\texttt{makefile:8: *** missing separator (did you mean TAB instead of 8 spaces?).\ \ Stop.}\end{center}
+  Le versioni recenti indovinano anche la causa, come si vede.}
+
+I limiti di make:
+
+\begin{itemize}
+  \item le possibilità di esprimere \textbf{strutture di controllo} dentro un makefile sono poche;
+  \item make \textbf{dipende dal sistema operativo}: i comandi delle regole sono comandi di shell, quindi su sistemi
+        diversi non si possono riusare identici gli stessi script, e servono anche versioni diverse di make.
+\end{itemize}
+
+% ============================================================
+\section{Apache Ant}
+
+\textbf{Ant} è stato il primo e più diffuso strumento di build per i programmi \textbf{Java}. Le sue caratteristiche:
+
+\begin{itemize}
+  \item è indipendente dalla piattaforma e dal sistema operativo (è scritto in Java);
+  \item si può usare anche per elaborazioni più complesse di una semplice build;
+  \item gli script sono scritti in \textbf{XML};
+  \item offre ricche «librerie» di compiti (\textit{task}) predefiniti, e permette di crearne di riutilizzabili;
+  \item si invoca dalla riga di comando, quindi si integra facilmente in altri programmi;
+  \item fa parte dei progetti open source di Apache, e non richiede installazione: basta copiarne i file e, se serve,
+        aggiungere la cartella \texttt{bin} al \texttt{PATH}.
+\end{itemize}
+
+\Needspace{12\baselineskip}
+La sintassi è praticamente quella di make, \texttt{ant [target]}: Ant cerca ed esegue il file \texttt{build.xml}, che
+corrisponde al makefile. L'esempio più semplice:
+
+\begin{lstlisting}[style=xml, name=build.xml]
+<?xml version="1.0"?>
+<project name="Hello World Project" default="info">
+<target name="info">
+<echo>Hello World - Welcome to Apache Ant!</echo>
+</target>
+</project>
+\end{lstlisting}
+
+\Needspace{11\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ ant
+Buildfile: [cartella del progetto]/build.xml
+
+info:
+     [echo] Hello World - Welcome to Apache Ant!
+
+BUILD SUCCESSFUL
+Total time: 0 seconds
+\end{lstlisting}
+
+Il tag \texttt{project} indica il nome del progetto e il target predefinito (qui \texttt{info}), quello eseguito quando
+non se ne specifica uno. Ant scrive il nome di ogni target che esegue, e fra parentesi quadre il task che produce
+ciascuna riga.
+
+\Needspace{16\baselineskip}
+\subsection{Target, proprietà e task}
+
+Un target ha questi attributi:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{lP{12.6cm}}
+\toprule
+\textbf{Attributo} & \textbf{Descrizione} \\
+\midrule
+\texttt{name} & il nome del target (obbligatorio) \\
+\texttt{depends} & l'elenco, separato da virgole, dei target da cui questo dipende (facoltativo) \\
+\texttt{description} & una breve descrizione del target (facoltativa) \\
+\texttt{if} & il target viene eseguito solo se la proprietà indicata è impostata (facoltativo) \\
+\texttt{unless} & il target viene eseguito solo se la proprietà indicata \textbf{non} è impostata (facoltativo) \\
+\texttt{extensionOf} & aggiunge il target all'elenco delle dipendenze di un \textit{extension point}, che è simile a un
+                       target ma non contiene task (facoltativo) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\info{Una svista nelle slide: \texttt{unless}}{
+  Nella tabella delle slide, accanto a \texttt{unless} c'è la descrizione dell'attributo \texttt{extensionOf}
+  («aggiunge il target all'elenco delle dipendenze dell'extension point\ldots»). \texttt{unless} è il contrario di
+  \texttt{if}: il target viene eseguito solo se la proprietà \textbf{non} è impostata.}
+
+\Needspace{11\baselineskip}
+Con il tag \texttt{property} si definisce una \textbf{variabile} (una proprietà), con un nome (attributo \texttt{name}) e
+un valore (attributo \texttt{value}). Per usarne il valore, in qualunque altro punto, si scrive
+\texttt{\$\{nomeVariabile\}}. Di solito le proprietà si raccolgono in un file a parte, \texttt{build.properties}. Anche i
+comandi si scrivono come tag, i cui attributi sono i parametri del comando. Ecco il target \texttt{build} delle slide,
+inserito in un progetto completo che lo compila, crea un archivio \texttt{jar} e lo esegue:
+
+\begin{lstlisting}[style=conf, name=build.properties]
+# cartelle del progetto, lette da build.xml
+src.dir=src
+build.dir=build
+dist.dir=dist
+\end{lstlisting}
+
+\Needspace{43\baselineskip}
+\begin{lstlisting}[style=xml, name=build.xml]
+<?xml version="1.0"?>
+<project name="Saluti" default="jar">
+
+  <property file="build.properties"/>
+
+  <path id="master-classpath">
+    <fileset dir="lib" includes="*.jar"/>
+  </path>
+
+  <target name="clean" description="Cancella i file generati">
+    <delete dir="${build.dir}"/>
+    <delete dir="${dist.dir}"/>
+  </target>
+
+  <target name="build" description="Compile source tree java files">
+    <mkdir dir="${build.dir}"/>
+    <javac destdir="${build.dir}" source="1.5" target="1.5" includeantruntime="false">
+      <src path="${src.dir}"/>
+      <classpath refid="master-classpath"/>
+    </javac>
+  </target>
+
+  <target name="jar" depends="build" description="Crea il file jar">
+    <mkdir dir="${dist.dir}"/>
+    <jar destfile="${dist.dir}/saluti.jar" basedir="${build.dir}">
+      <manifest>
+        <attribute name="Main-Class" value="it.unina.Saluti"/>
+      </manifest>
+    </jar>
+  </target>
+
+  <target name="run" depends="jar" description="Esegue il programma">
+    <java jar="${dist.dir}/saluti.jar" fork="true"/>
+  </target>
+
+  <target name="proprieta">
+    <echo>Giusto: ${build.dir}</echo>
+    <echo>Come nelle slide: {$build.dir}</echo>
+  </target>
+
+  <target name="debug" if="debug">
+    <echo>Modalita' debug: compilo in ${build.dir}</echo>
+  </target>
+</project>
+\end{lstlisting}
+
+\Needspace{21\baselineskip}
+Il sorgente è una sola classe, \texttt{src/it/unina/Saluti.java}, che stampa «Ciao da Ant!». I target sono collegati
+da \texttt{depends}: \texttt{run} richiede \texttt{jar}, che richiede \texttt{build}. Il \texttt{path} con
+\texttt{id="master-classpath"} raccoglie, con un \texttt{fileset}, tutti i \texttt{jar} della cartella \texttt{lib}
+(qui vuota): è il classpath che il target \texttt{build} usa per compilare. Lanciando \texttt{ant}, però, la
+compilazione fallisce:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ ant
+Buildfile: [cartella del progetto]/build.xml
+
+build:
+    [mkdir] Created dir: [cartella del progetto]/build
+    [javac] Compiling 1 source file to [cartella del progetto]/build
+    [javac] warning: [options] bootstrap class path not set in conjunction with -source 5
+    [javac] error: Source option 5 is no longer supported. Use 8 or later.
+    [javac] error: Target option 5 is no longer supported. Use 8 or later.
+
+BUILD FAILED
+[cartella del progetto]/build.xml:17: Compile failed; see the compiler error output for details.
+
+Total time: 1 second
+\end{lstlisting}
+
+\Needspace{33\baselineskip}
+L'esempio delle slide chiede di compilare per \textbf{Java 1.5} (\texttt{source="1.5" target="1.5"}), una versione del
+2004 che il compilatore di Java 21 non supporta più. Gli script di build invecchiano insieme al resto del codice: è il
+motivo per cui vanno mantenuti. Sostituendo i due attributi con \texttt{release="21"}, tutto funziona:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ ant run
+Buildfile: [cartella del progetto]/build.xml
+
+build:
+    [mkdir] Created dir: [cartella del progetto]/build
+    [javac] Compiling 1 source file to [cartella del progetto]/build
+
+jar:
+    [mkdir] Created dir: [cartella del progetto]/dist
+      [jar] Building jar: [cartella del progetto]/dist/saluti.jar
+
+run:
+     [java] Ciao da Ant!
+
+BUILD SUCCESSFUL
+Total time: 1 second
+$ ant run
+Buildfile: [cartella del progetto]/build.xml
+
+build:
+
+jar:
+
+run:
+     [java] Ciao da Ant!
+
+BUILD SUCCESSFUL
+Total time: 0 seconds
+\end{lstlisting}
+
+\Needspace{18\baselineskip}
+Ant esegue i target nell'ordine imposto dalle dipendenze. Alla seconda esecuzione \texttt{build} e \texttt{jar} non
+fanno nulla: come make, il task \texttt{javac} ricompila solo i sorgenti più recenti delle classi, e \texttt{jar}
+ricrea l'archivio solo se qualcosa è cambiato. Le descrizioni dei target servono a \texttt{ant -p}, che elenca i target
+principali:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ ant -p
+Buildfile: [cartella del progetto]/build.xml
+
+Main targets:
+
+ build  Compile source tree java files
+ clean  Cancella i file generati
+ jar    Crea il file jar
+ run    Esegue il programma
+Default target: jar
+\end{lstlisting}
+
+\Needspace{27\baselineskip}
+Gli ultimi due target del file mostrano le proprietà all'opera:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ ant proprieta
+Buildfile: [cartella del progetto]/build.xml
+
+proprieta:
+     [echo] Giusto: build
+     [echo] Come nelle slide: {$build.dir}
+
+BUILD SUCCESSFUL
+Total time: 0 seconds
+$ ant debug
+Buildfile: [cartella del progetto]/build.xml
+
+debug:
+
+BUILD SUCCESSFUL
+Total time: 0 seconds
+$ ant -Ddebug=true debug
+Buildfile: [cartella del progetto]/build.xml
+
+debug:
+     [echo] Modalita' debug: compilo in build
+
+BUILD SUCCESSFUL
+Total time: 0 seconds
+\end{lstlisting}
+
+\warning{Una svista nelle slide: \texttt{\{\$variabile\}}}{
+  Nelle slide si legge che, per usare il valore di una proprietà, basta scrivere \texttt{\{\$nomeVariabile\}}. La forma
+  giusta è \texttt{\$\{nomeVariabile\}}, con il dollaro \textbf{fuori} dalle graffe (come nel target \texttt{build} delle
+  slide stesse). Con la forma sbagliata Ant non segnala alcun errore: stampa il testo così com'è, come si vede qui sopra.}
+
+Il target \texttt{debug} ha \texttt{if="debug"}: senza la proprietà non fa nulla, e la si può impostare dalla riga di
+comando con \texttt{-D}. Per scegliere i file su cui lavorare, infine, Ant offre diversi filtri: \texttt{fileset}
+(insiemi di file), \texttt{patternset} (schemi di nomi riutilizzabili), \texttt{filterset} (sostituzioni nel contenuto
+dei file copiati), e altri.
+
+I limiti di Ant:
+
+\begin{itemize}
+  \item nella maggior parte dei casi gli script di Ant sono \textbf{generati automaticamente} da altri programmi, come
+        gli IDE (Eclipse, per esempio);
+  \item gli script sono piuttosto limitati quanto a \textbf{strutture di controllo} e ad altre possibilità di introdurre
+        comportamenti dinamici;
+  \item possono lavorare solo su file \textbf{su disco}, non su risorse remote: le librerie vanno scaricate a mano e
+        messe nella cartella giusta (la \texttt{lib} dell'esempio).
+\end{itemize}
+
+% ============================================================
+\section{Apache Maven}
+
+\textbf{Maven} non è solo uno strumento di build automation come Ant. È un tentativo di «applicare degli schemi
+all'infrastruttura di build di un progetto, per favorirne la comprensione e la produttività indicando una strada chiara
+nell'uso delle buone pratiche». In particolare, è nato per uniformare il modo di sviluppare e organizzare i diversi
+progetti della famiglia Apache. Si occupa della costruzione, dell'installazione e del deployment, ma anche della
+generazione di documentazione, metriche, report e casi di test. Come make e Ant si esegue dalla riga di comando, e come
+Ant legge uno o più file di configurazione XML.
+
+\Needspace{25\baselineskip}
+\subsection{Creare un progetto}
+
+Lo schema iniziale di un progetto si genera con un comando:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ mvn archetype:generate -DgroupId=com.mycompany.app -DartifactId=my-app -DarchetypeArtifactId=maven-archetype-quickstart -DinteractiveMode=false
+[INFO] Scanning for projects...
+...
+[INFO] --- archetype:3.4.1:generate (default-cli) @ standalone-pom ---
+[INFO] Generating project in Batch mode
+[INFO] ----------------------------------------------------------------------------
+[INFO] Using following parameters for creating project from Old (1.x) Archetype: maven-archetype-quickstart:1.0
+[INFO] ----------------------------------------------------------------------------
+[INFO] Parameter: basedir, Value: [cartella]
+[INFO] Parameter: package, Value: com.mycompany.app
+[INFO] Parameter: groupId, Value: com.mycompany.app
+[INFO] Parameter: artifactId, Value: my-app
+[INFO] Parameter: packageName, Value: com.mycompany.app
+[INFO] Parameter: version, Value: 1.0-SNAPSHOT
+[INFO] project created from Old (1.x) Archetype in dir: [cartella]/my-app
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+\end{lstlisting}
+
+Gli unici dati richiesti sono il nome dell'applicazione (\texttt{artifactId}) e il dominio di riferimento degli
+sviluppatori (\texttt{groupId}). Servono entrambi perché i progetti abbiano \textbf{nomi universali}, così da poterli
+ritrovare in modo univoco in rete. In Ant le risorse necessarie potevano essere solo locali; Maven invece, nella maggior
+parte dei casi, funziona solo se c'è una \textbf{connessione a Internet}, in particolare alla prima esecuzione dopo
+l'installazione: in questo caso, prima delle righe riportate, ne sono comparse circa 330 di download (plugin e
+archetipo).
+
+\Needspace{11\baselineskip}
+Il risultato dipende dall'\textbf{archetipo} scelto (qui \texttt{maven-archetype-quickstart}): una cartella con il
+\texttt{pom.xml} e un albero di sorgenti con due classi Java da completare, il programma e il suo test.
+
+\begin{center}
+\begin{tikzpicture}[every node/.style={font=\scriptsize\ttfamily, anchor=west, inner sep=1pt}]
+  \foreach \y/\lv/\testo in {0/0/my-app/, 1/1/pom.xml, 2/1/src/, 3/2/main/java/com/mycompany/app/,
+                            4/3/App.java, 5/2/test/java/com/mycompany/app/, 6/3/AppTest.java} {
+    \node at (0.45*\lv, -0.42*\y) {\testo};
+  }
+  \foreach \y/\lv in {1/1, 2/1, 3/2, 4/3, 5/2, 6/3}
+    \draw[swgray, line width=0.5pt] (0.45*\lv-0.32, -0.42*\y+0.42) |- (0.45*\lv-0.05, -0.42*\y);
+  \node[note, anchor=west] at (4.6,-0.42) {\textbf{pom.xml}: la configurazione del progetto};
+  \node[note, anchor=west] at (4.6,-1.68) {il codice del programma};
+  \node[note, anchor=west] at (4.6,-2.52) {i test, in una cartella separata};
+\end{tikzpicture}
+\end{center}
+
+\Needspace{22\baselineskip}
+L'archetipo usato senza indicarne la versione è la vecchia 1.0, e il \texttt{pom.xml} generato lo mostra:
+
+\begin{lstlisting}[style=xml, name=pom.xml]
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.mycompany.app</groupId>
+  <artifactId>my-app</artifactId>
+  <packaging>jar</packaging>
+  <version>1.0-SNAPSHOT</version>
+  <name>my-app</name>
+  <url>http://maven.apache.org</url>
+  <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>3.8.1</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>
+\end{lstlisting}
+
+\Needspace{29\baselineskip}
+Il progetto si compila già, ma Maven protesta:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ mvn compile
+[INFO] Scanning for projects...
+[INFO]
+[INFO] ----------------------< com.mycompany.app:my-app >----------------------
+[INFO] Building my-app 1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ my-app ---
+[WARNING] Using platform encoding (UTF-8 actually) to copy filtered resources, i.e. build is platform dependent!
+[INFO] skip non existing resourceDirectory [cartella del progetto]/src/main/resources
+[INFO]
+[INFO] --- compiler:3.13.0:compile (default-compile) @ my-app ---
+[INFO] Recompiling the module because of changed source code.
+[WARNING] File encoding has not been set, using platform encoding UTF-8, i.e. build is platform dependent!
+[INFO] Compiling 1 source file with javac [debug target 1.8] to target/classes
+[WARNING] bootstrap class path not set in conjunction with -source 8
+[WARNING] source value 8 is obsolete and will be removed in a future release
+[WARNING] target value 8 is obsolete and will be removed in a future release
+[WARNING] To suppress warnings about obsolete options, use -Xlint:-options.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  0.564 s
+[INFO] Finished at: 2026-11-03T19:05:54Z
+[INFO] ------------------------------------------------------------------------
+\end{lstlisting}
+
+\Needspace{12\baselineskip}
+Due avvisi, entrambi dovuti a impostazioni che il POM non specifica: la \textbf{codifica} dei sorgenti (e senza, la
+build dipende dalla piattaforma) e la \textbf{versione di Java} (e senza, Maven compila per Java 8, ormai obsoleta). Si
+aggiungono nella sezione \texttt{properties} del POM:
+
+\begin{lstlisting}[style=xml, name=pom.xml (aggiunta)]
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>21</maven.compiler.release>
+  </properties>
+\end{lstlisting}
+
+\Needspace{11\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ mvn compile
+...
+[INFO] --- compiler:3.13.0:compile (default-compile) @ my-app ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 1 source file with javac [debug release 21] to target/classes
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+...
+\end{lstlisting}
+
+\info{Archetipi più recenti}{
+  Indicando la versione dell'archetipo (\texttt{-DarchetypeVersion=1.5}) si ottiene un progetto moderno: il POM contiene
+  già la codifica, \texttt{maven.compiler.release} a 17, JUnit 5 al posto di JUnit 3.8.1 e le versioni dei plugin
+  bloccate, così che la build non cambi da sola quando cambia la versione di Maven installata.}
+
+\Needspace{15\baselineskip}
+\subsection{La struttura del POM}
+
+Il \textbf{POM} (\textit{Project Object Model}) è il cuore di un progetto Maven. È organizzato in quattro aree:
+
+\begin{center}
+\begin{tikzpicture}[
+    area/.style={rectangle, rounded corners=3pt, draw=#1!70!black, line width=0.7pt, fill=#1!5,
+                 minimum width=3.9cm, minimum height=3.1cm, anchor=north west},
+    tit/.style={font=\scriptsize\bfseries, text=#1!70!black, anchor=north},
+    voce/.style={rectangle, draw=#1!55, fill=white, font=\scriptsize, minimum width=3.2cm,
+                 minimum height=0.42cm, inner sep=1pt}]
+  \foreach \x/\c/\t [count=\i] in {0/swblue/POM Relationships, 4.3/sworange/Project Information,
+                        8.6/swteal/Build, 12.9/swgreen/Environment Settings} {
+    \node[area=\c] (a\i) at (\x,0) {};
+    \node[tit=\c] at ([yshift=-3pt]a\i.north) {\t};
+  }
+  \foreach \y/\t in {1/Coordinates, 2/Inheritance, 3/Dependencies}
+    \node[voce=swblue] at (1.95,-0.25-0.72*\y) {\t};
+  \node[font=\tiny\ttfamily, text=swgray] at (1.95,-1.32) {groupId, artifactId, version};
+  \node[font=\tiny\ttfamily, text=swgray] at (1.95,-2.04) {parent POM};
+  \foreach \y/\t in {1/Name, 2/Description, 3/Contributors, 4/Licenses}
+    \node[voce=sworange] at (6.25,-0.25-0.62*\y) {\t};
+  \foreach \y/\t in {1/Plugins, 2/Resources, 3/Directories, 4/Reporting: plugins}
+    \node[voce=swteal] at (10.55,-0.25-0.62*\y) {\t};
+  \foreach \y/\t in {1/Issue Tracking, 2/Prerequisites, 3/Repositories, 4/Plugin Repositories}
+    \node[voce=swgreen] at (14.85,-0.25-0.62*\y) {\t};
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item nella prima sezione, le \textbf{relazioni} (\textit{POM Relationships}): il riferimento alla versione del
+        linguaggio XML, il nome e la versione del programma da costruire, la versione del compilatore e del linguaggio,
+        il set di caratteri (per esempio UTF-8), altre variabili di contesto (per esempio i dati di SonarCloud, un
+        servizio di analisi statica del codice);
+  \item nella sezione \textbf{Project Information}, il nome e la versione del progetto (e descrizione, contributori,
+        licenze);
+  \item nella sezione di \textbf{build}, per ogni libreria usata (dipendenza): il nome univoco e la versione, necessari
+        per trovarla e scaricarla automaticamente dai repository di Maven, e il contesto (per esempio \texttt{test}),
+        cioè la fase in cui la libreria entra nella build;
+  \item nella sezione dei \textbf{plugin}, altre librerie, che però non sono usate dal programma compilato ma
+        dall'esecuzione di Maven stesso.
+\end{itemize}
+
+\Needspace{27\baselineskip}
+Ecco l'inizio del POM che il corso usa come modello per i progetti, dalle slide (le parti omesse sono indicate con
+\texttt{...}):
+
+\begin{lstlisting}[style=xml, name=pom.xml]
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" >
+<modelVersion>4.0.0</modelVersion>
+<groupId>groupId</groupId>
+<artifactId>Gruppo0</artifactId>
+<version>1.0-SNAPSHOT</version>
+<properties>
+<maven.compiler.source>25</maven.compiler.source>
+<maven.compiler.target>25</maven.compiler.target>
+<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+<sonar.organization>oop2026</sonar.organization>
+<sonar.host.url>https://sonarcloud.io</sonar.host.url>
+</properties>
+<dependencies>
+...
+</dependencies>
+<build>
+<finalName>TemplateOOP2026</finalName>
+<plugins>
+...
+</plugins>
+</build>
+</project>
+\end{lstlisting}
+
+Le \texttt{properties} fissano la versione di Java (25, quindi serve un JDK 25), la codifica e i dati per l'analisi
+statica su SonarCloud; \texttt{finalName} sceglie il nome dell'archivio prodotto dalla build.
+
+\Needspace{14\baselineskip}
+\subsection{Il ciclo di vita e le sue fasi}
+
+I comandi di Maven non sono target scritti dal programmatore, come in make e in Ant: sono le \textbf{fasi} di un
+\textbf{ciclo di vita} predefinito, uguale per tutti i progetti. Ogni fase comprende tutte quelle che la precedono, e a
+ogni fase sono collegati i plugin che fanno il lavoro.
+
+\begin{center}
+\begin{tikzpicture}
+  \foreach \x/\f in {0/validate, 1/compile, 2/test, 3/package, 4/verify, 5/install, 6/deploy}
+    \node[bnodo=swteal, minimum width=1.85cm] (f\x) at (2.25*\x,0) {\f};
+  \foreach \a/\b in {0/1, 1/2, 2/3, 3/4, 4/5, 5/6} \draw[bfreccia] (f\a) -- (f\b);
+  \node[note, below=3pt, align=center] at (f1.south) {compila\\ i sorgenti};
+  \node[note, below=3pt, align=center] at (f2.south) {esegue\\ i test};
+  \node[note, below=3pt, align=center] at (f3.south) {crea il jar};
+  \node[note, below=3pt, align=center] at (f5.south) {lo copia nel\\ repository locale};
+  \node[note, below=3pt, align=center] at (f6.south) {lo pubblica nel\\ repository remoto};
+\end{tikzpicture}
+\end{center}
+
+\Needspace{31\baselineskip}
+Per eseguire i test basta \texttt{mvn test}, e Maven compila anche i sorgenti, perché \texttt{compile} viene prima:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ mvn test
+...
+[INFO] --- compiler:3.13.0:compile (default-compile) @ my-app ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ my-app ---
+[INFO] skip non existing resourceDirectory [cartella del progetto]/src/test/resources
+[INFO]
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ my-app ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 1 source file with javac [debug release 21] to target/test-classes
+[INFO]
+[INFO] --- surefire:3.2.5:test (default-test) @ my-app ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junit.JUnit3Provider
+[INFO]
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.mycompany.app.AppTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.021 s -- in com.mycompany.app.AppTest
+[INFO]
+[INFO] Results:
+[INFO]
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+...
+\end{lstlisting}
+
+\Needspace{18\baselineskip}
+Ogni riga \texttt{---} è un \textbf{plugin} al lavoro (\texttt{compiler} per compilare, \texttt{surefire} per i test),
+con la sua versione. Per creare l'eseguibile (il \texttt{jar}) c'è \texttt{mvn package}, che ripete tutto e aggiunge il
+plugin \texttt{jar}:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ mvn package
+...
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO]
+[INFO] --- jar:3.4.1:jar (default-jar) @ my-app ---
+[INFO] Building jar: [cartella del progetto]/target/my-app-1.0-SNAPSHOT.jar
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+...
+$ java -cp target/my-app-1.0-SNAPSHOT.jar com.mycompany.app.App
+Hello World!
+\end{lstlisting}
+
+\Needspace{12\baselineskip}
+Altri comandi standard sono \texttt{mvn site}, che genera il sito web di documentazione del progetto, e \texttt{mvn
+clean}, che cancella tutti i file generati (la cartella \texttt{target}). Se si chiede una fase che non esiste, Maven
+risponde con l'elenco completo:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ mvn build
+...
+[ERROR] Unknown lifecycle phase "build". You must specify a valid lifecycle phase or a goal in the format <plugin-prefix>:<goal> or <plugin-group-id>:<plugin-artifact-id>[:<plugin-version>]:<goal>. Available lifecycle phases are: pre-clean, clean, post-clean, validate, initialize, generate-sources, process-sources, generate-resources, process-resources, compile, process-classes, generate-test-sources, process-test-sources, generate-test-resources, process-test-resources, test-compile, process-test-classes, test, prepare-package, package, pre-integration-test, integration-test, post-integration-test, verify, install, deploy, pre-site, site, post-site, site-deploy. -> [Help 1]
+...
+\end{lstlisting}
+
+I cicli di vita in realtà sono tre: \texttt{clean} (da \texttt{pre-clean} a \texttt{post-clean}), quello predefinito
+(da \texttt{validate} a \texttt{deploy}) e \texttt{site}. La figura sopra ne mostra le fasi principali.
+
+\warning{Due sviste nelle slide: fasi e proprietà}{
+  \begin{itemize}
+    \item Nelle slide si legge che \texttt{test}, in \texttt{mvn test}, «è il valore di un tag \texttt{scope}, equivalente
+          al concetto di target visto in make e in Ant». Sono due cose diverse: \texttt{test} in \texttt{mvn test} è una
+          \textbf{fase} del ciclo di vita, ed è questa l'analogo dei target; lo \textbf{scope} \texttt{test} di una
+          dipendenza dice invece che la libreria serve solo per compilare ed eseguire i test (come JUnit nel POM qui
+          sopra), e non finisce nel programma.
+    \item Sempre nelle slide, «come in Ant, le variabili si possono dichiarare in un file separato chiamato
+          \texttt{application.properties}». Maven non legge da sé quel file: le variabili della build stanno nella
+          sezione \texttt{properties} del POM, o arrivano dalla riga di comando (\texttt{-Dnome=valore}).
+          \texttt{application.properties} è il file di configurazione delle applicazioni Spring Boot, come quelle del
+          prossimo capitolo.
+  \end{itemize}}
+
+\Needspace{17\baselineskip}
+\subsection{Le dipendenze}
+
+Si possono dichiarare dipendenze da altri progetti, anche non disponibili localmente:
+
+\begin{lstlisting}[style=xml, name=pom.xml]
+<dependencies>
+  ...
+  <dependency>
+    <groupId>com.mycompany.app</groupId>
+    <artifactId>my-app</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <scope>compile</scope>
+  </dependency>
+</dependencies>
+\end{lstlisting}
+
+\Needspace{12\baselineskip}
+Non si indica l'URL esatto del progetto da cui si dipende: \texttt{groupId}, \texttt{artifactId} e \texttt{version} (le
+\textbf{coordinate}) bastano a Maven per trovarlo, se è stato pubblicato correttamente nel dominio
+\texttt{com.mycompany.app}. Maven lo cerca prima nel \textbf{repository locale}, una cartella nella home dell'utente, e
+poi nei repository remoti, primo fra tutti \textbf{Maven Central}. È quello che è successo a JUnit 3.8.1, scaricato alla
+prima build del progetto:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ ls ~/.m2/repository/junit/junit/3.8.1/
+_remote.repositories
+junit-3.8.1.jar
+junit-3.8.1.jar.sha1
+junit-3.8.1.pom
+junit-3.8.1.pom.sha1
+\end{lstlisting}
+
+Il percorso ricalca le coordinate, e i file \texttt{.sha1} servono a verificare che lo scaricamento sia integro. Nelle
+slide JUnit è presentato come un'eccezione («in assenza dell'URL, Maven lo cerca localmente e sul sito ufficiale del
+progetto Maven»), ma vale per \textbf{qualunque} dipendenza: senza indicazioni diverse nel POM, tutte vengono cercate
+nel repository locale e poi in Maven Central.
+
+\Needspace{14\baselineskip}
+Nel \texttt{pom.xml} e nel file aggiuntivo di impostazioni \texttt{settings.xml} si può anche indicare come
+\textbf{pubblicare} il progetto in un repository remoto, per renderlo disponibile ad altri (con \texttt{mvn deploy}):
+
+\begin{lstlisting}[style=xml, name=pom.xml]
+  <distributionManagement>
+    <repository>
+      <id>mycompany-repository</id>
+      <name>MyCompany Repository</name>
+      <url>scp://repository.mycompany.com/repository/maven2</url>
+    </repository>
+  </distributionManagement>
+</project>
+\end{lstlisting}
+
+\Needspace{18\baselineskip}
+\begin{lstlisting}[style=xml, name=settings.xml]
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                      http://maven.apache.org/xsd/settings-1.0.0.xsd">
+  ...
+  <servers>
+    <server>
+      <id>mycompany-repository</id>
+      <username>jvanzyl</username>
+      <!-- Default value is ~/.ssh/id_dsa -->
+      <privateKey>/path/to/identity</privateKey> (default is ~/.ssh/id_dsa)
+      <passphrase>my_key_passphrase</passphrase>
+    </server>
+  </servers>
+  ...
+</settings>
+\end{lstlisting}
+
+I due file sono collegati dall'\texttt{id}: il POM dice \textbf{dove} pubblicare, \texttt{settings.xml} con quali
+\textbf{credenziali}. La separazione non è casuale: il POM fa parte del progetto e si versiona, \texttt{settings.xml}
+sta nella home di chi pubblica e le credenziali non finiscono nel repository del codice.
+
+\subsection{Maven e Ant a confronto}
+
+I principali vantaggi di Maven rispetto ad Ant:
+
+\begin{itemize}
+  \item gestisce molti aspetti del ciclo di vita dell'applicazione, oltre a build e deploy;
+  \item ci sono più librerie e plugin di utilità, e si può estendere il suo comportamento con altri plugin;
+  \item è più facile da usare: le funzionalità si ottengono \textbf{per dichiarazione}, mentre negli altri strumenti
+        vanno descritte con comandi imperativi;
+  \item include progetti disponibili in remoto e li collega dinamicamente al momento della build;
+  \item si integra meglio con gli IDE.
+\end{itemize}
+
+% ============================================================
+\section{Gradle}
+
+\textbf{Gradle} (\url{https://gradle.org/}) estende le funzionalità di Ant e di Maven:
+
+\begin{itemize}
+  \item i compiti (\textit{task}, l'analogo dei target) sono definiti e collegati fra loro in un \textbf{grafo
+        aciclico};
+  \item non usa XML, che per la sua natura gerarchica è meno flessibile, ma un \textbf{linguaggio di programmazione}:
+        Groovy, oppure Kotlin;
+  \item gli script di Gradle sono in media più brevi degli equivalenti per Ant e Maven;
+  \item è ampiamente integrato con Ant e Maven: si può sempre passare da Ant o da Maven a Gradle;
+  \item le dipendenze non sono organizzate come un semplice elenco, ma come un \textbf{grafo delle dipendenze}, che
+        Gradle percorre.
+\end{itemize}
+
+\info{{Groovy, non JSON}}{
+  Nelle slide Groovy è descritto come un linguaggio «simile a JSON». Groovy è in realtà un linguaggio di programmazione
+  per la JVM, molto vicino a Java: uno script di Gradle è un \textbf{programma} scritto in un linguaggio specifico per
+  il dominio (\textit{DSL}), e può contenere variabili, condizioni e cicli. Dalla versione 8.2, inoltre, Gradle propone
+  come predefinito il \textbf{Kotlin DSL}: con Gradle 8.14.3, \texttt{gradle init --type java-application
+  --use-defaults} genera \texttt{build.gradle.kts} e \texttt{settings.gradle.kts}. Qui si usa Groovy, come nelle slide.}
+
+I file di un progetto Gradle sono:
+
+\begin{itemize}
+  \item \texttt{build.gradle}: tutte le informazioni di build di un progetto specifico;
+  \item \texttt{settings.gradle} (facoltativo): la definizione dei moduli, anche condivisi fra più progetti Gradle;
+  \item \texttt{gradle.properties} (facoltativo): un elenco di costanti per inizializzare le proprietà di un progetto.
+\end{itemize}
+
+Un \textbf{plugin} di Gradle rappresenta un algoritmo di costruzione: con plugin diversi si ottengono modalità di build
+diverse (per esempio con l'esecuzione dei test) e per linguaggi di programmazione diversi. Il plugin predefinito per le
+applicazioni Android (\texttt{com.android.application}), per esempio, definisce più di 100 task diversi e
+interdipendenti, che si possono anche invocare uno per uno con \texttt{gradle nomeTask}.
+
+\Needspace{16\baselineskip}
+\subsection{Un progetto Gradle}
+
+Come Maven, Gradle sa creare lo scheletro di un progetto:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ gradle init --type java-application --dsl groovy --test-framework junit-jupiter --project-name demo --package demo --java-version 21 --no-split-project --no-incubating
+Starting a Gradle Daemon (subsequent builds will be faster)
+
+> Task :init
+Learn more about Gradle by exploring our Samples at https://docs.gradle.org/8.14.3/samples/sample_building_java_applications.html
+
+BUILD SUCCESSFUL in 9s
+1 actionable task: 1 executed
+\end{lstlisting}
+
+\Needspace{13\baselineskip}
+Il progetto generato ha un modulo \texttt{app}, con i sorgenti nelle stesse cartelle di Maven
+(\texttt{src/main/java} e \texttt{src/test/java}). Questi sono i due file principali:
+
+\begin{lstlisting}[style=gradle, name=settings.gradle]
+plugins {
+    // Apply the foojay-resolver plugin to allow automatic download of JDKs
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0'
+}
+
+rootProject.name = 'demo'
+include('app')
+\end{lstlisting}
+
+\Needspace{36\baselineskip}
+\begin{lstlisting}[style=gradle, name=app/build.gradle]
+plugins {
+    // Apply the application plugin to add support for building a CLI application in Java.
+    id 'application'
+}
+
+repositories {
+    // Use Maven Central for resolving dependencies.
+    mavenCentral()
+}
+
+dependencies {
+    // Use JUnit Jupiter for testing.
+    testImplementation libs.junit.jupiter
+
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // This dependency is used by the application.
+    implementation libs.guava
+}
+
+// Apply a specific Java toolchain to ease working on different environments.
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+application {
+    // Define the main class for the application.
+    mainClass = 'demo.App'
+}
+
+tasks.named('test') {
+    // Use JUnit Platform for unit tests.
+    useJUnitPlatform()
+}
+\end{lstlisting}
+
+\Needspace{16\baselineskip}
+(Sono omessi i commenti di intestazione generati.) Il confronto con il POM di Maven è istruttivo: le stesse informazioni
+(plugin, repository, dipendenze, versione di Java, classe principale) in un terzo delle righe. Le dipendenze usano gli
+\textbf{scope} di Gradle (\texttt{implementation} per il programma, \texttt{testImplementation} per i test), e le loro
+versioni stanno in un file a parte, il \textbf{catalogo delle versioni} \texttt{gradle/libs.versions.toml}:
+
+\begin{lstlisting}[style=conf, name=gradle/libs.versions.toml]
+# This file was generated by the Gradle 'init' task.
+# https://docs.gradle.org/current/userguide/platforms.html#sub::toml-dependencies-format
+
+[versions]
+guava = "33.4.5-jre"
+junit-jupiter = "5.12.1"
+
+[libraries]
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
+\end{lstlisting}
+
+Il progetto contiene anche il \textbf{wrapper}, lo script \texttt{gradlew} (e \texttt{gradlew.bat} per Windows): alla
+prima esecuzione scarica la versione di Gradle indicata nel progetto, così chi clona il repository non deve installare
+nulla, e tutti usano la stessa versione. È anche il modo in cui si invoca Gradle nei workflow di GitHub Actions, più
+avanti.
+
+\Needspace{40\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ ./gradlew clean build --console=plain
+Calculating task graph as no cached configuration is available for tasks: clean build
+> Task :app:clean
+> Task :app:processTestResources NO-SOURCE
+> Task :app:processResources NO-SOURCE
+> Task :app:compileJava
+> Task :app:classes
+> Task :app:jar
+> Task :app:compileTestJava
+> Task :app:testClasses
+> Task :app:startScripts
+> Task :app:distTar
+> Task :app:distZip
+> Task :app:assemble
+> Task :app:test
+> Task :app:check
+> Task :app:build
+
+BUILD SUCCESSFUL in 1s
+8 actionable tasks: 8 executed
+Configuration cache entry stored.
+$ ./gradlew build --console=plain
+Reusing configuration cache.
+> Task :app:processTestResources NO-SOURCE
+> Task :app:processResources NO-SOURCE
+> Task :app:compileJava UP-TO-DATE
+> Task :app:classes UP-TO-DATE
+> Task :app:jar UP-TO-DATE
+> Task :app:compileTestJava UP-TO-DATE
+> Task :app:startScripts UP-TO-DATE
+> Task :app:distTar UP-TO-DATE
+> Task :app:distZip UP-TO-DATE
+> Task :app:assemble UP-TO-DATE
+> Task :app:testClasses UP-TO-DATE
+> Task :app:test UP-TO-DATE
+> Task :app:check UP-TO-DATE
+> Task :app:build UP-TO-DATE
+
+BUILD SUCCESSFUL in 587ms
+7 actionable tasks: 7 up-to-date
+Configuration cache entry reused.
+\end{lstlisting}
+
+\Needspace{26\baselineskip}
+Il task \texttt{build} ne ha messi in moto altri tredici. Alla seconda esecuzione sono tutti \texttt{UP-TO-DATE}: Gradle
+ricorda gli ingressi e le uscite di ogni task e, se non sono cambiati, non lo riesegue (la \textbf{build incrementale},
+l'idea di make portata all'estremo). \texttt{NO-SOURCE} indica un task senza nulla da elaborare (qui non ci sono
+risorse). L'ordine in cui i task verrebbero eseguiti si vede senza eseguirli, con \texttt{--dry-run}; ed è un ordine
+compatibile con il loro \textbf{grafo}:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ ./gradlew build --dry-run --console=plain
+Reusing configuration cache.
+:app:compileJava SKIPPED
+:app:processResources SKIPPED
+:app:classes SKIPPED
+:app:jar SKIPPED
+:app:startScripts SKIPPED
+:app:distTar SKIPPED
+:app:distZip SKIPPED
+:app:assemble SKIPPED
+:app:compileTestJava SKIPPED
+:app:processTestResources SKIPPED
+:app:testClasses SKIPPED
+:app:test SKIPPED
+:app:check SKIPPED
+:app:build SKIPPED
+
+BUILD SUCCESSFUL in 561ms
+Configuration cache entry reused.
+\end{lstlisting}
+
+\Needspace{8\baselineskip}
+\begin{center}
+\begin{tikzpicture}[x=2.05cm, y=1.0cm]
+  \node[bnodo] (cj) at (0,0) {compileJava};
+  \node[bnodo] (cl) at (1.25,0) {classes};
+  \node[bnodo] (jar) at (2.35,0) {jar};
+  \node[bnodo] (ss) at (3.45,0.8) {startScripts};
+  \node[bnodo] (dt) at (4.75,0.8) {distTar, distZip};
+  \node[bnodo] (as) at (5.95,0) {assemble};
+  \node[bnodo] (ct) at (1.25,-1.2) {compileTestJava};
+  \node[bnodo] (tc) at (2.65,-1.2) {testClasses};
+  \node[bnodo] (te) at (3.85,-1.2) {test};
+  \node[bnodo] (ch) at (4.85,-1.2) {check};
+  \node[bnodo=swgreen] (bu) at (7.05,-0.6) {build};
+  \draw[bfreccia] (cj) -- (cl); \draw[bfreccia] (cl) -- (jar); \draw[bfreccia] (jar) -- (as);
+  \draw[bfreccia] (jar) |- (ss); \draw[bfreccia] (ss) -- (dt); \draw[bfreccia] (dt) -| (as);
+  \draw[bfreccia] (cl) -- (ct); \draw[bfreccia] (ct) -- (tc); \draw[bfreccia] (tc) -- (te);
+  \draw[bfreccia] (te) -- (ch); \draw[bfreccia] (as) -- (bu); \draw[bfreccia] (ch) -- (bu);
+\end{tikzpicture}
+\end{center}
+
+\Needspace{32\baselineskip}
+I task li aggiungono i plugin: \texttt{application}, per esempio, porta \texttt{run} e le distribuzioni
+(\texttt{distTar}, \texttt{distZip}). L'elenco completo si ottiene con \texttt{gradle tasks}, di cui riportiamo una
+parte:
+
+\begin{lstlisting}[style=shell, name=Terminale]
+$ ./gradlew run --console=plain
+...
+> Task :app:run
+Hello World!
+
+BUILD SUCCESSFUL in 772ms
+2 actionable tasks: 1 executed, 1 up-to-date
+Configuration cache entry stored.
+$ ./gradlew tasks --console=plain
+...
+Application tasks
+-----------------
+run - Runs this project as a JVM application
+
+Build tasks
+-----------
+assemble - Assembles the outputs of this project.
+build - Assembles and tests this project.
+...
+clean - Deletes the build directory.
+jar - Assembles a jar archive containing the classes of the 'main' feature.
+testClasses - Assembles test classes.
+...
+Verification tasks
+------------------
+check - Runs all checks.
+test - Runs the test suite.
+\end{lstlisting}
+
+Infine il grafo delle dipendenze: il progetto dichiara solo Guava, ma Guava a sua volta dipende da altre librerie, che
+Gradle trova e scarica da sé (le \textbf{dipendenze transitive}).
+
+\Needspace{13\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ ./gradlew :app:dependencies --configuration runtimeClasspath --console=plain
+...
+runtimeClasspath - Runtime classpath of source set 'main'.
+\--- com.google.guava:guava:33.4.5-jre
+     +--- com.google.guava:failureaccess:1.0.3
+     +--- com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava
+     +--- org.jspecify:jspecify:1.0.0
+     +--- com.google.errorprone:error_prone_annotations:2.36.0
+     \--- com.google.j2objc:j2objc-annotations:3.0.0
+...
+\end{lstlisting}
+
+% ============================================================
+\section{Installabilità e portabilità}
+
+Oggi il problema dell'\textbf{installabilità} e della \textbf{portabilità} del software è particolarmente sentito, per
+la varietà e la rapida evoluzione degli ambienti di esecuzione:
+
+\begin{itemize}
+  \item i programmi scritti in Python soffrono molto la dipendenza da una specifica combinazione di versioni
+        dell'interprete e di tutte le librerie, che evolvono rapidamente;
+  \item nel caso di Android, strumenti di sviluppo e librerie cambiano ogni settimana, e la compatibilità all'indietro è
+        garantita solo occasionalmente.
+\end{itemize}
+
+D'altra parte, la diffusione di soluzioni tecnologiche come le \textbf{macchine virtuali} (Capitolo 13), i
+\textbf{container} (prossimo capitolo) e i sottosistemi (come il sottosistema Linux di Windows) dà la
+possibilità di far girare il software in ambienti molto diversi. Framework come Ant, Maven e Gradle sono usati per
+creare gli script di installazione di software complesso, specialmente in ambito di ricerca. Con Maven o Gradle, per
+esempio, si possono specificare in modo \textbf{del tutto portabile}:
+
+\begin{itemize}
+  \item il processo di costruzione di un'applicazione;
+  \item il processo di deployment delle sue risorse;
+  \item il processo di test;
+  \item il processo di pubblicazione di una release,
+\end{itemize}
+
+\noindent inserendo i riferimenti a tutte le librerie e agli script necessari a completare l'installazione.
+
+% ============================================================
+\section{GitHub Actions e YAML}
+
+Negli ultimi anni GitHub ha introdotto funzionalità per aggiungere \textbf{automazione} alla gestione dei repository,
+sfruttando le risorse messe a disposizione da Microsoft Azure; funzionalità simili sono offerte, in modi diversi, da
+altri fornitori (Google, Amazon, GitLab e altri).
+
+\dfn{GitHub Actions}{
+  Le \textbf{GitHub Actions} sono script di automazione scritti in un linguaggio dichiarativo, \textbf{YAML}, che
+  contengono elementi di script di shell, ed eseguiti su macchine (virtuali, o container) ospitate da GitHub su
+  Microsoft Azure. Un file di questo tipo si chiama \textbf{workflow}, e sta nella cartella
+  \texttt{.github/workflows} del repository.}
+
+\Needspace{29\baselineskip}
+\subsection{YAML}
+
+YAML è stato pubblicato nel 2001 come acronimo di \textit{Yet Another Markup Language}, anche se più spesso lo si
+considera acronimo (ricorsivo) di \textit{YAML Ain't Markup Language}. È un linguaggio per rappresentare dati in modo
+\textbf{leggibile da una persona}, analogo a JSON o a Groovy, e un miglioramento rispetto a XML: la struttura è data
+dall'\textbf{indentazione}, le coppie si scrivono \texttt{chiave: valore}, gli elementi di un elenco cominciano con un
+trattino. Ecco il workflow delle slide:
+
+\begin{lstlisting}[style=yaml, name=android.yml]
+name: Android CI
+
+on:
+  push:
+    branches: [ AsyncTask ]
+
+env:
+  BUILD_TOOLS_VERSION: 29.0.3
+
+jobs:
+  UnitTest:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+    - name: Autorizzo Gradle
+      run: chmod u+x ./gradlew
+    - name: Eseguo Test
+      run: |
+        ./gradlew test
+\end{lstlisting}
+
+\Needspace{12\baselineskip}
+Il modo più semplice per capire come viene letto un file YAML è convertirlo in JSON, che ha una sintassi esplicita. Lo
+fa uno script di cinque righe, con la libreria PyYAML:
+
+\begin{lstlisting}[style=plain, name=yaml2json.py]
+# legge un file YAML e lo stampa in JSON, per vedere come viene interpretato
+import json, sys
+import yaml
+
+with open(sys.argv[1]) as f:
+    print(json.dumps(yaml.safe_load(f), indent=2))
+\end{lstlisting}
+
+\Needspace{33\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale]
+$ python3 yaml2json.py android.yml
+{
+  "name": "Android CI",
+  "true": {
+    "push": {
+      "branches": [
+        "AsyncTask"
+      ]
+    }
+  },
+  "env": {
+    "BUILD_TOOLS_VERSION": "29.0.3"
+  },
+  "jobs": {
+    "UnitTest": {
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "name": "checkout",
+          "uses": "actions/checkout@v2"
+        },
+        {
+          "name": "Autorizzo Gradle",
+          "run": "chmod u+x ./gradlew"
+        },
+        {
+          "name": "Eseguo Test",
+          "run": "./gradlew test\n"
+        }
+      ]
+    }
+  }
+}
+\end{lstlisting}
+
+Si vedono tutte le regole: gli oggetti annidati per indentazione, l'elenco fra parentesi quadre (\texttt{[ AsyncTask ]},
+la forma compatta) e quello con i trattini (gli \texttt{steps}), il blocco di testo introdotto da \texttt{|}, che
+conserva gli a capo. \texttt{29.0.3} diventa una stringa, perché non è un numero valido.
+
+\info{Perché \texttt{on} è diventato \texttt{true}}{
+  La sorpresa è la seconda chiave: \texttt{on} è diventato \texttt{"true"}. Nella versione 1.1 di YAML, quella seguita da
+  PyYAML, le parole \texttt{on}, \texttt{off}, \texttt{yes} e \texttt{no} sono \textbf{booleani}, e \texttt{on} vale
+  \texttt{true}. GitHub legge correttamente la chiave dei suoi workflow, ma è un buon promemoria: in YAML il tipo di un
+  valore è \textbf{implicito}, e dipende da come è scritto. Nel dubbio, le stringhe vanno fra virgolette.}
+
+\subsection{I componenti di un workflow}
+
+Le slide descrivono un workflow su quattro livelli:
+
+\begin{itemize}
+  \item \textbf{trigger}: gli eventi che avviano le azioni descritte; possono essere eventi temporali o azioni compiute
+        sul repository, come un \textit{push}, una release, una issue, \ldots;
+  \item \textbf{job}: azioni complesse, fatte di uno o più compiti da eseguire \textbf{in parallelo} su macchine
+        (virtuali) diverse;
+  \item \textbf{task}: azioni più semplici, per le quali si indicano le caratteristiche della macchina nel cloud (per
+        esempio Windows, Ubuntu, macOS) su cui eseguire una sequenza di passi;
+  \item \textbf{step}: operazioni elementari, di solito righe di script Bash o batch, chiamate a eseguibili o, in alcuni
+        casi, a servizi messi a disposizione dal repository che ospita il codice.
+\end{itemize}
+
+\Needspace{14\baselineskip}
+Nel file YAML i livelli si chiamano \texttt{on}, \texttt{jobs} e \texttt{steps}: il «task» delle slide corrisponde al
+job stesso, che con \texttt{runs-on} sceglie la sua macchina (il \textit{runner}). Uno step o esegue comandi di shell
+(\texttt{run}), o usa un'\textbf{action} già pronta (\texttt{uses}), cioè un piccolo programma pubblicato su GitHub.
+
+\begin{center}
+\begin{tikzpicture}
+  \node[bnodo=sworange, minimum width=2.6cm] (ev) at (0,0) {on: push};
+  \node[card=swblue, minimum width=5.2cm, minimum height=2.5cm, anchor=west] (j1) at (2.4,0.75) {};
+  \node[font=\scriptsize\bfseries, anchor=north west] at (j1.north west) {job UnitTest (ubuntu-latest)};
+  \foreach \i/\t in {0/checkout, 1/Autorizzo Gradle, 2/Eseguo Test}
+    \node[bnodo, minimum width=4.4cm] at (5.0,1.05-0.55*\i) {\t};
+  \node[card=swgray, minimum width=5.2cm, minimum height=1.0cm, anchor=west] (j2) at (2.4,-1.35) {};
+  \node[font=\scriptsize\itshape, text=swgray] at (j2) {altri job, in parallelo su altre macchine};
+  \draw[bfreccia] (ev.east) -- (j1.west);
+  \draw[bfreccia] (ev.east) -- (j2.west);
+  \node[note, anchor=west] at (7.9,0.75) {gli step di un job\\ sono eseguiti\\ in sequenza};
+\end{tikzpicture}
+\end{center}
+
+Il workflow dell'esempio, quindi:
+
+\begin{itemize}
+  \item parte a ogni \textit{push} sul ramo \texttt{AsyncTask};
+  \item usa una macchina Ubuntu (l'ultima versione disponibile);
+  \item su quella macchina esegue prima il checkout del progetto, con un'utilità di GitHub Actions
+        (\texttt{actions/checkout}): così gli script successivi lavorano su un file system che contiene una copia del
+        progetto;
+  \item poi esegue operazioni di shell: rende eseguibile lo script \texttt{gradlew};
+  \item infine avvia \texttt{gradlew} con il task \texttt{test}, dalla cartella principale.
+\end{itemize}
+
+Si noti che Gradle e i test sono eseguibili che \textbf{fanno parte del progetto} di cui si è fatto il checkout (il
+wrapper visto prima): la macchina di GitHub non deve avere nulla di preinstallato, a parte Java.
+
+\warning{Versioni delle action}{
+  \texttt{@v2} in \texttt{actions/checkout@v2} è la \textbf{versione} dell'action, e le action invecchiano come ogni
+  dipendenza: oggi si usano versioni più recenti. Per \texttt{actions/upload-artifact} (vista fra poco, nelle slide
+  \texttt{@v1}) il problema è più serio: le versioni dalla 1 alla 3 sono state ritirate da GitHub, e un workflow che le
+  usa oggi fallisce; serve almeno la versione 4.}
+
+\subsection{Creare un workflow}
+
+Dal menu \textbf{Actions} del repository si sceglie \textbf{New workflow}. Ci sono molti workflow pronti all'uso,
+anche di esempio:
+
+\begin{itemize}
+  \item \textbf{Greetings}: manda un messaggio di saluto alla prima interazione di un programmatore con il progetto;
+  \item \textbf{Stale}: un workflow attivato a tempo (con l'utilità \texttt{cron}), che etichetta come «stale»
+        (stantie) le issue rimaste aperte troppo a lungo;
+  \item \textbf{Manual Workflow}: lo scheletro di un esempio più completo di workflow per un progetto Java.
+\end{itemize}
+
+Altre caratteristiche utili:
+
+\begin{itemize}
+  \item i job di uno script YAML sono eseguiti per impostazione predefinita su \textbf{macchine diverse}, e quindi
+        \textbf{in parallelo};
+  \item GitHub Actions permette di conservare i risultati ottenuti sulle macchine nel cloud (file, report), con
+        l'action \texttt{actions/upload-artifact};
+  \item se servono versioni specifiche di un software (Python, Android, \ldots), basta scrivere all'inizio del job le
+        istruzioni di shell per installarle.
+\end{itemize}
+
+Un esempio completo è il workflow del progetto \textit{OrariProcida2011-2017}
+(\url{https://github.com/PorfirioTramontana/OrariProcida2011-2017}, file
+\texttt{.github/workflows/android.yml} del ramo \texttt{AsyncTask}), che esegue \textbf{in parallelo}: l'analisi
+statica (\textit{lint}) di un'applicazione Android, i test di unità, i test di instrumentazione (test della GUI su
+Android), il random testing, i test con FunesDroid (uno strumento compreso nel progetto) e con FunesDroid Service (un
+servizio di test installato su un server); gli output di tutti gli strumenti vengono conservati con
+\texttt{upload-artifact}.
+
+\subsection{DevOps con YAML}
+
+Un solo script YAML può:
+
+\begin{itemize}
+  \item partire automaticamente a ogni commit (\textit{push}), a ogni pull request, a ogni issue, periodicamente, \ldots;
+  \item compilare lo stato corrente del software;
+  \item distribuirlo su risorse cloud o remote;
+  \item generare la documentazione;
+  \item eseguire i casi di test;
+  \item eseguire attività di analisi statica e di refactoring;
+  \item riportare i risultati sul repository (per esempio con dei \textit{badge}, le piccole etichette colorate che
+        mostrano se la build è riuscita).
+\end{itemize}
+
+In questo modo si ottengono \textbf{integrazione}, \textbf{consegna} e \textbf{deployment continui}
+(\textit{continuous integration}, \textit{delivery} e \textit{deployment}), insieme a una valutazione continua della
+qualità: ogni modifica al codice viene costruita, collaudata e, se tutto va bene, rilasciata, senza intervento umano. È
+il punto d'arrivo del percorso di questo capitolo, e il codice di build è diventato a tutti gli effetti parte del
+progetto, versionato insieme a esso.
+
+\Needspace{24\baselineskip}
+% ============================================================
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+\begin{itemize}
+  \item La \textbf{build automation} automatizza compilazione, linking, test, analisi statica, deployment e
+        documentazione. Il codice di build fa parte del codice del programma.
+  \item Gli \textbf{script di shell} sono la soluzione tradizionale, ma dipendono dal sistema operativo, hanno un
+        linguaggio povero e rifanno tutto ogni volta; \textbf{Python} è più potente e più portabile.
+  \item \textbf{Make} è dichiarativo: regole \texttt{target: prerequisiti} e comandi, e i comandi si rieseguono solo se i
+        prerequisiti sono più recenti del target. I comandi però sono di shell, quindi dipendenti dal sistema.
+  \item \textbf{Ant} porta l'idea in Java, con script XML (\texttt{build.xml}), target con \texttt{depends}, proprietà
+        \texttt{\$\{\ldots\}} e task predefiniti; lavora solo su file locali.
+  \item \textbf{Maven} impone convenzioni: un ciclo di vita con fasi fisse (\texttt{compile}, \texttt{test},
+        \texttt{package}, \ldots), il \texttt{pom.xml}, le dipendenze identificate da coordinate e scaricate da Maven
+        Central nel repository locale.
+  \item \textbf{Gradle} usa un linguaggio di programmazione (Groovy o Kotlin) invece di XML, un grafo aciclico di task e
+        la build incrementale; il wrapper \texttt{gradlew} fissa la versione di Gradle del progetto.
+  \item \textbf{GitHub Actions} esegue workflow scritti in \textbf{YAML} (\texttt{on}, \texttt{jobs}, \texttt{steps}) su
+        macchine nel cloud: è la base dell'integrazione e del deployment continui.
+\end{itemize}
+}
