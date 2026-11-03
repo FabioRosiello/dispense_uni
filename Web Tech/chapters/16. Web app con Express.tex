@@ -1,9 +1,11 @@
 \chapter{Una web app con Express}
 
 Sappiamo ora che cosa sono i web framework, e conosciamo Express: router,
-middleware, template. Mettiamo a frutto queste conoscenze costruendo
-un'applicazione vera, e affrontando l'ultimo pezzo mancante: la
-\textbf{persistenza dei dati}.
+middleware, template. Mettiamo a frutto queste conoscenze riscrivendo con
+Express la lista di cose da fare dei capitoli 12 e 13, con qualche funzionalità
+in più, e affrontando l'ultimo pezzo mancante: la \textbf{persistenza dei
+dati}, gestita in modo più evoluto con una libreria di \textit{Object-Relational
+Mapping}.
 
 \section{Object-Relational Mapping}
 
@@ -16,29 +18,48 @@ righe delle tabelle del database.
   \centering
   \begin{tikzpicture}[font=\Lato\scriptsize,
       o/.style={rounded corners=3pt, draw=primary!65!black, line width=0.8pt,
-                fill=primary!8!white, align=left, inner sep=5pt,
-                font=\FiraCodeNL\scriptsize},
-      t/.style={rounded corners=3pt, draw=green-gradient-6, line width=0.8pt,
-                fill=green-gradient-1!35!white, align=left, inner sep=5pt,
-                font=\FiraCodeNL\scriptsize},
+                fill=primary!8!white, align=left, inner sep=4pt,
+                font=\FiraCodeNL\scriptsize, anchor=north west},
+      td/.style={o, draw=accent!60!black, fill=accent!8!white},
+      rif/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt,
+                  draw=primary!65!black},
       a/.style={{Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]},
                 line width=1pt, draw=accent!70!black}]
 
-    \node[o] (u1) at (0,0.9)  {UserName: Janet\\ Password: 837jnge\\ Age: 22};
-    \node[o] (u2) at (0,-0.9) {UserName: Riff Raff\\ Password: xjdf08b\\ Age: 26};
+    \node[o] (janet) at (0,0)
+      {UserName: Janet\\ Password: 837jnge\\ Age: \ \ \ \ \ 22\\ Todos:};
+    \node[td] (t1) at (3.6,0.15)  {Todo: Learn Sequelize};
+    \node[td] (t2) at (3.6,-0.75) {Todo: Learn Express};
+    \node[o] (riff) at (0,-2.0)
+      {UserName: Riff Raff\\ Password: xjdf08b\\ Age: \ \ \ \ \ 26\\ Todos:};
+    \node[td] (t3) at (3.6,-2.55) {Todo: Do the time warp again};
 
-    \node[t] (tb) at (7.6,0)
-      {\textbf{Users}\\ 1 \ Janet \ \ \ \ \ 837jnge \ 22\\
-       2 \ Riff Raff \ xjdf08b \ 26};
+    \coordinate (j) at ([xshift=-10pt, yshift=7pt]janet.south east);
+    \coordinate (r) at ([xshift=-10pt, yshift=7pt]riff.south east);
+    \fill[primary!65!black] (j) circle (1.6pt) (r) circle (1.6pt);
+    \draw[rif] (j) to[out=0, in=180] (t1.west);
+    \draw[rif] (j) to[out=0, in=180] (t2.west);
+    \draw[rif] (r) to[out=0, in=180] (t3.west);
 
-    \draw[a] (2.2,0) -- node[wtlab, above]{ORM} (5.4,0);
+    \draw[a] (8.3,-1.45) -- node[wtlab, above]{ORM} (9.6,-1.45);
 
-    \node[font=\Lato\scriptsize\itshape, text=neutral!35!black] at (0,-2.0)
+    \dbtabella{u}{(10.0,0.05)}{Users}{4}{\textbf{Id} & \textbf{UserName} &
+      \textbf{Password} & \textbf{Age} \\ \hline
+      1 & Janet & 837jnge & 22 \\
+      2 & Riff Raff & xjdf08b & 26}
+    \dbtabella{t}{(10.0,-1.75)}{Todos}{3}{\textbf{Id} & \textbf{UserId} &
+      \textbf{Todo} \\ \hline
+      1 & 1 & Learn Sequelize \\
+      2 & 1 & Learn Express \\
+      3 & 2 & Do the time warp again}
+
+    \node[font=\Lato\scriptsize\itshape, text=neutral!35!black] at (3.6,-3.75)
       {oggetti nello heap};
-    \node[font=\Lato\scriptsize\itshape, text=neutral!35!black] at (7.6,-2.0)
+    \node[font=\Lato\scriptsize\itshape, text=neutral!35!black] at (12.4,-3.75)
       {righe nelle tabelle};
   \end{tikzpicture}
-  \caption{Le due rappresentazioni che un ORM tiene allineate.}
+  \caption{Le due rappresentazioni che un ORM tiene allineate: i riferimenti
+           fra oggetti diventano chiavi esterne (\code{UserId}).}
   \label{fig:orm}
 \end{figure}
 
@@ -51,7 +72,8 @@ esistente. È un lavoro considerevole, fatto di molto codice ripetitivo.
   Una libreria \term{ORM} (\textit{Object-Relational Mapping}) è una soluzione
   già pronta che aiuta a mantenere allineate la rappresentazione a oggetti e
   quella relazionale, permettendo di lavorare con \textbf{astrazioni di alto
-  livello} invece che con interrogazioni SQL.}
+  livello} invece che con interrogazioni SQL. Riduce il codice ripetitivo e
+  rende ancora più facile passare da un database a un altro.}
 
 Tipicamente una libreria ORM permette di:
 
@@ -75,7 +97,9 @@ Record} (Ruby on Rails), \term{Sequelize}, \term{Prisma} e \term{TypeORM}
 
 \term{Sequelize} è un ORM per Node.js che supporta Oracle, Postgres, MySQL,
 MariaDB, SQLite, SQL Server e altri, con un'API elegante basata sulle
-\textbf{Promise}. Qui si fa riferimento alla versione 6.
+\textbf{Promise}. Qui si fa riferimento alla versione 6: gli esempi sono stati
+eseguiti con Sequelize 6.37.8, il driver \code{sqlite3} 6.0.1 e Node.js 22, e
+gli output riportati sono quelli reali. Si installa con npm:
 
 \begin{lstlisting}[style=shell]
 npm install sequelize
@@ -92,13 +116,14 @@ npm install tedious         # MS SQL Server
 npm install oracledb        # Oracle
 \end{lstlisting}
 
-Per semplicità useremo SQLite.
+Per semplicità useremo SQLite, che tiene l'intero database in un solo file e
+non richiede un server.
 
 \subsection{Connettersi al database}
 
-\begin{affianco}[0.6][c]
+\begin{affianco}[0.62][c]
 \codicepiccolo
-\begin{lstlisting}[style=js, name=Database.js]
+\begin{lstlisting}[style=js, name=connect.js]
 import { Sequelize } from "sequelize";
 
 const database = new Sequelize("sqlite:mydb.sqlite");
@@ -118,7 +143,7 @@ try {
       minimum height=0.6cm, inner xsep=6pt},
     a/.style={{Stealth[length=4pt,width=3.5pt]}-{Stealth[length=4pt,width=3.5pt]},
       line width=0.7pt, draw=neutral!45!black}]
-  \node[b, draw=primary!60!black, fill=primary!8!white] (c) at (0,0) {app.js};
+  \node[b, draw=primary!60!black, fill=primary!8!white] (c) at (0,0) {codice};
   \node[b, draw=accent!60!black, fill=accent!12!white] (s) at (2.1,0) {Sequelize};
   \node[draw=green-gradient-6, fill=green-gradient-1!45!white, line width=0.7pt,
         shape=cylinder, shape border rotate=90, aspect=0.18, minimum height=0.9cm,
@@ -128,27 +153,44 @@ try {
 \end{immagine}
 \end{affianco}
 
-Il codice sopra crea automaticamente un database SQLite nel file
-\code{mydb.sqlite}.
+\begin{console}[Terminale]
+$ node connect.js
+Executing (default): SELECT 1+1 AS result
+Connessione stabilita correttamente.
+$ wc -c mydb.sqlite
+0 mydb.sqlite
+\end{console}
+
+Per verificare la connessione, \code{authenticate} esegue l'interrogazione più
+innocua possibile, \code{SELECT 1+1}. La riga \code{Executing (default)} è il
+\textbf{log} di Sequelize, che per impostazione predefinita stampa ogni
+istruzione SQL che esegue: è prezioso per capire che cosa succede, e si
+disattiva con l'opzione \code{logging: false} del costruttore. Il file
+\code{mydb.sqlite} viene creato automaticamente, ma per ora è vuoto: zero byte,
+perché non contiene ancora alcuna tabella. I modi per connettersi a un database
+sono molti, e la documentazione li elenca tutti.
 
 \subsection{Definire i modelli}
 
 I \term{modelli} sono l'essenza di ogni ORM. In Sequelize sono classi che
 estendono \code{Model}, e si possono definire in due modi equivalenti: invocando
 il metodo \code{define} sulla connessione, oppure creando una classe che
-estende \code{Model} e invocandone il metodo \code{init}.
+estende \code{Model} e invocandone il metodo \code{init}. Ecco il primo modo,
+con il modello delle slide:
 
-\begin{affianco}[0.55][c]
-\begin{lstlisting}[style=js, name=models/User.js]
+\begin{affianco}[0.5][c]
+\begin{lstlisting}[style=js, name=user.js]
 import { DataTypes, Sequelize } from "sequelize";
 
+const database = new Sequelize("sqlite:mydb.sqlite");
+
 const User = database.define('User', {
-  name: {
+  firstName: {
     type: DataTypes.STRING,
     allowNull: false
   },
   age: {
-    type: DataTypes.INTEGER    // allowNull: true di default
+    type: DataTypes.INTEGER    // allowNull è true di default
   },
   id: {
     type: DataTypes.INTEGER,
@@ -162,58 +204,30 @@ const User = database.define('User', {
                  aggiunge da sé \code{createdAt} e \code{updatedAt}.]
 \begin{tikzpicture}
   \dbtabella{t}{(0,0)}{Users}{3}{\textbf{colonna} & \textbf{tipo} & \textbf{vincoli} \\ \hline
-    name & VARCHAR(255) & NOT NULL \\
+    firstName & VARCHAR(255) & NOT NULL \\
     age & INTEGER & \\
-    id & INTEGER & PRIMARY KEY \\
+    id & INTEGER & PRIMARY KEY AUTOINCREMENT \\
     createdAt & DATETIME & NOT NULL \\
     updatedAt & DATETIME & NOT NULL}
 \end{tikzpicture}
 \end{immagine}
 \end{affianco}
 
-\begin{affianco}[0.58][c]
-\codicepiccolo
-\begin{lstlisting}[style=js, name=models/Todo.js]
-class Todo extends Model {}
-
-Todo.init({
-  todo: { type: DataTypes.TEXT, allowNull: false },
-  done: { type: DataTypes.BOOLEAN, defaultValue: false },
-  id:   { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true }
-}, {
-  sequelize: database, modelName: "Todo"
-});
-\end{lstlisting}
-\risultato
-\begin{immagine}[La tabella \code{Todos}.]
-\begin{tikzpicture}
-  \dbtabella{t}{(0,0)}{Todos}{3}{\textbf{colonna} & \textbf{tipo} & \textbf{default} \\ \hline
-    todo & TEXT & \\
-    done & BOOLEAN & false \\
-    id & INTEGER & (autoincr.)}
-\end{tikzpicture}
-\end{immagine}
-\end{affianco}
-
-\info{name, non firstName}{
-  Nelle slide il modello \code{User} definisce il campo \code{firstName}, ma
-  gli esempi successivi creano gli utenti con \code{name}. Così com'è,
-  \code{User.create(\{ name: "Janet", ... \})} fallirebbe con un errore di
-  validazione, perché \code{firstName} non ammette valori nulli. Qui si usa
-  \code{name} ovunque.}
+Ogni attributo ha un tipo (\code{DataTypes}) e dei vincoli facoltativi:
+\code{allowNull: false} diventa \code{NOT NULL}, \code{primaryKey} e
+\code{autoIncrement} fanno di \code{id} una chiave generata dal database.
+\code{createdAt} e \code{updatedAt} non sono nel modello: Sequelize le aggiunge
+a ogni tabella e le aggiorna da solo.
 
 \subsection{Sincronizzazione dei modelli}
 
-Definendo un modello diciamo a Sequelize com'è fatto il nostro dominio. Ma
-partiamo da un database \textbf{completamente vuoto}: bisogna dire a Sequelize
-di allineare lo schema del database ai modelli definiti. Che cosa succede se non
-esiste alcuna tabella? E se esiste ma ha colonne diverse?
+Definendo un modello diciamo a Sequelize com'è fatto il nostro dominio, ma il
+database è ancora \textbf{completamente vuoto}. E se le tabelle non esistono, o
+hanno colonne diverse? Lo schema si allinea ai modelli con la
+\term{sincronizzazione dei modelli}: il metodo \code{sync}, asincrono, che
+restituisce una Promise.
 
-L'allineamento avviene tramite la \term{sincronizzazione dei modelli}.
-
-\begin{affianco}[0.58][c]
-\begin{lstlisting}[style=js, name=sync.js]
-const User = database.define('User', { /* specifica omessa */ });
+\begin{lstlisting}[style=js, name=user.js, firstnumber=19]
 
 User.sync().then(() => {
   console.log("Tabella Users sincronizzata.")
@@ -221,43 +235,41 @@ User.sync().then(() => {
   console.error("Errore di sincronizzazione:", err.message)
 });
 \end{lstlisting}
-\risultato
+
 \begin{console}[Terminale]
-Executing: SELECT name FROM
-  sqlite_master WHERE type='table'
-  AND name='Users';
-Executing: CREATE TABLE IF NOT
-  EXISTS `Users` (...);
+$ node user.js
+Executing (default): SELECT name FROM sqlite_master WHERE type='table' AND name='Users';
+Executing (default): CREATE TABLE IF NOT EXISTS `Users` (`firstName` VARCHAR(255) NOT NULL, `age` INTEGER, `id` INTEGER PRIMARY KEY AUTOINCREMENT, `createdAt` DATETIME NOT NULL, `updatedAt` DATETIME NOT NULL);
+Executing (default): PRAGMA INDEX_LIST(`Users`)
+Tabella Users sincronizzata.
+$ node user.js
+Executing (default): SELECT name FROM sqlite_master WHERE type='table' AND name='Users';
+Executing (default): PRAGMA INDEX_LIST(`Users`)
 Tabella Users sincronizzata.
 \end{console}
-\end{affianco}
 
-Tre osservazioni:
+Sequelize ha \textbf{dedotto} il nome della tabella, \code{Users}: per
+impostazione predefinita usa il nome del modello al plurale (ma se ne può
+scegliere un altro). Dai log si vede che ha prima \textbf{verificato}
+l'esistenza della tabella, interrogando il catalogo di SQLite
+(\code{sqlite\_master}), poi l'ha creata e infine ne ha letto gli indici
+(\code{PRAGMA INDEX\_LIST}). Alla seconda esecuzione la tabella \textbf{non}
+viene ricreata, perché esiste già: manca la riga \code{CREATE TABLE}.
 
-\begin{itemize}
-  \item Sequelize ha \textbf{dedotto} il nome della tabella (\code{Users}): per
-        impostazione predefinita usa il nome del modello al plurale. Il
-        comportamento è configurabile.
-  \item Dai log si vede che Sequelize ha prima \textbf{verificato} l'esistenza
-        della tabella e poi l'ha creata.
-  \item Rieseguendo lo script la tabella non viene ricreata, perché esiste già.
-\end{itemize}
+\warning{Una svista nelle slide: \code{console.err}}{
+  Nelle slide il \code{catch} chiama \code{console.err}, che non esiste: se la
+  sincronizzazione fallisse, il \code{catch} solleverebbe a sua volta
+  \code{TypeError: console.err is not a function}, nascondendo l'errore vero.
+  Il metodo giusto è \code{console.error}.}
 
-Esistono modalità di sincronizzazione diverse:
+Esistono modalità di sincronizzazione diverse, e \code{sync()} invocato sulla
+connessione sincronizza tutti i modelli in una volta:
 
 \begin{lstlisting}[style=js]
-User.sync();
-// crea la tabella se non esiste (non fa nulla se esiste)
-
-User.sync({ force: true });
-// ricrea la tabella, eliminandola se esiste (DISTRUTTIVO!)
-
-User.sync({ alter: true });
-// controlla lo stato della tabella e la modifica per allinearla al modello
+User.sync();                  // crea la tabella se non esiste (se esiste, nulla)
+User.sync({ force: true });   // la elimina, se esiste, e la ricrea (DISTRUTTIVO!)
+User.sync({ alter: true });   // ne controlla colonne e tipi, e la modifica se serve
 \end{lstlisting}
-
-È possibile sincronizzare più modelli in una volta invocando \code{sync()} sulla
-connessione al database.
 
 \warning{\code{force: true} cancella tutto}{
   In sviluppo è comodissimo, perché riparte sempre da uno schema pulito. Su un
@@ -267,105 +279,183 @@ connessione al database.
 
 \subsection{Creare entità}
 
-\begin{affianco}[0.55][c]
-\begin{lstlisting}[style=js, name=create.js]
-// prima si crea un'istanza del modello...
-let janet = new User({
+\begin{warningbox}{{Una svista nelle slide: \code{firstName} o \code{name}?}}
+Il modello \code{User} delle slide definisce il campo \code{firstName}, ma il
+codice che crea gli utenti usa \code{name}, che non è un attributo del modello
+e viene ignorato: la validazione si ferma su \code{firstName}, che non ammette
+valori nulli. Ecco il codice delle slide con il loro modello
+(\code{create\_slide.js}, con \code{janet.save()} alla riga 15):
+
+\begin{console}[Terminale]
+$ node create_slide.js
+...
+ValidationError [SequelizeValidationError]: notNull Violation: User.firstName cannot be null
+    ...
+    at async file:///[cartella del progetto]/create_slide.js:15:1 {
+...
+\end{console}
+
+Da qui in poi il campo si chiama \code{name}; la tabella creata prima, con la
+colonna \code{firstName}, va ricreata con \code{sync(\{ force: true \})}.
+\end{warningbox}
+
+Un'entità si crea costruendo un'istanza del modello e salvandola con
+\code{save()}, o in un passo solo con il metodo statico \code{create()}:
+
+\begingroup\codicepiccolo
+\begin{lstlisting}[style=js, name=utenti.js]
+import { DataTypes, Sequelize } from "sequelize";
+
+const database = new Sequelize("sqlite:mydb.sqlite");
+
+const User = database.define('User', {
+  name: { type: DataTypes.STRING, allowNull: false },     // non più firstName
+  age:  { type: DataTypes.INTEGER },
+  id:   { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true }
+});
+
+await User.sync({ force: true });    // la tabella con firstName va ricreata
+
+let janet = new User({   // prima si crea un'istanza del modello...
   name: "Janet",
   age: 22
 });
-await janet.save();   // ...e poi la si salva nel database
+await janet.save();      // ...e poi la si salva nel database
+console.log("Janet salvata nel database.");
 
-// oppure si usa il metodo statico Model.create()
-let riff = await User.create({
+let riff = await User.create({   // oppure si usa il metodo statico create()
   name: "Riff Raff",
   age: 26
 });
 console.log(`Riff Raff salvato con id ${riff.id}.`);
 \end{lstlisting}
-\risultato
-\begin{immagine}[Le due righe inserite nella tabella \code{Users}.]
-\begin{tikzpicture}
-  \dbtabella{t}{(0,0)}{Users}{3}{\textbf{id} & \textbf{name} & \textbf{age} \\ \hline
-    1 & Janet & 22 \\
-    2 & Riff Raff & 26}
-\end{tikzpicture}
-\end{immagine}
-\end{affianco}
+\endgroup
 
-\subsection{Associazioni}
+\begin{console}[Terminale]
+$ node utenti.js
+Executing (default): DROP TABLE IF EXISTS `Users`;
+Executing (default): CREATE TABLE IF NOT EXISTS `Users` (`name` VARCHAR(255) NOT NULL, `age` INTEGER, `id` INTEGER PRIMARY KEY AUTOINCREMENT, `createdAt` DATETIME NOT NULL, `updatedAt` DATETIME NOT NULL);
+Executing (default): PRAGMA INDEX_LIST(`Users`)
+Executing (default): INSERT INTO `Users` (`name`,`age`,`id`,`createdAt`,`updatedAt`) VALUES ($1,$2,NULL,$3,$4);
+Janet salvata nel database.
+Executing (default): INSERT INTO `Users` (`name`,`age`,`id`,`createdAt`,`updatedAt`) VALUES ($1,$2,NULL,$3,$4);
+Riff Raff salvato con id 2.
+\end{console}
 
-Sequelize supporta associazioni uno-a-uno, uno-a-molti e molti-a-molti.
+L'\code{id} è inserito come \code{NULL}: lo sceglie SQLite, grazie ad
+\code{AUTOINCREMENT}, e Sequelize lo copia nell'oggetto (\code{riff.id} vale 2).
+I valori non sono scritti dentro l'SQL: al loro posto ci sono i segnaposto
+\code{\$1}, \code{\$2}, \ldots, e i dati viaggiano separati. Sono le
+\textbf{query parametriche}, che mettono al riparo dalla \textit{SQL injection}
+(capitolo sulla sicurezza).
 
-\begin{lstlisting}[style=js]
-A.hasOne(B);                          // A ha un B
-A.belongsTo(B);                       // A appartiene a B
-A.hasMany(B);                         // A ha molti B
-A.belongsToMany(B, { through: 'C' }); // molti-a-molti tramite la tabella C
-\end{lstlisting}
+\subsection{Modelli come classi e associazioni}
 
-\begin{affianco}[0.55][c]
+Il secondo modo di definire un modello è una classe che estende \code{Model},
+configurata con \code{init} (\code{Todo}, qui sotto). Le \term{associazioni}
+uno-a-uno, uno-a-molti e molti-a-molti si dichiarano con quattro metodi (a
+destra); fra utenti e cose da fare l'associazione è uno-a-molti, dichiarata da
+entrambi i lati (righe 21 e 22).
+
+\begin{affianco}[0.6][t]
 \codicepiccolo
-\begin{lstlisting}[style=js, name=models/Database.js]
-const database = new Sequelize("sqlite:mydb.sqlite");
+\begin{lstlisting}[style=js, name=models.js]
+import { DataTypes, Model, Sequelize } from "sequelize";
 
-const User = database.define('User', { /* specifica */ });
+export const database = new Sequelize("sqlite:mydb.sqlite");
 
-class Todo extends Model {}
-Todo.init({ /* specifica */ }, { /* opzioni */ });
-
-User.hasMany(Todo);    // chiave esterna Todo -> User
-Todo.belongsTo(User);
-
-database.sync({ force: true }).then(() => {
-  console.log("Database sincronizzato.")
+export const User = database.define('User', {
+  name: { type: DataTypes.STRING, allowNull: false },
+  age:  { type: DataTypes.INTEGER },
+  id:   { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true }
 });
+
+export class Todo extends Model {}
+
+Todo.init({
+  todo: { type: DataTypes.TEXT, allowNull: false },
+  done: { type: DataTypes.BOOLEAN, defaultValue: false },
+  id:   { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true }
+}, {
+  sequelize: database, modelName: "Todo"
+});
+
+User.hasMany(Todo);    // Sequelize aggiunge a Todo la chiave esterna UserId
+Todo.belongsTo(User);
 \end{lstlisting}
 \risultato
+\codicepiccolo
+\begin{lstlisting}[style=js]
+A.hasOne(B);       // A ha un B
+A.belongsTo(B);    // A appartiene a B
+A.hasMany(B);      // A ha molti B
+// molti-a-molti, tramite la tabella C:
+A.belongsToMany(B, { through: 'C' });
+\end{lstlisting}
 \begin{immagine}[Uno-a-molti: la chiave esterna \code{UserId}\\ sta nella tabella dei \code{Todos}.]
 \begin{tikzpicture}[
     a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=accent!70!black}]
-  \dbtabella{u}{(0,0)}{Users}{1}{\textbf{id} (PK) \\ \hline name \\ age}
-  \dbtabella{t}{(2.8,0)}{Todos}{1}{\textbf{id} (PK) \\ \hline todo \\ done \\ \textcolor{accent!70!black}{UserId (FK)}}
-  \draw[a] ([yshift=-1.37cm]t.north west) -- ([yshift=-0.24cm]u.north east);
-  \node[mnota, anchor=south west] at ([yshift=-0.24cm]u.north east) {1};
-  \node[mnota, anchor=north east] at ([yshift=-1.37cm]t.north west) {*};
+  \dbtabella{u}{(0,0)}{Users}{1}{\textbf{id} (PK) \\ \hline name \\ age \\ createdAt \\ updatedAt}
+  \dbtabella{t}{(3.0,0)}{Todos}{1}{\textbf{id} (PK) \\ \hline todo \\ done \\ createdAt \\ updatedAt \\
+    \textcolor{accent!70!black}{UserId (FK)}}
+  \draw[a] ([yshift=4.2pt]t.south west) -- ++(-0.45,0) |- ([yshift=-7pt]u.north east);
+  \node[mnota, anchor=south west] at ([yshift=-7pt]u.north east) {1};
+  \node[mnota, anchor=south east] at ([yshift=4.2pt]t.south west) {*};
 \end{tikzpicture}
 \end{immagine}
-\end{affianco}
+\begin{lstlisting}[style=js, name=sync.js]
+import { database } from "./models.js";
 
-Per impostazione predefinita Sequelize crea una colonna chiamata
-\code{ModelloRiferitoChiavePrimaria}: nel nostro caso una colonna
-\code{UserId} nella tabella \code{Todos}.
-
-\begin{affianco}[0.54][c]
-\begin{lstlisting}[style=js, name=linked.js]
-let riff = await User.create({ name: "Riff Raff", age: 26 });
-
-let todo = await Todo.create({
-  todo: "Do the time warp again",
-  done: true,
-  UserId: riff.id
-});
+await database.sync({ force: true });
+console.log("Database sincronizzato.");
 \end{lstlisting}
-\risultato
-\begin{immagine}[Il todo punta all'utente tramite \code{UserId}.]
-\begin{tikzpicture}[
-    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=accent!70!black}]
-  \dbtabella{u}{(0,0)}{Users}{2}{\textbf{id} & \textbf{name} \\ \hline 2 & Riff Raff}
-  \dbtabella{t}{(0,-1.3)}{Todos}{3}{\textbf{id} & \textbf{todo} & \textbf{UserId} \\ \hline
-    1 & Do the time warp again & \textcolor{accent!70!black}{2}}
-  \draw[a] ([xshift=-6pt, yshift=6pt]t.south east) to[out=0, in=0, looseness=1.8]
-    ([yshift=6pt]u.south east);
-\end{tikzpicture}
-\end{immagine}
 \end{affianco}
 
-Un'istanza può anche essere creata \textbf{insieme alle associazioni annidate}
-in un solo passo, purché tutti gli elementi siano nuovi:
+\begin{console}[Terminale]
+$ node sync.js
+Executing (default): DROP TABLE IF EXISTS `Todos`;
+Executing (default): DROP TABLE IF EXISTS `Users`;
+Executing (default): PRAGMA foreign_keys = OFF
+Executing (default): DROP TABLE IF EXISTS `Users`;
+Executing (default): DROP TABLE IF EXISTS `Todos`;
+Executing (default): PRAGMA foreign_keys = ON
+Executing (default): DROP TABLE IF EXISTS `Users`;
+Executing (default): CREATE TABLE IF NOT EXISTS `Users` (`name` VARCHAR(255) NOT NULL, `age` INTEGER, `id` INTEGER PRIMARY KEY AUTOINCREMENT, `createdAt` DATETIME NOT NULL, `updatedAt` DATETIME NOT NULL);
+Executing (default): PRAGMA INDEX_LIST(`Users`)
+Executing (default): DROP TABLE IF EXISTS `Todos`;
+Executing (default): CREATE TABLE IF NOT EXISTS `Todos` (`todo` TEXT NOT NULL, `done` TINYINT(1) DEFAULT 0, `id` INTEGER PRIMARY KEY AUTOINCREMENT, `createdAt` DATETIME NOT NULL, `updatedAt` DATETIME NOT NULL, `UserId` INTEGER REFERENCES `Users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE);
+Executing (default): PRAGMA INDEX_LIST(`Todos`)
+Database sincronizzato.
+\end{console}
 
-\begin{affianco}[0.45][c]
-\begin{lstlisting}[style=js, name=nested.js]
+Con \code{force: true} Sequelize elimina le tabelle (con abbondanza di
+\code{DROP}, e disattivando per un momento il controllo delle chiavi esterne) e
+le ricrea nell'ordine giusto: prima \code{Users}, poi \code{Todos}, che vi fa
+riferimento. In \code{Todos} ci sono due cose che il modello non diceva:
+
+\begin{itemize}
+  \item la \textbf{chiave esterna} \code{UserId} verso \code{Users}, che prende
+        il nome del modello riferito seguito da quello della sua chiave
+        primaria (\code{User} + \code{Id}). Eliminando un utente, le sue cose da
+        fare restano con \code{UserId} nullo (\code{ON DELETE SET NULL}); se
+        cambia l'\code{id} di un utente, cambia anche nelle righe che vi si
+        riferiscono (\code{ON UPDATE CASCADE});
+  \item il tipo di \code{done}: SQLite non ha un tipo booleano, e
+        \code{BOOLEAN} diventa \code{TINYINT(1)}, con i valori 0 e 1.
+\end{itemize}
+
+\subsection{Creare dati collegati}
+
+Le entità collegate si possono creare in due modi: indicando a mano la chiave
+esterna (\code{UserId}), oppure creando un'istanza \textbf{insieme alle
+associazioni annidate}, in un solo passo, purché siano tutte nuove. Il secondo
+modo richiede l'opzione \code{include}, che dice a Sequelize quali associazioni
+considerare.
+
+\begin{lstlisting}[style=js, name=crea.js]
+import { User, Todo } from "./models.js";
+
+// un utente con le sue cose da fare, in un solo passo
 let janet = await User.create({
   name: "Janet",
   age: 22,
@@ -376,84 +466,159 @@ let janet = await User.create({
 }, {
   include: [Todo]
 });
+
+// un utente, e poi una cosa da fare collegata tramite UserId
+let riff = await User.create({
+  name: "Riff Raff",
+  age: 26
+});
+console.log(`Riff Raff salvato con id ${riff.id}.`);
+
+let todo = await Todo.create({
+  todo: "Do the time warp again",
+  done: true,
+  UserId: riff.id
+});
 \end{lstlisting}
-\risultato
-\begin{immagine}[Una sola chiamata, tre righe in due tabelle.]
-\begin{tikzpicture}
-  \dbtabella{u}{(0,0)}{Users}{3}{\textbf{id} & \textbf{name} & \textbf{age} \\ \hline 3 & Janet & 22}
-  \dbtabella{t}{(0,-1.3)}{Todos}{3}{\textbf{id} & \textbf{todo} & \textbf{UserId} \\ \hline
-    2 & Learn Sequelize & 3 \\ 3 & Learn Express & 3}
-\end{tikzpicture}
-\end{immagine}
-\end{affianco}
+
+\begin{console}[Terminale]
+$ node crea.js
+Executing (default): INSERT INTO `Users` (`name`,`age`,`id`,`createdAt`,`updatedAt`) VALUES ($1,$2,NULL,$3,$4);
+Executing (default): INSERT INTO `Todos` (`todo`,`done`,`id`,`createdAt`,`updatedAt`,`UserId`) VALUES ($1,$2,NULL,$3,$4,$5);
+Executing (default): INSERT INTO `Todos` (`todo`,`done`,`id`,`createdAt`,`updatedAt`,`UserId`) VALUES ($1,$2,NULL,$3,$4,$5);
+Executing (default): INSERT INTO `Users` (`name`,`age`,`id`,`createdAt`,`updatedAt`) VALUES ($1,$2,NULL,$3,$4);
+Riff Raff salvato con id 2.
+Executing (default): INSERT INTO `Todos` (`todo`,`done`,`id`,`createdAt`,`updatedAt`,`UserId`) VALUES ($1,$2,NULL,$3,$4,$5);
+\end{console}
+
+La prima \code{create} produce tre \code{INSERT}: Janet, e poi le sue due cose
+da fare, con la chiave esterna già impostata. Ecco il contenuto delle tabelle
+dopo l'esecuzione, letto dal database:
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}
+    \dbtabella{u}{(0,0)}{Users}{5}{\textbf{name} & \textbf{age} & \textbf{id} &
+      \textbf{createdAt} & \textbf{updatedAt} \\ \hline
+      Janet & 22 & 1 & 2026-11-03 12:00:04.390 +00:00 & 2026-11-03 12:00:04.390 +00:00 \\
+      Riff Raff & 26 & 2 & 2026-11-03 12:00:04.409 +00:00 & 2026-11-03 12:00:04.409 +00:00}
+    \dbtabella{t}{(0,-1.75)}{Todos}{6}{\textbf{todo} & \textbf{done} & \textbf{id} &
+      \textbf{createdAt} & \textbf{updatedAt} & \textbf{UserId} \\ \hline
+      Learn Sequelize & 0 & 1 & 2026-11-03 12:00:04.401 +00:00 & 2026-11-03 12:00:04.401 +00:00 & 1 \\
+      Learn Express & 0 & 2 & 2026-11-03 12:00:04.401 +00:00 & 2026-11-03 12:00:04.401 +00:00 & 1 \\
+      Do the time warp again & 1 & 3 & 2026-11-03 12:00:04.414 +00:00 & 2026-11-03 12:00:04.414 +00:00 & 2}
+  \end{tikzpicture}
+  \caption{Le tabelle dopo \code{crea.js}. Le date sono in UTC (\code{+00:00}).}
+  \label{fig:tabelle-crea}
+\end{figure}
 
 \subsection{Interrogare i dati}
 
-\begin{affianco}[0.55][c]
-\begin{lstlisting}[style=js, name=query.js]
-let todos = await Todo.findAll();    // SELECT * FROM Todos
+I modelli di Sequelize offrono modi semplici per recuperare i dati (la
+documentazione ha un riferimento completo sulle interrogazioni). Gli esempi che
+seguono sono tutti nel file \code{leggi.js}: ogni pezzo è seguito dalla parte
+corrispondente del suo output. Il più semplice è \code{findAll}, che restituisce
+tutte le righe come istanze del modello:
+
+\begin{lstlisting}[style=js, name=leggi.js]
+import { Op } from "sequelize";
+import { User, Todo } from "./models.js";
+
+let todos = await Todo.findAll();
 for (let i of todos)
   console.log(`${i.id}: ${i.todo}`);
 \end{lstlisting}
-\risultato
-\begin{console}
+
+\begin{console}[Terminale]
+$ node leggi.js
+Executing (default): SELECT `todo`, `done`, `id`, `createdAt`, `updatedAt`, `UserId` FROM `Todos` AS `Todo`;
 1: Learn Sequelize
 2: Learn Express
+3: Do the time warp again
 \end{console}
-\end{affianco}
 
-\begin{affianco}[0.55][c]
-\begin{lstlisting}[style=js, name=query.js]
-import { Op } from "sequelize";
+Le condizioni si esprimono con un oggetto \code{where}; gli operatori diversi
+dall'uguaglianza sono i simboli dell'oggetto \code{Op} (\code{Op.gte} sta per
+\textit{greater than or equal}, cioè \code{>=}):
 
-// SELECT * FROM Todos WHERE id >= 2 AND todo LIKE '%Express%'
-let todos = await Todo.findAll({
+\begin{lstlisting}[style=js, name=leggi.js, firstnumber=7]
+
+let filtrati = await Todo.findAll({
   where: {
     id:   { [Op.gte]:  2 },
     todo: { [Op.like]: '%Express%' }
   }
 });
+for (let i of filtrati)
+  console.log(`${i.id}: ${i.todo}`);
 \end{lstlisting}
-\risultato
-\begin{immagine}[Solo la riga che soddisfa entrambe le condizioni.]
-\begin{tikzpicture}
-  \dbtabella{t}{(0,0)}{Todos}{2}{\textbf{id} & \textbf{todo} \\ \hline
-    1 & Learn Sequelize \\
-    \textcolor{accent!70!black}{\textbf{2}} & \textcolor{accent!70!black}{\textbf{Learn Express}} \\
-    3 & Do the time warp again}
-\end{tikzpicture}
-\end{immagine}
-\end{affianco}
 
-Per impostazione predefinita le associazioni \textbf{non} vengono caricate: se
-servono, vanno richieste esplicitamente.
+\begin{console}[Terminale (segue)]
+Executing (default): SELECT `todo`, `done`, `id`, `createdAt`, `updatedAt`, `UserId` FROM `Todos` AS `Todo` WHERE `Todo`.`id` >= 2 AND `Todo`.`todo` LIKE '%Express%';
+2: Learn Express
+\end{console}
 
-\begin{affianco}[0.55][c]
-\begin{lstlisting}[style=js]
-let todos = await Todo.findAll({ include: [User] });
+\warning{Una svista nelle slide: gli apici di \code{'\%Express\%'}}{
+  Nelle slide la stringa \code{'\%Express\%’} si chiude con un apostrofo
+  tipografico (’) invece che con quello dritto ('), un tipico effetto della
+  correzione automatica degli editor di testo: copiata così, non è JavaScript
+  valido, e Node.js si ferma con \code{SyntaxError: Invalid or unexpected
+  token}. Anche l'SQL riportato accanto, \code{LIKE '\%Express'}, ha perso il
+  \code{\%} finale: la query vera, stampata da Sequelize, è
+  \code{LIKE '\%Express\%'}.}
 
-for (let item of todos)
+\subsection{Caricare le associazioni, cercare per chiave}
+
+Per impostazione predefinita le associazioni \textbf{non} vengono caricate
+quando si recuperano i dati: se servono, vanno richieste esplicitamente con
+\code{include}, e Sequelize risponde con una \textit{join}. Il file è sempre
+\code{leggi.js}, e l'output prosegue quello di prima.
+
+\begin{lstlisting}[style=js, name=leggi.js, firstnumber=16]
+
+let conUtente = await Todo.findAll({ include: [User] });
+for (let item of conUtente)
   console.log(`${item.todo} - ${item.User?.name}`);
 \end{lstlisting}
-\risultato
-\begin{console}
+
+\begin{console}[Terminale (segue)]
+Executing (default): SELECT `Todo`.`todo`, `Todo`.`done`, `Todo`.`id`, `Todo`.`createdAt`, `Todo`.`updatedAt`, `Todo`.`UserId`, `User`.`name` AS `User.name`, `User`.`age` AS `User.age`, `User`.`id` AS `User.id`, `User`.`createdAt` AS `User.createdAt`, `User`.`updatedAt` AS `User.updatedAt` FROM `Todos` AS `Todo` LEFT OUTER JOIN `Users` AS `User` ON `Todo`.`UserId` = `User`.`id`;
 Learn Sequelize - Janet
 Learn Express - Janet
 Do the time warp again - Riff Raff
 \end{console}
-\end{affianco}
 
-Si può recuperare un'entità dalla sua chiave primaria con \code{findByPk}:
+La \code{LEFT OUTER JOIN} tiene anche le cose da fare senza utente (con
+\code{UserId} nullo): per loro \code{item.User} sarebbe \code{null}, ed è per
+questo che il codice usa l'operatore \code{?.} (capitolo 5). Infine, un'entità
+si recupera dalla sua chiave primaria con \code{findByPk}:
 
-\begin{lstlisting}[style=js]
+\begin{lstlisting}[style=js, name=leggi.js, firstnumber=20]
+
 let t = await Todo.findByPk(3);
 console.log("t:", t.id, t.todo, t.done, t.UserId);
 \end{lstlisting}
 
+\begin{console}[Terminale (segue)]
+Executing (default): SELECT `todo`, `done`, `id`, `createdAt`, `updatedAt`, `UserId` FROM `Todos` AS `Todo` WHERE `Todo`.`id` = 3;
+t: 3 Do the time warp again true 2
+\end{console}
+
+\warning{Una svista nelle slide: \code{true}, non \code{false}}{
+  Nelle slide l'ultima riga è \code{t: 3 Do the time warp again false 2}. Ma
+  questa cosa da fare è stata creata con \code{done: true} (\code{crea.js},
+  riga 24), e nel database la colonna vale 1: l'output reale, qui sopra, è
+  \code{true}. Si noti anche che Sequelize ha riconvertito l'1 di SQLite nel
+  booleano di JavaScript.}
+
 \subsection{Modificare ed eliminare}
 
-\begin{affianco}[0.55][c]
-\begin{lstlisting}[style=js, name=update.js]
+Un'istanza modificata si salva di nuovo con \code{save()}, e si elimina con
+\code{destroy()}:
+
+\begin{lstlisting}[style=js, name=modifica.js]
+import { Todo } from "./models.js";
+
 let learnSequelize = await Todo.findByPk(1);
 learnSequelize.setDataValue('done', true);
 await learnSequelize.save();     // UPDATE sul database
@@ -461,16 +626,34 @@ await learnSequelize.save();     // UPDATE sul database
 let learnExpress = await Todo.findByPk(2);
 await learnExpress.destroy();    // DELETE dal database
 \end{lstlisting}
-\risultato
-\begin{immagine}[Prima e dopo: un aggiornamento e una cancellazione.]
-\begin{tikzpicture}
-  \dbtabella{a}{(0,0)}{prima}{3}{\textbf{id} & \textbf{todo} & \textbf{done} \\ \hline
-    1 & Learn Sequelize & false \\ 2 & Learn Express & false}
-  \dbtabella{b}{(0,-1.75)}{dopo}{3}{\textbf{id} & \textbf{todo} & \textbf{done} \\ \hline
-    1 & Learn Sequelize & \textcolor{accent!70!black}{\textbf{true}}}
-\end{tikzpicture}
-\end{immagine}
-\end{affianco}
+
+\begin{console}[Terminale]
+$ node modifica.js
+Executing (default): SELECT `todo`, `done`, `id`, `createdAt`, `updatedAt`, `UserId` FROM `Todos` AS `Todo` WHERE `Todo`.`id` = 1;
+Executing (default): UPDATE `Todos` SET `done`=$1,`updatedAt`=$2 WHERE `id` = $3
+Executing (default): SELECT `todo`, `done`, `id`, `createdAt`, `updatedAt`, `UserId` FROM `Todos` AS `Todo` WHERE `Todo`.`id` = 2;
+Executing (default): DELETE FROM `Todos` WHERE `id` = 2
+\end{console}
+
+L'\code{UPDATE} riscrive solo le colonne cambiate: \code{done} e
+\code{updatedAt}, che Sequelize aggiorna da sé. Nella tabella, la prima riga ha
+ora \code{done} a 1 e un \code{updatedAt} più recente (mezzo secondo dopo), e la
+seconda non c'è più:
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}
+    \dbtabella{t}{(0,0)}{Todos}{6}{\textbf{todo} & \textbf{done} & \textbf{id} &
+      \textbf{createdAt} & \textbf{updatedAt} & \textbf{UserId} \\ \hline
+      Learn Sequelize & \textcolor{accent!70!black}{\textbf{1}} & 1 &
+        2026-11-03 12:00:04.401 +00:00 &
+        \textcolor{accent!70!black}{\textbf{2026-11-03 12:00:04.914 +00:00}} & 1 \\
+      Do the time warp again & 1 & 3 & 2026-11-03 12:00:04.414 +00:00 &
+        2026-11-03 12:00:04.414 +00:00 & 2}
+  \end{tikzpicture}
+  \caption{La tabella \code{Todos} dopo \code{modifica.js}.}
+  \label{fig:tabelle-modifica}
+\end{figure}
 
 \subsection{Pro e contro degli ORM}
 
@@ -487,7 +670,7 @@ await learnExpress.destroy();    // DELETE dal database
   \textbf{Portabilità}: è facile passare da un database supportato a un altro.
   & \textbf{Vendor lock-in}: cambiare ORM può essere difficile. \\
   \textbf{Leggibilità e coerenza}: più leggibile dell'SQL grezzo, e impone
-  convenzioni comuni.
+  schemi e convenzioni comuni.
   & \textbf{Prestazioni}: un ORM può introdurre un sovraccarico, soprattutto se
     usato male. \\
 \end{tabular}
@@ -496,24 +679,47 @@ await learnExpress.destroy();    // DELETE dal database
 \section{Organizzare un'applicazione Express}
 
 Express è \textit{unopinionated}: di conseguenza non esiste un unico modo giusto
-di organizzare un'applicazione. Quella che segue è l'organizzazione adottata nel
-corso; non è scolpita nella pietra.
+di organizzare un'applicazione. Quella della figura~\ref{fig:struttura} è
+l'organizzazione adottata nel corso, e la useremo per la lista di cose da fare;
+non è scolpita nella pietra, e vale la pena pensarci e migliorarla.
 
-\begin{center}
-\renewcommand{\arraystretch}{1.4}
-\begin{tabular}{@{}l@{\hspace{1.2cm}}>{\raggedright\arraybackslash}p{8.6cm}@{}}
-  \textbf{Directory} & \textbf{Contenuto} \\
-  \code{views}       & i template \\
-  \code{routes}      & la definizione dei router: il codice che indirizza le
-                       richieste verso il controller appropriato \\
-  \code{controllers} & il codice che implementa la logica di business per
-                       gestire le richieste \\
-  \code{models}      & la definizione dei modelli di dati e le connessioni al
-                       database \\
-  \code{middleware}  & i middleware personalizzati \\
-  \code{public}      & i file statici, organizzati in sottodirectory \\
-\end{tabular}
-\end{center}
+\begin{figure}[H]
+  \centering
+  {\renewcommand{\arraystretch}{1.2}%
+  \begin{tabular}{@{}>{\FiraCodeNL\scriptsize}l
+                  >{\raggedright\arraybackslash\leavevmode\FiraCodeNL\scriptsize\color{neutral!40!black}}p{5.3cm}
+                  >{\raggedright\arraybackslash\leavevmode\Lato\footnotesize}p{6.8cm}@{}}
+    \textcolor{primary!75!black}{\ifolder\ express-todo-list/} & & \\
+    ├─ \textcolor{primary!75!black}{\ifolder\ views/} &
+      auth.pug, errorPage.pug, homepage.pug, layout.pug, todo.pug &
+      i \textbf{template} \\
+    ├─ \textcolor{primary!75!black}{\ifolder\ routes/} &
+      authenticationRouter.js, homepageRouter.js, resetRouter.js, todoRouter.js &
+      la definizione dei \textbf{router}: il codice che indirizza le richieste
+      verso il controller appropriato \\
+    ├─ \textcolor{primary!75!black}{\ifolder\ controllers/} &
+      AuthController.js, TodoController.js &
+      il codice che implementa la \textbf{logica di business} per gestire le
+      richieste \\
+    ├─ \textcolor{primary!75!black}{\ifolder\ models/} &
+      Database.js &
+      la definizione dei \textbf{modelli} di dati e la connessione al
+      database \\
+    ├─ \textcolor{primary!75!black}{\ifolder\ middleware/} &
+      authorization.js, views.js &
+      i \textbf{middleware} personalizzati \\
+    ├─ \textcolor{primary!75!black}{\ifolder\ public/} &
+      css/style.css &
+      i \textbf{file statici}, organizzati in sottocartelle \\
+    ├─ \textcolor{neutral!50!black}{\ifolder\ node\_modules/} & &
+      i pacchetti installati da npm (non si versiona) \\
+    ├─ \ifile\ index.js & & il punto d'ingresso: configura e avvia l'app \\
+    ├─ \ifile\ package.json & & le dipendenze e gli script di npm \\
+    └─ \ifile\ database.db & & il database SQLite, creato al primo avvio \\
+  \end{tabular}}
+  \caption{La struttura della lista di cose da fare con Express.}
+  \label{fig:struttura}
+\end{figure}
 
 \section{Configurazione}
 
@@ -521,7 +727,8 @@ Le applicazioni web dipendono spesso da informazioni \textbf{sensibili} e da
 impostazioni \textbf{specifiche dell'ambiente}:
 
 \begin{itemize}
-  \item sensibili: chiavi API, password del database, credenziali cloud;
+  \item sensibili: chiavi API, password del database, credenziali cloud (per
+        esempio di AWS);
   \item specifiche dell'ambiente: URL del database di produzione, sviluppo o
         collaudo, livelli di log.
 \end{itemize}
@@ -534,15 +741,16 @@ impostazioni \textbf{specifiche dell'ambiente}:
           anche dopo essere stata rimossa;
     \item può essere necessario modificare più file per cambiare
           un'impostazione;
-    \item porta ad avere \guillemotleft versioni\guillemotright\ diverse dell'applicazione (sviluppo,
-          produzione) da aggiornare e mantenere separatamente.
+    \item porta ad avere \guillemotleft versioni\guillemotright\ diverse
+          dell'applicazione (sviluppo, produzione) da aggiornare e mantenere
+          separatamente.
   \end{itemize}
   Questi dati vanno in un \textbf{file di configurazione dedicato}.}
 
 Il file di configurazione dovrebbe essere l'\textbf{unico punto} in cui queste
 impostazioni si cambiano, e \textbf{non} va versionato (va messo nel
 \code{.gitignore}). Al suo posto si versiona una \textbf{versione fittizia}, che
-ciascuno modifica con le proprie impostazioni.
+ciascuno copia e modifica con le proprie impostazioni.
 
 Un modo diffuso è usare un file \code{.env} nella radice del progetto; pacchetti
 come \code{dotenv} lo leggono e ne rendono disponibile il contenuto
@@ -552,62 +760,171 @@ nell'oggetto globale \code{process.env}.
   \centering
   \begin{tikzpicture}[font=\Lato\scriptsize,
       f/.style={rounded corners=3pt, line width=0.8pt, align=left, inner sep=5pt,
-                font=\FiraCodeNL\scriptsize, text width=3.3cm},
+                font=\FiraCodeNL\scriptsize, text width=3.4cm, anchor=north},
       nv/.style={f, draw=red-gradient-6, fill=red-gradient-1!25!white},
-      v/.style={f, draw=green-gradient-6, fill=green-gradient-1!35!white}]
+      v/.style={f, draw=green-gradient-6, fill=green-gradient-1!35!white},
+      a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.8pt,
+                draw=neutral!45!black}]
 
     \node[font=\Lato\scriptsize\bfseries, text=red-gradient-6!75!black]
-      at (0,2.0) {non versionato};
+      at (2.0,1.0) {non versionati};
     \node[font=\Lato\scriptsize\bfseries, text=green-gradient-6!60!black]
-      at (6.5,2.0) {versionato};
+      at (10.6,1.0) {versionati};
 
-    \node[nv] (e1) at (0,0.9)
-      {\textbf{.env}\\ DB\_USER = "postgres"\\ DB\_PASS = "7\$cX\&"\\
-       DB\_HOST = "123.4.5.6"};
-    \node[nv] (e2) at (0,-1.4)
-      {\textbf{.env.production}\\ DB\_USER = "postgres"\\ DB\_PASS = "7\$cX\&"\\
-       DB\_HOST = "123.4.5.6"};
+    \node[nv] (env) at (0,0.5)
+      {\textbf{.env}\\[2pt] DB\_USER = "postgres"\\ DB\_PASS = "7\$cX\&.;£"\\
+       DB\_HOST = "123.4.5.6"\\ DB\_PORT = "5432"\\ DB\_NAME = "db"\\
+       API\_KEY = "i8\%\&787d"};
+    \node[nv] (prod) at (0,-2.55)
+      {\textbf{.env.production}\\[2pt] DB\_USER = "postgres"\\ DB\_PASS = "7\$cX\&.;£"\\
+       DB\_HOST = "123.4.5.6"\\ DB\_PORT = "5432"\\ DB\_NAME = "db"\\
+       API\_KEY = "i8\%\&787d"};
+    \node[nv] (dev) at (4.0,-2.55)
+      {\textbf{.env.dev}\\[2pt] DB\_USER = "dev"\\ DB\_PASS = "d3v370p"\\
+       DB\_HOST = "123.4.5.7"\\ DB\_PORT = "5432"\\ DB\_NAME = "dbdev"\\
+       API\_KEY = "i8\%\&787d"};
 
-    \node[v] (d1) at (6.5,0.9)
-      {\textbf{.env.dummy}\\ DB\_USER = "USER"\\ DB\_PASS = "PASS"\\
-       DB\_HOST = "???"};
-    \node[v] (d2) at (6.5,-1.4)
-      {\textbf{README.md}\\ Rinomina .env.dummy\\ in .env e adattalo\\
-       alle tue esigenze.};
+    \node[v, text width=2.6cm, align=center, font=\Lato\scriptsize] (code) at (8.6,0.0)
+      {\textbf{codice dell'app}\\ legge il file \code{.env}};
+    \node[v] (dummy) at (8.6,-2.55)
+      {\textbf{.env.dummy}\\[2pt] DB\_USER = "USER"\\ DB\_PASS = "PASS"\\
+       DB\_HOST = "???"\\ DB\_PORT = "5432"\\ DB\_NAME = "NAME"\\
+       API\_KEY = "YOUR\_KEY"};
+    \node[v, font=\Lato\scriptsize] (readme) at (12.6,0.5)
+      {\textbf{\FiraCodeNL README.md}\\[2pt] Rinomina \code{.env.dummy} in
+       \code{.env} e cambiane il contenuto secondo le tue esigenze.};
 
-    \draw[dashed, draw=neutral!45!white, line width=0.8pt] (3.25,2.3) -- (3.25,-2.5);
+    \draw[a] (code.west) -- node[mnota, above]{legge} (env.east |- code.west);
+    \draw[dashed, draw=neutral!45!white, line width=0.8pt] (6.3,1.2) -- (6.3,-5.1);
   \end{tikzpicture}
-  \caption{Che cosa si versiona e che cosa no.}
+  \caption{Che cosa si versiona e che cosa no. I file \code{.env.production} e
+           \code{.env.dev} raccolgono le impostazioni di ambienti diversi.}
   \label{fig:dotenv}
 \end{figure}
 
+Una prova con \code{dotenv} (versione 18.0.9). Il file \code{.env} è quello
+della figura; basta importare \code{dotenv/config} perché venga letto
+all'avvio:
+
+\begin{lstlisting}[style=js, name=config.js]
+import "dotenv/config";    // legge .env e lo copia in process.env
+
+console.log(`Connessione a ${process.env.DB_HOST}:${process.env.DB_PORT}` +
+            ` come ${process.env.DB_USER}`);
+console.log("La password ha", process.env.DB_PASS.length, "caratteri");
+\end{lstlisting}
+
+\begin{affianco}[0.3][t]
+\begin{lstlisting}[style=plain, name=.env]
+DB_USER = "postgres"
+DB_PASS = "7$cX&.;£"
+DB_HOST = "123.4.5.6"
+DB_PORT = "5432"
+DB_NAME = "db"
+API_KEY = "i8%&787d"
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ npm install dotenv
+...
+$ node config.js
+Connessione a 123.4.5.6:5432 come postgres
+La password ha 8 caratteri
+$ DB_HOST=localhost node config.js
+Connessione a localhost:5432 come postgres
+La password ha 8 caratteri
+\end{console}
+\end{affianco}
+
+Le virgolette del file \code{.env} non finiscono nel valore, e i caratteri
+speciali della password arrivano intatti (sono 8). La seconda esecuzione mostra
+una regola importante: le variabili d'ambiente \textbf{già definite} hanno la
+precedenza su quelle del file, che \code{dotenv} non sovrascrive. È così che, in
+produzione, il sistema in cui gira l'app può imporre le proprie impostazioni.
+
 \section{La lista di cose da fare, con Express}
 
-Riscriviamo l'applicazione con Express, aggiungendo qualche funzionalità: gli
-utenti potranno marcare gli elementi come completati, modificarli ed
-eliminarli, e la persistenza sarà gestita con Sequelize.
+Riscriviamo la lista di cose da fare con Express, rendendola un po' più
+interessante:
+
+\begin{itemize}
+  \item gli utenti potranno segnare ogni elemento come «fatto» o «da rifare»;
+  \item potranno modificare ed eliminare gli elementi;
+  \item la persistenza dei dati sarà gestita con Sequelize.
+\end{itemize}
+
+Il codice completo è nei materiali del corso, e le slide ne riportano alcuni
+estratti. Qui se ne usa una versione ricostruita da quegli estratti e completata
+dove le slide si fermano: è quella eseguita per ottenere gli output del
+capitolo.
+
+\subsection{I modelli}
+
+\begin{lstlisting}[style=js, name=models/Database.js]
+import { DataTypes, Model, Sequelize } from "sequelize";
+
+export const database = new Sequelize("sqlite:database.db", { logging: false });
+
+export class User extends Model {}
+
+User.init({
+  userName: { type: DataTypes.STRING, primaryKey: true },
+  password: { type: DataTypes.STRING, allowNull: false }
+}, {
+  sequelize: database, modelName: "User"
+});
+
+export class Todo extends Model {}
+
+Todo.init({
+  todo: { type: DataTypes.TEXT, allowNull: false },
+  done: { type: DataTypes.BOOLEAN, defaultValue: false },
+  id:   { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true }
+}, {
+  sequelize: database, modelName: "Todo"
+});
+
+User.hasMany(Todo);      // chiave esterna UserUserName nella tabella Todos
+Todo.belongsTo(User);
+
+await database.sync();
+// un utente di prova (le password in chiaro vanno bene solo in una demo)
+await User.findOrCreate({ where: { userName: "janet" }, defaults: { password: "rocky" } });
+\end{lstlisting}
+
+Questa volta la chiave primaria degli utenti è il nome utente, e la regola sul
+nome della chiave esterna (modello riferito + chiave primaria) produce un nome
+un po' buffo, \code{UserUserName}. Ecco lo schema che Sequelize crea al primo
+avvio, letto dal catalogo di SQLite:
+
+\begin{console}[Schema del database]
+CREATE TABLE `Users` (`userName` VARCHAR(255) PRIMARY KEY, `password` VARCHAR(255) NOT NULL, `createdAt` DATETIME NOT NULL, `updatedAt` DATETIME NOT NULL);
+CREATE TABLE `Todos` (`todo` TEXT NOT NULL, `done` TINYINT(1) DEFAULT 0, `id` INTEGER PRIMARY KEY AUTOINCREMENT, `createdAt` DATETIME NOT NULL, `updatedAt` DATETIME NOT NULL, `UserUserName` VARCHAR(255) REFERENCES `Users` (`userName`) ON DELETE SET NULL ON UPDATE CASCADE);
+\end{console}
+
+Il modulo sincronizza il database (senza \code{force}: i dati restano fra un
+avvio e l'altro) e, con \code{findOrCreate}, si assicura che esista un utente
+di prova. Sono \code{await} al livello più alto del modulo: chi lo importa
+riceve modelli già pronti.
 
 \subsection{Configurazione dei middleware}
 
-\begin{affianco}[0.6][c]
+\begin{affianco}[0.69][c]
 \codicepiccolo
-\begin{lstlisting}[style=js, name=index.js]
+\begin{lstlisting}[style=js, name=index.js, firstnumber=11]
 const app = express();
 const PORT = 3000;
 
-app.set("view engine", "pug");        // motore di template
+app.set("view engine", "pug");        // pug come motore di template predefinito
 
-app.use(morgan('dev'));               // log delle richieste
-app.use(express.static("public"));    // file statici
+app.use(morgan('dev'));
+app.use(express.static("public"));
 app.use(express.urlencoded({ extended: false }));
-
 app.use(session({
   secret: 'fu-tzu the great master',
-  resave: false,
-  saveUninitialized: false,
+  resave: false, saveUninitialized: false,
   cookie: { maxAge: 10 * 60 * 1000 }  // 10 minuti, in millisecondi
 }));
-
 app.use(flash());
 app.use(exportFlashMessagesToViews);
 app.use(exportAuthenticationStatus);
@@ -630,95 +947,208 @@ app.use(exportAuthenticationStatus);
 \end{immagine}
 \end{affianco}
 
-Si noti l'ordine: è quello in cui i middleware verranno eseguiti. La sessione
-deve essere stabilita \textbf{prima} dei middleware che ne leggono lo stato.
+Le prime nove righe di \code{index.js} importano i moduli. L'ordine dei
+middleware è quello in cui verranno eseguiti: \code{morgan} registra ogni
+richiesta nel terminale del server, poi vengono i file statici, l'analisi dei
+form, la sessione e i messaggi flash, che nella sessione vivono. La sessione
+deve quindi essere stabilita \textbf{prima} dei middleware che ne leggono lo
+stato. Gli ultimi due sono dell'app:
+
+\begin{lstlisting}[style=js, name=middleware/views.js]
+// rende disponibili a tutti i template i messaggi flash...
+export function exportFlashMessagesToViews(req, res, next) {
+  res.locals.infos = req.flash("info");
+  res.locals.successes = req.flash("success");
+  res.locals.errors = req.flash("error");
+  next();
+}
+
+// ...e lo stato dell'autenticazione (per esempio per la barra di navigazione)
+export function exportAuthenticationStatus(req, res, next) {
+  res.locals.isAuthenticated = req.session.isAuthenticated;
+  res.locals.username = req.session.username;
+  next();
+}
+\end{lstlisting}
+
+Copiano in \code{res.locals} ciò che serve a \textbf{ogni} pagina, così nessun
+gestore deve ricordarsene. Lo usa il template comune a tutte le pagine, che le
+altre estendono:
+
+\begin{affianco}[0.41][t]
+\codicepiccolo
+\begin{lstlisting}[style=pug, name=views/layout.pug]
+doctype html
+html(lang="it")
+  head
+    meta(charset="utf-8")
+    title To-do list con Express
+    link(rel="stylesheet" href="/css/style.css")
+  body
+    nav
+      a(href="/") Home
+      if isAuthenticated
+        a(href="/todo") La lista
+        form(action="/reset" method="POST")
+          button(type="submit") Azzera
+        form(action="/logout" method="POST")
+          button(type="submit") Esci (#{username})
+      else
+        a(href="/auth") Accedi
+    main
+      each info in infos
+        p.info #{info}
+      each success in successes
+        p.success #{success}
+      each error in errors
+        p.error #{error}
+      block content
+\end{lstlisting}
+\risultato
+\codicepiccolo
+\begin{lstlisting}[style=pug, name=views/todo.pug]
+extends layout.pug
+
+block content
+  h1 La lista di #{username}
+  form(action="/todo" method="POST")
+    input(type="text" name="todo" required)
+    button(type="submit") Salva
+  ul
+    each item in todoItems
+      li(class=item.done ? "done" : "")
+        form(action=`/todo/${item.id}/toggle` method="POST")
+          button(type="submit")= item.done ? "Da rifare" : "Fatto"
+        form(action=`/todo/${item.id}` method="POST")
+          input(type="text" name="todo" value=item.todo required)
+          button(type="submit") Modifica
+        form(action=`/todo/${item.id}/delete` method="POST")
+          button(type="submit") Elimina
+    else
+      li La lista è vuota.
+\end{lstlisting}
+\end{affianco}
+
+Ogni azione che \textbf{modifica} i dati (segnare, modificare, eliminare,
+azzerare, uscire) è un form con metodo \code{POST}, mai un semplice
+collegamento: una richiesta \code{GET} non deve avere effetti, perché browser,
+proxy e motori di ricerca si sentono liberi di ripeterla o di anticiparla
+(capitolo 9). Il costrutto \code{each}\ldots\code{else} di Pug mostra
+l'ultimo \code{li} quando la lista è vuota.
 
 \subsection{Configurazione delle rotte}
 
-\begin{affianco}[0.6][c]
-\codicepiccolo
-\begin{lstlisting}[style=js, name=index.js]
-app.use(homepageRouter);
-app.use(resetRouter);
-app.use(authenticationRouter);
-app.use(todoRouter);
+\begin{lstlisting}[style=js, name=index.js, firstnumber=28]
+// rotte
+app.use(homepageRouter); app.use(resetRouter);
+app.use(authenticationRouter); app.use(todoRouter);
 
-// catch-all: se arriviamo qui, e' un 404
-app.get('*', function (req, res) {
-  res.status(404).render("errorPage",
-    { code: "404", description: "Non trovato." });
+// catch-all: se arriviamo qui, è un 404
+app.get('/*splat', function (req, res) {
+  res.status(404).render("errorPage", { code: "404", description: "Non trovato." });
 });
 
-// gestore di errori
+// gestore degli errori
 app.use((err, req, res, next) => {
   console.log(err.stack);
   res.status(err.status || 500).render("errorPage", {
-    code: (err.status || 500),
-    description: (err.message || "Si e' verificato un errore")
+    code: (err.status || 500), description: (err.message || "Si è verificato un errore")
   });
 });
 
 app.listen(PORT);
 \end{lstlisting}
-\risultato
-\begin{immagine}[Una richiesta scende finché qualcuno\\ non risponde.]
-\begin{tikzpicture}[
-    m/.style={rounded corners=2pt, draw=primary!55!black, fill=primary!8!white,
-      line width=0.6pt, font=\FiraCodeNL\scriptsize, minimum width=3.2cm,
-      minimum height=0.42cm},
-    a/.style={-{Stealth[length=3.5pt,width=3pt]}, line width=0.6pt, draw=neutral!45!black}]
-  \foreach \t [count=\i] in {homepageRouter, resetRouter, authenticationRouter, todoRouter} {
-    \node[m] (m\i) at (0,-\i*0.62) {\t};
-  }
-  \node[m, draw=orange-gradient-6, fill=orange-gradient-1!40!white] (c) at (0,-3.35) {catch-all: 404};
-  \node[m, draw=merr, fill=red-gradient-1!35!white] (e) at (0,-4.35) {gestore di errori};
-  \foreach \i/\j in {1/2,2/3,3/4} \draw[a] (m\i) -- (m\j);
-  \draw[a] (m4) -- (c);
-  \draw[a, dashed, draw=merr] (m2.east) to[out=0, in=0] node[mnota, right, text=merr]{next(err)} (e.east);
-\end{tikzpicture}
-\end{immagine}
-\end{affianco}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      m/.style={rounded corners=2pt, draw=primary!55!black, fill=primary!8!white,
+        line width=0.6pt, font=\FiraCodeNL\scriptsize, minimum height=0.5cm,
+        inner xsep=5pt},
+      a/.style={-{Stealth[length=3.5pt,width=3pt]}, line width=0.6pt,
+        draw=neutral!45!black},
+      e/.style={dashed, draw=merr, line width=0.6pt}]
+    \node[m] (m1) at (0,0) {homepageRouter};
+    \node[m, anchor=west] (m2) at ([xshift=0.6cm]m1.east) {resetRouter};
+    \node[m, anchor=west] (m3) at ([xshift=0.6cm]m2.east) {authenticationRouter};
+    \node[m, anchor=west] (m4) at ([xshift=0.6cm]m3.east) {todoRouter};
+    \node[m, anchor=west, draw=orange-gradient-6, fill=orange-gradient-1!40!white]
+      (c) at ([xshift=0.6cm]m4.east) {catch-all: 404};
+    \foreach \i/\j in {m1/m2, m2/m3, m3/m4, m4/c} \draw[a] (\i) -- (\j);
+    \node[m, anchor=north, draw=merr, fill=red-gradient-1!35!white]
+      (h) at ([yshift=-0.75cm]c.south) {gestore degli errori};
+    \foreach \n in {m1, m2, m3, m4} \draw[e] (\n.south) -- (\n.south |- h.west);
+    \draw[e, -{Stealth[length=3.5pt,width=3pt]}] (m1.south |- h.west)
+      -- node[mnota, below, text=merr]{un errore, in qualunque router} (h.west);
+  \end{tikzpicture}
+  \caption{Una richiesta attraversa i router nell'ordine in cui sono montati,
+           finché qualcuno non risponde; un errore passa direttamente al gestore
+           degli errori.}
+  \label{fig:rotte-todo}
+\end{figure}
 
 L'ordine conta anche qui: il \textit{catch-all} va dopo tutte le rotte
-specifiche, e il gestore di errori per ultimo.
+specifiche, e il gestore degli errori per ultimo. Il percorso \code{'/*splat'}
+è la sintassi di Express 5 per «qualunque percorso» (in Express 4 si scriveva
+\code{'*'}, oggi un errore: capitolo 15). Due dettagli: un jolly con nome deve
+catturare almeno un segmento, quindi \code{/} da solo non corrisponde (ma lo
+gestisce già \code{homepageRouter}); e \code{app.get} cattura solo le
+richieste \code{GET}, quindi un \code{POST} verso un percorso inesistente
+riceve la pagina 404 predefinita di Express. Per le pagine d'errore, il
+gestore usa lo stato e il messaggio dell'errore, se ci sono.
 
-\subsection{Un router}
+\subsection{Un router e il suo controller}
 
-\begin{affianco}[0.58][c]
-\codicepiccolo
 \begin{lstlisting}[style=js, name=routes/todoRouter.js]
+import express from "express";
+import { TodoController } from "../controllers/TodoController.js";
+import { enforceAuthentication } from "../middleware/authorization.js";
+
 export const todoRouter = new express.Router();
 
-todoRouter.use(enforceAuthentication);   // solo per questo router
+todoRouter.use(enforceAuthentication);   // middleware usato da questo router
 
 todoRouter.get("/todo", (req, res, next) => {
   TodoController.getTodosForCurrentUser(req).then(todoItems => {
     res.locals.todoItems = todoItems;
     res.render("todo");
   }).catch(err => {
-    next(err);        // gli errori asincroni vanno passati a next()
+    next(err);
   });
 });
+
+todoRouter.post("/todo", async (req, res) => {
+  await TodoController.saveTodo(req);
+  req.flash("success", "Elemento salvato.");
+  res.redirect("/todo");
+});
+
+todoRouter.post("/todo/:id/toggle", async (req, res) => {
+  await TodoController.toggleTodo(req);
+  res.redirect("/todo");
+});
+
+todoRouter.post("/todo/:id", async (req, res) => {
+  await TodoController.updateTodo(req);
+  req.flash("success", "Elemento modificato.");
+  res.redirect("/todo");
+});
+
+todoRouter.post("/todo/:id/delete", async (req, res) => {
+  await TodoController.deleteTodo(req);
+  req.flash("success", "Elemento eliminato.");
+  res.redirect("/todo");
+});
 \end{lstlisting}
-\risultato
-\begin{immagine}[Ogni rotta del router passa prima dal middleware.]
-\begin{tikzpicture}[
-    m/.style={rounded corners=2pt, draw=primary!55!black, fill=primary!8!white,
-      line width=0.6pt, font=\FiraCodeNL\scriptsize, minimum width=3.4cm,
-      minimum height=0.45cm},
-    a/.style={-{Stealth[length=3.5pt,width=3pt]}, line width=0.6pt, draw=neutral!45!black}]
-  \node[mcod] (r) at (0,0) {GET /todo};
-  \node[m] (e) at (0,-0.75) {enforceAuthentication};
-  \node[m] (c) at (0,-1.5) {TodoController};
-  \node[m, fill=accent!12!white, draw=accent!55!black] (v) at (0,-2.25) {res.render("todo")};
-  \draw[a] (r) -- (e); \draw[a] (e) -- node[mcod, right, font=\FiraCodeNL\tiny]{next()} (c); \draw[a] (c) -- (v);
-\end{tikzpicture}
-\end{immagine}
-\end{affianco}
 
-\subsection{Un controller}
+Il router si limita a \textbf{instradare}: per ogni rotta chiama il metodo
+giusto del controller e decide la risposta (una vista, o un reindirizzamento con
+un messaggio flash). Il gestore \code{GET} è quello delle slide, con
+\code{then}/\code{catch} e l'errore passato a mano a \code{next}: funziona con
+qualunque versione di Express. Gli altri sono funzioni \code{async} senza
+\code{try}/\code{catch}, perché in Express 5 una Promise rifiutata arriva da sola
+al gestore degli errori (capitolo 15). Il controller contiene la logica:
 
-\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=js, name=controllers/TodoController.js]
 import { Todo } from "../models/Database.js";
 
@@ -732,28 +1162,67 @@ export class TodoController {
     })
   }
 
-  // altri metodi
+  static async saveTodo(req) {
+    return Todo.create({ todo: req.body.todo, UserUserName: req.session.username });
+  }
+
+  // un elemento si cerca fra quelli dell'utente corrente, non fra tutti
+  static async findTodoForCurrentUser(req) {
+    let item = await Todo.findOne({
+      where: { id: req.params.id, UserUserName: req.session.username }
+    });
+    if (item === null) {
+      let err = new Error("Elemento non trovato.");
+      err.status = 404;
+      throw err;
+    }
+    return item;
+  }
+
+  static async toggleTodo(req) {
+    let item = await TodoController.findTodoForCurrentUser(req);
+    item.done = !item.done;
+    return item.save();
+  }
+
+  static async updateTodo(req) {
+    let item = await TodoController.findTodoForCurrentUser(req);
+    item.todo = req.body.todo;
+    return item.save();
+  }
+
+  static async deleteTodo(req) {
+    let item = await TodoController.findTodoForCurrentUser(req);
+    return item.destroy();
+  }
+
+  static async deleteAllTodos(req) {
+    return Todo.destroy({ where: { UserUserName: req.session.username } });
+  }
 }
 \end{lstlisting}
-\risultato
-\begin{lstlisting}[style=sql, name=query generata]
-SELECT * FROM Todos
-WHERE UserUserName = 'luigi';
-\end{lstlisting}
-\wtnota{L'utente corrente viene dalla sessione.}
-\end{affianco}
+
+L'utente corrente viene sempre dalla \textbf{sessione}, mai dalla richiesta.
+\code{findTodoForCurrentUser} cerca l'elemento per \code{id} \textbf{e} per
+proprietario: chi prova a modificare un elemento altrui, cambiando l'\code{id}
+nell'URL, riceve un 404 come se l'elemento non esistesse. L'errore porta con sé
+lo stato (\code{err.status}), che il gestore degli errori usa per la risposta.
+\code{deleteAllTodos}, usato dal pulsante Azzera, cancella con un solo
+\code{DELETE} tutte le righe dell'utente.
 
 \subsection{Autenticazione}
 
-\begin{affianco}[0.58][c]
-\codicepiccolo
+Il login passa da un controller, che verifica le credenziali, e da un router,
+che decide dove andare dopo:
+
 \begin{lstlisting}[style=js, name=controllers/AuthController.js]
+import { User } from "../models/Database.js";
+
 export class AuthController {
 
   static async checkCredentials(req, res) {
-    let user = new User({
-      userName: req.body.usr,
-      password: req.body.pwd
+    let user = new User({        // i dati dell'utente arrivano dalla richiesta
+      userName: req.body.usr, password: req.body.pwd
     });
 
     let found = await User.findOne({
@@ -762,8 +1231,7 @@ export class AuthController {
 
     if (found === null) {
       return false;
-    } else {
-      // credenziali valide: creiamo una sessione
+    } else {                    // credenziali valide: creiamo una sessione
       req.session.isAuthenticated = true;
       req.session.username = found.userName;
       return true;
@@ -771,24 +1239,38 @@ export class AuthController {
   }
 }
 \end{lstlisting}
-\risultato
-\begin{immagine}
-\begin{tikzpicture}[
-    dec/.style={diamond, aspect=2.4, draw=primary!60!black, fill=primary!8!white,
-      line width=0.7pt, font=\Lato\scriptsize, inner sep=1pt},
-    esito/.style={rounded corners=3pt, draw=neutral!50!black, fill=white, line width=0.7pt,
-      font=\FiraCodeNL\scriptsize, inner sep=3pt, align=center},
-    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
-  \node[esito] (f) at (0,0) {User.findOne(\{ userName, password \})};
-  \node[dec] (q) at (0,-1.2) {trovato?};
-  \node[esito, draw=merr, text=merr] (n) at (-1.9,-2.4) {return false};
-  \node[esito, draw=mok] (y) at (1.6,-2.5) {req.session.isAuthenticated = true\\ req.session.username = \ldots};
-  \draw[a] (f) -- (q);
-  \draw[a] (q) -| node[mnota, above, pos=0.3]{no} (n);
-  \draw[a] (q) -| node[mnota, above, pos=0.3]{sì} (y);
-\end{tikzpicture}
-\end{immagine}
-\end{affianco}
+
+\begin{lstlisting}[style=js, name=routes/authenticationRouter.js]
+import express from "express";
+import { AuthController } from "../controllers/AuthController.js";
+
+export const authenticationRouter = express.Router();
+
+authenticationRouter.get("/auth", (req, res) => {
+  res.render("auth");
+});
+
+authenticationRouter.post("/auth", async (req, res) => {
+  let isAuthenticated = await AuthController.checkCredentials(req, res);
+  if (isAuthenticated) {
+    req.flash("success", `Benvenuta, ${req.session.username}!`);
+    res.redirect("/todo");
+  } else {
+    req.flash("error", "Credenziali non valide.");
+    res.redirect("/auth");
+  }
+});
+
+authenticationRouter.post("/logout", (req, res) => {
+  req.session.destroy(() => {
+    res.redirect("/");
+  });
+});
+\end{lstlisting}
+
+Il login va a buon fine se esiste un utente con quel nome e quella password: in
+quel caso la sessione ricorda che l'utente è autenticato, e chi. Il logout
+distrugge la sessione (\code{req.session.destroy}) e torna alla home.
 
 \error{Password in chiaro}{
   Il codice sopra cerca l'utente confrontando direttamente la password: è
@@ -800,38 +1282,201 @@ export class AuthController {
 
 \subsection{Un middleware di autenticazione}
 
-\begin{affianco}[0.6][c]
-\codicepiccolo
-\begin{lstlisting}[style=js, name=middleware/auth.js]
+\begin{lstlisting}[style=js, name=middleware/authorization.js]
 /**
  * Assicura che l'utente sia autenticato. In caso contrario,
  * reindirizza al login con un messaggio di errore.
  */
 export function enforceAuthentication(req, res, next) {
   if (!req?.session?.isAuthenticated) {
-    req.flash("error",
-      "Devi effettuare l'accesso per usare questa funzione.");
+    req.flash("error", "Devi effettuare l'accesso per usare questa funzione.");
     res.redirect("/auth");
   } else {
     next();
   }
 }
 \end{lstlisting}
+
+\begin{affianco}[0.48][c]
+Chi visita \code{/todo} senza essere autenticato finisce così al form di login
+(a destra), con il messaggio flash: il middleware lo ha messo nella sessione
+prima del reindirizzamento, e \code{exportFlashMessagesToViews} lo ha passato
+alla vista. Nella barra di navigazione, dato che \code{isAuthenticated} non è
+vero, \code{layout.pug} mostra il collegamento \textit{Accedi}.
 \risultato
 \begin{browser}[localhost:3000/auth]
-  {\color{css-crimson}\small Devi effettuare l'accesso per usare questa funzione.}\\[4pt]
-  {\Lora\bfseries\LARGE Login}\\[4pt]
-  \wtcampo[3.0cm]{}\\[3pt]
-  \wtcampo[3.0cm]{}\\[4pt]
-  \wtbottone{Accedi}
+  \Lato\small
+  \wtlink{Home}\quad\wtlink{Accedi}\\[6pt]
+  {\color{css-crimson}Devi effettuare l'accesso per usare questa funzione.}\\[6pt]
+  {\bfseries\LARGE Accedi}\\[8pt]
+  \wtcampo[2.0cm]{\color{neutral!55!white}Nome utente}\wtcampo[2.0cm]{\color{neutral!55!white}Password}\wtbottone{Accedi}
 \end{browser}
-\wtnota{Chi visita \code{/todo} senza sessione finisce qui,\\ con il messaggio flash.}
 \end{affianco}
 
 Vale la pena confrontarlo con il capitolo 13: lì il controllo
 dell'autenticazione andava ripetuto all'inizio di ogni controller. Qui è
-\textbf{un solo middleware}, montato una volta sul router, che protegge tutte le
-sue rotte. È il vantaggio concreto dell'inversione del controllo.
+\textbf{un solo middleware}. Il \code{todoRouter} lo monta per tutte le sue
+rotte, con \code{todoRouter.use}; il router dell'azzeramento lo applica invece a
+una sola rotta, passandolo prima del gestore:
+
+\begin{lstlisting}[style=js, name=routes/resetRouter.js, firstnumber=5]
+export const resetRouter = express.Router();
+
+// qui il middleware protegge una sola rotta
+resetRouter.post("/reset", enforceAuthentication, async (req, res) => {
+  await TodoController.deleteAllTodos(req);
+  req.flash("success", "Lista azzerata.");
+  res.redirect("/todo");
+});
+\end{lstlisting}
+
+\subsection{L'app al lavoro}
+
+Avviato il server con \code{node index.js}, la prima visita a \code{/todo},
+senza sessione, viene respinta dal middleware:
+
+\begin{console}[Terminale]
+$ curl -i http://localhost:3000/todo
+HTTP/1.1 302 Found
+X-Powered-By: Express
+Location: /auth
+Vary: Accept
+Content-Type: text/plain; charset=utf-8
+Content-Length: 27
+Set-Cookie: connect.sid=s%3A9-VN3qnlilImiLNog65o0xDFl-98U9H_.jx3ufmOrqTTBvBVO8SK603r9R91QdIXY6eMk4bPWROo; Path=/; Expires=Tue, 03 Nov 2026 12:07:29 GMT; HttpOnly
+Date: Tue, 03 Nov 2026 11:57:29 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+Found. Redirecting to /auth
+\end{console}
+
+Il reindirizzamento porta con sé un cookie di sessione, anche se l'utente non è
+autenticato: la sessione serve a conservare il messaggio flash fino alla
+pagina successiva (con \code{saveUninitialized: false} viene creata solo
+perché ora contiene qualcosa). Seguendo il reindirizzamento si arriva al form
+di login visto sopra. Da lì, una sessione di lavoro completa: un login con la
+password sbagliata e uno con quella giusta, due elementi aggiunti, il primo
+segnato come fatto, il secondo modificato e poi eliminato. Ecco la lista dopo
+la modifica:
+
+\begin{browser}[localhost:3000/todo]
+  \Lato\small
+  \wtlink{Home}\quad\wtlink{La lista}\quad\wtbottone{Azzera}\quad\wtbottone{Esci (janet)}\\[8pt]
+  {\color{css-green}Elemento modificato.}\\[6pt]
+  {\bfseries\LARGE La lista di janet}\\[8pt]
+  \wtcampo[3.0cm]{}\wtbottone{Salva}\\[6pt]
+  \hspace*{1.2em}\textbullet\hspace{0.6em}\wtbottone{Da rifare}\wtcampo[3.0cm]{\sout{Learn Express}}\wtbottone{Modifica}\wtbottone{Elimina}\\[2pt]
+  \hspace*{1.2em}\textbullet\hspace{0.6em}\wtbottone{Fatto}\wtcampo[3.0cm]{Learn Sequelize, davvero}\wtbottone{Modifica}\wtbottone{Elimina}
+\end{browser}
+
+Nel terminale del server, \code{morgan} ha registrato ogni richiesta, nel
+formato \code{dev}: metodo, percorso, stato, tempo di risposta e lunghezza del
+corpo in byte. La sessione completa, compresi i tentativi che vedremo fra poco:
+
+\begin{console}[Terminale del server]
+$ node index.js
+(node:2602) [DEP0044] DeprecationWarning: The `util.isArray` API is deprecated. Please use `Array.isArray()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+GET /todo 302 5.582 ms - 27
+GET /todo 302 1.272 ms - 27
+GET /auth 200 130.483 ms - 536
+POST /auth 302 13.497 ms - 27
+GET /auth 200 18.694 ms - 507
+POST /auth 302 4.008 ms - 27
+GET /todo 200 29.778 ms - 627
+POST /todo 302 6.837 ms - 27
+GET /todo 200 13.769 ms - 930
+POST /todo 302 5.736 ms - 27
+GET /todo 200 13.201 ms - 1262
+POST /todo/1/toggle 302 7.434 ms - 27
+GET /todo 200 11.300 ms - 1239
+POST /todo/2 302 6.579 ms - 27
+GET /todo 200 9.320 ms - 1291
+POST /todo/2/delete 302 6.268 ms - 27
+GET /todo 200 9.711 ms - 949
+Error: Elemento non trovato.
+    at TodoController.findTodoForCurrentUser (file:///[cartella del progetto]/controllers/TodoController.js:23:17)
+    at async TodoController.deleteTodo (file:///[cartella del progetto]/controllers/TodoController.js:43:16)
+    at async file:///[cartella del progetto]/routes/todoRouter.js:36:3
+POST /todo/99/delete 404 7.364 ms - 454
+GET /nonesiste 404 5.971 ms - 445
+POST /logout 302 0.964 ms - 23
+GET / 200 5.237 ms - 323
+GET /nonesiste 302 0.631 ms - 27
+\end{console}
+
+Qualche osservazione:
+
+\begin{itemize}
+  \item le prime due righe sono la visita senza sessione, una volta con
+        \code{curl -i} e una seguendo il reindirizzamento; l'avviso
+        \code{DEP0044} viene da \code{connect-flash} (capitolo 15);
+  \item ogni \code{POST} riceve un \code{302} ed è seguito da un \code{GET}:
+        dopo ogni form il server \textbf{reindirizza} alla lista, invece di
+        rispondere con una pagina. È lo schema \textit{Post/Redirect/Get}: se
+        l'utente ricarica la pagina, il browser ripete il \code{GET}
+        innocuo, non il \code{POST} che ha modificato i dati;
+  \item la lunghezza delle pagine \code{/todo} cresce e cala con la lista
+        (627 byte vuota, 1262 con due elementi, 949 con uno);
+  \item eliminare l'elemento 99, che non esiste, solleva l'errore di
+        \code{findTodoForCurrentUser}: il gestore degli errori ne stampa la
+        traccia e risponde \code{404} con la pagina d'errore («Errore 404,
+        Elemento non trovato.»), mentre \code{/nonesiste}, da utente
+        autenticato, arriva al \textit{catch-all} («Errore 404, Non
+        trovato.»).
+\end{itemize}
+
+I dati, questa volta, sopravvivono al server: fermato e riavviato
+\code{index.js}, dopo il login la lista contiene ancora \textit{Learn Express},
+segnato come fatto. Stanno nel file \code{database.db}, non più in un array in
+memoria come nel capitolo 12. Il pulsante Azzera (\code{POST /reset}) li
+cancella e riporta la pagina a «La lista è vuota.», con il messaggio «Lista
+azzerata.».
+
+\subsection{Una trappola: il middleware di un router}
+
+L'ultima riga del log nasconde un problema. Dopo il logout, una richiesta
+per \code{/nonesiste} non riceve il 404, ma un reindirizzamento al login:
+
+\begin{console}[Terminale]
+$ curl -i http://localhost:3000/nonesiste
+HTTP/1.1 302 Found
+X-Powered-By: Express
+Location: /auth
+...
+
+Found. Redirecting to /auth
+\end{console}
+
+Il motivo è nella riga 7 di \code{todoRouter.js}. Il router è montato senza
+percorso (\code{app.use(todoRouter)}), quindi ci entrano \textbf{tutte} le
+richieste che i router precedenti non hanno gestito; e \code{todoRouter.use},
+senza percorso, applica il middleware a tutte le richieste che entrano nel
+router, non solo a quelle per le sue rotte. Così
+\code{enforceAuthentication} intercetta anche \code{/nonesiste}, prima che
+arrivi al \textit{catch-all}: un utente anonimo non vede mai un 404, ma sempre
+la richiesta di login. Il rimedio è dare un percorso anche al middleware:
+
+\begin{lstlisting}[style=js, name=routes/todoRouter.js, firstnumber=7]
+todoRouter.use("/todo", enforceAuthentication);   // solo per i percorsi /todo...
+\end{lstlisting}
+
+\begin{console}[Terminale]
+$ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/nonesiste
+404
+$ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://localhost:3000/todo
+302 http://localhost:3000/auth
+$ curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' -d '' http://localhost:3000/todo/1/toggle
+302 http://localhost:3000/auth
+\end{console}
+
+Ora \code{/nonesiste} riceve il suo 404, mentre \code{/todo} e tutti i percorsi
+che cominciano con \code{/todo/} restano protetti (\code{\%\{redirect\_url\}}
+fa stampare a \code{curl} la destinazione del reindirizzamento). In
+alternativa, si può montare il router sotto un prefisso,
+\code{app.use("/todo", todoRouter)}, con percorsi relativi al suo interno, o
+applicare il middleware rotta per rotta, come fa \code{resetRouter}.
 
 \section{Riferimenti}
 
@@ -840,4 +1485,8 @@ sue rotte. È il vantaggio concreto dell'inversione del controllo.
         \urlx{https://martinfowler.com/bliki/OrmHate.html}
   \item \textbf{Getting Started: Sequelize} --- documentazione ufficiale. \\
         \urlx{https://sequelize.org/docs/v6/getting-started/}
+  \item \textbf{Associations: Sequelize} --- documentazione ufficiale. \\
+        \urlx{https://sequelize.org/docs/v6/core-concepts/assocs/}
+  \item \textbf{dotenv} --- documentazione del pacchetto. \\
+        \urlx{https://github.com/motdotla/dotenv}
 \end{itemize}
