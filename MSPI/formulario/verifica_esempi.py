@@ -189,3 +189,37 @@ print("cerchi:", [r(1 - exp(-k * k / 2), 3) for k in (1, 2, 3)])
 print("condizionata rho=0.8: media", 0.8, "varianza", r(1 - 0.64, 2), "sd", r(sqrt(1 - 0.64), 2))
 print("coppia correlata rho=0.6: sqrt(1-0.36)", r(sqrt(1 - 0.36), 2))
 print("C=[[4,3],[3,9]]: det", 4 * 9 - 3 * 3, "forma con [1,-1]", 4 - 3 - 3 + 9, "matrice sigma 2,3 rho .5:", 0.5 * 2 * 3)
+
+from math import cos
+print("--- argomento 17: processi aleatori")
+print("tre assi", F(4, 52) * F(3, 51) * F(2, 50), 4 * 3 * 2, 52 * 51 * 50, r(F(24, 132600), 7))
+print("Bernoulli +1,+1,-1", F(1, 2)**3, "quaternario due 2", F(1, 4)**2)
+a = sqrt(3)
+print("uniforme (-sqrt3, sqrt3): varianza a^2/3 =", r(a * a / 3, 6), "(2a)^2/12 =", r((2 * a)**2 / 12, 6))
+from itertools import product
+# media mobile: Y(n) = (X(n) + X(n-1))/2, X Bernoulli +-1; R_Y(k) enumerando X(n-1..n+3)
+def RY(k):
+    tot = F(0)
+    for xs in product((-1, 1), repeat=6):        # X(-1), X(0), ..., X(4)
+        Y = lambda n: F(xs[n + 1] + xs[n], 2)    # Y(n) per n = 0..4
+        tot += Y(0) * Y(k) * F(1, 64)
+    return tot
+print("R_Y(0..3)", [RY(k) for k in range(4)], "pmf Y", {v: sum(F(1, 4) for a_ in (-1, 1) for b_ in (-1, 1) if F(a_ + b_, 2) == v) for v in (-1, 0, 1)})
+Cy = [[RY(abs(i - j)) for j in range(4)] for i in range(4)]
+print("C_Y (x2)", [[2 * c for c in riga] for riga in Cy])
+# sinusoide con fase a caso: R_X(k) = E[A cos(2 pi U + phi_n) A cos(2 pi U + phi_{n+k})], A = 1, f0 = 1/8
+f0 = 1 / 8
+for k in (0, 4, 8, 3):
+    for n in (0, 5):
+        v = integra(lambda u: cos(2 * pi * u + 2 * pi * f0 * n) * cos(2 * pi * u + 2 * pi * f0 * (n + k)), -0.5, 0.5, 4000)
+        print("sinusoide k=%d n=%d R=%.4f formula=%.4f" % (k, n, v, 0.5 * cos(2 * pi * f0 * k)))
+print("media coseno su 2 periodi", r(integra(lambda u: cos(4 * pi * u + 0.7), -0.5, 0.5, 4000), 6))
+print("cos^2 medio su un periodo", r(integra(lambda u: cos(2 * pi * u)**2, 0, 1, 4000), 6))
+# passeggiata aleatoria: R_S(n1, n2) enumerando
+def RS(n1, n2):
+    tot = F(0)
+    m = max(n1, n2)
+    for xs in product((-1, 1), repeat=m):
+        tot += sum(xs[:n1]) * sum(xs[:n2])
+    return tot / 2**m
+print("R_S(1,2)", RS(1, 2), "R_S(10,11)", RS(10, 11), "var S(100) =", 100, "sd", sqrt(100))
