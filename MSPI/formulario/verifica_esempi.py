@@ -175,3 +175,17 @@ print("Q(1)", r(Q(1), 3), "1-2Q(1)", r(1 - 2 * Q(1), 3), "Q(2)", r(Q(2)), "Q(1.5
 print("Q(1.3)", r(Q(1.3)), "Q(2.5)", r(Q(2.5), 5), "magg Q(3)", r(exp(-4.5) / (3 * sqrt(2 * pi)), 5), "Q(3)", r(Q(3), 5))
 print("1-2Q(2)", r(1 - 2 * Q(2), 3), "2Q(2)", r(2 * Q(2)), "2Q(3)", r(2 * Q(3)), "Q(4)", Q(4))
 print("int e^(-x^2/2) = sqrt(2 pi)", r(integra(lambda x: exp(-x * x / 2), -12, 12)), r(sqrt(2 * pi)))
+
+print("--- argomento 16: vettori aleatori e gaussiani")
+R = [[F(5, 12), F(1, 3)], [F(1, 3), F(5, 12)]]
+mu = [F(7, 12), F(7, 12)]
+C = [[R[i][j] - mu[i] * mu[j] for j in range(2)] for i in range(2)]
+print("R*144", [[x * 144 for x in r_] for r_ in R], "C*144", [[x * 144 for x in r_] for r_ in C])
+q = [1, 1]
+print("var(X1+X2)", sum(q[i] * C[i][j] * q[j] for i in range(2) for j in range(2)), F(20, 144))
+print("[[1,2],[2,1]] con q=[1,-1]:", 1 - 2 - 2 + 1)
+print("bivariata rho=0.5: det", 1 - 0.25, "f(0,0)", r(1 / (2 * pi * sqrt(0.75)), 3))
+print("cerchi:", [r(1 - exp(-k * k / 2), 3) for k in (1, 2, 3)])
+print("condizionata rho=0.8: media", 0.8, "varianza", r(1 - 0.64, 2), "sd", r(sqrt(1 - 0.64), 2))
+print("coppia correlata rho=0.6: sqrt(1-0.36)", r(sqrt(1 - 0.36), 2))
+print("C=[[4,3],[3,9]]: det", 4 * 9 - 3 * 3, "forma con [1,-1]", 4 - 3 - 3 + 9, "matrice sigma 2,3 rho .5:", 0.5 * 2 * 3)
