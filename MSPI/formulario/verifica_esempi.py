@@ -251,3 +251,19 @@ pe1b = sum(Bn(k, p1) for k in range(0, 5)); pe2b = sum(Bn(k, p2) for k in range(
 print("MAP P(H1)=0.2: Pe soglia 5", r(0.2 * pe1b + 0.8 * pe2b, 3), "soglia 4", r(0.2 * pe1 + 0.8 * pe2, 3))
 print("media gaussiana +-1 V, sigma 2: n=1", r(Q(0.5), 3), "n=16", r(Q(2), 3))
 print("rischio", 10 * 0.03 + 1 * 0.05, "P(e)", 0.03 + 0.05)
+
+print("--- argomento 20: Neyman-Pearson")
+def Qinv(a, lo=-10.0, hi=10.0):
+    for _ in range(200):
+        m = (lo + hi) / 2
+        if Q(m) > a: lo = m
+        else: hi = m
+    return (lo + hi) / 2
+print("Q^-1:", {a: r(Qinv(a), 4) for a in (0.1, 0.05, 0.025, 0.01, 0.001)})
+for nn in (16, 36, 64):
+    print("radar n=%d potenza %.3f" % (nn, Q(Qinv(0.05) - 0.5 * sqrt(nn))), "soglia", r(Qinv(0.05) / sqrt(nn), 3))
+print("ROC d=2: alpha .05 ->", r(Q(Qinv(0.05) - 2), 3), "alpha .01 ->", r(Q(Qinv(0.01) - 2), 3), "alpha .1 ->", r(Q(Qinv(0.1) - 2), 3))
+n = 10
+Bn = lambda k, p: comb(n, k) * p**k * (1 - p)**(n - k)
+for t in (3, 4, 5, 6):
+    print("bit: soglia w>=%d alpha %.4f potenza %.4f" % (t, sum(Bn(k, 0.2) for k in range(t, n + 1)), sum(Bn(k, 0.6) for k in range(t, n + 1))))
