@@ -77,6 +77,43 @@ Questa cartella contiene i sorgenti LaTeX di `DispensaMSPI.pdf`.
 - `unina_doc_class.cls`, `fonts/`, `sources/` — template Unina Docs (lo stesso delle altre dispense)
 - `Images/` — eventuali immagini
 
+## Il formulario
+`FormularioMSPI.pdf` è un documento separato dalla dispensa, con due parti:
+- **Parte I, le formule**: per ogni argomento, nell'ordine della dispensa (tutti i 26 capitoli), le voci numerate
+  con nome, formula e varianti da usare nei casi particolari; in fondo una tabella riassuntiva delle distribuzioni
+  notevoli (valori, pmf o densità, media, varianza) e i richiami di matematica, raggruppati per argomento;
+- **Parte II, come si usano** (in fondo): una scheda per ogni formula, con quando si usa, come si applica, quale
+  variante scegliere, gli errori tipici e un esempio con i numeri. Ogni argomento si apre con un riquadro che aiuta a
+  scegliere la formula partendo dal testo dell'esercizio.
+
+Il numero di ogni voce porta alla sua scheda d'uso, e la scheda riporta alla voce.
+
+- `formulario.tex` — documento principale; usa la classe e `preamble/mspi.tex` della dispensa
+- `formulario/stile.tex` — l'aspetto delle voci e delle schede d'uso
+- `formulario/introduzione.tex` — come è fatto il formulario
+- `formulario/formule_N.tex` — parte I, argomento N. Gli argomenti 1-5 vengono dai capitoli 1-5 della dispensa (il 3
+  e il 4 dividono i capitoli 3 e 4 in regole della probabilità e condizionamento); dal 6 in poi l'argomento N è il
+  capitolo N. `tabella.tex` è la tabella delle distribuzioni, `formule_R.tex` sono i richiami di matematica
+- `formulario/uso_N.tex`, `uso_R.tex` — parte II: le schede d'uso degli stessi argomenti
+- `formulario/verifica_esempi.py` — ricalcola i numeri degli esempi delle schede
+
+Convenzioni del formulario:
+- `\argomento{Titolo}{nota}` apre un argomento numerato; `\argomento[R]{...}{...}` quello dei richiami (voci R.1,
+  R.2...) e `\argomento[T]{...}{...}` la tabella delle distribuzioni;
+  un ultimo argomento facoltativo fra quadre, `\argomento{...}{...}[titolo breve]`, accorcia il titolo nel piè di pagina
+- `\voce{etichetta}{Nome}{nota sotto il nome}{formula}{varianti}`: la formula si scrive come matematica (è composta in
+  display style); le varianti sono una serie di `\variante{caso}{formula}`
+- `\oltre` segna una formula che nelle slide non c'è: una generalizzazione comoda, sempre valida, o uno strumento
+  che la dispensa usa nelle dimostrazioni
+- `\scheda{etichetta}{...}` è la scheda d'uso della voce con la stessa etichetta, con le righe `\usoquando`,
+  `\usocome`, `\usovarianti`, `\usoattenzione`, `\usoesempio`; l'ambiente `scelta{Titolo}` è il riquadro «come
+  scegliere» in testa a ogni argomento della seconda parte
+- `\vv{etichetta}` scrive il numero di un'altra voce, cliccabile
+- in una formula lunga che può andare a capo, i termini vanno racchiusi fra graffe (`{P(A \cap B)}`): così la riga
+  si spezza fra un termine e l'altro e non dentro le parentesi
+- i numeri degli esempi delle schede si controllano con `python3 formulario/verifica_esempi.py`, che li ricalcola
+  (con le frazioni esatte dove serve) e li stampa
+
 ## Come ricompilare
 Serve una distribuzione LaTeX con **LuaLaTeX** e gli stessi pacchetti delle altre dispense, più
 `pgfplots`, `cancel` e `icomma`.
@@ -84,6 +121,9 @@ Serve una distribuzione LaTeX con **LuaLaTeX** e gli stessi pacchetti delle altr
 ```bash
 lualatex -interaction=nonstopmode main.tex    # tre volte, per l'indice e i riferimenti
 cp main.pdf DispensaMSPI.pdf
+
+lualatex -interaction=nonstopmode formulario.tex    # tre volte: indice, numeri delle voci, pagine dei collegamenti
+cp formulario.pdf FormularioMSPI.pdf
 ```
 
 ## Convenzioni usate
