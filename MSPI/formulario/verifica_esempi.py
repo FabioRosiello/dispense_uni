@@ -71,3 +71,14 @@ pY = {}
 for x in X:
     pY[x * x] = pY.get(x * x, 0) + F(1, 4)
 print("pmf di X^2", dict(sorted(pY.items())), "E[X^2]", sum(F(x * x, 4) for x in X))
+
+print("--- argomento 7: varianza e disuguaglianze")
+EX2 = 16 * F(1, 4) + 25 * F(1, 2) + 36 * F(1, 4)
+print("E[X^2]", EX2, float(EX2), "Xrms", r(float(EX2) ** 0.5, 3), "var X", EX2 - 25)
+print("var Y", 16 * F(1, 4) + 16 * F(1, 4), "sigma Y", r(8 ** 0.5, 3), "sigma X", r(0.5 ** 0.5, 3))
+N, p = 10, F(1, 10)
+print("binomiale E[X(X-1)]", N * (N - 1) * p**2, "E[X^2]", N * (N - 1) * p**2 + N * p, "var", N * (N - 1) * p**2 + N * p - (N * p)**2)
+print("Fahrenheit", F(18, 10) * 20 + 32, F(18, 10) * 2, "dado", F(6 * 6 - 1, 12))
+pz = sum(exp(-2) * 2**k / factorial(k) for k in range(10))
+print("Markov router: limite 0.2, Poisson(2) P(Z>=10) =", 1 - pz)
+print("Chebyshev k=2", 1 - F(1, 4), "k=3", F(1, 9), r(F(1, 9), 2))
