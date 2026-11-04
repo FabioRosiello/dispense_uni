@@ -148,3 +148,9 @@ print("U(-1,1)^2: area di 1/(2 sqrt y) su (0,1)", r(integra(lambda y: 1 / (2 * y
 print("Cauchy^2: area di 1/(pi sqrt(y)(1+y))", r(integra(lambda y: 1 / (pi * y ** 0.5 * (1 + y)), 0, 4000, 4000000), 3))
 print("inversione u=0.5: ln2", r(log(2), 3), "arcoseno A=1 in 0", r(1 / pi, 3))
 print("A/D Laplace(1): p(0.5)", r(0.5 - 0.5 * exp(-1), 3), "p(3.5)", r(0.5 * exp(-3), 3))
+
+print("--- argomento 13: media e varianza nel continuo")
+print("U(0,1): E[X^2]", r(integra(lambda x: x * x, 0, 1)), "f=2x: E[X^2]", r(integra(lambda x: 2 * x**3, 0, 1)), "var", F(1, 2) - F(4, 9))
+D = 2 / 2**8
+print("quantizzazione 8 bit: Delta", D, "sigma^2", D * D / 12, "9 bit", (D / 2)**2 / 12, "rapporto", (D * D / 12) / ((D / 2)**2 / 12))
+print("esponenziale P(X>=3)", r(exp(-3), 3))
