@@ -289,3 +289,15 @@ n = 7
 print("momenti n=7: E[w]", sum(comb(n, w) * w * eul(w, n - w) for w in range(n + 1)), F(n, 2),
       "E[w^2]", sum(comb(n, w) * w * w * eul(w, n - w) for w in range(n + 1)), F(n, 6) + F(n * n, 3),
       "E[wB]", sum(comb(n, w) * w * eul(w + 1, n - w) for w in range(n + 1)), F(n, 3))
+
+print("--- argomento 22: stima classica")
+print("L(0.5)", 0.5**2 * 0.5, "L(2/3)", F(2, 3)**2 * F(1, 3), r(F(4, 27), 3))
+print("esponenziale 1,2,3: lambda", F(3, 6))
+n, b = 10, F(1, 2)
+print("(w+1)/(n+2): media", (n * b + 1) / (n + 2), "bias", (1 - 2 * b) / (n + 2), "var", n * b * (1 - b) / (n + 2)**2, r(n * b * (1 - b) / (n + 2)**2, 4),
+      "CRB 1/I", b * (1 - b) / n, "CRB generale", (1 - F(2, n + 2))**2 * b * (1 - b) / n)
+for bb in (F(1, 5), F(7, 10)):
+    var = n * bb * (1 - bb) / (n + 2)**2; bias = (1 - 2 * bb) / (n + 2)
+    print("beta", bb, "MSE", r(var + bias**2, 5), "1/I", r(bb * (1 - bb) / n, 5))
+print("Fisher gauss sigma=2 n=100:", F(100, 4), "CRB", F(4, 100), "sd", sqrt(0.04))
+print("30 su 100: var", r(0.3 * 0.7 / 100, 5), "sd", r(sqrt(0.0021), 3))
