@@ -167,3 +167,11 @@ print("E[X]", EX, "E[X^2]", EX2, "var", EX2 - EX**2, "cov", F(1, 3) - EX**2, "rh
 print("E[X|Y=0]", F(1, 3) / F(1, 2), "E[X|Y=1]", (F(1, 3) + F(1, 2)) / F(3, 2))
 Fc = lambda x, y: (x * x * y + x * y * y) / 2
 print("rettangolo", Fc(1, 1) - Fc(1, .5) - Fc(.5, 1) + Fc(.5, .5), "diretto", r(integra2(g, .5, 1, .5, 1)))
+
+print("--- argomento 15: gaussiana e funzione Q")
+from math import erfc, sqrt
+Q = lambda x: 0.5 * erfc(x / sqrt(2))
+print("Q(1)", r(Q(1), 3), "1-2Q(1)", r(1 - 2 * Q(1), 3), "Q(2)", r(Q(2)), "Q(1.5)", r(Q(1.5)), "Q(-0.5)", r(Q(-0.5), 3))
+print("Q(1.3)", r(Q(1.3)), "Q(2.5)", r(Q(2.5), 5), "magg Q(3)", r(exp(-4.5) / (3 * sqrt(2 * pi)), 5), "Q(3)", r(Q(3), 5))
+print("1-2Q(2)", r(1 - 2 * Q(2), 3), "2Q(2)", r(2 * Q(2)), "2Q(3)", r(2 * Q(3)), "Q(4)", Q(4))
+print("int e^(-x^2/2) = sqrt(2 pi)", r(integra(lambda x: exp(-x * x / 2), -12, 12)), r(sqrt(2 * pi)))
