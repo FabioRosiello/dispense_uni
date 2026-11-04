@@ -82,3 +82,16 @@ print("Fahrenheit", F(18, 10) * 20 + 32, F(18, 10) * 2, "dado", F(6 * 6 - 1, 12)
 pz = sum(exp(-2) * 2**k / factorial(k) for k in range(10))
 print("Markov router: limite 0.2, Poisson(2) P(Z>=10) =", 1 - pz)
 print("Chebyshev k=2", 1 - F(1, 4), "k=3", F(1, 9), r(F(1, 9), 2))
+
+print("--- argomento 8: variabili multiple")
+pj = {(0, 0): F(1, 3), (0, 1): F(2, 9), (1, 0): F(1, 9), (1, 1): F(1, 3)}
+pX = {x: sum(v for (a, b), v in pj.items() if a == x) for x in (0, 1)}
+pY = {y: sum(v for (a, b), v in pj.items() if b == y) for y in (0, 1)}
+print("somma", sum(pj.values()), "pX", pX, "pY", pY, "prodotto 00", pX[0] * pY[0], "vs", pj[(0, 0)], F(27, 81))
+pXc = {0: F(6, 10), 1: F(4, 10)}
+canale = lambda y, x: F(9, 10) if x == y else F(1, 10)
+pjc = {(x, y): canale(y, x) * pXc[x] for x in (0, 1) for y in (0, 1)}
+pYc = {y: pjc[(0, y)] + pjc[(1, y)] for y in (0, 1)}
+print("canale congiunta", {k: float(v) for k, v in pjc.items()}, "pY", {k: float(v) for k, v in pYc.items()})
+print("bayes", pjc[(1, 1)] / pYc[1], pjc[(0, 1)] / pYc[1])
+print("catena", 0.5 * 0.8 * 0.9)
