@@ -267,3 +267,25 @@ n = 10
 Bn = lambda k, p: comb(n, k) * p**k * (1 - p)**(n - k)
 for t in (3, 4, 5, 6):
     print("bit: soglia w>=%d alpha %.4f potenza %.4f" % (t, sum(Bn(k, 0.2) for k in range(t, n + 1)), sum(Bn(k, 0.6) for k in range(t, n + 1))))
+
+print("--- argomento 21: stima bayesiana")
+eul = lambda a, b: F(factorial(a) * factorial(b), factorial(a + b + 1))
+print("eulero t(1-t)", eul(1, 1), "t^3(1-t)^2", eul(3, 2), "numerico", r(integra(lambda t: t**3 * (1 - t)**2, 0, 1), 6), r(1 / 60, 6))
+print("2 teste in 3: costante", 1 / eul(2, 1), "MMSE", 12 * eul(3, 1), F(3, 5), "MMSE 3 su 3", F(4, 5))
+print("a posteriori U[0,2], costo quadratico: min di a^2-2a+4/3 in", 1, "check", r(0.5 * integra(lambda t: (1 - t)**2, 0, 2), 4), r(1 - 2 + 4 / 3, 4))
+print("F(a)=a^2-a+1/3: a=0.3 ->", r(integra(lambda t: (0.3 - t)**2, 0, 1), 5), r(0.09 - 0.3 + 1 / 3, 5))
+# errori quadratici medi della moneta, per enumerazione esatta (media su B uniforme con eulero)
+def mse(stima, n):
+    tot = F(0)
+    for w in range(n + 1):
+        # E[(s - B)^2 ; w] = C(n,w) * int (s - b)^2 b^w (1-b)^(n-w) db
+        s = stima(w, n)
+        tot += comb(n, w) * (s * s * eul(w, n - w) - 2 * s * eul(w + 1, n - w) + eul(w + 2, n - w))
+    return tot
+for n in (1, 2, 5, 10, 100):
+    m1 = mse(lambda w, n: F(w + 1, n + 2), n); m2 = mse(lambda w, n: F(w, n), n)
+    print("n=%d MMSE %s (%s) MAP %s (%s)" % (n, m1, F(1, 6 * (n + 2)), m2, F(1, 6 * n)), r(m1, 5), r(m2, 5))
+n = 7
+print("momenti n=7: E[w]", sum(comb(n, w) * w * eul(w, n - w) for w in range(n + 1)), F(n, 2),
+      "E[w^2]", sum(comb(n, w) * w * w * eul(w, n - w) for w in range(n + 1)), F(n, 6) + F(n * n, 3),
+      "E[wB]", sum(comb(n, w) * w * eul(w + 1, n - w) for w in range(n + 1)), F(n, 3))
