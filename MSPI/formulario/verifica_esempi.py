@@ -237,3 +237,17 @@ print("binomiale 50, 1/2: media", 50 * 0.5, "varianza", 50 * 0.25)
 # M(t) gaussiana standard = e^{t^2/2}, numerica per t = 0.7
 t = 0.7
 print("M gauss(0.7)", r(integra(lambda x: exp(t * x) * exp(-x * x / 2) / sqrt(2 * pi), -12, 12), 5), r(exp(t * t / 2), 5))
+
+print("--- argomento 19: decisioni bayesiane")
+p1, p2, n = 0.6, 0.2, 10
+eta1 = n * log((1 - p2) / (1 - p1)) / log(p1 * (1 - p2) / (p2 * (1 - p1)))
+Bn = lambda k, p: comb(n, k) * p**k * (1 - p)**(n - k)
+pe1 = sum(Bn(k, p1) for k in range(0, 4)); pe2 = sum(Bn(k, p2) for k in range(4, n + 1))
+print("eta1", r(eta1, 3), "= 10 ln2/ln6", r(10 * log(2) / log(6), 3), "Pe|H1", r(pe1, 3), "Pe|H2", r(pe2, 3), "Pe", r((pe1 + pe2) / 2, 3))
+print("soglie 1..7:", [r(0.5 * sum(Bn(k, p1) for k in range(t)) + 0.5 * sum(Bn(k, p2) for k in range(t, n + 1)), 3) for t in range(1, 8)])
+Lw = lambda w: (p1 / p2)**w * ((1 - p1) / (1 - p2))**(n - w)
+print("L(4)", r(Lw(4), 4), F(81, 64), "L(3)", r(Lw(3), 3), "prima w con L > 4:", min(w for w in range(11) if Lw(w) > 4))
+pe1b = sum(Bn(k, p1) for k in range(0, 5)); pe2b = sum(Bn(k, p2) for k in range(5, n + 1))
+print("MAP P(H1)=0.2: Pe soglia 5", r(0.2 * pe1b + 0.8 * pe2b, 3), "soglia 4", r(0.2 * pe1 + 0.8 * pe2, 3))
+print("media gaussiana +-1 V, sigma 2: n=1", r(Q(0.5), 3), "n=16", r(Q(2), 3))
+print("rischio", 10 * 0.03 + 1 * 0.05, "P(e)", 0.03 + 0.05)
