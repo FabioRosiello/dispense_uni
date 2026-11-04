@@ -353,3 +353,40 @@ H2 = lambda p: -p * log2(p) - (1 - p) * log2(1 - p)
 print("H2(0.11)", r(H2(0.11), 4), "termini", r(log2(1 / 0.11), 3), r(log2(1 / 0.89), 3), "H2(0.5)", H2(0.5))
 print("Jensen uniforme 1..4: E[log2 X]", r(sum(log2(k) for k in range(1, 5)) / 4, 3), "log2 2.5", r(log2(2.5), 3))
 print("log2 3,5,6,52", [r(log2(k), 3) for k in (3, 5, 6, 52)], "ln(1/0.11)", r(log(1 / 0.11), 3), "ln2", r(log(2), 3))
+
+print("--- argomento 26: codifica di sorgente")
+from math import ceil
+p8 = [F(1, 4), F(3, 32), F(1, 8), F(1, 32), F(3, 16), F(1, 8), F(1, 16), F(1, 8)]
+C2 = ["0", "1001", "100", "1111", "01", "110", "1100", "111"]
+C3 = ["10", "110", "001", "1111", "000", "010", "1110", "011"]
+print("somma p", sum(p8), "L1", 3, "L2", float(sum(p * len(c) for p, c in zip(p8, C2))), "L3", float(sum(p * len(c) for p, c in zip(p8, C3))))
+print("H", r(sum(float(p) * log2(1 / float(p)) for p in p8), 4))
+print("Kraft C3", sum(F(1, 2**len(c)) for c in C3), "Kraft C2", float(sum(F(1, 2**len(c)) for c in C2)))
+pref = lambda C: any(a != b and b.startswith(a) for a in C for b in C)
+print("C3 a prefisso?", not pref(C3), "C2 a prefisso?", not pref(C2))
+dec = {c: i + 1 for i, c in enumerate(C2)}
+print("1111000 =", "".join(C2[i - 1] for i in (8, 3, 1)), "".join(C2[i - 1] for i in (4, 1, 1, 1)))
+q = [1, 4, 8, 8]
+print("quaternaria L", sum(F(1, 2) ** 0 * 0 for _ in [0]) + F(1, 2) * 1 + F(1, 4) * 2 + F(1, 8) * 3 + F(1, 8) * 3)
+p1 = [F(1, 4)] * 2 + [F(1, 8)] * 2 + [F(1, 16)] * 4
+print("diadica H", sum(float(p) * log2(1 / float(p)) for p in p1), "L Huffman", sum(p * l for p, l in zip(p1, [2, 2, 3, 3, 4, 4, 4, 4])))
+p2 = [F(1, 3), F(1, 9), F(1, 9), F(1, 9), F(1, 27), F(2, 27), F(1, 6), F(1, 18)]
+print("p2 somma", sum(p2), "in 54esimi", [int(p * 54) for p in p2])
+lh = [2, 3, 3, 3, 4, 3, 3, 4]
+print("Huffman L", sum(p * l for p, l in zip(p2, lh)), r(sum(p * l for p, l in zip(p2, lh)), 4), "Kraft", sum(F(1, 2**l) for l in lh))
+print("H2", r(sum(float(p) * log2(1 / float(p)) for p in p2), 4))
+ls = [ceil(log2(1 / float(p)) - 1e-12) for p in p2]
+print("Shannon lunghezze", ls, "L", r(sum(float(p) * l for p, l in zip(p2, ls)), 4), "Kraft", float(sum(F(1, 2**l) for l in ls)))
+# Huffman con heapq per controllo
+import heapq, itertools
+def huff(ps):
+    cnt = itertools.count()
+    h = [(p, next(cnt), [i]) for i, p in enumerate(ps)]
+    heapq.heapify(h); L = [0] * len(ps)
+    while len(h) > 1:
+        a = heapq.heappop(h); b = heapq.heappop(h)
+        for i in a[2] + b[2]: L[i] += 1
+        heapq.heappush(h, (a[0] + b[0], next(cnt), a[2] + b[2]))
+    return L
+print("Huffman (heapq) p2", huff(p2), "L", sum(p * l for p, l in zip(p2, huff(p2))), "p1", huff(p1))
+print("blocchi: 0.5 + 1/10 =", 0.5 + 0.1)
