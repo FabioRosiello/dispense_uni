@@ -59,3 +59,15 @@ print("gauss 100", sum(range(1, 101)), "quadrati 3", 1 + 4 + 9, 3 * 4 * 7 // 6)
 print("geometrica 1/3", 1 / (1 - F(1, 3)), "da 1 con 1/2", F(1, 2) / (1 - F(1, 2)))
 print("e approx", (1 + 1 / 10**6)**(10**6))
 print("rms uniforme 0..3", F(sum(i * i for i in range(4)), 4), F((4 - 1) * (2 * 4 - 1), 6))
+
+print("--- argomento 6: pmf condizionate e funzioni")
+print("dado | X>4", F(1, 6) / F(2, 6), "media", 5 * F(1, 2) + 6 * F(1, 2))
+b05 = comb(10, 9) * 0.5**10
+b08 = comb(10, 9) * 0.8**9 * 0.2
+print("due monete p(9):", r(b05), r(b08), "P(truccata|9)", r(b08 / (b05 + b08), 3))
+print("media due monete", F(1, 2) * 5 + F(1, 2) * 8)
+X = [-2, -1, 0, 2]
+pY = {}
+for x in X:
+    pY[x * x] = pY.get(x * x, 0) + F(1, 4)
+print("pmf di X^2", dict(sorted(pY.items())), "E[X^2]", sum(F(x * x, 4) for x in X))

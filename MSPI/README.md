@@ -91,13 +91,15 @@ Il numero di ogni voce porta alla sua scheda d'uso, e la scheda riporta alla voc
 - `formulario.tex` — documento principale; usa la classe e `preamble/mspi.tex` della dispensa
 - `formulario/stile.tex` — l'aspetto delle voci e delle schede d'uso
 - `formulario/introduzione.tex` — come è fatto il formulario
-- `formulario/formule_1.tex` ... `formule_5.tex`, `formule_R.tex` — parte I: eventi e insiemi, calcolo combinatorio,
-  probabilità e regole, condizionamento e indipendenza, variabili aleatorie discrete, richiami di matematica
-- `formulario/uso_1.tex` ... `uso_5.tex`, `uso_R.tex` — parte II: le schede d'uso degli stessi argomenti
+- `formulario/formule_N.tex` — parte I, argomento N. Gli argomenti 1-5 vengono dai capitoli 1-5 della dispensa (il 3
+  e il 4 dividono i capitoli 3 e 4 in regole della probabilità e condizionamento); dal 6 in poi l'argomento N è il
+  capitolo N. `formule_R.tex` sono i richiami di matematica
+- `formulario/uso_N.tex`, `uso_R.tex` — parte II: le schede d'uso degli stessi argomenti
 - `formulario/verifica_esempi.py` — ricalcola i numeri degli esempi delle schede
 
 Convenzioni del formulario:
-- `\argomento{Titolo}{nota}` apre un argomento numerato; `\argomento[R]{...}{...}` quello dei richiami (voci R.1, R.2...)
+- `\argomento{Titolo}{nota}` apre un argomento numerato; `\argomento[R]{...}{...}` quello dei richiami (voci R.1, R.2...);
+  un ultimo argomento facoltativo fra quadre, `\argomento{...}{...}[titolo breve]`, accorcia il titolo nel piè di pagina
 - `\voce{etichetta}{Nome}{nota sotto il nome}{formula}{varianti}`: la formula si scrive come matematica (è composta in
   display style); le varianti sono una serie di `\variante{caso}{formula}`
 - `\oltre` segna una formula che nelle slide non c'è (una generalizzazione comoda, sempre valida)
