@@ -130,3 +130,13 @@ Ftri = lambda x: integra(tri, -1, x)
 print("triangolare F(1/2), F(-1/2)", r(Ftri(0.5)), r(Ftri(-0.5)), "P", r(Ftri(0.5) - Ftri(-0.5)), "attesi", 7 / 8, 1 / 8)
 print("media f=2x", r(integra(lambda x: 2 * x * x, 0, 1)), "media triangolare", r(integra(lambda x: x * tri(x), -1, 1)))
 print("integrale (3+x) da 0 a 2", r(integra(lambda x: 3 + x, 0, 2)), "int x^-2 da 1 a 1000", r(integra(lambda x: x ** -2, 1, 1000, 2000000)))
+
+print("--- argomento 11: variabili continue notevoli")
+from math import atan, pi, log
+print("U(2,6): P(3<=X<=4)", F(1, 4), "media", F(2 + 6, 2), "varianza", F((6 - 2)**2, 12))
+print("esponenziale lambda=0.5: P(X>3)", r(exp(-1.5)), "P(X<=1)", r(1 - exp(-0.5)))
+print("memoria: e^-0.5", r(exp(-0.5)))
+print("Laplace lambda=1: P(X<=-1)", r(0.5 * exp(-1)), "P(|X|>1)", r(exp(-1)))
+print("Cauchy(0,1): P(-1<=X<=1)", r((atan(1) - atan(-1)) / pi), "P(X>1)", r(0.5 - atan(1) / pi))
+print("per parti int_0^1 x e^x", r(integra(lambda x: x * exp(x), 0, 1)), "cambio variabile int_0^1 2x e^(x^2)", r(integra(lambda x: 2 * x * exp(x * x), 0, 1)), "e-1", r(exp(1) - 1))
+print("logaritmo: ln10/0.5", r(log(10) / 0.5, 2), "arcotangente: (1/pi) int_-1^1 1/(1+y^2)", r(integra(lambda y: 1 / (pi * (1 + y * y)), -1, 1)))
