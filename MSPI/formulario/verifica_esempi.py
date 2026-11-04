@@ -118,3 +118,15 @@ vx2, vy2 = 1 - mx2**2, 1 - my2**2
 print("seconda coppia pZ", pz, "cov", cov2, "rho", float(cov2) / float(vx2 * vy2) ** 0.5, -1 / 45**0.5)
 print("X uniforme {-1,0,1}, Y=X^2: E[XY]", sum(F(x**3, 3) for x in (-1, 0, 1)))
 print("due dadi", 2 * F(35, 12), float(2 * F(35, 12)))
+
+print("--- argomento 10: densità e CDF")
+def integra(f, a, b, n=200000):
+    # regola del punto medio: basta per controllare i risultati a 4 cifre
+    h = (b - a) / n
+    return sum(f(a + (i + 0.5) * h) for i in range(n)) * h
+print("P(X<=1/2) con f=2x", r(integra(lambda x: 2 * x, 0, 0.5)), "costante c per c x^2", r(1 / integra(lambda x: x * x, 0, 1)))
+tri = lambda x: max(0.0, 1 - abs(x))
+Ftri = lambda x: integra(tri, -1, x)
+print("triangolare F(1/2), F(-1/2)", r(Ftri(0.5)), r(Ftri(-0.5)), "P", r(Ftri(0.5) - Ftri(-0.5)), "attesi", 7 / 8, 1 / 8)
+print("media f=2x", r(integra(lambda x: 2 * x * x, 0, 1)), "media triangolare", r(integra(lambda x: x * tri(x), -1, 1)))
+print("integrale (3+x) da 0 a 2", r(integra(lambda x: 3 + x, 0, 2)), "int x^-2 da 1 a 1000", r(integra(lambda x: x ** -2, 1, 1000, 2000000)))
