@@ -323,3 +323,24 @@ for g in (0.25, 0.72):
         gr = [2 * av[0] + 0.9 * av[1] - 2.9, 0.9 * av[0] + av[1] - 1.9]
         av = [av[0] - g * gr[0], av[1] - g * gr[1]]
     print("gamma", g, "dopo 60 passi", [r(x, 4) for x in av])
+
+print("--- argomento 24: minimi quadrati")
+t = [1, 2, 3, 4, 5, 6]; th = [2.1, 3.9, 6.2, 7.8, 10.1, 12.0]
+def ls(t, th):
+    p = len(t); St = sum(t); St2 = sum(x * x for x in t); Sy = sum(th); Sty = sum(a * b for a, b in zip(t, th))
+    d = p * St2 - St * St
+    return (St2 * Sy - St * Sty) / d, (-St * Sy + p * Sty) / d, (p, St, St2, round(Sy, 3), round(Sty, 3), d)
+a1, a2, somme = ls(t, th)
+print("somme", somme, "a", r(a1, 4), r(a2, 4), "residui", r(sum((a1 + a2 * x - y)**2 for x, y in zip(t, th)), 4))
+# Sherman-Morrison: (I + u u^T)^-1 con u = [1,1]
+print("SM:", [[F(1) - F(1, 3), -F(1, 3)], [-F(1, 3), F(1) - F(1, 3)]], "inversa diretta di [[2,1],[1,2]]:", [[F(2, 3), F(-1, 3)], [F(-1, 3), F(2, 3)]])
+# un dato in piu': (7, 14.1)
+Rinv = [[91 / 105, -21 / 105], [-21 / 105, 6 / 105]]
+x = [1, 7]; thn = 14.1
+Rx = [Rinv[0][0] * x[0] + Rinv[0][1] * x[1], Rinv[1][0] * x[0] + Rinv[1][1] * x[1]]
+K = x[0] * Rx[0] + x[1] * Rx[1]
+prev = a1 + a2 * 7
+innov = thn - prev
+an = [a1 + Rx[0] / (1 + K) * innov, a2 + Rx[1] / (1 + K) * innov]
+b1, b2, _ = ls(t + [7], th + [thn])
+print("K", r(K, 4), "previsione", r(prev, 3), "innovazione", r(innov, 3), "ricorsiva", [r(v, 4) for v in an], "diretta", r(b1, 4), r(b2, 4))
