@@ -154,3 +154,16 @@ print("U(0,1): E[X^2]", r(integra(lambda x: x * x, 0, 1)), "f=2x: E[X^2]", r(int
 D = 2 / 2**8
 print("quantizzazione 8 bit: Delta", D, "sigma^2", D * D / 12, "9 bit", (D / 2)**2 / 12, "rapporto", (D * D / 12) / ((D / 2)**2 / 12))
 print("esponenziale P(X>=3)", r(exp(-3), 3))
+
+print("--- argomento 14: variabili continue multiple")
+def integra2(f, a, b, c, d, n=600):
+    hx, hy = (b - a) / n, (d - c) / n
+    return sum(f(a + (i + 0.5) * hx, c + (j + 0.5) * hy) for i in range(n) for j in range(n)) * hx * hy
+print("P(X+Y<=1) esponenziali", r(integra2(lambda x, y: exp(-x - y) if x + y <= 1 else 0.0, 0, 1, 0, 1, 1200), 3), "1-2/e", r(1 - 2 / exp(1), 3))
+g = lambda x, y: x + y
+print("area x+y", r(integra2(g, 0, 1, 0, 1)), "E[XY]", r(integra2(lambda x, y: x * y * g(x, y), 0, 1, 0, 1)), F(1, 3))
+EX = F(1, 3) + F(1, 4); EX2 = F(1, 4) + F(1, 6)
+print("E[X]", EX, "E[X^2]", EX2, "var", EX2 - EX**2, "cov", F(1, 3) - EX**2, "rho", (F(1, 3) - EX**2) / (EX2 - EX**2))
+print("E[X|Y=0]", F(1, 3) / F(1, 2), "E[X|Y=1]", (F(1, 3) + F(1, 2)) / F(3, 2))
+Fc = lambda x, y: (x * x * y + x * y * y) / 2
+print("rettangolo", Fc(1, 1) - Fc(1, .5) - Fc(.5, 1) + Fc(.5, .5), "diretto", r(integra2(g, .5, 1, .5, 1)))
