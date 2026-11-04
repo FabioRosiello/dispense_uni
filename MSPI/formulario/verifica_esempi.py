@@ -223,3 +223,17 @@ def RS(n1, n2):
         tot += sum(xs[:n1]) * sum(xs[:n2])
     return tot / 2**m
 print("R_S(1,2)", RS(1, 2), "R_S(10,11)", RS(10, 11), "var S(100) =", 100, "sd", sqrt(100))
+
+print("--- argomento 18: grandi numeri e limite centrale")
+mu_d = F(sum(range(1, 7)), 6); var_d = F(sum(k * k for k in range(1, 7)), 6) - mu_d**2
+print("dado: mu", mu_d, "var", var_d, "var media 100", r(var_d / 100, 4), "sd", r(sqrt(var_d / 100), 3))
+print("Chebyshev moneta: sigma2/(n eps^2) = 100/n:", F(1, 4) / F(25, 10000), "n per 0.05:", F(1, 4) / (F(5, 100) * F(25, 10000)))
+print("frequenza del 6 su 600: var", F(1, 6) * F(5, 6) / 600, r(F(5, 36) / 600, 7), "sd", r(sqrt(5 / 36 / 600), 4))
+print("dieci dadi: mu", 10 * mu_d, "var", 10 * var_d, r(10 * var_d, 2), "sd", r(sqrt(10 * var_d), 2))
+# n per 2Q(0.1 sqrt n) = 0.05
+z = 1.959963984540054
+print("Q(1.96)", r(Q(1.96), 4), "n = (z/0.1)^2 =", r((z / 0.1)**2, 1), "2Q(0.1 sqrt 385)", r(2 * Q(0.1 * sqrt(385)), 4))
+print("binomiale 50, 1/2: media", 50 * 0.5, "varianza", 50 * 0.25)
+# M(t) gaussiana standard = e^{t^2/2}, numerica per t = 0.7
+t = 0.7
+print("M gauss(0.7)", r(integra(lambda x: exp(t * x) * exp(-x * x / 2) / sqrt(2 * pi), -12, 12), 5), r(exp(t * t / 2), 5))
