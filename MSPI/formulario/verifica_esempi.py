@@ -301,3 +301,25 @@ for bb in (F(1, 5), F(7, 10)):
     print("beta", bb, "MSE", r(var + bias**2, 5), "1/I", r(bb * (1 - bb) / n, 5))
 print("Fisher gauss sigma=2 n=100:", F(100, 4), "CRB", F(4, 100), "sd", sqrt(0.04))
 print("30 su 100: var", r(0.3 * 0.7 / 100, 5), "sd", r(sqrt(0.0021), 3))
+
+print("--- argomento 23: LMMSE e gradiente")
+# due misure X_i = Theta + N_i, var Theta = 1, var N = 1, media Theta 1
+M = [[F(2), F(1)], [F(1), F(2)]]; s = [F(1), F(1)]
+det = M[0][0] * M[1][1] - M[0][1] * M[1][0]
+Minv = [[M[1][1] / det, -M[0][1] / det], [-M[1][0] / det, M[0][0] / det]]
+a = [sum(Minv[i][j] * s[j] for j in range(2)) for i in range(2)]
+print("a", a, "b", 1 - sum(a), "errore", 1 - sum(s[i] * a[i] for i in range(2)))
+aa = 1 / 1.49
+print("misura rumorosa: a", r(aa, 3), "stima X=3", r(aa * 3 + (1 - aa) * 2, 3), "errore", r(0.49 / 1.49, 3))
+# autovalori di [[2,0.9],[0.9,1]]
+from math import sqrt as rq
+l1 = (3 + rq(9 - 4 * 1.19)) / 2; l2 = (3 - rq(9 - 4 * 1.19)) / 2
+print("autovalori", r(l1, 3), r(l2, 3), "2/lmax", r(2 / l1, 3), "fattori g=.25", r(1 - .25 * l1, 3), r(1 - .25 * l2, 3), "g=.72", r(1 - .72 * l1, 3), r(1 - .72 * l2, 3))
+print("M a = s con a=[1,1]:", [2 + 0.9, 0.9 + 1])
+# simulazione del gradiente da [-1, 2.6]
+for g in (0.25, 0.72):
+    av = [-1.0, 2.6]
+    for k in range(60):
+        gr = [2 * av[0] + 0.9 * av[1] - 2.9, 0.9 * av[0] + av[1] - 1.9]
+        av = [av[0] - g * gr[0], av[1] - g * gr[1]]
+    print("gamma", g, "dopo 60 passi", [r(x, 4) for x in av])
