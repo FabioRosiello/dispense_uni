@@ -344,3 +344,12 @@ innov = thn - prev
 an = [a1 + Rx[0] / (1 + K) * innov, a2 + Rx[1] / (1 + K) * innov]
 b1, b2, _ = ls(t + [7], th + [thn])
 print("K", r(K, 4), "previsione", r(prev, 3), "innovazione", r(innov, 3), "ricorsiva", [r(v, 4) for v in an], "diretta", r(b1, 4), r(b2, 4))
+
+print("--- argomento 25: informazione ed entropia")
+from math import log2
+print("bit: moneta", log2(2), "dado", r(log2(6), 3), "52 carte", r(log2(52), 3), "dieci teste", log2(2**10))
+print("H quaternaria", sum(p * log2(1 / p) for p in (1 / 2, 1 / 4, 1 / 8, 1 / 8)))
+H2 = lambda p: -p * log2(p) - (1 - p) * log2(1 - p)
+print("H2(0.11)", r(H2(0.11), 4), "termini", r(log2(1 / 0.11), 3), r(log2(1 / 0.89), 3), "H2(0.5)", H2(0.5))
+print("Jensen uniforme 1..4: E[log2 X]", r(sum(log2(k) for k in range(1, 5)) / 4, 3), "log2 2.5", r(log2(2.5), 3))
+print("log2 3,5,6,52", [r(log2(k), 3) for k in (3, 5, 6, 52)], "ln(1/0.11)", r(log(1 / 0.11), 3), "ln2", r(log(2), 3))
