@@ -95,3 +95,26 @@ pYc = {y: pjc[(0, y)] + pjc[(1, y)] for y in (0, 1)}
 print("canale congiunta", {k: float(v) for k, v in pjc.items()}, "pY", {k: float(v) for k, v in pYc.items()})
 print("bayes", pjc[(1, 1)] / pYc[1], pjc[(0, 1)] / pYc[1])
 print("catena", 0.5 * 0.8 * 0.9)
+
+print("--- argomento 9: covarianza e correlazione")
+pj = {(0, 0): F(1, 3), (0, 1): F(2, 9), (1, 0): F(1, 9), (1, 1): F(1, 3)}
+E = lambda g, p: sum(g(x, y) * v for (x, y), v in p.items())
+print("E[3X^2+Y]", E(lambda x, y: 3 * x * x + y, pj))
+pY0, pY1 = pj[(0, 0)] + pj[(1, 0)], pj[(0, 1)] + pj[(1, 1)]
+h0 = 3 * pj[(1, 0)] / pY0
+h1 = 3 * pj[(1, 1)] / pY1 + 1
+print("h(0)", h0, "h(1)", h1, "media in due tempi", h0 * pY0 + h1 * pY1)
+mx, my = E(lambda x, y: x, pj), E(lambda x, y: y, pj)
+vx, vy = E(lambda x, y: x * x, pj) - mx**2, E(lambda x, y: y * y, pj) - my**2
+cov = E(lambda x, y: x * y, pj) - mx * my
+print("medie", mx, my, "varianze", vx, vy, "E[XY]", E(lambda x, y: x * y, pj), "cov", cov, "rho", cov / vx)
+p2 = {(1, -1): F(1, 8), (-1, -1): F(1, 4), (-1, 1): F(1, 2), (1, 1): F(1, 8)}
+pz = {}
+for (x, y), v in p2.items():
+    pz[3 * x * x + y] = pz.get(3 * x * x + y, 0) + v
+mx2, my2 = E(lambda x, y: x, p2), E(lambda x, y: y, p2)
+cov2 = E(lambda x, y: x * y, p2) - mx2 * my2
+vx2, vy2 = 1 - mx2**2, 1 - my2**2
+print("seconda coppia pZ", pz, "cov", cov2, "rho", float(cov2) / float(vx2 * vy2) ** 0.5, -1 / 45**0.5)
+print("X uniforme {-1,0,1}, Y=X^2: E[XY]", sum(F(x**3, 3) for x in (-1, 0, 1)))
+print("due dadi", 2 * F(35, 12), float(2 * F(35, 12)))
