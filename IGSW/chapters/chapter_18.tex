@@ -1,0 +1,1034 @@
+\chapter{Controllo delle versioni: Git e GitHub}
+\label{cap:git}
+\emergencystretch=2.5em
+
+Nei due capitoli precedenti il codice veniva compilato, collaudato, impacchettato e chiuso in un container. Resta una
+domanda a monte: da dove viene quel codice, e come fanno più persone a modificarlo insieme, per mesi o per anni,
+senza perdere il lavoro l'una dell'altra? La risposta sono i \textbf{sistemi di controllo delle versioni}. Il capitolo
+parte dal problema e dalle soluzioni storiche (CVS, con i modelli \textit{lock/modify/unlock} e
+\textit{copy/modify/merge}), poi passa a \textbf{Git}, il sistema distribuito che useremo nel progetto d'esame, e alla
+piattaforma \textbf{GitHub}. Gli esempi sono stati eseguiti davvero con Git 2.43: gli output riportati sono quelli
+reali.
+
+% Numero di un passo nelle figure
+\newcommand{\gn}[1]{\textcolor{swred!80!black}{\textbf{#1}}\,}
+
+% Stili delle figure di questo capitolo
+\tikzset{
+  gcil/.style={cylinder, shape border rotate=90, aspect=0.22, draw=#1!75!black, fill=#1!14, line width=0.8pt,
+               font=\scriptsize, align=center, minimum width=1.9cm, minimum height=1.25cm, inner sep=2pt},
+  gcil/.default=swblue,
+  gdoc/.style={rectangle, draw=#1!75!black, fill=#1!10, line width=0.7pt, font=\scriptsize, align=center,
+               minimum width=1.5cm, minimum height=0.95cm, inner sep=2pt},
+  gdoc/.default=sworange,
+  gfreccia/.style={-{Stealth[length=2.2mm]}, line width=0.8pt, draw=#1},
+  gfreccia/.default=swgray,
+  getich/.style={font=\scriptsize\itshape, fill=white, inner sep=1.5pt, align=center},
+  gpasso/.style={circle, fill=#1, text=white, font=\tiny\bfseries, inner sep=0pt, minimum size=0.36cm},
+  gpasso/.default=swgray,
+  gver/.style={rectangle, rounded corners=2pt, draw=#1!70!black, fill=#1!12, line width=0.6pt,
+               font=\scriptsize, inner sep=2.5pt, minimum height=0.45cm},
+  gver/.default=swblue,
+  gcommit/.style={circle, draw=#1!75!black, fill=#1!22, line width=0.8pt, minimum size=0.5cm, inner sep=0pt,
+                  font=\tiny},
+  gcommit/.default=swblue,
+  gpunt/.style={rectangle, rounded corners=1.5pt, fill=#1, text=white, font=\tiny\bfseries, inner sep=2pt},
+}
+
+% ============================================================
+\section{Perché gestire le versioni}
+
+Un sistema software non nasce in un colpo solo:
+
+\begin{itemize}
+  \item non è realizzato in una sola sessione di programmazione, ma in settimane, mesi, anni;
+  \item spesso non è realizzato da un solo programmatore;
+  \item non è rilasciato una sola volta: la correzione dei difetti e l'introduzione di nuove funzionalità portano a
+        nuovi rilasci;
+  \item spesso va rilasciato in diverse \textbf{configurazioni}: una versione completa e una ridotta, versioni in
+        diverse lingue, versioni per diverse configurazioni hardware, \ldots
+\end{itemize}
+
+Per tutte queste necessità è opportuno usare un sistema di gestione del \textbf{ciclo di vita} del software o, almeno,
+della \textbf{storia delle sue versioni}: chi ha cambiato che cosa, quando e perché, e come tornare a uno stato
+precedente.
+
+\subsection{Che cosa deve offrire}
+
+I requisiti di un sistema per la gestione delle versioni sono:
+
+\begin{itemize}
+  \item il supporto alla gestione delle versioni vera e propria:
+        \begin{itemize}
+          \item l'\textbf{identificazione} delle versioni e delle release;
+          \item la gestione della \textbf{memorizzazione} di tutte le versioni;
+          \item la registrazione dello \textbf{storico} delle modifiche;
+          \item lo \textbf{sviluppo indipendente}, cioè la gestione dei rami (\textit{branch}) e delle versioni
+                concorrenti;
+        \end{itemize}
+  \item il supporto alla \textbf{build automation} (Capitolo 16);
+  \item il supporto alle attività \textbf{DevOps}: \textit{Continuous Integration} e \textit{Continuous
+        Delivery/Deployment}, come i workflow di GitHub Actions del Capitolo 16, che partono proprio a ogni
+        modifica del repository.
+\end{itemize}
+
+Fra i tanti sistemi e protocolli esistenti ne vedremo due: \textbf{CVS}, il primo sistema aperto a essere usato su
+larga scala, e \textbf{Git}, il più usato nei progetti open source da circa vent'anni. Git, sulla piattaforma GitHub,
+è quello che useremo nel progetto d'esame.
+
+% ============================================================
+\section{CVS e il problema della concorrenza}
+
+\dfn{CVS (Concurrent Versioning System)}{
+  \textbf{CVS} (\textit{Concurrent Versioning System}, noto anche come \textit{Concurrent Versions System}) è un
+  sistema di controllo delle versioni di un progetto fatto di file. Permette a un gruppo di persone di lavorare
+  simultaneamente sullo stesso gruppo di file (in genere i sorgenti di un programma), mantenendo il controllo
+  dell'evoluzione delle modifiche.
+}
+
+Per farlo, CVS mantiene un deposito centrale, il \textbf{repository}, dal quale i collaboratori ottengono una
+\textbf{copia di lavoro} (\textit{working copy}). Ciascuno modifica i file della sua copia e sottopone le modifiche a
+CVS, che le integra nel repository. Il compito di CVS non si ferma qui: è sempre possibile ricostruire la storia delle
+modifiche di un gruppo di file e ottenere una copia che corrisponde a una versione passata del lavoro. Nato alla fine
+degli anni Ottanta, CVS è stato storicamente il primo strumento open source di gestione della configurazione con
+un'ampia diffusione.
+
+\subsection{Le modifiche perse}
+
+Se molti sviluppatori lavorano contemporaneamente, le loro modifiche possono andare in \textbf{conflitto}: due persone
+possono modificare nello stesso momento lo stesso file. Ecco la sequenza delle slide, con due sviluppatori A e B e un
+file $f$ sul server:
+
+\begin{enumerate}
+  \item A scarica il file $f$ (versione 1);
+  \item A modifica il file, $f$ (v1) $\to$ $f$ (v2);
+  \item B scarica il file $f$ (v1);
+  \item A salva il file $f$ (v2);
+  \item A carica sul server il file $f$ (v2);
+  \item B modifica il file, $f$ (v1) $\to$ $f$ (v3);
+  \item B carica sul server il file $f$ (v3).
+\end{enumerate}
+
+\begin{center}
+\begin{tikzpicture}[x=1.45cm, y=1cm,
+    corsia/.style={font=\scriptsize\bfseries, anchor=east, align=right}]
+  \foreach \y/\n in {1.5/Sviluppatore A, 0/Server, -1.5/Sviluppatore B} {
+    \node[corsia] at (0.45,\y) {\n};
+    \draw[swgray!45, line width=0.6pt] (0.55,\y) -- (8.45,\y);
+  }
+  % versioni del file sul server
+  \node[gver=swblue] (s1) at (1.4,0) {$f$ (v1)};
+  \node[gver=swgreen] (s2) at (5.0,0) {$f$ (v2)};
+  \node[gver=swred] (s3) at (7.9,0) {$f$ (v3)};
+  % lo sviluppatore A
+  \node[gver=swblue] (a1) at (1.4,1.5) {$f$ (v1)};
+  \node[gver=swgreen] (a2) at (3.0,1.5) {$f$ (v2)};
+  \draw[gfreccia] (s1.north) -- node[gpasso] {1} (a1.south);
+  \draw[gfreccia] (a1.east) -- node[gpasso, above=2pt] {2} (a2.west);
+  \node[gpasso, above=3pt] (p4) at (a2.north) {4};
+  \node[font=\tiny, text=swgray, right=1pt] at (p4.east) {salva};
+  \draw[gfreccia] (a2.south east) -- node[gpasso] {5} (s2.north west);
+  % lo sviluppatore B
+  \node[gver=swblue] (b1) at (3.2,-1.5) {$f$ (v1)};
+  \node[gver=swred] (b3) at (6.3,-1.5) {$f$ (v3)};
+  \draw[gfreccia] (s1.south east) -- node[gpasso] {3} (b1.north west);
+  \draw[gfreccia] (b1.east) -- node[gpasso, above=2pt] {6} (b3.west);
+  \draw[gfreccia] (b3.north east) -- node[gpasso] {7} (s3.south west);
+  % la versione persa
+  \draw[swred, line width=1.4pt] ($(s2.south west)+(-0.05,-0.05)$) -- ($(s2.north east)+(0.05,0.05)$);
+  \draw[swred, line width=1.4pt] ($(s2.north west)+(-0.05,0.05)$) -- ($(s2.south east)+(0.05,-0.05)$);
+  \node[font=\scriptsize\bfseries, text=swred, align=left, anchor=west] at (5.5,0.75) {v2 sovrascritta da v3:\\le modifiche di A sono perse};
+\end{tikzpicture}
+\end{center}
+
+Le modifiche che aveva fatto A (la versione v2) sono andate perdute: B ha caricato una versione costruita su v1, che
+non le conteneva. Per evitarlo esistono due modelli.
+
+\subsection{Primo modello: lock/modify/unlock}
+
+In principio l'unico modello con cui più programmatori accedevano in concorrenza ai file di un progetto era
+\textbf{lock/modify/unlock}: un utente che vuole modificare un file prima lo \textbf{blocca} (\textit{lock}), impedendo a
+chiunque altro di modificarlo; quando ha finito lo \textbf{sblocca} (\textit{unlock}).
+
+\begin{center}
+\begin{tikzpicture}
+  \node[gcil] (srv) at (0,0) {Server\\[1pt]$f$};
+  \node[gdoc=swgreen] (a) at (-4.4,0) {A modifica $f$};
+  \node[gdoc=swgray] (b) at (4.4,0) {B aspetta};
+  \draw[gfreccia=swgreen] (srv.west) -- node[getich, above] {lock, poi unlock} (a.east);
+  \draw[gfreccia=swred, dashed] (b.west) -- node[getich, above] {lock? occupato} (srv.east);
+  % lucchetto sul file
+  \begin{scope}[shift={(0.62,0.55)}, line width=0.7pt]
+    \draw[swgray!90!black] (-0.09,0.05) arc (180:0:0.09) -- (0.09,0);
+    \draw[swgray!90!black] (-0.09,0.05) -- (-0.09,0);
+    \fill[swgray!90!black] (-0.14,-0.16) rectangle (0.14,0.02);
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+
+Il modello impedisce i conflitti, ma ha i suoi problemi:
+
+\begin{itemize}
+  \item non sono possibili modifiche contemporanee allo stesso file;
+  \item molti sviluppatori restano bloccati in attesa che il file si liberi, e più cresce il gruppo di lavoro più
+        cresce il tempo perso in attesa;
+  \item per ridurre le attese gli sviluppatori dovrebbero dividersi il lavoro nel modo più netto possibile.
+\end{itemize}
+
+\subsection{Secondo modello: copy/modify/merge}
+
+L'alternativa è il modello \textbf{copy/modify/merge}:
+
+\begin{enumerate}
+  \item lo sviluppatore A scarica una copia del progetto (\textit{working copy} o \textit{sandbox}) dal server CVS,
+        cioè dal \textbf{repository};
+  \item applica liberamente tutte le modifiche; nel frattempo altri programmatori, come B, possono fare lo stesso;
+  \item al termine del lavoro A aggiorna il progetto sul server (\textbf{commit});
+  \item gli altri programmatori possono chiedere al repository di aggiornare la loro copia (\textbf{update}), oppure
+        creare a loro volta nuove versioni (\textbf{commit}).
+\end{enumerate}
+
+\Needspace{14\baselineskip}
+\begin{center}
+\begin{tikzpicture}
+  \node[gcil, minimum width=2.6cm, minimum height=2.2cm] (srv) at (0,0) {};
+  \node[font=\scriptsize\bfseries, anchor=north] at ($(srv.north)+(0,-0.35)$) {Server CVS};
+  \foreach \v [count=\i] in {1.1, 1.2, 1.3} {
+    \node[gver=swteal, minimum width=1.2cm] at (0,0.55-0.48*\i) {v\v};
+  }
+  \node[gdoc=sworange] (a) at (-4.2,0.9) {Sviluppatore A\\working copy};
+  \node[gdoc=sworange] (b) at (4.2,0.9) {Sviluppatore B\\working copy};
+  \draw[gfreccia] ($(srv.west)+(0,0.35)$) -- node[getich, above, pos=0.55] {\gn{1} check out} ($(a.east)+(0,-0.1)$);
+  \draw[gfreccia] ($(srv.east)+(0,0.35)$) -- node[getich, above, pos=0.55] {\gn{2} check out} ($(b.west)+(0,-0.1)$);
+  \draw[gfreccia=swgreen] ($(a.south)+(0.3,0)$) |- node[getich, below, pos=0.75] {\gn{3} commit} ($(srv.west)+(0,-0.45)$);
+  \draw[gfreccia=swblue] ($(srv.east)+(0,-0.15)$) -| node[getich, below, pos=0.3] {\gn{4} update} ($(b.south)+(-0.3,0)$);
+  \draw[gfreccia=swgreen] ($(b.south)+(0.35,0)$) |- node[getich, below, pos=0.75] {\gn{5} commit} ($(srv.east)+(0,-0.7)$);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Risolvere i conflitti}
+
+Con copy/modify/merge due versioni diverse dello stesso file possono comunque arrivare al server. Le soluzioni
+possibili sono tre:
+
+\begin{enumerate}
+  \item \textbf{accettare} una delle due versioni e \textbf{gettare} l'altra: si è solo sprecato il tempo di un
+        programmatore;
+  \item \textbf{fondere} (\textit{merge}) le due versioni, cercando di mantenere le modifiche di entrambe: se riguardano
+        parti diverse (o file diversi) la fusione può essere quasi automatica, altrimenti bisogna procedere a mano;
+  \item \textbf{duplicare} (\textit{fork}) il repository, tenendo vive due versioni diverse (\textit{branch}), ciascuna
+        con le sue modifiche; più avanti si potranno fondere in una sola.
+\end{enumerate}
+
+\subsection{Un confronto}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}P{3.2cm}P{5.4cm}P{5.4cm}@{}}
+  \toprule
+  & \textbf{lock/modify/unlock} & \textbf{copy/modify/merge} \\ \midrule
+  Conflitti & impossibili & possibili: vanno risolti \\
+  Lavoro in parallelo & no: chi trova il file bloccato aspetta & sì, sugli stessi file \\
+  Team numerosi & la produttività cala con le dimensioni del gruppo & la risoluzione dei conflitti può diventare un collo
+    di bottiglia, perché in genere spetta all'amministratore del progetto \\
+  Cosa aiuta & la modularità del software e una divisione netta dei compiti & aggiornare la propria copia
+    (\textit{update}) prima di cominciare a modificarla \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+In ogni caso, ogni sviluppatore dovrebbe sempre \textbf{aggiornare} la propria versione del progetto prima di iniziare a
+modificarla: meno la copia è vecchia, meno conflitti ci saranno.
+
+% ============================================================
+\section{Git}
+
+\textbf{Git} (\url{https://git-scm.com/}) è stato proposto nel 2005 da Linus Torvalds, l'autore del kernel Linux, per
+gestire proprio lo sviluppo di Linux (nelle slide il nome è scritto «Linux Torvalds»: è una svista). Rispetto a CVS si
+rifà a un paradigma più aperto, nel quale chiunque può partecipare a un progetto:
+
+\begin{itemize}
+  \item \textbf{biforcando} (\textit{fork}) un progetto esistente, cioè facendone una copia propria;
+  \item \textbf{proponendo} le sue aggiunte al progetto (\textit{patch}).
+\end{itemize}
+
+\dfn{L'architettura distribuita di Git}{
+  In Git non esiste un'unica copia centralizzata del progetto: ogni sviluppatore ha un repository locale
+  \textbf{completo}, con tutta la storia. Esiste però una copia di \textbf{riferimento} del progetto, gestita di solito
+  dal suo fondatore. Ogni utente può creare una copia dell'intero progetto (\textbf{fork}) e può chiedere al fondatore di
+  propagare nella copia di riferimento una sua modifica, proponendo una patch tramite una \textbf{pull request}.
+}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[gcil=swteal, minimum width=3.4cm] (orig) at (0,0) {\textbf{Repository online}\\(origin, su GitHub)};
+  \foreach \x/\n in {-4.6/Anna, 0/Bruno, 4.6/Carla} {
+    \node[gcil, minimum width=2.2cm] (r\n) at (\x,-2.9) {Repository\\locale};
+    \node[gdoc=sworange, minimum width=1.6cm, minimum height=0.7cm] (w\n) at (\x,-4.55) {file locali};
+    \draw[gfreccia] ($(r\n.south)+(-0.2,0)$) -- ($(w\n.north)+(-0.2,0)$);
+    \draw[gfreccia] ($(w\n.north)+(0.2,0)$) -- ($(r\n.south)+(0.2,0)$);
+    \node[font=\scriptsize\bfseries, anchor=north] at (w\n.south) {\n};
+  }
+  % push (verde) e pull (blu) fra ogni repository locale e quello online
+  \draw[gfreccia=swgreen] ($(rAnna.north)+(-0.3,0)$) -- node[getich, pos=0.3, left=3pt] {push} (orig.-128);
+  \draw[gfreccia=swblue] (orig.-114) -- node[getich, pos=0.7, right=3pt] {pull} ($(rAnna.north)+(0.3,0)$);
+  \draw[gfreccia=swgreen] ($(rBruno.north)+(-0.25,0)$) -- node[getich, pos=0.4, left=1pt] {push} (orig.-97);
+  \draw[gfreccia=swblue] (orig.-83) -- node[getich, pos=0.6, right=1pt] {pull} ($(rBruno.north)+(0.25,0)$);
+  \draw[gfreccia=swgreen] ($(rCarla.north)+(0.3,0)$) -- node[getich, pos=0.3, right=3pt] {push} (orig.-52);
+  \draw[gfreccia=swblue] (orig.-66) -- node[getich, pos=0.7, left=3pt] {pull} ($(rCarla.north)+(-0.3,0)$);
+\end{tikzpicture}
+\end{center}
+
+Ogni repository locale è una copia completa: si può lavorare, fare commit e consultare la storia anche senza rete, e
+sincronizzarsi con il repository online solo quando serve.
+
+\info{\texttt{master} e \texttt{main}}{
+  Le slide chiamano \textit{master} la copia di riferimento. In Git il ramo principale di un repository si chiamava
+  per tradizione \texttt{master}; dal 2020 GitHub dà ai nuovi repository il ramo \texttt{main}, e Git permette di
+  scegliere il nome con l'opzione \texttt{init.defaultBranch}. Negli esempi di questo capitolo il ramo principale si
+  chiama \texttt{main}.
+}
+
+\subsection{Operazioni locali e operazioni remote}
+
+In un repository Git i file passano per tre luoghi locali, più il repository remoto:
+
+\begin{itemize}
+  \item la \textbf{working copy} (o \textit{workspace}): i file su cui si lavora;
+  \item l'\textbf{index} (o \textit{staging area}): le modifiche scelte per il prossimo commit;
+  \item il \textbf{repository locale}: la storia dei commit, nella cartella nascosta \texttt{.git};
+  \item il \textbf{repository remoto}: per esempio quello su GitHub.
+\end{itemize}
+
+\Needspace{12\baselineskip}
+\begin{center}
+\begin{tikzpicture}
+  \node[gdoc=sworange, minimum width=2cm, minimum height=1.1cm] (ws) at (0,0) {\textbf{Working copy}};
+  \node[gdoc=swgray, minimum width=1.7cm, minimum height=0.9cm] (ix) at (3.3,-1.3) {\textbf{Index}};
+  \node[gcil] (rep) at (6.6,0) {\textbf{Repository}\\\textbf{locale}};
+  \node[gcil=swteal] (rem) at (11,0) {\textbf{Repository}\\\textbf{remoto}};
+  \draw[gfreccia] (ws.south) |- node[getich, pos=0.75] {add} (ix.west);
+  \draw[gfreccia] (ix.east) -| node[getich, pos=0.25] {commit} (rep.south);
+  \draw[gfreccia=swgreen] ($(rep.east)+(0,-0.25)$) -- node[getich, below] {push} ($(rem.west)+(0,-0.25)$);
+  \draw[gfreccia=swblue] ($(rem.west)+(0,0.25)$) -- node[getich, above] {fetch / clone} ($(rep.east)+(0,0.25)$);
+  \draw[gfreccia=swblue] (rem.north) .. controls (10.4,2.3) and (1.2,2.3) .. node[getich, pos=0.5] {pull} (ws.north);
+  \draw[gfreccia] (rep.north west) .. controls (5.2,1.0) and (2.2,1.0) .. node[getich, pos=0.5] {checkout / switch} (ws.north east);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item \textbf{add} sposta una modifica dalla working copy all'index;
+  \item \textbf{commit} registra nel repository locale tutto ciò che è nell'index: una nuova versione, con un autore, una
+        data e un messaggio;
+  \item \textbf{push} invia al repository remoto i commit locali che non ha ancora;
+  \item \textbf{fetch} scarica dal remoto i commit nuovi, senza toccare la working copy; \textbf{clone} crea un
+        repository locale copiando per intero quello remoto;
+  \item \textbf{pull} è un fetch seguito dalla fusione dei commit scaricati nel ramo corrente, quindi aggiorna anche la
+        working copy;
+  \item \textbf{checkout} (oggi anche \textbf{switch}) porta nella working copy un ramo o una versione del repository.
+\end{itemize}
+
+% ============================================================
+\section{Git in pratica}
+
+Gli esempi che seguono costruiscono un piccolo progetto, una rubrica in Java, con due sviluppatori: Anna, che lo crea,
+e Bruno, che si unisce dopo. Ogni listato riporta i comandi (dopo il \texttt{\$}) e il loro output reale; i tre punti
+\texttt{...} abbreviano il percorso della cartella di lavoro.
+
+\subsection{Configurazione e primo commit}
+
+Ogni commit porta il nome e l'indirizzo di chi lo fa: prima di tutto si configurano, una volta per tutte. L'ultima
+riga sceglie \texttt{main} come nome del ramo principale dei nuovi repository.
+
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletekeywords={java}]
+$ git config --global user.name "Anna Rossi"
+$ git config --global user.email anna.rossi@example.com
+$ git config --global init.defaultBranch main
+\end{lstlisting}
+
+Il progetto parte con una classe e un file di presentazione:
+
+\Needspace{17\baselineskip}
+\begin{lstlisting}[style=java, name=Contatto.java]
+public class Contatto {
+    private final String nome;
+    private final String telefono;
+
+    public Contatto(String nome, String telefono) {
+        this.nome = nome;
+        this.telefono = telefono;
+    }
+
+    @Override
+    public String toString() {
+        return nome + " (" + telefono + ")";
+    }
+}
+\end{lstlisting}
+
+\texttt{git init} trasforma la cartella in un repository; \texttt{git status} dice in che stato sono i file:
+
+\Needspace{14\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletestring={[b]'}, deletekeywords={java}]
+$ git init
+Initialized empty Git repository in .../rubrica/.git/
+$ git status
+On branch main
+
+No commits yet
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	Contatto.java
+	README.md
+
+nothing added to commit but untracked files present (use "git add" to track)
+\end{lstlisting}
+
+I due file non sono ancora tracciati (\textit{untracked}): Git li vede, ma non li considera parte del progetto finché
+non li si aggiunge all'index con \texttt{git add}. Poi \texttt{git commit} registra la prima versione:
+
+\Needspace{17\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletestring={[b]'}, deletekeywords={java}]
+$ git add Contatto.java README.md
+$ git status
+On branch main
+
+No commits yet
+
+Changes to be committed:
+  (use "git rm --cached <file>..." to unstage)
+	new file:   Contatto.java
+	new file:   README.md
+
+$ git commit -m "Prima versione della rubrica"
+[main (root-commit) 5f707a2] Prima versione della rubrica
+ 2 files changed, 16 insertions(+)
+ create mode 100644 Contatto.java
+ create mode 100644 README.md
+\end{lstlisting}
+
+Il commit è identificato da un codice, \texttt{5f707a2}: sono le prime cifre di un \textit{hash} SHA-1 di 40 cifre
+esadecimali, calcolato dal contenuto, dall'autore, dalla data e dal commit precedente. È la funzione di hash del
+Capitolo 14: cambiando anche un solo carattere della storia, cambierebbe l'identificativo.
+
+\subsection{Modifiche, differenze e storia}
+
+Anna cambia il formato di \texttt{toString}. \texttt{git status --short} riassume lo stato in una riga per file
+(\texttt{M}: modificato), \texttt{git diff} mostra che cosa è cambiato rispetto all'ultimo commit:
+
+\Needspace{16\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletekeywords={java}]
+$ git status --short
+ M Contatto.java
+$ git diff
+diff --git a/Contatto.java b/Contatto.java
+index 8878a70..32a9193 100644
+--- a/Contatto.java
++++ b/Contatto.java
+@@ -9,6 +9,6 @@ public class Contatto {
+
+     @Override
+     public String toString() {
+-        return nome + " (" + telefono + ")";
++        return nome + ": " + telefono;
+     }
+ }
+\end{lstlisting}
+
+Le righe con il \texttt{-} sono state tolte, quelle con il \texttt{+} aggiunte; le altre sono il contesto.
+L'opzione \texttt{-a} di \texttt{git commit} fa da sé l'\texttt{add} dei file già tracciati. Poi \texttt{git log}
+racconta la storia, dal commit più recente:
+
+\Needspace{16\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletekeywords={java}]
+$ git commit -am "Nuovo formato di toString"
+[main 3fbb3dc] Nuovo formato di toString
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+$ git log --oneline
+3fbb3dc Nuovo formato di toString
+5f707a2 Prima versione della rubrica
+$ git log -1
+commit 3fbb3dcc070bc8ec1ae63c2ffa49df667c8002f1
+Author: Anna Rossi <anna.rossi@example.com>
+Date:   Thu Nov 5 10:50:00 2026 +0100
+
+    Nuovo formato di toString
+\end{lstlisting}
+
+Una versione importante si marca con un \textbf{tag}, un'etichetta che individua una \textbf{release}:
+
+\Needspace{6\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletekeywords={java}]
+$ git tag -a v1.0 -m "Prima release"
+$ git log --oneline --decorate
+3fbb3dc (HEAD -> main, tag: v1.0) Nuovo formato di toString
+5f707a2 Prima versione della rubrica
+\end{lstlisting}
+
+\texttt{HEAD -> main} dice che il ramo corrente è \texttt{main} e che il suo ultimo commit è \texttt{3fbb3dc}, lo stesso
+a cui ora punta il tag \texttt{v1.0}.
+
+\subsection{Rami e fusioni}
+
+Un \textbf{ramo} (\textit{branch}) è una linea di sviluppo indipendente: in Git è soltanto un'etichetta che punta a un
+commit e avanza da sola a ogni nuovo commit. Anna apre il ramo \texttt{email} per aggiungere l'indirizzo di posta ai
+contatti (un campo e il suo metodo \texttt{setEmail}); intanto, sul ramo \texttt{main}, aggiunge al README le
+istruzioni per compilare.
+
+\Needspace{17\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletestring={[b]'}, deletekeywords={java}]
+$ git switch -c email
+Switched to a new branch 'email'
+$ git commit -am "Aggiunta l'email"
+[email 2d7dfbf] Aggiunta l'email
+ 1 file changed, 5 insertions(+)
+$ git switch main
+Switched to branch 'main'
+$ git commit -am "Istruzioni per compilare"
+[main 02ab2d8] Istruzioni per compilare
+ 1 file changed, 1 insertion(+)
+$ git log --oneline --graph --all
+* 02ab2d8 Istruzioni per compilare
+| * 2d7dfbf Aggiunta l'email
+|/
+* 3fbb3dc Nuovo formato di toString
+* 5f707a2 Prima versione della rubrica
+\end{lstlisting}
+
+\texttt{git switch -c} crea il ramo e ci si sposta (con le versioni di Git precedenti alla 2.23 si scriveva
+\texttt{git checkout -b}). Il grafo disegnato da \texttt{git log --graph} mostra che le due linee si sono separate dopo
+\texttt{3fbb3dc}:
+
+\begin{center}
+\begin{tikzpicture}[x=1.55cm]
+  \node[gcommit] (c1) at (0,0) {};
+  \node[gcommit] (c2) at (1,0) {};
+  \node[gcommit] (c3) at (2,0.65) {};
+  \node[gcommit=swgreen] (c4) at (2,-0.65) {};
+  \draw[line width=0.8pt, swgray] (c1) -- (c2) (c2) -- (c3) (c2) -- (c4);
+  \foreach \c/\h in {c1/5f707a2, c2/3fbb3dc} { \node[font=\tiny\ttfamily, below=1pt] at (\c.south) {\h}; }
+  \node[font=\tiny\ttfamily, right=2pt] at (c3.east) {02ab2d8};
+  \node[font=\tiny\ttfamily, right=2pt] at (c4.east) {2d7dfbf};
+  \node[gpunt=swblue, above=4pt] at (c3.north) {main $\leftarrow$ HEAD};
+  \node[gpunt=swgreen, below=4pt] at (c4.south) {email};
+  \node[gpunt=sworange, above=4pt] at (c2.north) {tag v1.0};
+\end{tikzpicture}
+\end{center}
+
+Per riportare nel ramo principale il lavoro fatto sul ramo \texttt{email} lo si \textbf{fonde} (\textit{merge}). Le due
+linee hanno toccato file diversi, quindi Git le unisce da solo, con un \textbf{commit di fusione} che ha due genitori:
+
+\Needspace{13\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletestring={[b]'}, deletekeywords={java}]
+$ git merge email -m "Merge del ramo email"
+Merge made by the 'ort' strategy.
+ Contatto.java | 5 +++++
+ 1 file changed, 5 insertions(+)
+$ git log --oneline --graph
+*   1c47c77 Merge del ramo email
+|\
+| * 2d7dfbf Aggiunta l'email
+* | 02ab2d8 Istruzioni per compilare
+|/
+* 3fbb3dc Nuovo formato di toString
+* 5f707a2 Prima versione della rubrica
+\end{lstlisting}
+
+(\texttt{ort} è il nome dell'algoritmo di fusione predefinito di Git.) Se invece il ramo principale non fosse avanzato
+nel frattempo, la fusione sarebbe stata un semplice \textit{fast-forward}: l'etichetta \texttt{main} si sarebbe spostata
+in avanti fino all'ultimo commit di \texttt{email}, senza commit di fusione.
+
+\subsection{Un conflitto}
+
+Che cosa succede se due rami cambiano la \textbf{stessa riga}? Anna, sul ramo \texttt{parentesi}, mette il telefono fra
+parentesi quadre; su \texttt{main}, lo fa precedere da «tel.». Poi prova a fondere:
+
+\Needspace{24\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletestring={[b]'}, deletekeywords={java}]
+$ git switch -c parentesi
+Switched to a new branch 'parentesi'
+$ git commit -am "Telefono fra parentesi quadre"
+[parentesi 2a692af] Telefono fra parentesi quadre
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+$ git switch main
+Switched to branch 'main'
+$ git commit -am "Telefono preceduto da tel."
+[main ce48c12] Telefono preceduto da tel.
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+$ git merge parentesi
+Auto-merging Contatto.java
+CONFLICT (content): Merge conflict in Contatto.java
+Automatic merge failed; fix conflicts and then commit the result.
+$ git status
+On branch main
+You have unmerged paths.
+  (fix conflicts and run "git commit")
+  (use "git merge --abort" to abort the merge)
+
+Unmerged paths:
+  (use "git add <file>..." to mark resolution)
+	both modified:   Contatto.java
+
+no changes added to commit (use "git add" and/or "git commit -a")
+\end{lstlisting}
+
+Git non può scegliere da solo fra le due versioni: è la seconda soluzione delle slide, la fusione manuale. Nel file mette
+entrambe le versioni, fra tre righe di marcatori (qui \texttt{sed} stampa le righe dalla 15 alla 23):
+
+\Needspace{12\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletestring={[b]'}, deletekeywords={java}]
+$ sed -n '15,23p' Contatto.java
+    @Override
+    public String toString() {
+<<<<<<< HEAD
+        return nome + " - tel. " + telefono;
+=======
+        return nome + " [" + telefono + "]";
+>>>>>>> parentesi
+    }
+}
+\end{lstlisting}
+
+Fra \texttt{<<<<<<< HEAD} e \texttt{=======} c'è la versione del ramo corrente, fra \texttt{=======} e
+\texttt{>>>>>>> parentesi} quella del ramo che si sta fondendo. Si modifica il file come si vuole che diventi
+(qui unendo le due idee), togliendo i marcatori; poi \texttt{git add} segna il conflitto come risolto e
+\texttt{git commit} chiude la fusione:
+
+\Needspace{30\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletestring={[b]'}, deletekeywords={java}]
+$ sed -n '15,19p' Contatto.java
+    @Override
+    public String toString() {
+        return nome + " [tel. " + telefono + "]";
+    }
+}
+$ git add Contatto.java
+$ git commit --no-edit
+[main 222546d] Merge branch 'parentesi'
+$ git log --oneline --graph
+*   222546d Merge branch 'parentesi'
+|\
+| * 2a692af Telefono fra parentesi quadre
+* | ce48c12 Telefono preceduto da tel.
+|/
+*   1c47c77 Merge del ramo email
+|\
+| * 2d7dfbf Aggiunta l'email
+* | 02ab2d8 Istruzioni per compilare
+|/
+* 3fbb3dc Nuovo formato di toString
+* 5f707a2 Prima versione della rubrica
+$ git branch -d email parentesi
+Deleted branch email (was 2d7dfbf).
+Deleted branch parentesi (was 2a692af).
+\end{lstlisting}
+
+L'opzione \texttt{--no-edit} accetta il messaggio di fusione proposto da Git. Alla fine Anna cancella i due rami: il
+loro lavoro è ormai dentro \texttt{main}, e i commit restano nella storia.
+
+\subsection{Un repository remoto}
+
+Finora tutto è avvenuto sul computer di Anna. Per collaborare serve un repository \textbf{remoto}, raggiungibile da
+tutti: quello che GitHub crea per ogni progetto. Qui, per vedere ogni dettaglio, il «server» è un repository
+\textbf{bare} (senza working copy) in una cartella della stessa macchina: per Git non cambia nulla, se non l'indirizzo.
+
+\Needspace{12\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletestring={[b]'}, deletekeywords={java}]
+$ git init --bare server/rubrica.git
+Initialized empty Git repository in .../server/rubrica.git/
+$ git remote add origin .../server/rubrica.git
+$ git push -u origin main
+To .../server/rubrica.git
+ * [new branch]      main -> main
+branch 'main' set up to track 'origin/main'.
+$ git push origin v1.0
+To .../server/rubrica.git
+ * [new tag]         v1.0 -> v1.0
+\end{lstlisting}
+
+\texttt{git remote add} dà al repository remoto il nome \texttt{origin}, quello usato per convenzione; con
+\texttt{-u}, il ramo locale \texttt{main} resta collegato a quello remoto, e i prossimi \texttt{push} e \texttt{pull} non
+avranno bisogno di argomenti. I tag vanno inviati esplicitamente. Ora Bruno, sul suo computer, configura il suo nome e
+\textbf{clona} il progetto: riceve l'intero repository, con tutta la storia.
+
+\Needspace{11\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Bruno, deletestring={[b]'}, deletekeywords={java}]
+$ git config --global user.name "Bruno Bianchi"
+$ git config --global user.email bruno.bianchi@example.com
+$ git clone .../server/rubrica.git
+Cloning into 'rubrica'...
+done.
+$ git log --oneline -3
+222546d Merge branch 'parentesi'
+ce48c12 Telefono preceduto da tel.
+2a692af Telefono fra parentesi quadre
+\end{lstlisting}
+
+\subsection{Le modifiche perse? Non con Git}
+
+Ripetiamo con Git la sequenza delle modifiche perse. Anna aggiunge una riga al README e fa push:
+
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletekeywords={java}]
+$ git commit -am "Autori nel README"
+[main cd80f8a] Autori nel README
+ 1 file changed, 1 insertion(+)
+$ git push
+To .../server/rubrica.git
+   222546d..cd80f8a  main -> main
+\end{lstlisting}
+
+Bruno, che non lo sa, aggiunge a \texttt{Contatto} il metodo \texttt{getNome}, fa commit e prova il push:
+
+\Needspace{14\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Bruno, deletestring={[b]'}, deletekeywords={java}]
+$ git commit -am "Metodo getNome"
+[main 038f08d] Metodo getNome
+ 1 file changed, 4 insertions(+)
+$ git push
+To .../server/rubrica.git
+ ! [rejected]        main -> main (fetch first)
+error: failed to push some refs to '.../server/rubrica.git'
+hint: Updates were rejected because the remote contains work that you do not
+hint: have locally. This is usually caused by another repository pushing to
+hint: the same ref. If you want to integrate the remote changes, use
+hint: 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+\end{lstlisting}
+
+Il push è \textbf{rifiutato}: il remoto contiene un commit (quello di Anna) che Bruno non ha. Git accetta un push solo se
+aggiunge commit in coda alla storia del remoto, senza toglierne nessuno; così la versione di Anna non può essere
+sovrascritta. Bruno deve prima integrare le modifiche remote con \texttt{git pull}:
+
+\Needspace{24\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Bruno, deletestring={[b]'}, deletekeywords={java}, deletecomment={[l]\#}]
+$ git pull
+From .../server/rubrica
+   222546d..cd80f8a  main       -> origin/main
+hint: You have divergent branches and need to specify how to reconcile them.
+hint: You can do so by running one of the following commands sometime before
+hint: your next pull:
+hint:
+hint:   git config pull.rebase false  # merge
+hint:   git config pull.rebase true   # rebase
+hint:   git config pull.ff only       # fast-forward only
+hint:
+hint: You can replace "git config" with "git config --global" to set a default
+hint: preference for all repositories. You can also pass --rebase, --no-rebase,
+hint: or --ff-only on the command line to override the configured default per
+hint: invocation.
+fatal: Need to specify how to reconcile divergent branches.
+\end{lstlisting}
+
+Il \textit{fetch} è riuscito (la prima riga), ma la fusione no: le versioni recenti di Git, quando la storia locale e
+quella remota divergono, chiedono di scegliere una volta per tutte come riconciliarle. Bruno sceglie la fusione
+(\textit{merge}), la stessa vista sopra:
+
+\Needspace{16\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Bruno, deletestring={[b]'}, deletekeywords={java}]
+$ git config pull.rebase false
+$ git pull
+Merge made by the 'ort' strategy.
+ README.md | 1 +
+ 1 file changed, 1 insertion(+)
+$ git push
+To .../server/rubrica.git
+   cd80f8a..2462b03  main -> main
+$ git log --oneline --graph -4
+*   2462b03 Merge branch 'main' of .../server/rubrica
+|\
+| * cd80f8a Autori nel README
+* | 038f08d Metodo getNome
+|/
+*   222546d Merge branch 'parentesi'
+|\
+\end{lstlisting}
+
+Le modifiche toccavano file diversi, quindi la fusione è automatica (Git propone il messaggio del commit di fusione in
+un editor: qui è stato accettato così com'è); se avessero toccato le stesse righe ci sarebbe stato un conflitto da
+risolvere come prima. In ogni caso il lavoro di fusione lo fa \textbf{chi arriva per secondo}, sulla propria copia,
+prima di poter fare push.
+
+\info{Merge o rebase}{
+  La seconda opzione proposta da Git, \texttt{pull.rebase true}, invece di creare un commit di fusione «sposta» i commit
+  locali di Bruno in coda a quelli scaricati, come se li avesse scritti dopo: la storia resta una linea sola, ma i
+  commit spostati diventano commit nuovi, con hash diversi. Molti progetti la preferiscono per avere una storia lineare;
+  per un primo progetto la fusione è la scelta più semplice da capire.
+}
+
+\subsection{Commit e push}
+
+Riassumendo, \textbf{commit} è un'operazione locale: aggiorna il repository nella cartella \texttt{.git} del proprio
+computer. \textbf{Push} invia al repository remoto (per esempio quello ospitato da GitHub) i commit fatti in locale.
+
+\warning{{Due precisazioni sul push}}{
+  \begin{itemize}
+    \item Le slide dicono che solo il proprietario (\textit{owner}) del progetto può fare push e che tutti gli altri
+          possono al massimo fare una pull request. Su GitHub possono fare push tutti quelli che hanno i permessi di
+          scrittura sul repository: il proprietario e i \textbf{collaboratori} che ha invitato (come nel progetto
+          d'esame, dove tutti i membri del gruppo lavorano sullo stesso repository). Chi non ha questi permessi passa
+          per una fork e una pull request.
+    \item Le slide dicono anche che la richiesta di push viene analizzata in cerca di conflitti. Più precisamente, il
+          server non fonde nulla: rifiuta il push se il remoto ha commit che chi spinge non ha (lo abbiamo visto sopra),
+          e la fusione la fa in locale chi riceve il rifiuto.
+  \end{itemize}
+}
+
+% ============================================================
+\section{Pull request}
+
+La \textbf{pull request} è un elemento fondamentale della visione open source di GitHub: qualunque sviluppatore, anche
+esterno al progetto, può realizzare un possibile miglioramento dell'applicazione e proporre al proprietario di
+inglobarlo nel progetto.
+
+\begin{itemize}
+  \item Chi è esterno parte da una \textbf{fork} del progetto, cioè dalla sua copia su GitHub, sulla quale fa i suoi
+        commit; poi chiede di portarli nel progetto originale.
+  \item Una pull request si può fare anche a partire da un \textbf{branch} del progetto stesso: è il modo normale di
+        lavorare in un gruppo, perché ogni modifica viene vista (e magari discussa e corretta) prima di entrare nel ramo
+        principale.
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}
+  \node[gcil=swteal, minimum width=2.9cm] (orig) at (0,0) {\textbf{anna-rossi/rubrica}\\(originale)};
+  \node[gcil=swteal!60!swblue, minimum width=2.9cm] (fork) at (7.2,0) {\textbf{carla/rubrica}\\(fork)};
+  \node[gcil, minimum width=2.4cm] (loc) at (7.2,-3.1) {Repository\\locale di Carla};
+  \draw[gfreccia] (orig.east) -- node[getich, above] {\gn{1} fork} (fork.west);
+  \draw[gfreccia] ($(fork.south)+(-0.35,0)$) -- node[getich, left] {\gn{2} clone} ($(loc.north)+(-0.35,0)$);
+  \draw[gfreccia=swgreen] ($(loc.north)+(0.35,0)$) -- node[getich, right] {\gn{3} commit e push} ($(fork.south)+(0.35,0)$);
+  \draw[gfreccia=sworange, dashed, line width=1.1pt] ($(fork.west)+(0,-0.45)$) .. controls (4.2,-1.6) and (2.6,-1.6) ..
+    node[getich, below, pos=0.5] {\gn{4} pull request} ($(orig.east)+(0,-0.45)$);
+  \node[font=\scriptsize, text=black!75, align=left, anchor=north west] at (-1.4,-1.35) {\gn{5} il proprietario la\\
+    discute e, se la accetta,\\la fonde (\textit{merge})};
+\end{tikzpicture}
+\end{center}
+
+Vediamo il secondo caso con Bruno, che lavora su un ramo del progetto. Scrive una classe \texttt{Rubrica} con la
+ricerca per nome:
+
+\Needspace{21\baselineskip}
+\begin{lstlisting}[style=java, name=Rubrica.java]
+import java.util.ArrayList;
+import java.util.List;
+
+public class Rubrica {
+    private final List<Contatto> contatti = new ArrayList<>();
+
+    public void aggiungi(Contatto c) {
+        contatti.add(c);
+    }
+
+    public Contatto cerca(String nome) {
+        for (Contatto c : contatti) {
+            if (c.getNome().equals(nome)) {
+                return c;
+            }
+        }
+        return null;
+    }
+}
+\end{lstlisting}
+
+La fa sul ramo \texttt{cerca} e lo invia al server:
+
+\Needspace{14\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Bruno, deletestring={[b]'}, deletekeywords={java}]
+$ git switch -c cerca
+Switched to a new branch 'cerca'
+$ git add Rubrica.java
+$ git commit -m "Classe Rubrica con la ricerca per nome"
+[cerca cdac883] Classe Rubrica con la ricerca per nome
+ 1 file changed, 19 insertions(+)
+ create mode 100644 Rubrica.java
+$ git push -u origin cerca
+To .../server/rubrica.git
+ * [new branch]      cerca -> cerca
+branch 'cerca' set up to track 'origin/cerca'.
+\end{lstlisting}
+
+Su GitHub, a questo punto, compare il pulsante \textit{Compare \& pull request}: Bruno apre la pull request, Anna la
+legge, può commentare le righe di codice e chiedere modifiche e, quando è soddisfatta, la accetta. Accettarla vuol dire
+fondere il ramo \texttt{cerca} in \texttt{main}, con un commit di fusione. Ecco la stessa operazione fatta da Anna a
+mano, con il messaggio che userebbe GitHub:
+
+\Needspace{30\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletestring={[b]'}, deletekeywords={java}, deletecomment={[l]\#}]
+$ git pull
+From .../server/rubrica
+   cd80f8a..2462b03  main       -> origin/main
+ * [new branch]      cerca      -> origin/cerca
+Updating cd80f8a..2462b03
+Fast-forward
+ Contatto.java | 4 ++++
+ 1 file changed, 4 insertions(+)
+$ git branch -a
+* main
+  remotes/origin/cerca
+  remotes/origin/main
+$ git merge --no-ff origin/cerca -m 'Merge pull request #1 from bruno/cerca'
+Merge made by the 'ort' strategy.
+ Rubrica.java | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+ create mode 100644 Rubrica.java
+$ git push
+To .../server/rubrica.git
+   2462b03..d19ef44  main -> main
+\end{lstlisting}
+
+Il \texttt{pull} di Anna è un \textit{fast-forward}: lei non aveva commit nuovi, quindi le basta spostare in avanti
+\texttt{main}. Il \texttt{pull} ha anche scoperto il ramo remoto \texttt{origin/cerca}, che Anna fonde con
+\texttt{--no-ff} per avere comunque un commit di fusione che ricordi la pull request (è ciò che fa il pulsante
+\textit{Merge pull request} di GitHub). Alla fine la storia completa del progetto è questa:
+
+\Needspace{24\baselineskip}
+\begin{lstlisting}[style=shell, name=Terminale di Anna, deletestring={[b]'}, deletekeywords={java}, deletecomment={[l]\#}]
+$ git log --oneline --graph
+*   d19ef44 Merge pull request #1 from bruno/cerca
+|\
+| * cdac883 Classe Rubrica con la ricerca per nome
+|/
+*   2462b03 Merge branch 'main' of .../server/rubrica
+|\
+| * cd80f8a Autori nel README
+* | 038f08d Metodo getNome
+|/
+*   222546d Merge branch 'parentesi'
+|\
+| * 2a692af Telefono fra parentesi quadre
+* | ce48c12 Telefono preceduto da tel.
+|/
+*   1c47c77 Merge del ramo email
+|\
+| * 2d7dfbf Aggiunta l'email
+* | 02ab2d8 Istruzioni per compilare
+|/
+* 3fbb3dc Nuovo formato di toString
+* 5f707a2 Prima versione della rubrica
+\end{lstlisting}
+
+% ============================================================
+\section{Git e CVS a confronto}
+
+Rispetto a CVS, Git:
+
+\begin{itemize}
+  \item è più \textbf{sicuro}: non esiste un'unica copia centralizzata del progetto. I contributori possono tenere le
+        proprie copie e scegliere se provare a condividerle con quella principale; il proprietario può rifiutare le
+        modifiche di cui non si fida;
+  \item è più \textbf{scalabile}: il numero dei partecipanti può crescere liberamente. In CVS e in SVN, invece,
+        all'aumentare dei partecipanti aumentano il tempo in cui le risorse restano bloccate o il numero dei conflitti sui
+        commit. Il kernel Linux è stato sviluppato fin dall'inizio con Git, con la copia di riferimento sotto il
+        controllo diretto di Linus Torvalds;
+  \item sposta il lavoro di \textbf{merge}: le versioni in conflitto non le fonde il proprietario, ma chi propone la
+        modifica, che deve proporre modifiche non in conflitto con l'originale (come Bruno nell'esempio del push
+        rifiutato).
+\end{itemize}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}P{4cm}P{5cm}P{5cm}@{}}
+  \toprule
+  & \textbf{CVS} & \textbf{Git} \\ \midrule
+  Architettura & centralizzata: un solo repository & distribuita: ogni copia è un repository completo \\
+  Commit & sul server: serve la rete & in locale; il push lo condivide \\
+  Storia & sul server & in ogni copia \\
+  Chi fonde i conflitti & l'amministratore del progetto & chi propone la modifica \\
+  Contributi esterni & richiedono un accesso al server & fork e pull request \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+% ============================================================
+\section{GitHub e le altre piattaforme}
+
+Il protocollo di Git è usato soprattutto nei progetti open source distribuiti sul Web, ed è particolarmente semplice
+sfruttarne le potenzialità appoggiandosi a una piattaforma di \textbf{hosting}, in gran parte gratuita:
+
+\begin{itemize}
+  \item \textbf{GitHub} (\url{https://github.com/}) è il fornitore più famoso, in continua espansione, acquisito da
+        Microsoft nel 2018;
+  \item \textbf{GitLab} (\url{https://about.gitlab.com/}), anch'esso in rapida espansione, permette anche di ospitare i
+        progetti su proprie risorse, perché la piattaforma stessa è open source;
+  \item \textbf{Bitbucket} (\url{https://bitbucket.org/}) si può usare anch'esso su risorse proprie oltre che su quelle del
+        sito; è stato acquisito da Atlassian.
+\end{itemize}
+
+\subsection{Lavorare con un progetto su GitHub}
+
+Un repository nasce come il deposito di tutta la storia del codice e degli altri artefatti di un progetto, per tutto il
+suo ciclo di vita. La pagina di un repository su GitHub li mostra tutti; questo è lo schema della sua intestazione:
+
+\begin{center}
+\begin{tikzpicture}[
+    pulsgh/.style={rectangle, rounded corners=2pt, draw=swgray!60, fill=swlight, font=\scriptsize\Lato,
+                   inner sep=3pt, minimum height=0.5cm},
+    schedagh/.style={font=\scriptsize\Lato, inner sep=3pt}]
+  \draw[swgray!50, line width=0.6pt, rounded corners=3pt, fill=white] (-0.2,-2.2) rectangle (13.3,0.55);
+  \node[anchor=west, font=\small\Lato] at (0,0) {\textcolor{swblue}{anna-rossi} / \textbf{\textcolor{swblue}{rubrica}}};
+  \node[pulsgh, anchor=west, font=\tiny\Lato] at (3.55,0) {Public};
+  \node[pulsgh, anchor=east] (star) at (13.1,0) {\textbf{Star} \ 0};
+  \node[pulsgh, anchor=east] (fork) at ($(star.west)+(-0.15,0)$) {\textbf{Fork} \ 1};
+  \node[pulsgh, anchor=east] (watch) at ($(fork.west)+(-0.15,0)$) {\textbf{Watch} \ 2};
+  \foreach \t/\x in {Code/0, Issues/1.3, Pull requests/2.6, Actions/4.75, Settings/6.25} {
+    \node[schedagh, anchor=west] at (\x,-0.75) {\t};
+  }
+  \draw[sworange, line width=1.4pt] (0.05,-1.0) -- (0.85,-1.0);
+  \draw[swgray!40] (-0.2,-1.08) -- (13.3,-1.08);
+  \node[pulsgh, anchor=west] at (0,-1.6) {main $\blacktriangledown$};
+  \node[schedagh, anchor=west, text=black!70] at (1.75,-1.6) {2 branches \quad 1 tag \quad 13 commits};
+  \node[rectangle, rounded corners=2pt, fill=swgreen, text=white, font=\scriptsize\bfseries\Lato, inner sep=3pt,
+        minimum height=0.5cm, anchor=east] at (13.1,-1.6) {<> Code $\blacktriangledown$};
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+  \item \textbf{Creazione di un progetto.} I progetti possono essere pubblici o privati. Dato lo spirito open source
+        della piattaforma, i progetti pubblici sono completamente gratuiti e hanno meno limitazioni di quelli privati;
+        alcune funzionalità avanzate sono disponibili in quantità limitata o si sbloccano solo a pagamento (al momento
+        delle slide il piano gratuito offriva repository pubblici e privati illimitati, collaboratori illimitati, 2000
+        minuti al mese di GitHub Actions e 500 MB per i pacchetti).
+  \item \textbf{Importazione di un progetto esistente.} Il pulsante \textit{Code} permette di scaricare lo stato
+        attuale del progetto: con \textit{Download ZIP} lo si scarica come archivio, da importare poi in un IDE;
+        con l'indirizzo fornito lo si clona con un client Git (la riga di comando, GitHub Desktop) o direttamente
+        dall'IDE, e si può continuare a farlo evolvere.
+  \item \textbf{Navigazione nel codice.} Si possono individuare tutte le versioni del software, identificate come
+        \textbf{commit} (ogni commit ha un titolo, e cliccandolo si vedono le modifiche che ha introdotto),
+        \textbf{tag} (associato a un commit, individua una release: cliccandolo si vede lo stato dell'intero progetto
+        in quel momento) e \textbf{branch} (ogni ramo, identificato da un nome, procede in modo indipendente da quando è
+        stato creato).
+  \item \textbf{Fork.} Il pulsante \textit{Fork} crea una copia esatta del progetto e la aggiunge ai progetti di chi lo
+        ha premuto, che può cominciare a modificarla come preferisce; GitHub tiene il conto delle fork di ogni progetto.
+  \item \textbf{Watch e Star.} Con \textit{Watch} le notifiche sulle attività del progetto arrivano nella propria
+        dashboard; con \textit{Star} si aggiunge il progetto ai preferiti, dando un riscontro positivo agli sviluppatori.
+  \item \textbf{Issue.} Anche chi è esterno al progetto può contribuire, segnalando difetti e problemi o proponendo
+        evoluzioni, con le \textbf{issue}: ogni issue è una discussione numerata, che si può assegnare a qualcuno,
+        etichettare e collegare alla pull request che la risolve.
+\end{itemize}
+
+\warning{Password e token}{
+  Le slide dicono che per continuare a far evolvere un progetto clonato servono login e password. Dal 2021, però,
+  GitHub non accetta più la password dell'account per le operazioni Git da riga di comando: al suo posto si usa un
+  \textbf{personal access token} (una specie di password generata dal sito, con permessi limitati e una scadenza) o una
+  chiave \textbf{SSH}. GitHub Desktop e gli IDE gestiscono l'accesso da soli, dopo un login dal browser.
+}
+
+\gbox{In sintesi}{azure-gradient-6!80!black}{
+  \begin{itemize}
+    \item Il software si sviluppa in tante sessioni, da tante persone, con tanti rilasci e configurazioni: serve un
+          sistema di \textbf{controllo delle versioni} che identifichi versioni e release, conservi la storia, gestisca
+          i rami e sostenga build automation e DevOps.
+    \item Con più sviluppatori le modifiche concorrenti possono andare perse. \textbf{Lock/modify/unlock} evita i
+          conflitti ma blocca il lavoro; \textbf{copy/modify/merge} (CVS) permette il lavoro in parallelo, ma i conflitti
+          vanno risolti: accettando una versione, fondendole o creando un ramo.
+    \item \textbf{Git} è distribuito: ogni copia è un repository completo. \texttt{add} porta le modifiche nell'index,
+          \texttt{commit} le registra in locale, \texttt{push} le invia al remoto, \texttt{fetch}, \texttt{pull} e
+          \texttt{clone} le ricevono. I \textbf{tag} marcano le release, i \textbf{rami} le linee di sviluppo, il
+          \textbf{merge} le riunisce (con un conflitto da risolvere a mano se due rami toccano le stesse righe).
+    \item Git rifiuta un push che sovrascriverebbe lavoro altrui: chi arriva per secondo fa \texttt{pull}, fonde e poi
+          fa push. Nessuna modifica va persa.
+    \item Su \textbf{GitHub} (o GitLab, Bitbucket) si contribuisce con \textbf{fork} e \textbf{pull request}, si
+          segnalano problemi con le \textbf{issue}, si seguono i progetti con \textit{Watch} e \textit{Star}. Per Git
+          da riga di comando serve un token o una chiave SSH, non la password.
+  \end{itemize}
+}
