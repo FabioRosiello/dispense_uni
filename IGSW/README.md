@@ -1,9 +1,10 @@
 # Sorgenti della dispensa di Ingegneria del Software
 
-Questa cartella contiene i sorgenti LaTeX di `DispensaIGSW.pdf`.
+Questa cartella contiene i sorgenti LaTeX di `DispensaIGSW.pdf` e del cheat sheet `CheatSheetIGSW.pdf`.
 
 ## Struttura
-- `main.tex` — preambolo (colori, stili TikZ, macro) e inclusione dei capitoli
+- `main.tex` — inclusione dei capitoli della dispensa
+- `preamble/igsw.tex` — preambolo comune a dispensa e cheat sheet: pacchetti, colori, stili TikZ dei diagrammi UML, riquadri, listati
 - `chapters/chapter_0.tex` — Prefazione
 - `chapters/chapter_1.tex` — Introduzione all'Ingegneria del Software (L_01)
 - `chapters/chapter_2.tex` — I processi software (L_01)
@@ -25,9 +26,35 @@ Questa cartella contiene i sorgenti LaTeX di `DispensaIGSW.pdf`.
 - `chapters/chapter_18.tex` — Controllo delle versioni: perché gestire le versioni e che cosa deve offrire un sistema di controllo delle versioni, CVS e le modifiche perse, i modelli lock/modify/unlock e copy/modify/merge, la risoluzione dei conflitti; Git (architettura distribuita, working copy, index e repository, operazioni locali e remote), un progetto di esempio con due sviluppatori (configurazione, commit, `diff` e `log`, tag, rami e fusioni, un conflitto risolto a mano, un repository remoto *bare*, il push rifiutato e il `pull` con la scelta fra merge e rebase, una pull request), Git e CVS a confronto, GitHub, GitLab e Bitbucket, il lavoro su GitHub (fork, watch, star, issue). Gli esempi sono eseguiti davvero con Git 2.43, con le date dei commit fissate perché gli hash restino riproducibili: gli output sono quelli reali; segnalate alcune imprecisioni delle slide (il nome di Linus Torvalds, chi può fare push e che cosa fa il server, login e password al posto del token) (lezione *Version Control: Git & GitHub*)
 - `chapters/chapter_19.tex` — Linee guida e principi dell'interazione uomo-macchina: le otto regole d'oro di Shneiderman e le dieci euristiche di Nielsen e Molich (con la tabella della loro unione e la versione del 1994), dialogo semplice e naturale (legge di Hick), lingua dell'utente, carico sulla memoria, coerenza, feedback (persistenza, tempi di risposta, bias della percezione del lavoro), uscite e azioni reversibili, scorciatoie, messaggi di errore (le quattro regole di Shneiderman, messaggi a più livelli), prevenzione degli errori (slip e mistake), aiuto e documentazione, usabilità universale, dialoghi che arrivano a una conclusione, letture. Le finestre di esempio delle slide sono ridisegnate e tradotte in italiano (lezione *Guidelines and Principles in Human-Computer Interaction*)
 - `preamble/listati-vscode.tex` — aspetto dei listati: finestre di VS Code con il tema Dark+, come nella dispensa di Tecnologie Web
-- `preamble/nomi_listati.py` — genera `preamble/listati-nomi.tex`, l'elenco dei metodi e dei tipi usati nei listati Java (per colorarli come in VS Code); va rilanciato dopo aver aggiunto esempi
+- `preamble/nomi_listati.py` — genera `preamble/listati-nomi.tex` e `cheatsheet/listati-nomi.tex`, gli elenchi dei metodi e dei tipi usati nei listati Java della dispensa e del cheat sheet (per colorarli come in VS Code); va rilanciato dopo aver aggiunto esempi
 - `unina_doc_class.cls`, `fonts/`, `sources/` — template Unina Docs (da `Materiale/Dispense.rar`)
 - `Images/` — immagini tratte dalle slide del corso
+
+### Il cheat sheet (`CheatSheetIGSW.pdf`)
+Un riassunto da consultare, come il formulario di MSPI: la notazione UML e i design pattern del corso, presi dalle slide
+attraverso i capitoli 6, 7, 8, 9 e 15 della dispensa. Le voci aggiunte per essere pronti ai casi che le slide non
+mostrano sono marcate «oltre le slide».
+- `cheatsheet.tex` — copertina, indice e inclusione degli argomenti
+- `cheatsheet/stile.tex` — stile: argomenti numerati, voci di notazione (`\voce`), casi «dal codice al diagramma» (ambiente
+  `caso`: codice Java a sinistra, diagramma e regola a destra), esempi completi dei pattern (ambiente `programma`), carta
+  d'identità dei pattern (`\scheda`), riquadri `guida` e `attenzione`, rimandi cliccabili (`\vv`)
+- `cheatsheet/introduzione.tex` — come è fatto il cheat sheet
+- Parte I, i diagrammi UML: `classi_elementi.tex` (classi, attributi, operazioni, visibilità, molteplicità, ordered e
+  nonunique, statici, astratti, interfacce, enumerazioni), `classi_relazioni.tex` (le frecce in un colpo d'occhio,
+  associazioni, ruoli, navigazione, aggregazione, composizione, generalizzazione, realizzazione, pallina e presa,
+  dipendenze, classi associative, riflessive, qualificate, n-arie, annidate, template), i casi dal codice al diagramma
+  `codice_attributi.tex`, `codice_riferimenti.tex`, `codice_collezioni.tex` (array, liste, insiemi, code, mappe,
+  `Optional`, matrici, vincoli di quantità), `codice_gerarchie.tex` (extends, implements, enum con campi, generici, classi
+  annidate, record, metodi default, eccezioni), `codice_dipendenze.tex` («call», «use», «create», composizione e
+  aggregazione nel codice, classe associativa, iniezione delle dipendenze, liste di ascoltatori); poi `casi_uso.tex`,
+  `sequenza.tex` (con la tabella dal codice al diagramma di sequenza), `architettura.tex` (package, componenti,
+  deployment), `stato.tex`, `attivita.tex` e `scelta_diagramma.tex` (quale diagramma usare)
+- Parte II, riconoscere i design pattern: un file per pattern (`pattern_singleton.tex`, `pattern_builder.tex`, ...), con la
+  carta d'identità (intento, indizi nel testo, nel codice e nel diagramma, varianti, con che cosa non confonderlo), la
+  struttura e un esempio completo con il suo diagramma delle classi
+- `cheatsheet/verifica_listati.py` — compila tutti i casi con Java 21, compila ed esegue gli esempi dei pattern e
+  confronta l'output con quello stampato; controlla anche che le righe di codice non superino i 52 caratteri (la
+  larghezza della colonna del codice)
 
 ## Come ricompilare
 Serve una distribuzione LaTeX con **LuaLaTeX** (il template usa `fontspec` e `luacode`)
@@ -41,6 +68,10 @@ pgfplots booktabs multirow colortbl`.
 python3 preamble/nomi_listati.py              # solo se sono cambiati i listati Java
 lualatex -interaction=nonstopmode main.tex    # tre volte, per l'indice e i riferimenti
 cp main.pdf DispensaIGSW.pdf
+
+python3 cheatsheet/verifica_listati.py        # il codice del cheat sheet: compilazione ed esecuzione (JDK 21)
+lualatex -interaction=nonstopmode cheatsheet.tex   # tre volte
+cp cheatsheet.pdf CheatSheetIGSW.pdf
 ```
 
 ## Convenzioni usate

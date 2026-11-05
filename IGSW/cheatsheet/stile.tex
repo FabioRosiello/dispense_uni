@@ -1,0 +1,227 @@
+% ============================================================
+%  STILE DEL CHEAT SHEET DI INGEGNERIA DEL SOFTWARE
+% ============================================================
+% Si carica dopo preamble/igsw.tex, da cui prende colori, stili TikZ dei diagrammi UML (\umlclass, classe1, aggr,
+% compos, gen, realizza, navig, dep, molt, notauml...) e l'aspetto dei listati. Aggiunge:
+%   \argomento{Titolo}{nota}[titolo breve]  sezione numerata (1, 2, ...); il titolo breve va nel piè di pagina
+%   \voce[larghezza del disegno]{etichetta}{Nome}{nota}{disegno}{significato}
+%                       una voce di notazione: a sinistra numero e nome, al centro il disegno UML, a destra il
+%                       significato (e, quando c'è, l'equivalente Java)
+%   ambiente caso[opzioni]{etichetta}{Titolo}
+%                       un caso «dal codice al diagramma»: a sinistra il codice Java (un lstlisting con
+%                       style=javacs), dopo \tcblower il diagramma e la \regola{...}
+%   ambiente struttura[opzioni]{etichetta}{Titolo}
+%                       come caso, ma con il diagramma a sinistra (la struttura di un pattern) e il testo a destra
+%   \scheda{Titolo}{righe}  la carta d'identità di un pattern: righe \pintento, \ptesto, \pcodice, \pdiagramma,
+%                       \pvarianti, \pconfondere
+%   ambiente guida{Titolo}  riquadro con una procedura o una tabella per scegliere
+%   \vv{etichetta}       rimando cliccabile a una voce o a un caso: scrive il suo numero
+%   \oltre               etichetta «oltre le slide» per ciò che nelle slide non c'è
+% Voci e casi condividono la numerazione dell'argomento (3.1, 3.2...); \vv porta alla voce citata.
+
+% ------------------------------------------------------------
+% Colori
+% ------------------------------------------------------------
+\colorlet{ncolore}{swteal!85!black}    % voci di notazione
+\colorlet{nsfondo}{swteal!5}           % sfondo alternato delle voci
+\colorlet{ccolore}{swblue!85!black}    % casi «dal codice al diagramma»
+\colorlet{pcolore}{ph3!85!black}       % pattern
+\colorlet{acolore}{sworange!85!black}  % «attenzione», «da non confondere», «oltre le slide»
+\colorlet{casocolore}{ccolore}         % colore dei riquadri caso e struttura: nella parte II diventa pcolore
+
+% Pagine di apertura delle parti come nel formulario di MSPI: con titlesec la parte non lascia dietro di sé una
+% pagina bianca (la classe è a due facciate, e il \part standard ne aggiungerebbe una)
+\titleformat{\part}[display]
+  {\centering\color{primary}}
+  {\fontsize{20}{24}\selectfont\Gobold Parte \thepart}
+  {18pt}
+  {\color{primary!80!black}\fontsize{32}{40}\selectfont\Gobold #1}
+  [\vspace{10pt}{\color{primary!40}\rule{0.35\linewidth}{2pt}}]
+\assignpagestyle{\part}{empty}
+
+% ------------------------------------------------------------
+% Argomenti e numerazione
+% ------------------------------------------------------------
+\newcounter{argomento}
+\newcounter{voce}
+\renewcommand{\thevoce}{\arabic{argomento}.\arabic{voce}}
+% Nome dell'ancora del PDF: diverso per ogni voce (voce.2.4, voce.3.4...), altrimenti i collegamenti alle voci di
+% argomenti diversi con lo stesso numero finirebbero tutti sulla prima
+\renewcommand{\theHvoce}{\arabic{argomento}.\arabic{voce}}
+
+% \argomento{Titolo}{nota sotto il titolo}[titolo breve per il piè di pagina]
+% Ogni argomento comincia su una pagina nuova: si ritrova subito sfogliando, e il titolo non resta mai in fondo a
+% una pagina staccato dal primo riquadro (i riquadri non si spezzano, e quello che segue il titolo può essere alto).
+\NewDocumentCommand{\argomento}{m m o}{%
+  \clearpage
+  \stepcounter{argomento}\setcounter{voce}{0}%
+  \section{\arabic{argomento}\enspace #1}%
+  \IfNoValueTF{#3}{\gdef\currentchapter{#1}}{\gdef\currentchapter{#3}}%
+  \nobreak\vspace{-4mm}{\Lato\small\color{swgray}#2}\par\nobreak\vspace{2mm}%
+}
+
+% Numero in un rettangolino colorato
+\newcommand{\badge}[2][ncolore]{%
+  {\setlength{\fboxsep}{1.5pt}\colorbox{#1}{\Lato\bfseries\footnotesize\color{white}\strut\,#2\,}}}
+
+% Rimando cliccabile a una voce o a un caso
+\newcommand{\vv}[1]{\hyperref[v:#1]{\textcolor{swblue!80!black}{\Lato\bfseries\ref*{v:#1}}}}
+
+% Etichetta per ciò che nelle slide non c'è (casi aggiunti per essere pronti alle novità)
+\newcommand{\oltre}{%
+  {\setlength{\fboxsep}{0.8pt}\fcolorbox{acolore}{white}{\Lato\upshape\mdseries\scriptsize\color{acolore}\,oltre le slide\,}}}
+
+% Codice nel testo e testo dei diagrammi scritto come nel diagramma
+\newcommand{\uml}[1]{{\FiraCodeNL\small #1}}
+
+% ------------------------------------------------------------
+% Le voci di notazione
+% ------------------------------------------------------------
+\newtcolorbox{vocebox}[1][]{%
+  enhanced, breakable=false, boxrule=0pt, frame hidden, arc=0pt, colback=white,
+  left=3mm, right=3mm, top=2mm, bottom=2mm, before skip=0pt, after skip=0pt,
+  borderline south={0.5pt}{0pt}{swgray!30},
+  before upper={\setlength{\parskip}{0pt}},
+  #1}
+
+\newlength{\vocenome}
+\setlength{\vocenome}{36mm}
+% \voce[larghezza del disegno]{etichetta}{Nome}{nota sotto il nome}{disegno}{significato}
+\NewDocumentCommand{\voce}{O{62mm} m m m +m +m}{%
+  \ifodd\value{voce}\def\vocesfondo{nsfondo}\else\def\vocesfondo{white}\fi
+  \begin{vocebox}[colback=\vocesfondo]
+    \begin{minipage}[c]{\vocenome}\raggedright
+      \refstepcounter{voce}\label{v:#2}%
+      \badge[ncolore]{\thevoce}\par\vspace{2pt}%
+      {\bfseries #3\par}%
+      \ifx\relax#4\relax\else{\footnotesize\color{swgray}#4\par}\fi
+    \end{minipage}\hfill
+    \begin{minipage}[c]{#1}\centering #5\end{minipage}\hfill
+    \begin{minipage}[c]{\dimexpr\linewidth-\vocenome-#1-8mm\relax}\raggedright\small\setlength{\parskip}{3pt}#6%
+    \end{minipage}%
+  \end{vocebox}}
+
+% ------------------------------------------------------------
+% I casi «dal codice al diagramma»
+% ------------------------------------------------------------
+% Il riquadro ha il titolo con il numero; sotto, due colonne: a sinistra il codice (un lstlisting, quindi
+% l'ambiente non può essere il corpo di un comando), a destra, dopo \tcblower, il diagramma e la regola.
+\newtcolorbox{casobox}[2][]{%
+  enhanced, breakable=false, sidebyside, sidebyside align=center, sidebyside gap=4mm,
+  lefthand width=96mm, colback=white, colframe=casocolore!40, boxrule=0.5pt, arc=1.5mm,
+  left=2mm, right=3mm, top=2mm, bottom=2mm, before skip=2.5mm, after skip=2.5mm,
+  colbacktitle=casocolore!8, coltitle=casocolore, fonttitle=\bfseries, toptitle=0.8mm, bottomtitle=0.8mm,
+  titlerule=0.5pt, titlerule style={casocolore!30}, segmentation hidden,
+  before upper={\setlength{\parskip}{0pt}}, before lower={\setlength{\parskip}{0pt}\centering},
+  title={#2}, #1}
+\NewDocumentEnvironment{caso}{O{} m m}{%
+  \begin{casobox}[#1]{\refstepcounter{voce}\label{v:#2}\badge[casocolore]{\thevoce}\enspace #3}%
+}{\end{casobox}}
+% Un esempio completo di un pattern: come un caso, ma il programma si compila e si esegue (cheatsheet/
+% verifica_listati.py confronta l'output con il listato «Terminale» a destra, sotto il diagramma)
+\NewDocumentEnvironment{programma}{O{} m m}{%
+  \begin{casobox}[#1]{\refstepcounter{voce}\label{v:#2}\badge[casocolore]{\thevoce}\enspace #3}%
+}{\end{casobox}}
+% La regola sotto il diagramma: come si passa dal codice al disegno
+\newcommand{\regola}[1]{\par\vspace{2.5mm}{\raggedright\footnotesize\setlength{\parskip}{2pt}#1\par}}
+% La struttura di un pattern: il diagramma a sinistra, i partecipanti a destra
+\NewDocumentEnvironment{struttura}{O{} m m}{%
+  \begin{casobox}[lefthand width=100mm, before upper={\setlength{\parskip}{0pt}\centering},
+                  before lower={\setlength{\parskip}{3pt}\raggedright\small}, #1]%
+    {\refstepcounter{voce}\label{v:#2}\badge[casocolore]{\thevoce}\enspace #3}%
+}{\end{casobox}}
+
+% Listati del cheat sheet: come quelli della dispensa, ma senza numeri di riga e più compatti. I nomi di metodi e
+% tipi da colorare li raccoglie preamble/nomi_listati.py nel file cheatsheet/listati-nomi.tex.
+\input{cheatsheet/listati-nomi.tex}
+\lstdefinestyle{javacs}{
+  style=java, language=JavaVSCnomiCS,
+  numbers=none, xleftmargin=8pt, framexleftmargin=4pt, framesep=4pt, xrightmargin=4pt,
+  aboveskip=0pt, belowskip=0pt,
+}
+\lstdefinestyle{shellcs}{
+  style=shell, numbers=none, xleftmargin=8pt, framexleftmargin=4pt, framesep=4pt, xrightmargin=4pt,
+  aboveskip=0pt, belowskip=0pt,
+}
+
+% ------------------------------------------------------------
+% La carta d'identità di un pattern
+% ------------------------------------------------------------
+\newtcolorbox{schedabox}[1]{%
+  enhanced, breakable=false, colback=white, colframe=pcolore!45, boxrule=0.5pt, arc=1.5mm,
+  left=3mm, right=3mm, top=1.5mm, bottom=2.5mm, before skip=2.5mm, after skip=2.5mm,
+  colbacktitle=pcolore!9, coltitle=pcolore, fonttitle=\bfseries, toptitle=0.9mm, bottomtitle=0.9mm,
+  titlerule=0.5pt, titlerule style={pcolore!30}, title={#1},
+  before upper={\setlength{\parskip}{0pt}},
+}
+\newcommand{\scheda}[2]{\begin{schedabox}{#1}#2\end{schedabox}}
+
+% Una riga della scheda: etichetta a sinistra, testo a destra
+\newlength{\schedaetichetta}
+\setlength{\schedaetichetta}{30mm}
+\newcommand{\rigascheda}[3]{%
+  \par\vspace{2.5pt}\noindent
+  % \noindent prima del colore: il riferimento delle minipage [t] deve essere la prima riga di testo
+  \begin{minipage}[t]{\schedaetichetta}\noindent{\Lato\bfseries\small\color{#1}#2}\end{minipage}%
+  \begin{minipage}[t]{\dimexpr\linewidth-\schedaetichetta\relax}\setlength{\parskip}{3pt}\raggedright\noindent#3%
+  \end{minipage}\par}
+\newcommand{\pintento}[1]{\rigascheda{pcolore}{Intento}{#1}}
+\newcommand{\ptesto}[1]{\rigascheda{pcolore}{Nel testo}{#1}}
+\newcommand{\pcodice}[1]{\rigascheda{pcolore}{Nel codice}{#1}}
+\newcommand{\pdiagramma}[1]{\rigascheda{pcolore}{Nel diagramma}{#1}}
+\newcommand{\pvarianti}[1]{\rigascheda{ccolore}{Varianti}{#1}}
+\newcommand{\pconfondere}[1]{\rigascheda{acolore}{Da non confondere}{#1}}
+
+% ------------------------------------------------------------
+% Riquadri «guida»: procedure e tabelle per scegliere
+% ------------------------------------------------------------
+\newtcolorbox{guidabox}[2][]{%
+  enhanced, breakable=false, colback=primary!4, colframe=primary!55, boxrule=0.5pt, arc=1.5mm,
+  left=3mm, right=3mm, top=2mm, bottom=2.5mm, before skip=2mm, after skip=3mm,
+  fonttitle=\bfseries, colbacktitle=primary!55, coltitle=white, title={#2},
+  before upper={\setlength{\parskip}{4pt}}, #1}
+\NewDocumentEnvironment{guida}{O{} m}{\begin{guidabox}[#1]{#2}}{\end{guidabox}}
+% Riquadro «attenzione»: un errore tipico
+\newtcolorbox{attenzione}[1]{%
+  enhanced, breakable=false, colback=acolore!5, colframe=acolore!60, boxrule=0.5pt, arc=1.5mm,
+  left=3mm, right=3mm, top=1.5mm, bottom=2mm, before skip=2mm, after skip=3mm,
+  fonttitle=\bfseries, colbacktitle=acolore!12, coltitle=acolore, title={#1},
+  before upper={\setlength{\parskip}{3pt}}}
+
+% ------------------------------------------------------------
+% Piccoli elementi dei diagrammi usati spesso nel cheat sheet
+% ------------------------------------------------------------
+\tikzset{
+  % associazione semplice (linea continua) e testo dei ruoli
+  assocl/.style={line width=0.7pt, draw=black!80},
+  ruolo/.style={font=\tiny, inner sep=1.5pt, text=black!85},
+  % linea tratteggiata verso una nota o una classe associativa
+  tratt/.style={dashed, line width=0.6pt, draw=black!70},
+  % contenimento di una classe annidata: cerchio con la croce dal lato della classe esterna
+  annida/.style={{Circle[open, length=2.6mm, width=2.6mm]}-, line width=0.7pt, draw=black!80},
+}
+% Croce del lato non navigabile: \noNav{(punto)}{angolo della linea}
+\newcommand{\noNav}[2]{%
+  \draw[line width=0.75pt, black!80] ($#1+(#2+45:0.13)$) -- ($#1+(#2+225:0.13)$)
+                                     ($#1+(#2+135:0.13)$) -- ($#1+(#2+315:0.13)$);}
+% Croce dentro il cerchio del contenimento: \piuAnnida{(centro del cerchio)}
+\newcommand{\piuAnnida}[1]{%
+  \draw[line width=0.6pt, black!80] ($#1+(-0.13,0)$) -- ($#1+(0.13,0)$) ($#1+(0,-0.13)$) -- ($#1+(0,0.13)$);}
+% Stereotipo sopra il nome di una classe: \stereotipo{interface}{Nome}
+\newcommand{\stereotipo}[2]{{\tiny\normalfont «#1»}\\#2}
+% Molteplicità e ruolo all'estremo di un'associazione, appena fuori dalla classe e lontano dalla punta della
+% freccia. Il primo argomento è il punto in cui la linea tocca la classe; la lettera dice da dove arriva la linea:
+%   \estO da sinistra (ovest), \estE da destra (est), \estN dall'alto (nord), \estS dal basso (sud).
+% La molteplicità va sopra (o a destra), il ruolo sotto (o a sinistra).
+\newcommand{\estO}[3]{%
+  \node[molt, anchor=south east] at ($#1+(-0.1,0.07)$) {#2};
+  \node[ruolo, anchor=north east] at ($#1+(-0.1,-0.07)$) {#3};}
+\newcommand{\estE}[3]{%
+  \node[molt, anchor=south west] at ($#1+(0.1,0.07)$) {#2};
+  \node[ruolo, anchor=north west] at ($#1+(0.1,-0.07)$) {#3};}
+\newcommand{\estN}[3]{%
+  \node[molt, anchor=south west] at ($#1+(0.08,0.1)$) {#2};
+  \node[ruolo, anchor=south east] at ($#1+(-0.08,0.1)$) {#3};}
+\newcommand{\estS}[3]{%
+  \node[molt, anchor=north west] at ($#1+(0.08,-0.1)$) {#2};
+  \node[ruolo, anchor=north east] at ($#1+(-0.08,-0.1)$) {#3};}

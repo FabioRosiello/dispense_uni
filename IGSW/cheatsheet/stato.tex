@@ -1,0 +1,192 @@
+% ============================================================
+% Cheat sheet, argomento 11: il diagramma di stato (dispensa, capitolo 9)
+% ============================================================
+\argomento{Il diagramma di stato}{Dispensa: capitolo 9. Come reagisce un oggetto agli eventi, a seconda dello stato in
+cui si trova}[Diagramma di stato]
+
+\voce{stato}{Stato}{rettangolo con gli angoli arrotondati}
+  {\begin{tikzpicture}
+     \node[stato] at (0,0) {Attesa};
+     \node[stato] at (2.8,0) {Erogazione};
+   \end{tikzpicture}}
+  {Una situazione \textbf{stabile} in cui l'oggetto reagisce agli eventi in un certo modo; ci resta finché un evento
+   non lo fa cambiare. In ogni momento è attivo \textbf{un solo} stato (uno per regione, \vv{regioni}). Nel codice: il
+   valore di una variabile di stato, o l'oggetto stato corrente del pattern State.}
+
+\voce{inizialefinale}{Stato iniziale e finale}{pallino pieno; pallino cerchiato}
+  {\begin{tikzpicture}
+     \node[iniziale] (i) at (0,0) {};
+     \node[stato] (s) at (1.9,0) {Attesa};
+     \node[finale] (f) at (3.8,0) {};
+     \draw[tr] (i) -- (s);
+     \draw[tr] (s) -- (f);
+   \end{tikzpicture}}
+  {Due \textbf{pseudostati}: da quello iniziale parte la prima transizione (non ha frecce entranti); in quello finale
+   l'oggetto ha finito (non ha frecce uscenti). La prima transizione può avere un'azione (\code{/ credito = 0}): il
+   costruttore.}
+
+\voce{transizione}{Transizione}{\uml{evento [guardia] / azioni}}
+  {\begin{tikzpicture}
+     \node[stato, minimum width=1.6cm] (a) at (0,0) {Attesa};
+     \node[stato, minimum width=1.6cm] (b) at (4.4,0) {Scelta};
+     \draw[tr] (a) -- node[above, font=\tiny]{\textcolor{q8}{moneta()} \textcolor{swred}{[credito>=2]}}
+                     node[below, font=\tiny]{\textcolor{q7}{/ credito++}} (b);
+   \end{tikzpicture}}
+  {Scatta quando arriva l'\textcolor{q8}{\textbf{evento}} (una chiamata di metodo) \textbf{e} la
+   \textcolor{swred}{\textbf{guardia}} è vera; poi esegue le \textcolor{q7}{\textbf{azioni}}. Tutte e tre le parti sono
+   facoltative: senza evento né guardia la transizione è spontanea. Se più transizioni sono attivabili ne scatta una a
+   caso: le guardie dello stesso evento devono \textbf{escludersi}.}
+
+\voce{autotransizione}{Autotransizione}{esce dallo stato e ci rientra}
+  {\begin{tikzpicture}
+     \node[stato, minimum width=2.0cm] (a) at (0,0) {Attesa};
+     \path (a) edge[tr, loop right, min distance=10mm] node[right, font=\tiny, align=left]{moneta()\\{}[credito<2]\\/ credito++} (a);
+   \end{tikzpicture}}
+  {L'evento cambia i dati ma non lo stato. Attenzione: l'autotransizione \textbf{esce} e \textbf{rientra}, quindi esegue
+   le attività \code{exit} ed \code{entry} (\vv{attivitainterne}); una reazione \textbf{interna}, scritta dentro lo
+   stato, no.}
+
+\voce{attivitainterne}{Attività interne}{entry, do, exit}
+  {\begin{tikzpicture}
+     \node[stato, align=left, minimum width=3.8cm] (c) at (0,0) {\makebox[3.4cm]{\textbf{Cottura}}\\[-2pt]\rule{3.4cm}{0.4pt}\\
+        entry / accendiMicroonde()\\ do / ruotaPiatto()\\ exit / spegniMicroonde()\\ apri / pausa()};
+   \end{tikzpicture}}
+  {\code{entry /} all'ingresso, \code{do /} finché si resta nello stato, \code{exit /} all'uscita (per qualunque
+   transizione). Le altre righe \code{evento [guardia] / azione} sono \textbf{reazioni interne}: non fanno uscire dallo
+   stato.}
+
+\voce{composito}{Stato composito}{uno stato che ne contiene altri}
+  {\begin{tikzpicture}
+     \node[stato, minimum width=1.2cm, minimum height=0.6cm] (n) at (0.2,1.2) {Folle};
+     \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!6] (0.7,-0.65) rectangle (5.2,0.55);
+     \node[font=\tiny\bfseries, anchor=north west] at (0.75,0.53) {Marcia avanti};
+     \node[iniziale] (i) at (1.05,-0.2) {};
+     \node[stato, minimum width=1.1cm, minimum height=0.55cm] (p) at (2.1,-0.2) {Prima};
+     \node[stato, minimum width=1.1cm, minimum height=0.55cm] (s) at (4.2,-0.2) {Seconda};
+     \draw[tr] (i) -- (p);
+     \draw[tr] (p) -- node[above, font=\tiny]{veloce()} (s);
+     \draw[tr] (n.east) -| node[right, font=\tiny, pos=0.8]{drive()} (3.1,0.55);
+     \draw[tr] (4.7,0.55) |- node[above, font=\tiny, pos=0.7]{folle()} ($(n.north)+(0.2,0.0)$);
+   \end{tikzpicture}}
+  {Dentro c'è un intero diagramma di stato. Una transizione che parte dal \textbf{bordo} vale per \textbf{tutti} i
+   sottostati (\code{folle()} da qualunque marcia); una che arriva sul bordo entra dallo stato iniziale interno
+   (\code{drive()} porta in \code{Prima}).}
+
+\voce{regioni}{Regioni parallele}{separate dal tratteggio}
+  {\begin{tikzpicture}
+     \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!6] (0,0) rectangle (5.4,1.7);
+     \node[font=\tiny\bfseries, anchor=north west] at (0.05,1.68) {Studiare};
+     \draw[dashed, line width=0.7pt] (2.7,0.1) -- (2.7,1.35);
+     \node[iniziale] (i1) at (0.4,0.6) {};
+     \node[stato, minimum width=1.4cm, minimum height=0.55cm] (a) at (1.6,0.6) {Esame};
+     \node[iniziale] (i2) at (3.1,0.6) {};
+     \node[stato, minimum width=1.4cm, minimum height=0.55cm] (b) at (4.3,0.6) {Progetto};
+     \draw[tr] (i1) -- (a);
+     \draw[tr] (i2) -- (b);
+   \end{tikzpicture}}
+  {Comportamenti che procedono \textbf{in parallelo}: in ogni regione è attivo uno stato (si prepara l'esame
+   \textbf{e} si fa il progetto). Quando si esce dallo stato composito, tutte le regioni terminano.}
+
+\voce{history}{History}{H: ultimo sottostato; H*: a ogni livello}
+  {\begin{tikzpicture}
+     \node[stato, minimum width=1.0cm] (off) at (0,0) {Off};
+     \draw[rounded corners=8pt, line width=0.8pt, draw=q3!80!black, fill=q3!6] (1.5,-0.75) rectangle (5.4,0.75);
+     \node[font=\tiny\bfseries, anchor=north west] at (1.55,0.73) {On};
+     \node[circle, draw, fill=white, font=\tiny, inner sep=1pt, minimum size=0.36cm] (h) at (1.95,0) {H};
+     \node[stato, minimum width=1.0cm, minimum height=0.5cm] (b) at (3.0,-0.2) {Bassa};
+     \node[stato, minimum width=1.0cm, minimum height=0.5cm] (a) at (4.6,-0.2) {Alta};
+     \draw[tr] (off) -- node[above, font=\tiny]{on()} (h);
+     \draw[tr] (b) -- (a);
+   \end{tikzpicture}}
+  {Entrando dalla \textbf{H} si torna nel sottostato in cui ci si trovava quando si è usciti (la lampada si riaccende
+   all'ultimo livello di luce); la prima volta si parte dallo stato iniziale. \textbf{H} (\textit{shallow}) ricorda solo
+   il primo livello; \textbf{H*} (\textit{deep}) l'intera configurazione, sottostati dei sottostati compresi.}
+
+\begin{caso}{statoswitch}{Una variabile di stato e uno switch}
+\begin{lstlisting}[style=javacs]
+class Lampada {
+    enum Stato { SPENTA, ACCESA }
+    private Stato stato = Stato.SPENTA;
+
+    void click() {
+        switch (stato) {
+            case SPENTA -> stato = Stato.ACCESA;
+            case ACCESA -> stato = Stato.SPENTA;
+        }
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[iniziale] (i) at (-1.8,0) {};
+  \node[stato, minimum width=1.6cm] (off) at (0,0) {Spenta};
+  \node[stato, minimum width=1.6cm] (on) at (3.6,0) {Accesa};
+  \draw[tr] (i) -- (off);
+  \draw[tr] ($(off.east)+(0,0.15)$) -- node[above, font=\tiny]{click()} ($(on.west)+(0,0.15)$);
+  \draw[tr] ($(on.west)+(0,-0.15)$) -- node[below, font=\tiny]{click()} ($(off.east)+(0,-0.15)$);
+\end{tikzpicture}
+\regola{La variabile che dice «in che fase sono» (spesso un'\code{enum}) è lo \textbf{stato}: ogni suo valore è uno
+stato del diagramma, il valore iniziale è la prima transizione. Ogni metodo che la cambia è un \textbf{evento}. Lo
+stesso evento (\code{click()}) fa cose diverse a seconda dello stato: è ciò che il diagramma mostra.}
+\end{caso}
+
+\begin{caso}{statoguardie}{Guardie e azioni: quali variabili diventano stati}
+\begin{lstlisting}[style=javacs]
+public class Counter {
+    private int count = 0;
+    private String mode = "increment";
+
+    public void flick() {
+        if (mode.equals("increment"))
+            count++;
+        else
+            count--;
+        if (count == 10)
+            mode = "decrement";
+        else if (count == 0)
+            mode = "increment";
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[iniziale] (i) at (-2.4,0) {};
+  \node[stato, minimum width=1.9cm] (inc) at (0,0) {Increment};
+  \node[stato, minimum width=1.9cm] (dec) at (0,-2.6) {Decrement};
+  \draw[tr] (i) -- node[above, font=\tiny]{/ count=0} (inc);
+  \path (inc) edge[tr, out=20, in=-20, looseness=6, min distance=8mm] node[right, font=\tiny, align=left]{flick() [count<9]\\/ count++} (inc);
+  \path (dec) edge[tr, out=20, in=-20, looseness=6, min distance=8mm] node[right, font=\tiny, align=left]{flick() [count>1]\\/ count\mbox{-}\mbox{-}} (dec);
+  \draw[tr] ($(inc.south)+(0.45,0)$) -- node[right, font=\tiny, align=left]{flick() [count==9]\\/ count++} ($(dec.north)+(0.45,0)$);
+  \draw[tr] ($(dec.north)+(-0.45,0)$) -- node[left, font=\tiny, align=right]{flick() [count==1]\\/ count\mbox{-}\mbox{-}} ($(inc.south)+(-0.45,0)$);
+\end{tikzpicture}
+\regola{\code{mode} decide il comportamento: i suoi valori sono gli \textbf{stati}. \code{count} no (sarebbero 11
+stati): compare nelle \textbf{guardie} e nelle \textbf{azioni}. Le guardie guardano il valore \textbf{prima}
+dell'azione: con \code{count==9} lo \code{flick()} porta a 10 e fa passare in Decrement.}
+\end{caso}
+
+\begin{guida}{Dal diagramma al codice: switch annidati o pattern State}
+Due modi. Con gli \textbf{switch annidati} il primo sceglie lo stato corrente, il secondo l'evento arrivato:
+funziona, ma con molti stati diventa enorme. Con il \textbf{pattern State} (\vv{state-struttura}) ogni stato è una
+classe:
+
+\centering
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}l l@{}}
+  \textbf{Nel diagramma} & \textbf{Nel codice con il pattern State} \\ \hline
+  stato & una sottoclasse di \code{State} (\code{Attesa}, \ldots) \\
+  evento (trigger) & un metodo di \code{State}, vuoto nella classe base \\
+  guardia & un \code{if} dentro il metodo \\
+  azione & il corpo del metodo \\
+  transizione & la chiamata \code{contesto.setState(nuovoStato)} \\
+  evento ignorato in uno stato & metodo non ridefinito: resta quello vuoto \\
+\end{tabular}
+\end{guida}
+
+\begin{attenzione}{Errori tipici}
+\begin{itemize}[nosep, leftmargin=*]
+  \item Due transizioni con lo stesso evento e guardie che si sovrappongono: comportamento \textbf{non deterministico}.
+  \item Un'autotransizione al posto di una reazione interna: rieseguire \code{entry} può azzerare i dati.
+  \item Uno stato per ogni valore di un contatore: i numeri vanno in guardie e azioni, non negli stati.
+  \item Confondere stato e attività: lo stato si \textbf{è}, l'attività si \textbf{fa} (\vv{azione}).
+\end{itemize}
+\end{attenzione}

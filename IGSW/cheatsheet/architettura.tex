@@ -1,0 +1,152 @@
+% ============================================================
+% Cheat sheet, argomento 10: package, componenti e deployment (dispensa, capitoli 8 e 9)
+% ============================================================
+\argomento{Package, componenti e deployment}{Dispensa: capitoli 8 e 9. Come è diviso il sistema e dove
+gira}[Package, componenti, deployment]
+
+\voce{package}{Package}{una cartella con la linguetta}
+  {\begin{tikzpicture}
+     \umlpkg{m}{(0,0)}{4.2}{1.3}{model}
+     \node[classe1=1.3cm] at (1.1,0.45) {Borsa};
+     \node[classe1=1.3cm] at (3.1,0.45) {Societa};
+   \end{tikzpicture}}
+  {Raggruppa classi (e altri package). In Java è un \code{package}: le classi della cartella \code{model} iniziano
+   con \code{package model;}. Dentro si può disegnare il diagramma delle classi del package, o lasciarlo vuoto.}
+
+\voce{dipendenzapackage}{Dipendenza fra package}{freccia tratteggiata: gli import}
+  {\begin{tikzpicture}
+     \umlpkg{g}{(0,0)}{1.6}{0.6}{gui}
+     \umlpkg{c}{(2.3,0)}{1.6}{0.6}{controller}
+     \umlpkg{m}{(4.6,0)}{1.4}{0.6}{model}
+     \draw[dep] (g.east) -- (c.west);
+     \draw[dep] (c.east) -- (m.west);
+   \end{tikzpicture}}
+  {\code{gui} dipende da \code{controller}, che dipende da \code{model}: nel codice sono gli \code{import}
+   (\code{import model.Borsa;} in una classe del controller). Il \code{model} non importa nulla: si può cambiare
+   l'interfaccia grafica senza toccarlo. Un \code{import} contrario alle frecce viola l'architettura.}
+
+\voce{interfacciapackage}{Interfacce fra package}{realizzazione e dipendenza attraverso un'interfaccia}
+  {\begin{tikzpicture}
+     \umlpkg{d}{(0,0)}{2.5}{1.25}{dao}
+     \node[classe1=2.1cm, align=center] (i) at (1.25,0.45) {{\tiny\normalfont«interface»}\\ListinoDAO};
+     \umlpkg{p}{(3.2,0)}{2.6}{1.25}{postgres}
+     \node[classe1=2.3cm, font=\tiny\bfseries] (k) at (4.5,0.45) {ListinoPostgresDAO};
+     \draw[realizza] (k.west) -- (i.east);
+   \end{tikzpicture}}
+  {Il controller usa l'interfaccia \code{ListinoDAO} (package \code{dao}); la classe per PostgreSQL la realizza in un
+   altro package. Per cambiare database si scrive un'altra implementazione, e chi usa \code{ListinoDAO} non cambia.}
+
+\voce{componente}{Componente}{«component» e l'icona in alto a destra}
+  {\begin{tikzpicture}
+     \node[compo, minimum width=3.0cm, minimum height=1.2cm] (ts) {{\tiny «component»}\\ \textbf{Biglietteria}};
+     \compicon{ts}
+   \end{tikzpicture}}
+  {Un pezzo del sistema che si costruisce e si sostituisce da solo: un eseguibile, una libreria (\code{.jar}), un
+   servizio, un database. Contiene classi e package. Il diagramma dei componenti dice \textbf{che cosa} c'è e come si
+   collega, \textbf{non dove} gira.}
+
+\voce{interfaccecomp}{Interfacce fornite e richieste}{pallina, presa e il loro incastro}
+  {\begin{tikzpicture}
+     \node[compo, minimum width=1.6cm, minimum height=0.8cm] (c) at (0,0) {Vendite};
+     \node[compo, minimum width=1.6cm, minimum height=0.8cm] (d) at (4.0,0) {Contabilità};
+     \draw[line width=0.8pt] (c.east) -- (1.75,0);
+     \presa{(1.95,0)}{0}
+     \palla{(1.95,0)}
+     \draw[line width=0.8pt] (2.06,0) -- (d.west);
+     \node[ruolo] at (1.95,0.45) {Registro};
+   \end{tikzpicture}}
+  {\code{Contabilità} \textbf{fornisce} l'interfaccia \code{Registro} (pallina: la implementa); \code{Vendite} la
+   \textbf{richiede} (presa: ne ha bisogno). L'incastro è il collegamento. In Java: una \code{interface}, una classe
+   che la implementa e una che la riceve nel costruttore (\vv{componenticodice}).}
+
+\voce{porta}{Porta}{quadratino sul bordo}
+  {\begin{tikzpicture}
+     \node[compo, minimum width=3.2cm, minimum height=1.3cm] (s) at (0,0) {};
+     \compicon{s}
+     \node[font=\tiny\bfseries, anchor=north] at ($(s.north)+(0,-0.08)$) {Server vendite};
+     \node[compo, minimum width=1.4cm, minimum height=0.55cm, fill=white, font=\tiny] (t) at (0.3,-0.2) {Processore};
+     \node[draw, fill=white, minimum size=0.16cm, inner sep=0pt] (p) at (-1.6,-0.2) {};
+     \draw[dipend] (p.east) -- (t.west);
+     \draw[line width=0.8pt] (p.west) -- (-2.2,-0.2);
+     \palla{(-2.31,-0.2)}
+   \end{tikzpicture}}
+  {Il punto in cui i dati entrano o escono da un componente (con eventuali trasformazioni o serializzazioni). Un
+   componente che ne contiene altri è un \textbf{sottosistema} («subsystem»): la porta inoltra all'interno ciò che
+   arriva dall'esterno.}
+
+\voce{nodo}{Nodo}{parallelepipedo: una macchina o un dispositivo}
+  {\begin{tikzpicture}
+     \nodo{n}{(0,0)}{3.6}{0.75}{\underline{sede : ServerBiglietti}}
+   \end{tikzpicture}}
+  {Un elemento \textbf{fisico}: un server, un PC, un telefono, un sensore. Il nome è un'istanza,
+   \underline{\code{nome : Tipo}}. Un nodo può contenere \textbf{ambienti di esecuzione} (un DBMS, un container
+   EJB, Docker), anche loro disegnati come nodi.}
+
+\voce{artefatto}{Artefatto e componenti nel nodo}{«artifact»: un file prodotto o usato}
+  {\begin{tikzpicture}
+     \nodo{b}{(0,0)}{5.0}{1.7}{\textbf{Server della banca}}
+     \node[compo, minimum width=2.2cm, minimum height=0.7cm, fill=white] (m) at (1.4,0.65) {{\tiny «component»}\\Mutui};
+     \node[compo, minimum width=1.9cm, minimum height=0.7cm, draw=q9, fill=q9!6] (d) at (3.8,0.65) {{\tiny «artifact»}\\clienti.db};
+     \draw[dipend] (m.east) -- (d.west);
+   \end{tikzpicture}}
+  {Dentro un nodo si disegnano i \textbf{componenti} che vi girano e gli \textbf{artefatti}: file eseguibili (\code{.jar},
+   \code{.war}), database, file di configurazione. Così il diagramma di deployment si collega a quello dei
+   componenti.}
+
+\voce{connessione}{Connessione e valori etichettati}{una linea con il protocollo; \{nome = valore\}}
+  {\begin{tikzpicture}
+     \nodo{c}{(0,0)}{1.6}{0.9}{\textbf{PC}\\{\tiny browser}}
+     \nodo{w}{(3.0,0)}{2.6}{0.9}{\textbf{Web server}\\{\tiny\{OS = Linux\}}}
+     \draw[line width=0.8pt] (c.east) -- node[font=\tiny, above]{HTTPS} (w.west);
+   \end{tikzpicture}}
+  {Le connessioni sono collegamenti \textbf{fisici}, etichettati con il protocollo (TCP/IP, HTTP, JDBC, Java RMI). I
+   \textbf{valori etichettati} \code{\{nome = valore\}} aggiungono dettagli: il sistema operativo, il software,
+   quanti nodi uguali ci sono (\code{\{number deployed = 3\}}).}
+
+\begin{caso}{componenticodice}{Interfaccia fornita e richiesta, nel codice}
+\begin{lstlisting}[style=javacs]
+interface Registro {          // l'interfaccia
+    void registra(String vendita);
+}
+class Contabilita implements Registro {  // fornisce
+    public void registra(String vendita) { }
+}
+class Vendite {
+    private final Registro registro;     // richiede
+    Vendite(Registro r) { registro = r; }
+    void vendi(String articolo) {
+        registro.registra(articolo);
+    }
+}
+public class Assemblaggio {
+    public static void main(String[] args) {
+        Vendite v = new Vendite(new Contabilita());
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[compo, minimum width=1.8cm, minimum height=0.9cm] (c) at (0,0) {Vendite};
+  \compicon{c}
+  \node[compo, minimum width=1.8cm, minimum height=0.9cm] (d) at (4.6,0) {Contabilita};
+  \compicon{d}
+  \draw[line width=0.8pt] (c.east) -- (2.1,0);
+  \presa{(2.3,0)}{0}
+  \palla{(2.3,0)}
+  \draw[line width=0.8pt] (2.41,0) -- (d.west);
+  \node[ruolo] at (2.3,0.45) {Registro};
+\end{tikzpicture}
+\regola{La \textbf{pallina} è la classe che \code{implements} l'interfaccia; la \textbf{presa} è la classe che la
+riceve (nel costruttore) e la usa. L'incastro avviene dove si assemblano i pezzi (\code{main}): è l'unico punto che
+conosce tutti e due. È la stessa idea della Dependency Injection (\vv{iniezione}).}
+\end{caso}
+
+\begin{attenzione}{Package, componenti o deployment?}
+\begin{itemize}[nosep, leftmargin=*]
+  \item \textbf{Package}: come è \textbf{organizzato il codice} (cartelle, \code{import}). Si sceglie con l'architettura,
+        poi si disegna un diagramma delle classi per package.
+  \item \textbf{Componenti}: \textbf{che cosa} è stato costruito e chi offre quale interfaccia a chi, in modo logico.
+  \item \textbf{Deployment}: \textbf{dove} gira ogni pezzo, su quale macchina, con quale collegamento fisico. Lo stesso
+        componente può comparire nel diagramma dei componenti e, dentro un nodo, in quello di deployment.
+\end{itemize}
+\end{attenzione}
