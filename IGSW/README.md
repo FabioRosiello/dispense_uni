@@ -49,9 +49,13 @@ mostrano sono marcate «oltre le slide».
   aggregazione nel codice, classe associativa, iniezione delle dipendenze, liste di ascoltatori); poi `casi_uso.tex`,
   `sequenza.tex` (con la tabella dal codice al diagramma di sequenza), `architettura.tex` (package, componenti,
   deployment), `stato.tex`, `attivita.tex` e `scelta_diagramma.tex` (quale diagramma usare)
-- Parte II, riconoscere i design pattern: un file per pattern (`pattern_singleton.tex`, `pattern_builder.tex`, ...), con la
-  carta d'identità (intento, indizi nel testo, nel codice e nel diagramma, varianti, con che cosa non confonderlo), la
-  struttura e un esempio completo con il suo diagramma delle classi
+- Parte II, riconoscere i design pattern: `pattern_riconoscere.tex` (la procedura in cinque domande, le «firme» di ogni
+  pattern con il disegno tipico e che cosa cercare nel codice, le parole del testo, le famiglie della GoF), un file per
+  pattern (`pattern_singleton.tex`, `pattern_builder.tex`, `pattern_adapter.tex`, `pattern_composite.tex`,
+  `pattern_decorator.tex`, `pattern_observer.tex`, `pattern_state.tex`, `pattern_strategy.tex`, `pattern_di.tex`), con
+  la carta d'identità (intento, indizi nel testo, nel codice e nel diagramma, varianti, con che cosa non confonderlo),
+  la struttura e un esempio completo, compilato ed eseguito, con il suo diagramma delle classi; infine
+  `pattern_confronti.tex` (i pattern che si somigliano e gli altri pattern della GoF nominati nelle slide)
 - `cheatsheet/verifica_listati.py` — compila tutti i casi con Java 21, compila ed esegue gli esempi dei pattern e
   confronta l'output con quello stampato; controlla anche che le righe di codice non superino i 52 caratteri (la
   larghezza della colonna del codice)

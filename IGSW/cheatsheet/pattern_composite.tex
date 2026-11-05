@@ -1,0 +1,121 @@
+% ============================================================
+% Cheat sheet, argomento: il pattern Composite (dispensa, capitolo 15)
+% ============================================================
+\argomento{Composite}{Dispensa: capitolo 15. Pattern strutturale della GoF}[Pattern Composite]
+
+\scheda{Carta d'identità}{
+  \pintento{Comporre gli oggetti in \textbf{strutture ad albero} (gerarchie tutto-parte) e permettere al client di
+    trattare \textbf{allo stesso modo} oggetti singoli e oggetti composti.}
+  \ptesto{«gerarchia», «albero», «un elemento può contenere altri elementi, che a loro volta\ldots», «cartelle e
+    file», «menu e sottomenu», «gruppi e sottogruppi», «pannelli che contengono pulsanti e altri pannelli»,
+    «un'operazione sul tutto si applica a tutte le parti», «trattare in modo uniforme».}
+  \pcodice{un'interfaccia (o classe astratta) Component; una classe \textbf{foglia} che la implementa; una classe
+    \textbf{composta} che la implementa \textbf{e} ha una \textbf{collezione dello stesso tipo}
+    (\code{List<AbstractFile>}), con \code{add} e \code{remove}; il metodo del composto chiama lo \textbf{stesso
+    metodo} su tutti i figli (ricorsione), e il client lo chiama una volta sola, sulla radice.}
+  \pdiagramma{\code{Leaf} e \code{Composite} realizzano (o estendono) \code{Component}; da \code{Composite} parte
+    un'\textbf{aggregazione con molteplicità \code{*}} che torna verso \code{Component}: un composto contiene
+    componenti, quindi anche altri composti.}
+  \pvarianti{\textbf{trasparenza}: \code{add}, \code{remove}, \code{getChild} dichiarati nel Component (il client tratta
+    tutti allo stesso modo, ma deve gestire \code{add} su una foglia, per esempio con un'eccezione) oppure
+    \textbf{sicurezza}: solo nel Composite (il compilatore impedisce di aggiungere figli a una foglia). Nelle GUI di
+    Java: un \code{Container} è un \code{Component} che contiene \code{Component}.}
+  \pconfondere{il \textbf{Decorator} (\vv{decorator-struttura}): anche lui implementa il Component e ne contiene uno,
+    ma \textbf{uno solo}, e aggiunge comportamento; il Composite ne contiene \textbf{molti} e combina i risultati. Una
+    semplice associazione riflessiva (\code{List<Persona> figli}): senza un'interfaccia comune fra foglie e composti
+    non è un Composite.}
+}
+
+\begin{struttura}{composite-struttura}{La struttura}
+\begin{tikzpicture}
+  \node[classe1=1.3cm] (c) at (-2.8,0) {Client};
+  \umlclass[3.4cm]{co}{(1.0,0)}{\textit{Component}}{}{+ operation()\\+ add(c: Component)\\+ remove(c: Component)\\+ getChild(i: int)}
+  \umlclass[2.0cm]{l}{(-1.2,-3.0)}{Leaf}{}{+ operation()}
+  \umlclass[3.4cm]{cm}{(2.6,-3.0)}{Composite}{}{+ operation()\\+ add(c: Component)\\+ remove(c: Component)\\+ getChild(i: int)}
+  \draw[navig] (c.east) -- (co.west);
+  \draw[gen] (l.north) |- ++(0,0.55) -| ([xshift=-0.6cm]co.south);
+  \draw[gen] (cm.north) |- ++(0,0.4) -| ([xshift=0.6cm]co.south);
+  \draw[aggr] (cm.east) -- ++(0.5,0) |- (co.east);
+  \node[molt, anchor=south west] at ($(co.east)+(0.1,0.05)$) {*};
+  \node[ruolo, anchor=north west] at ($(co.east)+(0.1,-0.05)$) {figli};
+  \node[notauml, anchor=north, text width=2.6cm] (n) at (2.6,-4.6) {for all g in figli:\\\hspace*{1em}g.operation()};
+  \draw[tratt] (cm.south) -- (n.north);
+\end{tikzpicture}
+\tcblower
+\textbf{Component}: l'interfaccia comune, con le operazioni e (nella forma trasparente) la gestione dei figli.
+\textbf{Leaf}: un oggetto senza figli. \textbf{Composite}: memorizza i figli e implementa le operazioni chiamandole su
+di loro. \textbf{Client}: lavora solo con il Component, senza sapere se ha in mano una foglia o un composto.
+La relazione decisiva è l'aggregazione \textbf{dal Composite al Component}: è lei che rende l'albero ricorsivo.
+\end{struttura}
+
+\begin{programma}{composite-esempio}{L'esempio del corso: il file system}
+\begin{lstlisting}[style=javacs, name=EsempioComposite.java]
+public class EsempioComposite {
+    public static void main(String[] args) {
+        Directory one = new Directory("dir111"),
+                  two = new Directory("dir222"),
+                  thr = new Directory("dir333");
+        one.add(new File("a"));
+        one.add(two);
+        one.add(new File("b"));
+        two.add(new File("c"));
+        two.add(new File("d"));
+        two.add(thr);
+        thr.add(new File("e"));
+        one.ls("");           // una sola chiamata
+    }
+}
+interface AbstractFile {            // Component
+    void ls(String rientro);
+}
+class File implements AbstractFile { // Leaf
+    private final String nome;
+    File(String nome) { this.nome = nome; }
+    public void ls(String rientro) {
+        System.out.println(rientro + nome);
+    }
+}
+// Composite
+class Directory implements AbstractFile {
+    private final String nome;
+    private final List<AbstractFile> figli =
+            new ArrayList<>();
+    Directory(String nome) { this.nome = nome; }
+    void add(AbstractFile f) { figli.add(f); }
+    public void ls(String rientro) {
+        System.out.println(rientro + nome);
+        for (AbstractFile f : figli)
+            f.ls(rientro + "   ");   // ricorsione
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[2.6cm]{a}{(2.0,0)}{\stereotipo{interface}{AbstractFile}}{}{+ ls(rientro: String)}
+  \umlclass[2.9cm]{f}{(-0.2,-2.6)}{File}{- nome: String}{+ ls(rientro: String)}
+  \umlclass[3.4cm]{d}{(3.6,-2.6)}{Directory}{- nome: String}{\textasciitilde\ add(f: AbstractFile)\\+ ls(rientro: String)}
+  \draw[realizza] (f.north) |- ++(0,0.5) -| ([xshift=-0.4cm]a.south);
+  \draw[realizza] (d.north) |- ++(0,0.35) -| ([xshift=0.4cm]a.south);
+  \draw[aggr] (d.east) -- ++(0.45,0) |- (a.east);
+  \node[molt, anchor=south west] at ($(a.east)+(0.1,0.05)$) {* \{ordered\}};
+  \node[ruolo, anchor=north west] at ($(a.east)+(0.1,-0.05)$) {figli};
+\end{tikzpicture}
+
+\medskip
+\begin{lstlisting}[style=shellcs, name=Terminale]
+$ javac EsempioComposite.java
+$ java EsempioComposite
+dir111
+   a
+   dir222
+      c
+      d
+      dir333
+         e
+   b
+\end{lstlisting}
+\regola{\code{Directory} non sa se un figlio è un file o un'altra directory: chiama \code{ls} e ci pensa il
+\textbf{polimorfismo}. Il \code{main} chiama \code{ls} una volta, sulla radice, e la ricorsione visita l'albero. Nel
+codice del corso il rientro è una \code{StringBuffer} statica che ogni \code{ls} allunga e poi accorcia, e
+\code{add} riceve un \code{Object}; qui il rientro è un parametro e \code{add} accetta solo \code{AbstractFile}.}
+\end{programma}

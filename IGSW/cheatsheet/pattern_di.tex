@@ -1,0 +1,111 @@
+% ============================================================
+% Cheat sheet, argomento: la Dependency Injection (dispensa, capitolo 15)
+% ============================================================
+\argomento{Dependency Injection}{Dispensa: capitolo 15. Un pattern moderno, fuori dal catalogo della
+GoF}[Dependency Injection]
+
+\scheda{Carta d'identità}{
+  \pintento{Le risorse da cui un oggetto dipende gli vengono \textbf{passate dall'esterno} (iniettate), di solito nel
+    costruttore, invece di essere create dall'oggetto stesso. Si chiama anche \textbf{inversione del controllo}:
+    prima si crea la dipendenza, poi chi la usa.}
+  \ptesto{«testare la classe senza il servizio reale» (che non è disponibile, è lento o non è ancora pronto), «un
+    oggetto \textbf{fittizio} (finto, \textit{mock})», «cambiare database o servizio senza modificare la classe»,
+    «configurare dall'esterno quale implementazione usare», «Spring», «\code{@Autowired}», «\code{@Inject}».}
+  \pcodice{un costruttore che riceve un'\textbf{interfaccia} (\code{AllarmeCaldo(ServizioMeteo meteo)}) e la salva in un
+    campo \code{final}; dentro la classe \textbf{nessun \code{new}} della classe concreta; chi crea l'oggetto (il
+    \code{main}, un test, un framework) crea \textbf{prima} la dipendenza e poi la passa.}
+  \pdiagramma{la classe con un'associazione verso un'\code{«interface»}, realizzata da più classi (quella vera e
+    quella finta); le dipendenze «create» stanno sul \code{main} o sul test, non sulla classe.}
+  \pvarianti{iniezione nel \textbf{costruttore} (la più comune) o con un \textbf{setter} \oltre; a mano, nel
+    \code{main}, o con un framework (Spring, Jakarta EE) che crea gli oggetti e li collega. Nella dispensa: la
+    \code{Cassa} con il \code{GatewayPagamenti} (capitolo 4), il \code{Controller} con il \code{ListinoDAO}
+    (capitolo 8).}
+  \pconfondere{il \textbf{Singleton} (\vv{singleton-struttura}): lì chi usa l'oggetto \textbf{va a prenderselo}
+    (\code{getInstance()}), qui gli viene \textbf{dato}; lo \textbf{Strategy}: è spesso iniettato, ma dice che cosa è
+    l'oggetto (un algoritmo intercambiabile), non come arriva.}
+}
+
+\begin{struttura}{di-struttura}{La struttura}
+\begin{tikzpicture}
+  \umlclass[2.8cm]{c}{(0,0)}{Client}{- servizio: Servizio}{+ Client(s: Servizio)}
+  \umlclass[2.6cm]{i}{(4.6,0)}{\stereotipo{interface}{Servizio}}{}{+ opera()}
+  \node[classe1=2.2cm] (v) at (3.4,-2.3) {ServizioVero};
+  \node[classe1=2.2cm] (f) at (5.9,-2.3) {ServizioFinto};
+  \umlclass[2.6cm]{m}{(0,-2.3)}{Assemblatore}{}{\underline{+ main(\ldots)}}
+  \draw[navig] (c.east) -- (c.east -| i.west);
+  \estO{(c.east -| i.west)}{1}{servizio}
+  \draw[realizza] (v.north) |- ($(i.south)+(0,-0.45)$) -- (i.south);
+  \draw[realizza] (f.north) |- ($(i.south)+(0,-0.45)$);
+  \draw[dep] (m.north) -- node[stereo, left]{«create»} (c.south);
+  \draw[dep] (m.east) -- node[stereo, above]{«create»} (v.west);
+\end{tikzpicture}
+\tcblower
+\textbf{Client}: dichiara nel costruttore di che cosa ha bisogno, con il tipo di un'interfaccia. \textbf{Servizio}:
+l'interfaccia. \textbf{ServizioVero}, \textbf{ServizioFinto}: le implementazioni, quella di produzione e quella per i
+test. \textbf{Assemblatore}: il \code{main}, il test o il framework, l'unico che conosce le classi concrete. Resta
+una dipendenza dal \textbf{tipo} della risorsa, e chi crea l'oggetto deve conoscere tutte le sue dipendenze.
+\end{struttura}
+
+\begin{programma}{di-esempio}{L'esempio della dispensa: un allarme provato con un servizio finto}
+\begin{lstlisting}[style=javacs, name=App.java]
+public class App {
+    public static void main(String[] args) {
+        // prima la dipendenza, poi chi la usa
+        ServizioMeteo finto = new MeteoFinto(38.0);
+        AllarmeCaldo a = new AllarmeCaldo(finto);
+        System.out.println(a.controlla("Napoli"));
+        a = new AllarmeCaldo(new MeteoFinto(22.5));
+        System.out.println(a.controlla("Napoli"));
+    }
+}
+interface ServizioMeteo {
+    double temperatura(String citta);   // gradi C
+}
+class AllarmeCaldo {
+    private final ServizioMeteo meteo; // risorsa
+    AllarmeCaldo(ServizioMeteo meteo) {
+        this.meteo = meteo;             // iniettata
+    }
+    String controlla(String citta) {
+        double t = meteo.temperatura(citta);
+        if (t >= 35)
+            return "ALLARME: a " + citta
+                    + " ci sono " + t + " gradi";
+        return "Nessun allarme a " + citta;
+    }
+}
+// oggetto fittizio per i test: risponde sempre
+// con la temperatura che gli si dà
+class MeteoFinto implements ServizioMeteo {
+    private final double temperatura;
+    MeteoFinto(double t) { temperatura = t; }
+    public double temperatura(String citta) {
+        return temperatura;
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[3.4cm]{a}{(0,0)}{AllarmeCaldo}{}{\textasciitilde\ AllarmeCaldo(meteo)\\\textasciitilde\ controlla(citta): String}
+  \umlclass[3.9cm]{s}{(4.85,0)}{\stereotipo{interface}{ServizioMeteo}}{}{+ temperatura(citta): double}
+  \umlclass[3.0cm]{f}{(4.85,-2.6)}{MeteoFinto}{- temperatura: double}{}
+  \umlclass[2.4cm]{m}{(0,-2.6)}{App}{}{\underline{+ main(\ldots)}}
+  \draw[navig] (a.east) -- (a.east -| s.west);
+  \estO{(a.east -| s.west)}{1}{meteo}
+  \draw[realizza] (f.north) -- (s.south);
+  \draw[dep] (m.north) -- node[stereo, left]{«create»} (a.south);
+  \draw[dep] (m.east) -- node[stereo, above]{«create»} (m.east -| f.west);
+\end{tikzpicture}
+
+\medskip
+\begin{lstlisting}[style=shellcs, name=Terminale]
+$ javac App.java
+$ java App
+ALLARME: a Napoli ci sono 38.0 gradi
+Nessun allarme a Napoli
+\end{lstlisting}
+\regola{\code{AllarmeCaldo} è la stessa classe in produzione e nei test: in produzione riceve \code{MeteoHttp}, che
+interroga un servizio REST (nella dispensa), nei test \code{MeteoFinto}, che risponde subito e con la temperatura
+scelta dal test. Il controesempio: \code{private final ServizioMeteo meteo = new MeteoHttp(\ldots);} dentro la classe
+lega l'allarme al servizio vero, e nessun test lo può sostituire.}
+\end{programma}

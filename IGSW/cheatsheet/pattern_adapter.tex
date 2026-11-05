@@ -1,0 +1,153 @@
+% ============================================================
+% Cheat sheet, argomento: il pattern Adapter (dispensa, capitolo 15)
+% ============================================================
+\argomento{Adapter}{Dispensa: capitolo 15. Pattern strutturale della GoF (sinonimo: Wrapper)}[Pattern Adapter]
+
+\scheda{Carta d'identità}{
+  \pintento{\textbf{Convertire l'interfaccia} di una classe esistente in quella che il client si aspetta, così che
+    classi con interfacce incompatibili possano lavorare insieme. Come l'adattatore per le prese di corrente.}
+  \ptesto{«riusare una classe (una libreria, un servizio, un microservizio) che esiste già», «la sua interfaccia non è
+    quella che ci serve», «non possiamo modificarla» (non è nostra, o la usano altri), «unità di misura diverse»
+    (libbre e chilogrammi), «formati diversi», «il nostro codice chiama \code{inEuro(\ldots)}, il servizio offre
+    \code{getRate(\ldots)}».}
+  \pcodice{una classe che \textbf{\code{implements}} l'interfaccia del client (Target) e ha un \textbf{campo del tipo della
+    classe esistente} (Adaptee, di tipo \textbf{diverso} da Target), oppure la estende; i suoi metodi
+    \textbf{traducono} parametri e risultati e chiamano un metodo con un altro nome o un'altra firma
+    (\code{evaluate} chiama \code{calcolaIMC}).}
+  \pdiagramma{\code{Client} $\to$ \code{«interface» Target}, realizzata da \code{Adapter}, che ha un'associazione verso
+    \code{Adaptee} (adapter di oggetto) o ne è una sottoclasse (adapter di classe).}
+  \pvarianti{adapter di \textbf{oggetto} (composizione: il più usato in Java, adatta anche le sottoclassi
+    dell'Adaptee e lo nasconde) e adapter di \textbf{classe} (\code{extends Adaptee implements Target}:
+    \vv{adapter-classe}). L'uso tipico: un'interfaccia decisa dal nostro progetto davanti a un servizio esterno.}
+  \pconfondere{il \textbf{Decorator} (\vv{decorator-struttura}): avvolge un oggetto con la \textbf{stessa} interfaccia e
+    aggiunge funzioni; l'Adapter avvolge un oggetto di un tipo \textbf{diverso} e ne cambia l'interfaccia. Il
+    \textit{Facade}: semplifica un intero sottosistema, non adatta una classe (\vv{altri-gof}).}
+}
+
+\begin{struttura}{adapter-struttura}{La struttura: adapter di oggetto e di classe}
+\begin{tikzpicture}
+  \node[classe1=1.2cm] (c) at (0,0) {Client};
+  \umlclass[2.2cm]{t}{(2.4,0)}{\textit{Target}}{}{+ request()}
+  \umlclass[2.6cm]{a}{(2.4,-2.1)}{Adapter}{}{+ request()}
+  \umlclass[2.8cm]{e}{(6.5,-2.1)}{Adaptee}{}{+ specificRequest()}
+  \draw[dep] (c.east) -- (t.west);
+  \draw[realizza] (a.north) -- (t.south);
+  \draw[navig] (a.east) -- (e.west);
+  \estO{(e.west)}{1}{adaptee}
+  \node[notauml, anchor=north, text width=3.4cm] (n) at (2.4,-3.3) {adaptee.specificRequest()};
+  \draw[tratt] (a.south) -- (n.north);
+  \node[font=\tiny\bfseries, text=pcolore] at (6.0,0.3) {di oggetto (composizione)};
+\end{tikzpicture}
+
+\medskip
+\begin{tikzpicture}
+  \node[classe1=1.2cm] (c) at (0,0) {Client};
+  \umlclass[2.2cm]{t}{(2.4,0)}{\textit{Target}}{}{+ request()}
+  \umlclass[2.6cm]{a}{(2.4,-2.1)}{Adapter}{}{+ request()}
+  \umlclass[2.8cm]{e}{(6.0,0)}{Adaptee}{}{+ specificRequest()}
+  \draw[dep] (c.east) -- (t.west);
+  \draw[realizza] (a.north) -- (t.south);
+  \draw[gen] (a.east) -| (e.south);
+  \node[font=\tiny\bfseries, text=pcolore] at (6.0,-1.3) {di classe (ereditarietà)};
+\end{tikzpicture}
+\tcblower
+\textbf{Client}: vuole un servizio. \textbf{Target}: l'interfaccia che il client si aspetta. \textbf{Adaptee}: la
+classe esistente, con un'interfaccia diversa. \textbf{Adapter}: implementa Target e traduce le chiamate verso
+l'Adaptee, che \textbf{contiene} (sopra) o da cui \textbf{eredita} (sotto). Il client conosce solo Target: non sa che
+l'Adaptee esiste.
+\end{struttura}
+
+\begin{programma}{adapter-esempio}{L'esempio del corso: l'indice di massa corporea}
+\begin{lstlisting}[style=javacs, name=Main.java]
+public class Main {
+    public static void main(String[] args) {
+        Health health = new Health();
+        health.evaluateIMC(165, 70); // lb, pollici
+        System.out.println(health.IMC);
+    }
+}
+class Health {                   // il Client
+    public double IMC;
+    public double evaluateIMC(double weight,
+                              double height) {
+        Target adapter = new Adapter();
+        IMC = adapter.evaluate(weight, height);
+        return IMC;
+    }
+}
+interface Target {               // ciò che serve
+    double evaluate(double weight, double height);
+}
+class Adapter implements Target {
+    private final Adaptee adaptee = new Adaptee();
+    public double evaluate(double weight,
+                           double height) {
+        // libbre -> chilogrammi, pollici -> metri
+        return adaptee.calcolaIMC(weight * 0.453,
+                                  height * 0.0254);
+    }
+}
+class Adaptee {                  // ciò che esiste
+    public double calcolaIMC(double pesoKg,
+                             double altezzaM) {
+        return pesoKg / (altezzaM * altezzaM);
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[5.6cm]{h}{(0,0)}{Health}{+ IMC: double}{+ evaluateIMC(weight, height): double}
+  \umlclass[5.6cm]{t}{(0,-2.0)}{\stereotipo{interface}{Target}}{}{+ evaluate(weight, height): double}
+  \umlclass[5.6cm]{a}{(0,-4.0)}{Adapter}{}{+ evaluate(weight, height): double}
+  \umlclass[5.6cm]{e}{(0,-6.0)}{Adaptee}{}{+ calcolaIMC(pesoKg, altezzaM): double}
+  \draw[dep] (h.south) -- node[stereo, right]{«use»} (t.north);
+  \draw[dep] (h.east) -- ++(0.6,0) |- node[stereo, right, pos=0.25]{«create»} (a.east);
+  \draw[realizza] (a.north) -- (t.south);
+  \draw[navig] (a.south) -- (e.north);
+  \estN{(e.north)}{1}{adaptee}
+\end{tikzpicture}
+
+\medskip
+\begin{lstlisting}[style=shellcs, name=Terminale]
+$ javac Main.java
+$ java Main
+23.643873818359882
+\end{lstlisting}
+\regola{Tutta la «traduzione» sta nell'\code{Adapter}, in una riga: 165 libbre sono 74,7 kg, 70 pollici 1,78 m.
+\code{Health} conosce solo \code{Target}. Nella slide della soluzione l'adapter \textbf{divide} per 0,453 e 0,0254, e
+stampa un indice senza senso (0,000048): per passare dalle libbre ai chilogrammi si moltiplica. Nel codice del corso
+l'Adaptee usa a sua volta una classe \code{IMC} con lo stesso calcolo.}
+\end{programma}
+
+\begin{caso}{adapter-classe}{La variante: adapter di classe}
+\begin{lstlisting}[style=javacs]
+interface Target {
+    double evaluate(double weight, double height);
+}
+class Adaptee {
+    public double calcolaIMC(double kg, double m) {
+        return kg / (m * m);
+    }
+}
+// eredita dall'Adaptee invece di contenerlo
+class AdapterDiClasse extends Adaptee
+                      implements Target {
+    public double evaluate(double weight,
+                           double height) {
+        return calcolaIMC(weight * 0.453,
+                          height * 0.0254);
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[4.5cm]{t}{(0,0)}{\stereotipo{interface}{Target}}{}{+ evaluate(weight, height): double}
+  \umlclass[3.6cm]{e}{(4.35,0)}{Adaptee}{}{+ calcolaIMC(kg, m): double}
+  \umlclass[4.5cm]{a}{(2.0,-2.5)}{AdapterDiClasse}{}{+ evaluate(weight, height): double}
+  \draw[realizza] ($(a.north)+(-0.6,0)$) |- ++(0,0.4) -| (t.south);
+  \draw[gen] ($(a.north)+(0.6,0)$) |- ++(0,0.4) -| (e.south);
+\end{tikzpicture}
+\regola{L'adapter \textbf{è} un Adaptee e chiama il metodo ereditato. Più compatto, ma legato a \textbf{una} classe
+Adaptee, che espone tutta (chi ha un \code{AdapterDiClasse} può chiamare anche \code{calcolaIMC}); e in Java si
+estende una classe sola. Per questo si preferisce l'adapter di oggetto.}
+\end{caso}
