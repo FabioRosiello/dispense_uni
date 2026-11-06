@@ -79,13 +79,68 @@ La tendenza è dividere le applicazioni web in due componenti:
         server;
   \item il \term{frontend}, responsabile dell'interfaccia utente, sul client.
         Può essere un'app nativa mobile o desktop, oppure una pagina HTML
-        \guillemotleft più intelligente\guillemotright\ che costruisce un'interfaccia interattiva con
+        «più intelligente» che costruisce un'interfaccia interattiva con
         JavaScript, cioè una Single Page App.
 \end{itemize}
 
-I due componenti comunicano attraverso Internet. Non è un dettaglio marginale:
-secondo il rapporto Akamai sullo stato di Internet (2019), l'\textbf{83\%} del
-traffico web è costituito da chiamate ad API.
+I due componenti comunicano attraverso Internet. Più in generale, è il
+\textbf{software} a dover comunicare su Internet: le app di ogni tipo con i
+server, e i server fra loro. Non è un dettaglio marginale: secondo il rapporto
+Akamai sullo stato di Internet (2019), l'\textbf{83\%} del traffico web è
+costituito da chiamate ad API.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      cl/.style={rounded corners=2pt, fill=primary!70!black, text=white,
+        minimum width=2.25cm, minimum height=0.55cm, align=center,
+        font=\Lato\scriptsize},
+      app/.style={rounded corners=3pt, text=white, minimum width=3.2cm,
+        minimum height=0.75cm, font=\Lato\footnotesize},
+      box/.style={rounded corners=5pt, line width=1pt, inner sep=7pt},
+      tit/.style={font=\Lato\footnotesize\bfseries},
+      freccia/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt},
+      doppia/.style={{Stealth[length=5pt,width=4pt]}-{Stealth[length=5pt,width=4pt]},
+        line width=0.8pt},
+      lab/.style={font=\Lato\scriptsize, inner sep=2pt}]
+    % i client
+    \node[cl] (c1) at (0,0.8)    {App Android};
+    \node[cl] (c2) at (2.5,0.8)  {App iOS};
+    \node[cl] (c3) at (0,0)      {Pagina web};
+    \node[cl] (c4) at (2.5,0)    {App Java Swing};
+    \node[cl] (c5) at (0,-0.8)   {App Angular};
+    \node[cl] (c6) at (2.5,-0.8) {Riga di comando};
+    \node[box, draw=primary!70!black, fit=(c1)(c6),
+          label={[tit, text=primary!70!black]above:Client}] (C) {};
+    % application server A, con il suo database
+    \node[app, fill=accent!75!black] (a) at (8.4,0.45) {Application};
+    \node[box, draw=accent!75!black, fit=(a), inner sep=6pt,
+          label={[tit, text=accent!75!black]above:Application Server A}] (A) {};
+    \node[wtdatabase] (da) at (12.0,0.45) {Database};
+    \draw[doppia, draw=accent!75!black] (A.east) -- (da.west);
+    % application server B, con il suo database
+    \node[app, fill=orange-gradient-6] (b) at (8.4,-1.95) {Application};
+    \node[box, draw=orange-gradient-6, fit=(b), inner sep=6pt,
+          label={[tit, text=orange-gradient-6]below:Application Server B}] (B) {};
+    \node[wtdatabase, draw=orange-gradient-6, fill=orange-gradient-1!40!white]
+      (db) at (12.0,-1.95) {Database};
+    \draw[doppia, draw=orange-gradient-6] (B.east) -- (db.west);
+    % richieste e risposte
+    \draw[freccia, draw=primary!70!black] (C.east |- 0,0.7)
+      -- node[lab, above]{richiesta} (A.west |- 0,0.7);
+    \draw[freccia, dashed, draw=primary!70!black] (A.west |- 0,0.2)
+      -- node[lab, below]{risposta} (C.east |- 0,0.2);
+    \draw[freccia, draw=accent!75!black] ([xshift=-0.7cm]A.south)
+      -- node[lab, left]{richiesta} ([xshift=-0.7cm]B.north);
+    \draw[freccia, dashed, draw=accent!75!black] ([xshift=0.7cm]B.north)
+      -- node[lab, right]{risposta} ([xshift=0.7cm]A.south);
+  \end{tikzpicture}
+  \caption{Il contesto architetturale. Client di ogni tipo inviano richieste
+           all'application server A; per rispondere, A può a sua volta
+           diventare client dell'application server B. Ciascun server ha il
+           proprio database.}
+  \label{fig:contesto-api}
+\end{figure}
 
 \dfn{API}{
   Le \term{API} (\textit{Application Programming Interface}) sono il modo in cui
@@ -97,7 +152,8 @@ integrare $n$ API dovremmo imparare $n$ protocolli diversi. Sono esistite
 architetture dedicate (CORBA, Java RMI, SOAP), che in sostanza reinventavano
 un'alternativa al Web.
 
-La risposta moderna è più semplice: \textbf{usare i protocolli del Web}.
+La risposta moderna è più semplice: \textbf{usare i protocolli del Web}, cioè
+HTTP.
 
 \section{REST}
 
@@ -106,7 +162,7 @@ La risposta moderna è più semplice: \textbf{usare i protocolli del Web}.
   architetturale}, cioè un insieme di principi e linee guida che definiscono
   come gli standard web debbano essere usati nelle API. È basato su HTTP e sulle
   URI, e fornisce un'interfaccia comune e coerente basata sull'uso
-  \guillemotleft corretto\guillemotright\ di HTTP.}
+  «corretto» di HTTP.}
 
 È lo stile architetturale prevalente per le API web, con un tasso di adozione
 del 93,4\%.
@@ -116,8 +172,9 @@ del 93,4\%.
 \begin{itemize}
   \item Una API REST permette di interagire con \term{risorse} tramite HTTP.
   \item Tutte le risorse sono associate a una \textbf{URI univoca}.
-        \guillemotleft Una risorsa è qualunque cosa sia abbastanza importante da essere
-        referenziata come cosa a sé\guillemotright.
+        «Una risorsa è qualunque cosa sia abbastanza importante da essere
+        referenziata come cosa a sé» (Richardson e Ruby, \textit{RESTful Web
+        Services}, O'Reilly, 2008).
   \item Le risorse corrispondono tipicamente (ma non necessariamente) a oggetti
         di dominio persistenti.
   \item I \textbf{verbi HTTP} vanno usati per recuperare o manipolare le
@@ -144,12 +201,12 @@ Il nome per esteso descrive con precisione il meccanismo:
         XML, \ldots).
 \end{itemize}
 
-\begin{affianco}[0.5][c]
-\begin{lstlisting}[style=http, name=Scambio REST]
-GET /todos HTTP/1.1
-
-[{"todo": "A"}, {"todo": "B"}, ...]
-\end{lstlisting}
+\begin{affianco}[0.42][c]
+Il client chiede \code{/todos}, la lista degli elementi; il server risponde
+con una \textbf{rappresentazione} in JSON dello stato delle sue risorse. La risorsa non
+viaggia: viaggia una sua «fotografia», in un formato concordato. Che cosa
+farne (mostrarla, filtrarla, tenerla in memoria fino alla richiesta successiva)
+fa parte dello stato dell'applicazione, e resta sul client.
 \risultato
 \begin{immagine}[Il client tiene lo stato dell'applicazione,\\
                  il server quello delle risorse.]
@@ -161,13 +218,13 @@ GET /todos HTTP/1.1
     res/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=green-gradient-6},
     msg/.style={mcod, above, inner sep=1.5pt}]
   \node[att] (c) at (0,0) {client};
-  \node[att] (s) at (4.4,0) {server};
+  \node[att] (s) at (5.2,0) {server};
   \node[mnota, anchor=north] at ([yshift=-1.75cm]c.south) {stato dell'applicazione};
   \node[mnota, anchor=north] at ([yshift=-1.75cm]s.south) {stato delle risorse};
   \draw[vita] (c.south) -- (0,-1.8);
-  \draw[vita] (s.south) -- (4.4,-1.8);
-  \draw[req] (0,-0.75) -- node[msg]{GET /todos} (4.4,-0.75);
-  \draw[res] (4.4,-1.4) -- node[msg]{rappresentazione JSON} (0,-1.4);
+  \draw[vita] (s.south) -- (5.2,-1.8);
+  \draw[req] (0,-0.75) -- node[msg]{GET /todos HTTP/1.1} (5.2,-0.75);
+  \draw[res] (5.2,-1.4) -- node[msg]{[\{"todo": "A"\}, \{"todo": "B"\}, \ldots]} (0,-1.4);
 \end{tikzpicture}
 \end{immagine}
 \end{affianco}
@@ -219,16 +276,275 @@ si trasforma in un oggetto con una sola chiamata.
 \end{center}
 
 Qui si vede perché nel primo capitolo insistevamo sulla semantica dei verbi:
-in REST è precisamente ciò che rende l'API prevedibile.
+in REST è precisamente ciò che rende l'API prevedibile. (Nella tabella delle
+slide, la riga del \code{POST} parla dei dati «dell'esame» da salvare: è un
+residuo di un altro esempio, e si intendono i dati del nuovo elemento.)
 
 \subsection{Risorse annidate}
 
 Talvolta esiste una \textbf{gerarchia} fra le risorse: un'azienda ha zero o più
 reparti, che hanno zero o più dipendenti. Progettando un'API è possibile
-definire risorse annidate, per esempio \code{GET /seller/\{id\}/reviews} per
-elencare tutte le recensioni di un dato venditore.
+definire \term{risorse annidate}, che riflettono la gerarchia nel percorso:
+\code{GET /sellers/\{id\}/reviews} elenca tutte le recensioni di un dato
+venditore, \code{GET /companies/42/departments/7/employees} i dipendenti del
+reparto 7 dell'azienda 42.
 
 Va però tenuto presente che ogni risorsa dovrebbe avere \textbf{una sola} URI.
+Se la stessa recensione fosse raggiungibile sia come \code{/sellers/3/reviews/8}
+sia come \code{/reviews/8}, per i client e per le cache sarebbero due risorse
+diverse: due copie in cache che invecchiano ciascuna per conto suo, e una
+modifica inviata a uno dei due indirizzi non invaliderebbe la copia dell'altro.
+
+\section{Quattro archetipi di risorse}
+
+Nel progettare le URI di una API conviene chiedersi, per ogni risorsa, di che
+\textbf{tipo} sia. Si considerano quattro \term{archetipi} di base:
+\textit{document}, \textit{collection}, \textit{store} e \textit{controller}.
+Archetipi e regole di nomenclatura vengono dal libro di Mark Massé citato
+nella sezione sulle regole.
+
+\subsection{Document}
+
+Un \term{document} è un concetto \textbf{singolare}: corrisponde all'istanza di
+un oggetto o a un record di un database. Ciascuna di queste URI identifica un
+document:
+
+\begin{itemize}
+  \item \code{/leagues/serie-a}
+  \item \code{/leagues/serie-a/teams/napoli}
+  \item \code{/leagues/serie-a/teams/napoli/players/mc-tominay}
+\end{itemize}
+
+\mok\ \textbf{Regola}: i nomi dei document (se non sono identificatori numerici)
+vanno al \textbf{singolare}.
+
+L'ultimo segmento nomina \textit{una} cosa: \textit{una} lega, \textit{una}
+squadra, \textit{un} giocatore. Anche \code{/todos/1} è un document, con un
+identificatore numerico al posto del nome.
+
+\subsection{Collection}
+
+Le \term{collection} sono directory di risorse \textbf{gestite dall'applicazione
+web}. I client possono proporre di aggiungere una nuova risorsa a una
+collection, ma è la collection a decidere se accettarla. Ciascuna di queste URI
+identifica una collection:
+
+\begin{itemize}
+  \item \code{/leagues}
+  \item \code{/leagues/serie-a/teams}
+  \item \code{/leagues/serie-a/teams/napoli/players}
+\end{itemize}
+
+\mok\ \textbf{Regola}: i nomi delle collection vanno al \textbf{plurale}.
+
+La nostra \code{/todos} è una collection: con \code{POST /todos} il client
+propone un nuovo elemento, ed è il server a sceglierne l'identificatore e a
+comunicarlo nella risposta (lo vedremo con Express: \code{201 Created}, con
+l'header \code{Location: /todos/1}).
+
+\subsection{Store}
+
+Gli \term{store} sono directory di risorse \textbf{gestite dal client}: il
+client può creare, recuperare, aggiornare ed eliminare le risorse che
+contengono. Questa URI identifica uno store:
+
+\begin{itemize}
+  \item \code{/users/1234/favourites}
+\end{itemize}
+
+\mok\ \textbf{Regola}: i nomi degli store vanno al \textbf{plurale}.
+
+La differenza con una collection sta in chi sceglie l'URI delle nuove risorse.
+In uno store è il \textbf{client}: per mettere il Napoli fra i preferiti
+dell'utente 1234 invia \code{PUT /users/1234/favourites/napoli}, e la risorsa
+nasce esattamente a quell'indirizzo. Uno store non inventa URI nuove; una
+collection sì.
+
+\subsection{Controller}
+
+Le risorse \term{controller} modellano un concetto \textbf{procedurale}. Si
+possono pensare come \textbf{funzioni eseguibili}: si invocano con certi
+parametri e restituiscono un risultato, oppure producono un effetto collaterale.
+Ciascuna di queste URI identifica un controller:
+
+\begin{itemize}
+  \item \code{/alerts/1234/resend}
+  \item \code{/login}
+  \item \code{/reset-app}
+\end{itemize}
+
+\mok\ \textbf{Regola}: i nomi dei controller sono tipicamente \textbf{verbi} o
+locuzioni verbali.
+
+Servono per le azioni che non si riducono a leggere, creare, sostituire o
+eliminare una risorsa, come rispedire un avviso o azzerare l'applicazione, e si
+invocano con \code{POST}. Nella nostra API saranno controller \code{/auth}
+(autenticare) e \code{/signup} (registrarsi).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      seg/.style={rounded corners=2pt, line width=0.7pt, font=\FiraCodeNL\footnotesize,
+        inner xsep=3pt, minimum height=0.6cm, anchor=west},
+      col/.style={seg, draw=primary!65!black, fill=primary!10!white},
+      doc/.style={seg, draw=green-gradient-6, fill=green-gradient-1!45!white},
+      sto/.style={seg, draw=orange-gradient-6, fill=orange-gradient-1!45!white},
+      ctr/.style={seg, draw=red-gradient-6, fill=red-gradient-1!40!white},
+      tipo/.style={font=\Lato\scriptsize, anchor=north, inner sep=2pt}]
+    % /leagues/serie-a/teams/napoli/players/mc-tominay
+    \node[col] (a1) at (0,0) {/leagues};
+    \node[doc] (a2) at ([xshift=1.5pt]a1.east) {/serie-a};
+    \node[col] (a3) at ([xshift=1.5pt]a2.east) {/teams};
+    \node[doc] (a4) at ([xshift=1.5pt]a3.east) {/napoli};
+    \node[col] (a5) at ([xshift=1.5pt]a4.east) {/players};
+    \node[doc] (a6) at ([xshift=1.5pt]a5.east) {/mc-tominay};
+    % /users/1234/favourites
+    \node[col] (b1) at (0,-1.35) {/users};
+    \node[doc] (b2) at ([xshift=1.5pt]b1.east) {/1234};
+    \node[sto] (b3) at ([xshift=1.5pt]b2.east) {/favourites};
+    % /alerts/1234/resend
+    \node[col] (c1) at (6.4,-1.35) {/alerts};
+    \node[doc] (c2) at ([xshift=1.5pt]c1.east) {/1234};
+    \node[ctr] (c3) at ([xshift=1.5pt]c2.east) {/resend};
+    % gli archetipi
+    \foreach \n in {a1,a3,a5,b1,c1}
+      \node[tipo, text=primary!65!black] at (\n.south) {collection};
+    \foreach \n in {a2,a4,a6,b2,c2}
+      \node[tipo, text=green-gradient-6!80!black] at (\n.south) {document};
+    \node[tipo, text=orange-gradient-6!85!black] at (b3.south) {store};
+    \node[tipo, text=red-gradient-6!85!black] at (c3.south) {controller};
+  \end{tikzpicture}
+  \caption{Gli archetipi lungo un percorso: collection e document si alternano
+           (plurale, singolare, plurale\ldots), e un percorso può terminare
+           con uno store o con un controller.}
+  \label{fig:archetipi}
+\end{figure}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{5.6cm}%
+                >{\raggedright\arraybackslash}p{4.2cm}l%
+                >{\raggedright\arraybackslash\leavevmode}p{3.6cm}@{}}
+  \textbf{Archetipo} & \textbf{Che cosa modella} & \textbf{Chi sceglie l'URI
+    dei nuovi elementi} & \textbf{Nome} & \textbf{Metodi tipici} \\ \hline
+  document   & un singolo oggetto (un record)    & ---       & singolare &
+    \code{GET}, \code{PUT}, \code{DELETE} \\
+  collection & una directory gestita dal server  & il server & plurale   &
+    \code{GET}, \code{POST} \\
+  store      & una directory gestita dal client  & il client & plurale   &
+    \code{GET}, \code{PUT}, \code{DELETE} \\
+  controller & una procedura                     & ---       & verbo     &
+    \code{POST} \\
+\end{tabular}
+\end{center}
+
+I metodi tipici sono quelli che il libro di Massé associa a ciascun archetipo:
+\code{POST} su una collection per aggiungervi un elemento, \code{PUT} su uno
+store per inserire (o sostituire) una risorsa all'URI scelto dal client,
+\code{POST} per eseguire un controller.
+
+\section{Progettare le URI: filtri, paginazione, ricerche}
+
+\subsection{Filtrare}
+
+Spesso, quando si recuperano risorse, si vuole applicare un \textbf{filtro}.
+
+\mok\ \textbf{Regola}: la componente \textit{query} delle URI va usata per
+filtrare collection e store.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l@{\hspace{0.8cm}}>{\raggedright\arraybackslash}p{8.8cm}@{}}
+  \code{GET /users}                       & recupera tutti gli utenti \\
+  \code{GET /users?role=admin}            & recupera gli utenti con il ruolo
+                                            indicato \\
+  \code{GET /users?age.gt=18\&age.lte=40} & recupera gli utenti con più di 18
+                                            anni e al massimo 40 \\
+\end{tabular}
+\end{center}
+
+Il percorso resta quello della collection: il filtro non identifica una risorsa
+nuova, ne restringe la rappresentazione. Nell'ultima riga \code{gt} e
+\code{lte} stanno per \textit{greater than} (maggiore di) e \textit{less than or
+equal} (minore o uguale): è una \textbf{convenzione} dell'API, non uno
+standard, e il server deve saperla interpretare. Express si limita a consegnare
+i parametri in \code{req.query}; conviene vedere in che forma:
+
+\begin{affianco}[0.45][c]
+\begin{lstlisting}[style=js, name=query.js]
+import express from "express";
+
+const app = express();
+
+app.get("/users", (req, res) => {
+  res.json(req.query);     // come li vede Express
+});
+
+app.listen(3000);
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ curl 'localhost:3000/users'
+{}
+$ curl 'localhost:3000/users?role=admin'
+{"role":"admin"}
+$ curl 'localhost:3000/users?age.gt=18&age.lte=40'
+{"age.gt":"18","age.lte":"40"}
+\end{console}
+\end{affianco}
+
+I nomi arrivano così come sono scritti, punto compreso, e i valori sono sempre
+\textbf{stringhe}: \code{"18"}, non \code{18}. Tradurre \code{age.gt} in una
+condizione (con \code{Op.gt} di Sequelize, capitolo 16) e convertire i numeri è
+compito del codice dell'API. Lo faremo nella nostra lista per il filtro
+\code{done}. (Le virgolette attorno all'URL servono alla shell, per cui
+\code{\&} avrebbe un altro significato.)
+
+\subsection{Paginare}
+
+Spesso si vuole anche \textbf{paginare} i risultati, cioè restituirli a blocchi
+invece di inviarli tutti insieme.
+
+\mok\ \textbf{Regola}: la componente \textit{query} delle URI va usata per
+paginare i risultati di collection e store.
+
+\begin{center}
+\code{GET /todos?size=10\&page=2}\qquad recupera i risultati dall'11º al 20º
+(cioè la pagina 2)
+\end{center}
+
+Con pagine da \code{size} elementi, la pagina \code{page} comincia dopo
+$(\mathit{page}-1)\cdot\mathit{size}$ elementi: la pagina 2 salta i primi 10.
+Senza paginazione, una collection con centomila elementi verrebbe trasferita
+per intero a ogni richiesta.
+
+\subsection{Ricerche complesse}
+
+Quando i requisiti di filtro o di paginazione superano ciò che si riesce a
+esprimere comodamente nella query string, si può introdurre una
+\textbf{risorsa controller} dedicata nella collection o nello store:
+
+\begin{center}
+\code{POST /users/search}
+\end{center}
+
+Così il client può passare i criteri come un \textbf{oggetto} nel corpo della
+richiesta, con tutta la struttura che serve. Per esempio, in un formato
+inventato per l'occasione (ogni API definisce il proprio):
+
+\begin{lstlisting}[style=json, name=corpo di POST /users/search]
+{
+  "anyOf": [ { "role": "admin" }, { "age": { "gt": 18, "lte": 40 } } ],
+  "sort":  [ "-age", "name" ],
+  "page":  { "size": 10, "number": 2 }
+}
+\end{lstlisting}
+
+Alternative, annidamenti e liste sono naturali in JSON e scomodi in una query
+string. Il prezzo è che una \code{POST} non è né sicura né idempotente, e non
+si mette in cache: è esattamente il vuoto che vuole colmare il metodo
+\code{QUERY} visto nel capitolo 9, una ricerca con il corpo ma con la
+semantica di sola lettura di una \code{GET}.
 
 \section{Implementare una API REST}
 
@@ -241,12 +557,12 @@ facevamo con la web app tradizionale, con tre differenze:
         browser, si usa una rappresentazione \textbf{adatta alle macchine},
         tipicamente JSON;
   \item invece di ricevere input dall'invio di form, li si riceve in una
-        rappresentazione adatta alle macchine;
+        rappresentazione adatta alle macchine (ancora JSON);
   \item non ci si deve appoggiare alle \textbf{sessioni}: servono altri schemi
         di autenticazione.
 \end{itemize}
 
-\section{Autenticazione con token}
+\section{Proteggere una API REST}
 
 Le API REST permettono agli utenti di manipolare risorse, e nella maggior parte
 dei casi non vogliamo che chiunque possa farlo.
@@ -258,6 +574,8 @@ dei casi non vogliamo che chiunque possa farlo.
         certe risorse (un dipendente non dovrebbe poter modificare il proprio
         stipendio).
 \end{itemize}
+
+\subsection{Autenticazione con token}
 
 Uno schema molto diffuso è basato sui \term{token}:
 
@@ -273,36 +591,69 @@ Uno schema molto diffuso è basato sui \term{token}:
 
 \begin{figure}[H]
   \centering
-  \begin{tikzpicture}[font=\Lato\small,
-      hdr/.style={wtnode, minimum width=2.8cm, minimum height=0.9cm},
+  \begin{tikzpicture}[
+      hdr/.style={wtnode, minimum width=2.6cm, minimum height=0.7cm},
       life/.style={draw=neutral!45!white, line width=0.7pt, dashed},
-      msg/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
-                  draw=primary!70!black},
-      rsp/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
-                  draw=accent!70!black},
-      bad/.style={-{Stealth[length=6pt,width=5pt]}, line width=0.9pt,
-                  draw=red-gradient-6},
-      ml/.style={font=\FiraCodeNL\scriptsize, midway, above, inner sep=2.5pt,
-                 fill=white, text=neutral!15!black}]
-
-    \def\xb{0} \def\xs{9.0}
-    \node[hdr] (B) at (\xb,0) {\textbf{Client}};
-    \node[hdr] (S) at (\xs,0) {\textbf{API}};
-    \draw[life] (B.south) -- (\xb,-4.4);
-    \draw[life] (S.south) -- (\xs,-4.4);
-
-    \draw[bad] (\xb,-0.8) -- (\xs,-0.8) node[ml]{GET /todos (nessun token)};
-    \draw[bad] (\xs,-1.5) -- (\xb,-1.5) node[ml]{401 Unauthorized};
-
-    \draw[msg] (\xb,-2.3) -- (\xs,-2.3) node[ml]{POST /auth \{usr, pwd\}};
-    \draw[rsp] (\xs,-3.0) -- (\xb,-3.0) node[ml]{200 OK + token};
-
-    \draw[msg] (\xb,-3.7) -- (\xs,-3.7) node[ml]{GET /todos Authorization: Bearer ...};
-    \draw[rsp] (\xs,-4.3) -- (\xb,-4.3) node[ml]{200 OK + dati};
+      att/.style={draw=primary!60!black, fill=primary!25!white, line width=0.6pt},
+      msg/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+        draw=primary!70!black},
+      rsp/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt,
+        draw=accent!70!black, dashed},
+      ml/.style={font=\FiraCodeNL\scriptsize, above, inner sep=2pt,
+        text=neutral!15!black},
+      sl/.style={font=\FiraCodeNL\scriptsize, right, inner sep=3pt,
+        text=neutral!15!black},
+      nota/.style={draw=yellow-gradient-6, fill=yellow-gradient-1!60!white,
+        line width=0.6pt, font=\Lato\scriptsize, text width=3.0cm, align=center,
+        inner sep=4pt},
+      lega/.style={dashed, draw=neutral!50!black, line width=0.5pt}]
+    \def\xc{0} \def\xa{8.8}
+    \node[hdr] (C) at (\xc,0) {\textbf{Client}};
+    \node[hdr] (A) at (\xa,0) {\textbf{API REST}};
+    \draw[life] (C.south) -- (\xc,-7.0);
+    \draw[life] (A.south) -- (\xa,-7.0);
+    % le barre di attivazione
+    \foreach \ya/\yb in {-0.9/-2.05, -2.9/-4.05, -4.9/-6.55}
+      \filldraw[att] (\xa-0.1,\ya) rectangle (\xa+0.1,\yb);
+    % 1: nessun token
+    \draw[msg] (\xc,-0.9) -- node[ml]{GET /todos} (\xa-0.1,-0.9);
+    \draw[msg] (\xa+0.1,-1.15) -- ++(0.7,0) |- node[sl, pos=0.25]{verifyToken("")}
+      (\xa+0.1,-1.5);
+    \draw[rsp] (\xa-0.1,-1.95) -- node[ml]{401 Unauthorized} (\xc,-1.95);
+    \node[nota] (n1) at (-3.6,-0.9) {richiesta senza token\\ nell'header
+      \code{Authorization}};
+    \draw[lega] (n1.east) -- (\xc,-0.9);
+    % 2: login
+    \draw[msg] (\xc,-2.9) -- node[ml]{POST /auth \{"usr": "eric", "pwd": "kewl"\}}
+      (\xa-0.1,-2.9);
+    \draw[msg] (\xa+0.1,-3.15) -- ++(0.7,0) |- node[sl, pos=0.25]{generateToken()}
+      (\xa+0.1,-3.5);
+    \draw[rsp] (\xa-0.1,-3.95) -- node[ml]{200 OK "xKy\ldots4h1"} (\xc,-3.95);
+    \node[nota] (n2) at (-3.6,-2.9) {richiesta di autenticazione};
+    \draw[lega] (n2.east) -- (\xc,-2.9);
+    % 3: con il token
+    \draw[msg] (\xc,-4.9) -- node[ml]{GET /todos}
+      node[ml, below, font=\FiraCodeNL\tiny]{Authorization: Bearer xKy\ldots4h1}
+      (\xa-0.1,-4.9);
+    \draw[msg] (\xa+0.1,-5.4) -- ++(0.7,0) |- node[sl, pos=0.25]{verifyToken("xKy\ldots4h1")}
+      (\xa+0.1,-5.75);
+    \draw[rsp] (\xa-0.1,-6.45) -- node[ml]{200 OK [\{"todo": "Learn REST"\}]} (\xc,-6.45);
+    \node[nota] (n3) at (-3.6,-4.9) {richiesta con un token valido};
+    \draw[lega] (n3.east) -- (\xc,-4.9);
   \end{tikzpicture}
-  \caption{Lo schema di autenticazione basato su token.}
+  \caption{Lo schema di autenticazione basato su token: senza token la
+           risposta è \code{401}; il login restituisce un token, che da quel
+           momento accompagna ogni richiesta.}
   \label{fig:token-auth}
 \end{figure}
+
+Lo schema è quello delle slide, con i nomi dei campi del codice del corso
+(\code{usr} e \code{pwd}, letti da \code{req.body.usr} e \code{req.body.pwd}).
+Nel diagramma delle slide la richiesta di login contiene \code{"user"} e
+\code{"pws"}, e la risposta un oggetto \code{\{"token": \ldots\}}; il codice
+del corso, che vedremo eseguito, risponde invece con il token da solo, come
+stringa JSON. Il server non deve ricordare nulla fra una richiesta e l'altra:
+ogni richiesta porta con sé la prova di chi la invia, e l'API resta stateless.
 
 \subsection{JSON Web Token}
 
@@ -337,37 +688,58 @@ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
 \end{immagine}
 \end{affianco}
 
-\textbf{Header.} Contiene informazioni sul tipo di token e sulla funzione di
-hash usata per firmarlo, in formato JSON, codificate in Base64Url.
+\textbf{Header.} Contiene il \textbf{tipo di token} e l'algoritmo usato per
+\textbf{firmarlo}, in formato JSON, codificati in \term{Base64Url}.
 
-\begin{lstlisting}[style=json]
-{ "alg": "HS256", "typ": "JWT" }
-\end{lstlisting}
-
-\textbf{Payload.} È un oggetto JSON contenente le asserzioni. Alcune sono
-\textit{registrate} e raccomandate (per esempio \code{exp}, che indica la data
-di scadenza del token); altre sono liberamente personalizzabili. Anch'esso è
+\textbf{Payload.} È un oggetto JSON che contiene le asserzioni. Alcune sono
+\textit{registrate} e raccomandate dallo standard, per esempio \code{exp}, la
+data di scadenza del token (in secondi dal 1º gennaio 1970); le altre sono
+libere: nel payload si può scrivere qualunque asserzione. Anche il payload è
 codificato in Base64Url.
 
-\begin{lstlisting}[style=json]
-{ "name": "luigi", "role": "admin", "exp": 1670398432 }
+Base64Url è una \textbf{codifica}, non una cifratura: si inverte banalmente, e
+per leggere header e payload non serve alcuna chiave. Lo mostra un piccolo
+programma che decodifica il token delle slide:
+
+\begin{lstlisting}[style=js, name=decodifica.js]
+// legge header e payload di un JWT: non serve alcuna chiave
+const token = process.argv[2];
+const [header, payload, firma] = token.split(".");
+const testo = (parte) => Buffer.from(parte, "base64url").toString();
+
+console.log(testo(header));
+console.log(testo(payload));
+console.log("firma:", firma);
+
+const { exp } = JSON.parse(testo(payload));
+console.log("scadenza:", new Date(exp * 1000).toISOString());
 \end{lstlisting}
 
+\begin{console}[Terminale]
+$ node decodifica.js eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoibHVpZ2kiLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE2NzAzOTg0MzJ9.fopBYrax8wcB7rnPjCcOMc62IT2lJdvyOdyixMWMZAQ
+{"alg":"HS256","typ":"JWT"}
+{"name":"luigi","role":"admin","exp":1670398432}
+firma: fopBYrax8wcB7rnPjCcOMc62IT2lJdvyOdyixMWMZAQ
+scadenza: 2022-12-07T07:33:52.000Z
+\end{console}
+
+Il token delle slide è scaduto il 7 dicembre 2022 alle 7:33:52 UTC (le 8:33 in
+Italia): \code{toISOString} mostra l'ora UTC, indicata dalla \code{Z} finale.
+
 \error{Base64Url è una codifica, non una cifratura}{
-  Header e payload di un JWT si decodificano banalmente: chiunque intercetti il
-  token può \textbf{leggerne il contenuto}. Nel payload non vanno quindi mai
-  messi dati riservati. Ciò che la firma garantisce è l'\textbf{integrità} (il
-  token non è stato alterato), non la riservatezza.}
+  Header e payload di un JWT si decodificano banalmente, come appena visto:
+  chiunque intercetti il token può \textbf{leggerne il contenuto}. Nel payload
+  non vanno quindi mai messi dati riservati. Ciò che la firma garantisce è
+  l'\textbf{integrità} (il token non è stato alterato), non la riservatezza.}
 
 \textbf{Signature.} Per garantire che i token non siano manomessi o falsificati
-si include una firma, ottenuta applicando una funzione di hash crittografica
-alla concatenazione di:
-
-\begin{itemize}
-  \item l'header del token;
-  \item il payload del token;
-  \item una \textbf{chiave segreta} nota solo al server che emette il token.
-\end{itemize}
+si include una \textbf{firma}. Le slide la descrivono come una funzione di hash
+crittografica applicata alla concatenazione dell'header, del payload e di una
+\textbf{chiave segreta} nota solo al server che emette il token, e avvertono
+che in realtà la cosa è un po' più complessa. Con l'algoritmo \code{HS256}
+indicato nell'header, la firma è un \term{HMAC} con SHA-256: un hash di
+\code{header.payload} (le due parti codificate, unite dal punto) calcolato
+\textbf{con} la chiave segreta.
 
 \begin{affianco}[0.62][c]
 \codicepiccolo
@@ -395,6 +767,112 @@ HMACSHA256(
 \end{immagine}
 \end{affianco}
 
+Lo si può verificare con il pacchetto \code{jsonwebtoken} (versione 9.0.3),
+quello usato dal codice del corso, ricalcolando la firma a mano con il modulo
+\code{crypto} di Node. La chiave sta nel file \code{.env}, nella variabile
+\code{TOKEN\_SECRET}, come nel codice del corso:
+
+\begin{lstlisting}[style=js, name=token.js]
+import "dotenv/config";
+import jwt from "jsonwebtoken";
+import { createHmac } from "node:crypto";
+
+const segreto = process.env.TOKEN_SECRET;
+const token = jwt.sign({ user: "janet" }, segreto, { expiresIn: `${24 * 60 * 60}s` });
+console.log(token);
+console.log(jwt.verify(token, segreto));
+
+// la firma è l'HMAC-SHA256 di "header.payload", calcolato con la chiave segreta
+const [header, payload, firma] = token.split(".");
+const hmac = createHmac("sha256", segreto).update(`${header}.${payload}`);
+console.log(hmac.digest("base64url") === firma);
+\end{lstlisting}
+
+\begin{console}[Terminale]
+$ node token.js
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiamFuZXQiLCJpYXQiOjE3OTM5NTgyNDcsImV4cCI6MTc5NDA0NDY0N30.SR6RvY4ykqtl590UeF0WkVRzp2cX3cYXajpAN1Bhrmg
+{ user: 'janet', iat: 1793958247, exp: 1794044647 }
+true
+\end{console}
+
+Tre osservazioni:
+
+\begin{itemize}
+  \item l'header è identico a quello del token delle slide
+        (\code{eyJhbGci}\ldots\code{IkpXVCJ9}), perché codifica lo stesso
+        JSON;
+  \item \code{jwt.sign} aggiunge da sé l'asserzione registrata \code{iat}
+        (\textit{issued at}, l'istante di emissione), e \code{exp} vale
+        \code{iat} più 86\,400 secondi, le 24 ore chieste con
+        \code{expiresIn};
+  \item la firma ricalcolata a mano coincide con la terza parte del token
+        (\code{true}).
+\end{itemize}
+
+Ora i tentativi di imbroglio. Lo script seguente modifica il payload lasciando
+la firma originale, firma un token con un'altra chiave e verifica un token
+valido «25 ore dopo» (l'opzione \code{clockTimestamp} finge che l'orologio sia
+avanti). La verifica usa una callback, come il codice del corso:
+
+\begin{lstlisting}[style=js, name=attacchi.js]
+import "dotenv/config";
+import jwt from "jsonwebtoken";
+
+const segreto = process.env.TOKEN_SECRET;
+const token = jwt.sign({ user: "janet" }, segreto, { expiresIn: "24h" });
+const [header, payload, firma] = token.split(".");
+
+const esito = (err, decoded) => console.log(err ? `${err.name}: ${err.message}` : decoded);
+
+// 1. payload alterato (janet diventa eric), firma originale
+const altro = JSON.parse(Buffer.from(payload, "base64url").toString());
+altro.user = "eric";
+const falso = Buffer.from(JSON.stringify(altro)).toString("base64url");
+jwt.verify(`${header}.${falso}.${firma}`, segreto, esito);
+
+// 2. token firmato con un'altra chiave
+jwt.verify(jwt.sign({ user: "eric" }, "indovinata?"), segreto, esito);
+
+// 3. token valido, verificato 25 ore dopo
+const fra25ore = Math.floor(Date.now() / 1000) + 25 * 60 * 60;
+jwt.verify(token, segreto, { clockTimestamp: fra25ore }, esito);
+
+// 4. token valido, verificato adesso
+jwt.verify(token, segreto, esito);
+\end{lstlisting}
+
+\begin{console}[Terminale]
+$ node attacchi.js
+JsonWebTokenError: invalid signature
+JsonWebTokenError: invalid signature
+TokenExpiredError: jwt expired
+{ user: 'janet', iat: 1793958247, exp: 1794044647 }
+\end{console}
+
+Cambiare \code{janet} in \code{eric} cambia il payload, e la firma non
+corrisponde più; chi non conosce la chiave non può ricalcolarla. Un token
+firmato con un'altra chiave fallisce allo stesso modo. Il token scaduto ha una
+firma valida, ma \code{exp} è passato. Solo l'ultimo supera la verifica, e
+\code{verify} restituisce il payload decodificato (\code{"24h"} è un altro modo
+di scrivere la durata di 24 ore).
+
+\info{HS256 e RS256}{
+  Con \code{HS256} la stessa chiave segreta serve per firmare e per verificare:
+  chi può verificare un token può anche emetterne. Va bene quando emette e
+  verifica lo stesso server, come nella nostra API. Con \code{RS256} si firma
+  con una chiave \textbf{privata} e si verifica con la corrispondente chiave
+  \textbf{pubblica}: altri servizi possono verificare i token senza poterne
+  creare. Per approfondire, le slide rimandano a
+  \urlx{https://auth0.com/blog/rs256-vs-hs256-whats-the-difference/}.}
+
+\info{E il logout?}{
+  Con le sessioni del capitolo 16 il logout distruggeva la sessione sul server.
+  Con i token non c'è nulla da distruggere: il client «esce» dimenticando il
+  token (la SPA del capitolo 22 lo toglie dal \code{localStorage}). Un token
+  rubato, però, resta valido fino alla scadenza, perché il server non ricorda
+  quali token ha emesso: è il prezzo della statelessness, e il motivo per cui i
+  token hanno una durata limitata.}
+
 \subsection{Funzioni di hash crittografiche}
 
 \dfn{Funzione di hash crittografica}{
@@ -412,87 +890,215 @@ Le funzioni di hash crittografiche sicure hanno due proprietà interessanti:
         risalire all'input che lo ha generato.
 \end{itemize}
 
-\begin{center}
-\renewcommand{\arraystretch}{1.4}
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.0cm}@{\hspace{0.8cm}}>{\raggedright\arraybackslash}p{9.8cm}@{}}
-  \textbf{Input} & \textbf{Digest SHA2-256} \\
-  \code{Web Technologies}
-    & {\FiraCodeNL\scriptsize 72bdf1226df1010dfb47cffaed85f5b35ae15ec9b482388691fa7a662a114113} \\
-  \code{Web Technologies!}
-    & {\FiraCodeNL\scriptsize 1a6791a2eab52c7c71d3e1225632d866b48a3abad91df15b2d44ab6004877993} \\
-\end{tabular}
-\end{center}
+Il comando \code{sha256sum} calcola il digest SHA-256 (detto anche SHA2-256)
+di ciò che riceve in ingresso:
 
-Un solo carattere di differenza produce un digest completamente diverso: è
-questa proprietà a rendere rilevabile qualunque manomissione.
+\begin{console}[Terminale]
+$ printf 'Web Technologies' | sha256sum
+72bdf1226df1010dfb47cffaed85f5b35ae15ec9b482388691fa7a662a114113  -
+$ printf 'Web Technologies!' | sha256sum
+1a6791a2eab52c7c71d3e1225632d866b48a3abad91df15b2d44ab6004877993  -
+$ echo 'Web Technologies' | sha256sum
+8fdc65cace071647aeb2e83a52fd63274d6cb28488a77f105e99c78adb0e2482  -
+\end{console}
+
+I primi due digest sono quelli delle slide: un solo carattere di differenza (il
+punto esclamativo) produce un digest completamente diverso, ed è questa
+proprietà a rendere rilevabile qualunque manomissione. Il terzo comando è una
+trappola istruttiva: \code{echo} aggiunge un a capo in fondo alla stringa, e
+anche quel carattere invisibile basta a cambiare tutto; per questo si usa
+\code{printf}. Il digest ha sempre 256 bit (64 cifre esadecimali), qualunque
+sia la lunghezza dell'input.
 
 \section{Una API REST con Express}
 
-Riscriviamo la nostra applicazione come API REST, riusando gran parte del codice
-Express.
+Implementiamo una API REST per la nostra lista di cose da fare, con Express,
+riusando gran parte del codice della web app del capitolo 16. Il codice del
+corso è disponibile nel materiale didattico, e le slide ne mostrano i punti
+salienti; qui li ricomponiamo in un'applicazione completa, eseguita davvero con
+Express 5.3.0, Sequelize 6.37.8, \code{jsonwebtoken} 9.0.3, \code{cors} 2.8.6 e
+\code{dotenv} 18.0.9.
+
+\begin{lstlisting}[style=shell]
+npm install express sequelize sqlite3 morgan cors jsonwebtoken dotenv
+\end{lstlisting}
+
+\begin{figure}[H]
+  \centering
+  {\renewcommand{\arraystretch}{1.2}%
+  \begin{tabular}{@{}>{\FiraCodeNL\scriptsize}l
+                  >{\raggedright\arraybackslash\leavevmode\FiraCodeNL\scriptsize\color{neutral!40!black}}p{5.3cm}
+                  >{\raggedright\arraybackslash\leavevmode\Lato\footnotesize}p{6.8cm}@{}}
+    \textcolor{primary!75!black}{\ifolder\ todo-rest-api/} & & \\
+    ├─ \textcolor{primary!75!black}{\ifolder\ routes/} &
+      authenticationRouter.js, todoRouter.js &
+      i \textbf{router}: \code{/auth} e \code{/signup}; \code{/todos} e
+      \code{/todos/:id} \\
+    ├─ \textcolor{primary!75!black}{\ifolder\ controllers/} &
+      AuthController.js, TodoController.js &
+      credenziali, token e permessi; le operazioni sugli elementi \\
+    ├─ \textcolor{primary!75!black}{\ifolder\ models/} &
+      Database.js &
+      \textbf{identico} a quello del capitolo 16 \\
+    ├─ \textcolor{primary!75!black}{\ifolder\ middleware/} &
+      authorization.js &
+      autenticazione (il token) e autorizzazione (i permessi) \\
+    ├─ \textcolor{neutral!50!black}{\ifolder\ node\_modules/} & &
+      i pacchetti installati da npm (non si versiona) \\
+    ├─ \ifile\ .env & & la chiave segreta dei token (non si versiona) \\
+    ├─ \ifile\ index.js & & il punto d'ingresso: configura e avvia l'API \\
+    ├─ \ifile\ package.json & & le dipendenze e gli script di npm \\
+    └─ \ifile\ database.db & & il database SQLite, creato al primo avvio \\
+  \end{tabular}}
+  \caption{La struttura dell'API REST: rispetto al capitolo 16 mancano
+           \code{views/} e \code{public/}.}
+  \label{fig:struttura-rest}
+\end{figure}
+
+Il modello \code{models/Database.js} è identico a quello del capitolo 16:
+utenti ed elementi, con la chiave esterna \code{UserUserName}, e l'utente di
+prova \code{janet} (password \code{rocky}). Spariscono le viste, i file
+statici, la sessione e i messaggi flash. Cambiano le rotte, che diventano
+quelle di una API:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash\leavevmode}p{5.6cm}%
+                >{\raggedright\arraybackslash\leavevmode}p{6.6cm}@{}}
+  \textbf{Operazione} & \textbf{Capitolo 16 (form HTML)} &
+    \textbf{Capitolo 17 (API REST)} \\ \hline
+  elenco                 & \code{GET /todo}, pagina HTML &
+    \code{GET /todos}, JSON \\
+  creazione              & \code{POST /todo}, poi \code{302} &
+    \code{POST /todos}, \code{201} con l'header \code{Location} \\
+  lettura di un elemento & --- & \code{GET /todos/:id} \\
+  modifica, «fatto»      & \code{POST /todo/:id}, \code{POST /todo/:id/toggle} &
+    \code{PUT /todos/:id}, con il testo e \code{done} \\
+  eliminazione           & \code{POST /todo/:id/delete} &
+    \code{DELETE /todos/:id}, \code{204} \\
+  login                  & \code{POST /auth}, crea la sessione &
+    \code{POST /auth}, restituisce il token \\
+  registrazione          & --- & \code{POST /signup} \\
+  logout                 & \code{POST /logout} &
+    --- (il client dimentica il token) \\
+\end{tabular}
+\end{center}
+
+I form HTML conoscono soltanto \code{GET} e \code{POST}: per questo nel
+capitolo 16 ogni azione era una \code{POST} verso un percorso con un verbo
+(\code{toggle}, \code{delete}). Un client che parla con una API (curl,
+\code{fetch}, l'\code{HttpClient} di Angular del capitolo 22) può usare tutti i
+verbi di HTTP, e le URI tornano a essere nomi di risorse: \code{/todos} è una
+collection, al plurale, e \code{/todos/:id} un document.
 
 \subsection{Configurazione}
 
-\begin{affianco}[0.55][c]
+La chiave segreta con cui firmare i token va nel file \code{.env}, che non si
+versiona (capitolo 16). Deve essere lunga e casuale; un modo comodo per
+generarla è il modulo \code{crypto} di Node:
+
+\begin{console}[Terminale]
+$ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+92f73dff9ac7c038bba2200e70d3b84c9d3695de18770e02ac7d5741df795bdd
+\end{console}
+
+\begin{lstlisting}[style=plain, name=.env]
+TOKEN_SECRET = "92f73dff9ac7c038bba2200e70d3b84c9d3695de18770e02ac7d5741df795bdd"
+\end{lstlisting}
+
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=index.js]
+import "dotenv/config";
+import express from "express";
+import morgan from "morgan";
+import cors from "cors";
+import { authenticationRouter } from "./routes/authenticationRouter.js";
+import { todoRouter } from "./routes/todoRouter.js";
+import { enforceAuthentication } from "./middleware/authorization.js";
+
 const app = express();
 const PORT = 3000;
 
-app.use(morgan('dev'));    // log delle richieste
-app.use(cors());           // accessibile da ogni origine
-app.use(express.json());   // analizza i corpi JSON
+// registra il middleware di log morgan, nel formato 'dev'
+app.use(morgan('dev'));
+
+app.use(cors());   // API accessibile da ogni origine (capitolo 23)
+
+// analizza le richieste con un corpo in formato JSON
+app.use(express.json());
+
+// /auth e /signup sono libere, tutte le altre rotte richiedono il token
+app.use(authenticationRouter);
+app.use(enforceAuthentication);
+app.use(todoRouter);
 \end{lstlisting}
 \risultato
-\begin{immagine}[Niente sessioni né template: l'API parla JSON.]
+\begin{immagine}[L'ordine di dichiarazione è l'ordine\\ di esecuzione.]
 \begin{tikzpicture}[
     m/.style={rounded corners=2pt, draw=primary!55!black, fill=primary!8!white,
-      line width=0.6pt, font=\FiraCodeNL\scriptsize, minimum width=2.6cm,
+      line width=0.6pt, font=\FiraCodeNL\scriptsize, minimum width=3.4cm,
       minimum height=0.42cm},
+    r/.style={m, fill=accent!12!white, draw=accent!55!black},
+    g/.style={m, fill=orange-gradient-1!40!white, draw=orange-gradient-6},
     a/.style={-{Stealth[length=3.5pt,width=3pt]}, line width=0.6pt, draw=neutral!45!black}]
-  \foreach \t [count=\i] in {morgan, cors, express.json} \node[m] (m\i) at (0,-\i*0.62) {\t};
-  \node[m, fill=accent!12!white, draw=accent!55!black] (r) at (0,-2.5) {router};
-  \draw[a] (m1) -- (m2); \draw[a] (m2) -- (m3); \draw[a] (m3) -- (r);
+  \node[m] (m1) at (0,0)     {morgan (log)};
+  \node[m] (m2) at (0,-0.62) {cors};
+  \node[m] (m3) at (0,-1.24) {express.json};
+  \node[r] (m4) at (0,-1.86) {authenticationRouter};
+  \node[g] (m5) at (0,-2.48) {enforceAuthentication};
+  \node[r] (m6) at (0,-3.10) {todoRouter};
+  \foreach \i/\j in {1/2,2/3,3/4,4/5,5/6} \draw[a] (m\i) -- (m\j);
+  \node[mnota, anchor=west] at ([xshift=3pt]m4.east) {/auth, /signup};
+  \node[mnota, anchor=west] at ([xshift=3pt]m5.east) {serve il token};
+  \node[mnota, anchor=west] at ([xshift=3pt]m6.east) {/todos\ldots};
 \end{tikzpicture}
 \end{immagine}
 \end{affianco}
 
-Si noti che sparisce \code{express.urlencoded} (non ci sono più form) e compare
-\code{express.json}. Su \code{cors()} torneremo nel capitolo sulla sicurezza.
+La prima riga carica il file \code{.env} in \code{process.env}. Rispetto al
+capitolo 16 sparisce \code{express.urlencoded} (non ci sono più form) e compare
+\code{express.json}, che analizza i corpi JSON (capitolo 15). \code{cors()}
+rende l'API utilizzabile anche da pagine servite da altre origini, come la SPA
+Angular del capitolo 22: ne parleremo nel capitolo 23.
+
+L'ordine dei router decide che cosa è protetto: \code{authenticationRouter}
+viene prima di \code{enforceAuthentication}, quindi \code{/auth} e
+\code{/signup} si raggiungono senza token (altrimenti nessuno potrebbe
+ottenerne uno); tutto ciò che segue lo richiede.
 
 \subsection{Gestione degli errori}
 
-\begin{affianco}[0.55][c]
-\begin{lstlisting}[style=js, name=index.js]
+\begin{lstlisting}[style=js, name=index.js, firstnumber=25]
+// gestore degli errori
 app.use((err, req, res, next) => {
   console.log(err.stack);
   res.status(err.status || 500).json({
     code: err.status || 500,
-    description: err.message || "Si e' verificato un errore"
+    description: err.message || "Si è verificato un errore"
   });
 });
-\end{lstlisting}
-\risultato
-\begin{lstlisting}[style=http, name=Risposta d'errore]
-HTTP/1.1 404 Not Found
-Content-Type: application/json
 
-{"code": 404,
- "description": "Todo non trovato"}
+app.listen(PORT);
 \end{lstlisting}
-\end{affianco}
 
-La differenza rispetto alla web app tradizionale è tutta nell'ultima riga:
-\code{res.json()} al posto di \code{res.render()}. Anche gli errori devono
-essere leggibili da un programma.
+La differenza rispetto alla web app tradizionale è tutta in \code{res.json()}
+al posto di \code{res.render()}: anche gli errori devono essere leggibili da un
+programma. Ogni errore diventa una risposta con lo stato giusto e un corpo JSON
+con due campi, \code{code} e \code{description}. Le rotte e i middleware
+segnalano gli errori chiamando \code{next} con un oggetto
+\code{\{ status, message \}}.
 
 \subsection{Autenticazione}
 
-\begin{affianco}[0.6][c]
-\codicepiccolo
 \begin{lstlisting}[style=js, name=routes/authenticationRouter.js]
+import express from "express";
+import { AuthController } from "../controllers/AuthController.js";
+
+export const authenticationRouter = express.Router();
+
 authenticationRouter.post("/auth", async (req, res) => {
   let isAuthenticated = await AuthController.checkCredentials(req, res);
-
   if (isAuthenticated) {
     res.json(AuthController.issueToken(req.body.usr));
   } else {
@@ -509,73 +1115,87 @@ authenticationRouter.post("/signup", (req, res, next) => {
   })
 });
 \end{lstlisting}
-\risultato
-\begin{immagine}[Il token ottenuto al login accompagna\\ ogni richiesta successiva.]
-\begin{tikzpicture}[    att/.style={rounded corners=3pt, draw=primary!65!black, fill=primary!12!white,
-      line width=0.7pt, font=\Lato\scriptsize\bfseries, minimum width=1.8cm,
-      minimum height=0.5cm, align=center},
-    vita/.style={dashed, draw=neutral!55!white, line width=0.7pt},
-    req/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=primary!70!black},
-    res/.style={-{Stealth[length=5pt,width=4pt]}, line width=0.8pt, draw=green-gradient-6},
-    msg/.style={mcod, above, inner sep=1.5pt}]
-  \node[att] (c) at (0,0) {client};
-  \node[att] (s) at (4.0,0) {API};
-  \draw[vita] (c.south) -- (0,-3.0);
-  \draw[vita] (s.south) -- (4.0,-3.0);
-  \draw[req] (0,-0.75) -- node[msg]{POST /auth \{usr, pwd\}} (4.0,-0.75);
-  \draw[res] (4.0,-1.4) -- node[msg]{200 "eyJhbGci\ldots"} (0,-1.4);
-  \draw[req] (0,-2.1) -- node[msg]{GET /todos} node[mcod, below, font=\FiraCodeNL\tiny]{Authorization: Bearer eyJ\ldots} (4.0,-2.1);
-  \draw[res] (4.0,-2.85) -- node[msg]{200 [ \ldots ]} (0,-2.85);
-\end{tikzpicture}
-\end{immagine}
-\end{affianco}
 
-\begin{affianco}[0.6][c]
+Il login (\code{POST /auth}) verifica le credenziali e, se sono corrette,
+risponde con il token; altrimenti con \code{401} e un messaggio. La
+registrazione (\code{POST /signup}) salva un nuovo utente e lo restituisce.
+Il lavoro vero lo fa il controller:
+
 \begin{lstlisting}[style=js, name=controllers/AuthController.js]
 import Jwt from "jsonwebtoken";
+import { User, Todo } from "../models/Database.js";
 
-static issueToken(username) {
-  return Jwt.sign({ user: username }, process.env.TOKEN_SECRET, {
-    expiresIn: `${24 * 60 * 60}s`
-  });
-}
+export class AuthController {
 
-static isTokenValid(token, callback) {
-  Jwt.verify(token, process.env.TOKEN_SECRET, callback);
+  static async checkCredentials(req, res) {
+    let user = new User({        // i dati dell'utente arrivano dalla richiesta
+      userName: req.body.usr, password: req.body.pwd
+    });
+    let found = await User.findOne({
+      where: { userName: user.userName, password: user.password }
+    });
+    return found !== null;       // nessuna sessione: il client riceverà un token
+  }
+
+  static async saveUser(req, res) {
+    let user = new User({ userName: req.body.usr, password: req.body.pwd });
+    return user.save();
+  }
+
+  static issueToken(username) {
+    return Jwt.sign({ user: username }, process.env.TOKEN_SECRET, {
+      expiresIn: `${24 * 60 * 60}s`
+    });
+  }
+
+  static isTokenValid(token, callback) {
+    Jwt.verify(token, process.env.TOKEN_SECRET, callback);
+  }
+
+  static async canUserModifyTodo(user, todoId) {
+    const todo = await Todo.findByPk(todoId);
+    return todo !== null && todo.UserUserName === user;   // esiste ed è sua
+  }
 }
 \end{lstlisting}
+
+\begin{affianco}[0.55][c]
+\code{checkCredentials} è quella del capitolo 16 senza la sessione: dice
+soltanto se esiste un utente con quel nome e quella password.
+\code{issueToken} firma un payload con il solo nome dell'utente, valido 24 ore
+($24 \cdot 60 \cdot 60$ secondi); \code{isTokenValid} verifica firma e
+scadenza e passa l'esito a una callback. \code{canUserModifyTodo} servirà per
+l'autorizzazione. La chiave viene letta da \code{process.env}, cioè dal file
+\code{.env}.
 \risultato
 \begin{immagine}[\code{sign} produce il token, \code{verify} lo controlla.]
 \begin{tikzpicture}[
     b/.style={rounded corners=2pt, line width=0.7pt, font=\FiraCodeNL\scriptsize, inner sep=3pt},
     a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=neutral!45!black}]
-  \node[b, draw=accent!60!black, fill=accent!12!white] (p) at (0,0) {\{ user: "luigi" \}};
-  \node[b, draw=primary!60!black, fill=primary!10!white] (t) at (3.5,0) {token};
+  \node[b, draw=accent!60!black, fill=accent!12!white] (p) at (0,0) {\{ user: "janet" \}};
+  \node[b, draw=primary!60!black, fill=primary!10!white] (t) at (3.3,0) {token};
   \draw[a] (p) -- node[mcod, above]{sign} (t);
-  \node[b, draw=green-gradient-6, fill=green-gradient-1!45!white] (ok) at (3.5,-1.3) {decodedToken};
+  \node[b, draw=green-gradient-6, fill=green-gradient-1!45!white] (ok) at (3.3,-1.3) {decodedToken};
   \draw[a] (t) -- node[mcod, right]{verify} (ok);
-  \node[mnota, anchor=north] at (ok.south) {oppure \code{err} se scaduto o alterato};
+  \node[mnota, anchor=north] at (ok.south) {oppure \code{err}, se scaduto o alterato};
 \end{tikzpicture}
 \end{immagine}
 \end{affianco}
 
-La chiave segreta viene letta da \code{process.env}, cioè dal file \code{.env}
-non versionato di cui abbiamo parlato nel capitolo precedente.
-
-\subsection{Middleware di autenticazione}
+\subsection{Il middleware di autenticazione}
 
 \begin{affianco}[0.58][c]
 \codicepiccolo
-\begin{lstlisting}[style=js, name=middleware/auth.js]
-export function enforceAuthentication(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader?.split(' ')[1];   // "Bearer <token>"
+\begin{lstlisting}[style=js, name=middleware/authorization.js]
+import { AuthController } from "../controllers/AuthController.js";
 
+export function enforceAuthentication(req, res, next) {
+  const authHeader = req.headers['authorization']
+  const token = authHeader?.split(' ')[1];    // "Bearer <token>"
   if (!token) {
     next({ status: 401, message: "Unauthorized" });
     return;
   }
-
   AuthController.isTokenValid(token, (err, decodedToken) => {
     if (err) {
       next({ status: 401, message: "Unauthorized" });
@@ -606,24 +1226,31 @@ export function enforceAuthentication(req, res, next) {
 \end{immagine}
 \end{affianco}
 
+Il middleware legge l'header \code{Authorization}, che ha la forma
+\code{Bearer <token>}: \code{split(' ')[1]} ne prende la seconda parola, e
+l'operatore \code{?.} (capitolo 5) evita un errore quando l'header manca del
+tutto. Se il token non c'è, o \code{verify} lo rifiuta (firma sbagliata,
+scaduto), la richiesta finisce al gestore degli errori con \code{401}.
+Altrimenti il nome dell'utente, preso dal payload, viene salvato in
+\code{req.username}: è il posto che nel capitolo 16 occupava
+\code{req.session.username}, e da lì lo leggeranno i middleware e i controller
+successivi.
+
 \subsection{Autorizzazione}
 
 Nella nostra API vogliamo che gli utenti possano vedere e modificare
 \textbf{soltanto i propri} elementi. Che cosa succede se un utente invia una
-richiesta \code{DELETE} per un elemento che non gli appartiene?
-
-Non basta verificare \textit{chi} è l'utente: bisogna verificare anche che abbia
-il \textbf{permesso} di interagire con quella risorsa.
+richiesta \code{DELETE} per un elemento che non gli appartiene? Non basta
+verificare \textit{chi} è l'utente: bisogna verificare anche che abbia il
+\textbf{permesso} di interagire con quella risorsa.
 
 \begin{affianco}[0.62][c]
 \codicepiccolo
-\begin{lstlisting}[style=js, name=middleware/authz.js]
+\begin{lstlisting}[style=js, name=middleware/authorization.js, firstnumber=20]
 export async function ensureUsersModifyOnlyOwnTodos(req, res, next) {
-  const user   = req.username;
+  const user = req.username;
   const todoId = req.params.id;
-
   const userHasPermission = await AuthController.canUserModifyTodo(user, todoId);
-
   if (userHasPermission) {
     next();
   } else {
@@ -650,29 +1277,73 @@ export async function ensureUsersModifyOnlyOwnTodos(req, res, next) {
 \end{immagine}
 \end{affianco}
 
-\begin{affianco}[0.62][c]
-\codicepiccolo
+Il middleware si aspetta di trovare \code{req.username}, quindi va eseguito
+\textbf{dopo} \code{enforceAuthentication}; il permesso lo decide
+\code{canUserModifyTodo}, nel controller: l'elemento deve esistere ed essere
+dell'utente.
+
+\info{401 contro 403}{
+  Sono due cose diverse e vanno usate con precisione. \code{401 Unauthorized}
+  significa «non so chi sei»: manca l'autenticazione, o il token non è valido.
+  \code{403 Forbidden} significa «so chi sei, ma non puoi»: l'autenticazione
+  c'è, mancano i permessi.}
+
+\subsection{Le rotte degli elementi}
+
 \begin{lstlisting}[style=js, name=routes/todoRouter.js]
+import express from "express";
+import { TodoController } from "../controllers/TodoController.js";
+import { ensureUsersModifyOnlyOwnTodos } from "../middleware/authorization.js";
+
+export const todoRouter = new express.Router();
+
+todoRouter.get("/todos", async (req, res) => {
+  res.json(await TodoController.getTodosForCurrentUser(req));
+});
+
+todoRouter.post("/todos", async (req, res) => {
+  const item = await TodoController.saveTodo(req);
+  res.status(201).location(`/todos/${item.id}`).json(item);
+});
+
 todoRouter.get("/todos/:id", ensureUsersModifyOnlyOwnTodos, (req, res, next) => {
   TodoController.findById(req).then((item) => {
     if (item)
       res.json(item);
     else
-      next({ status: 404, message: "Todo non trovato" });
+      next({ status: 404, message: "Elemento non trovato" });
   }).catch(err => {
     next(err);
   })
 });
+
+todoRouter.put("/todos/:id", ensureUsersModifyOnlyOwnTodos, async (req, res) => {
+  res.json(await TodoController.update(req));
+});
+
+todoRouter.delete("/todos/:id", ensureUsersModifyOnlyOwnTodos, async (req, res) => {
+  await TodoController.delete(req);
+  res.status(204).end();
+});
 \end{lstlisting}
+
+\begin{affianco}[0.6][c]
+Il gestore di \code{GET /todos/:id} è quello delle slide, con
+\code{then}/\code{catch} e l'errore passato a mano a \code{next}; gli altri
+sono funzioni \code{async}, perché in Express 5 una Promise rifiutata arriva da
+sola al gestore degli errori (capitolo 15). Le tre rotte con \code{:id} passano
+prima da \code{ensureUsersModifyOnlyOwnTodos}, inserito fra il percorso e il
+gestore: una richiesta deve superare tre controlli, a ciascuno dei quali
+corrisponde un codice d'errore, prima di arrivare ai dati.
 \risultato
-\begin{immagine}[Una richiesta attraversa tre controlli\\ prima di arrivare ai dati.]
+\begin{immagine}
 \begin{tikzpicture}[
     m/.style={rounded corners=2pt, draw=primary!55!black, fill=primary!8!white,
       line width=0.6pt, font=\FiraCodeNL\scriptsize, minimum width=3.5cm,
       minimum height=0.42cm},
     a/.style={-{Stealth[length=3.5pt,width=3pt]}, line width=0.6pt, draw=neutral!45!black},
     errx/.style={mcod, anchor=west, text=merr}]
-  \node[mcod] (r) at (0,0) {GET /todos/7};
+  \node[mcod] (r) at (0,0) {GET /todos/1};
   \node[m] (m1) at (0,-0.7) {enforceAuthentication};
   \node[m] (m2) at (0,-1.4) {ensureUsersModify\ldots};
   \node[m, fill=accent!12!white, draw=accent!55!black] (m3) at (0,-2.1) {findById};
@@ -685,11 +1356,499 @@ todoRouter.get("/todos/:id", ensureUsersModifyOnlyOwnTodos, (req, res, next) => 
 \end{immagine}
 \end{affianco}
 
-\info{401 contro 403}{
-  Sono due cose diverse e vanno usate con precisione. \code{401 Unauthorized}
-  significa \guillemotleft non so chi sei\guillemotright: manca l'autenticazione, o il token non è
-  valido. \code{403 Forbidden} significa \guillemotleft so chi sei, ma non puoi\guillemotright:
-  l'autenticazione c'è, mancano i permessi.}
+Due risposte meritano attenzione:
+
+\begin{itemize}
+  \item \code{POST /todos} risponde \code{201 Created}, con l'header
+        \code{Location} che indica l'URI della nuova risorsa: in una collection
+        è il server a sceglierlo, e così il client lo viene a sapere;
+  \item \code{DELETE /todos/:id} risponde \code{204 No Content}: l'operazione è
+        riuscita e non c'è niente da restituire.
+\end{itemize}
+
+\begin{lstlisting}[style=js, name=controllers/TodoController.js]
+import { Todo } from "../models/Database.js";
+
+export class TodoController {
+
+  // filtro e paginazione dalla query: /todos?done=false&size=10&page=2
+  static async getTodosForCurrentUser(req) {
+    const where = { UserUserName: req.username };
+    if (req.query.done !== undefined) {
+      where.done = req.query.done === "true";
+    }
+    const size = Number(req.query.size) || 10;
+    const page = Number(req.query.page) || 1;
+    return Todo.findAll({ where, order: [["id", "ASC"]],
+                          limit: size, offset: (page - 1) * size });
+  }
+
+  static async saveTodo(req) {
+    return Todo.create({ todo: req.body.todo, UserUserName: req.username });
+  }
+
+  static async findById(req) {
+    return Todo.findByPk(req.params.id);
+  }
+
+  // PUT sostituisce la risorsa: il corpo ne contiene lo stato completo
+  static async update(req) {
+    const item = await Todo.findByPk(req.params.id);
+    item.set({ todo: req.body.todo, done: req.body.done ?? false });
+    return item.save();
+  }
+
+  static async delete(req) {
+    const item = await Todo.findByPk(req.params.id);
+    return item.destroy();
+  }
+}
+\end{lstlisting}
+
+L'utente corrente viene sempre da \code{req.username}, mai dalla richiesta.
+\code{getTodosForCurrentUser} mette in pratica le due regole sulla query: il
+parametro \code{done}, una stringa, diventa un booleano; \code{size} e
+\code{page} diventano numeri (con 10 e 1 come valori predefiniti) e poi le
+opzioni \code{limit} e \code{offset} di \code{findAll}. Con il log delle query
+di Sequelize attivo (capitolo 16), la richiesta \code{GET /todos?size=2\&page=2}
+produce questa query:
+
+\begin{console}[Terminale del server]
+Executing (default): SELECT `todo`, `done`, `id`, `createdAt`, `updatedAt`, `UserUserName` FROM `Todos` AS `Todo` WHERE `Todo`.`UserUserName` = 'janet' ORDER BY `Todo`.`id` ASC LIMIT 2, 2;
+\end{console}
+
+In SQLite, \code{LIMIT 2, 2} significa «salta 2 righe e prendine 2». L'ordine
+esplicito per \code{id} serve a rendere stabili le pagine: senza
+\code{ORDER BY}, il database è libero di restituire le righe in qualunque
+ordine. \code{update} implementa la semantica di \code{PUT}: il corpo contiene
+il \textbf{nuovo stato completo}, e un \code{done} assente vale \code{false}.
+
+\subsection{L'API al lavoro}
+
+Avviato il server con \code{node index.js} (su un database nuovo), proviamo
+l'API con \code{curl}. La prima richiesta, senza token, viene respinta da
+\code{enforceAuthentication}:
+
+\begin{console}[Terminale]
+$ curl -i localhost:3000/todos
+HTTP/1.1 401 Unauthorized
+X-Powered-By: Express
+Access-Control-Allow-Origin: *
+Content-Type: application/json; charset=utf-8
+Content-Length: 41
+ETag: W/"29-sxwp76lsP4bFrZKf3vK22wznCAA"
+Date: Fri, 06 Nov 2026 09:37:24 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"code":401,"description":"Unauthorized"}
+\end{console}
+
+Il corpo è il JSON del gestore degli errori, con \codel{Content-Type:
+application/json}; l'header \codel{Access-Control-Allow-Origin: *} lo aggiunge
+\code{cors()} a ogni risposta. Poi il login di janet, che restituisce il token:
+
+\begin{console}[Terminale]
+$ curl -i -H 'Content-Type: application/json' -d '{"usr": "janet", "pwd": "rocky"}' localhost:3000/auth
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Access-Control-Allow-Origin: *
+Content-Type: application/json; charset=utf-8
+Content-Length: 150
+...
+
+"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiamFuZXQiLCJpYXQiOjE3OTM5NTc4NDQsImV4cCI6MTc5NDA0NDI0NH0.P37Px_NExj8oY15BQmePyvOi4hrI06PfoxXuygZy8BQ"
+$ TOKEN=$(curl -s -H 'Content-Type: application/json' -d '{"usr": "janet", "pwd": "rocky"}' localhost:3000/auth | jq -r .)
+$ node decodifica.js $TOKEN
+{"alg":"HS256","typ":"JWT"}
+{"user":"janet","iat":1793957844,"exp":1794044244}
+firma: P37Px_NExj8oY15BQmePyvOi4hrI06PfoxXuygZy8BQ
+scadenza: 2026-11-07T09:37:24.000Z
+\end{console}
+
+Il token arriva come \textbf{stringa JSON}, virgolette comprese (148 caratteri
+più 2: i 150 byte di \code{Content-Length}). Per non doverlo ricopiare, lo si
+mette in una variabile della shell: \code{jq -r .} estrae il valore della
+stringa senza le virgolette. Decodificato, contiene il nome dell'utente e le
+due date, con la scadenza 24 ore dopo l'emissione. Il token va ora inviato
+nell'header \code{Authorization}; con l'opzione \code{-v}, \code{curl} mostra
+anche la richiesta che invia (le righe con \code{>}) oltre alla risposta (le
+righe con \code{<}):
+
+\begin{console}[Terminale]
+$ curl -v -H "Authorization: Bearer $TOKEN" localhost:3000/todos
+...
+> GET /todos HTTP/1.1
+> Host: localhost:3000
+> User-Agent: curl/8.5.0
+> Accept: */*
+> Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiamFuZXQiLCJpYXQiOjE3OTM5NTc4NDQsImV4cCI6MTc5NDA0NDI0NH0.P37Px_NExj8oY15BQmePyvOi4hrI06PfoxXuygZy8BQ
+>
+< HTTP/1.1 200 OK
+< X-Powered-By: Express
+< Access-Control-Allow-Origin: *
+< Content-Type: application/json; charset=utf-8
+< Content-Length: 2
+...
+[]
+\end{console}
+
+Questa volta la richiesta passa, e la lista è vuota. Aggiungiamo quattro
+elementi: il primo con \code{-i}, per vedere la risposta completa, gli altri
+con un ciclo della shell che stampa solo lo stato e l'header \code{Location}.
+Poi segniamo il primo come fatto, con una \code{PUT} che ne invia lo stato
+completo:
+
+\begin{console}[Terminale]
+$ curl -i -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"todo": "Learn REST"}' localhost:3000/todos
+HTTP/1.1 201 Created
+X-Powered-By: Express
+Access-Control-Allow-Origin: *
+Location: /todos/1
+Content-Type: application/json; charset=utf-8
+Content-Length: 142
+...
+
+{"done":false,"id":1,"todo":"Learn REST","UserUserName":"janet","updatedAt":"2026-11-06T09:37:24.787Z","createdAt":"2026-11-06T09:37:24.787Z"}
+$ for t in "Learn JWT" "Learn OpenAPI" "Learn Angular"; do curl -s -o /dev/null -w '%{http_code} %header{location}\n' -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d "{\"todo\": \"$t\"}" localhost:3000/todos; done
+201 /todos/2
+201 /todos/3
+201 /todos/4
+$ curl -i -X PUT -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"todo": "Learn REST", "done": true}' localhost:3000/todos/1
+HTTP/1.1 200 OK
+...
+
+{"todo":"Learn REST","done":true,"id":1,"createdAt":"2026-11-06T09:37:24.787Z","updatedAt":"2026-11-06T09:37:24.831Z","UserUserName":"janet"}
+\end{console}
+
+La rappresentazione JSON di un elemento è quella che Sequelize costruisce dal
+modello: tutti i campi, comprese le date gestite da Sequelize e la chiave
+esterna. Dopo la \code{PUT}, \code{updatedAt} è cambiato e \code{createdAt}
+no. Ora la lista, con un filtro e con la paginazione (\code{jq -c} riduce ogni
+elemento a una riga, con i soli campi indicati):
+
+\begin{console}[Terminale]
+$ curl -s -H "Authorization: Bearer $TOKEN" localhost:3000/todos | jq -c '.[] | {id, todo, done}'
+{"id":1,"todo":"Learn REST","done":true}
+{"id":2,"todo":"Learn JWT","done":false}
+{"id":3,"todo":"Learn OpenAPI","done":false}
+{"id":4,"todo":"Learn Angular","done":false}
+$ curl -s -H "Authorization: Bearer $TOKEN" 'localhost:3000/todos?done=false' | jq -c '.[] | {id, todo, done}'
+{"id":2,"todo":"Learn JWT","done":false}
+{"id":3,"todo":"Learn OpenAPI","done":false}
+{"id":4,"todo":"Learn Angular","done":false}
+$ curl -s -H "Authorization: Bearer $TOKEN" 'localhost:3000/todos?size=2&page=2' | jq -c '.[] | {id, todo, done}'
+{"id":3,"todo":"Learn OpenAPI","done":false}
+{"id":4,"todo":"Learn Angular","done":false}
+\end{console}
+
+Entra in scena un secondo utente, eric, che si registra, ottiene il suo token e
+prova a eliminare un elemento di janet:
+
+\begin{console}[Terminale]
+$ curl -i -H 'Content-Type: application/json' -d '{"usr": "eric", "pwd": "kewl"}' localhost:3000/signup
+HTTP/1.1 200 OK
+...
+
+{"userName":"eric","password":"kewl","updatedAt":"2026-11-06T09:37:24.863Z","createdAt":"2026-11-06T09:37:24.863Z"}
+$ ERIC=$(curl -s -H 'Content-Type: application/json' -d '{"usr": "eric", "pwd": "kewl"}' localhost:3000/auth | jq -r .)
+$ curl -s -H "Authorization: Bearer $ERIC" localhost:3000/todos
+[]
+$ curl -i -X DELETE -H "Authorization: Bearer $ERIC" localhost:3000/todos/1
+HTTP/1.1 403 Forbidden
+...
+
+{"code":403,"description":"Non hai i permessi per vedere o modificare questa risorsa"}
+\end{console}
+
+eric vede solo la sua lista, vuota, e la cancellazione dell'elemento 1 viene
+respinta con \code{403}: il token è valido (eric è autenticato), ma l'elemento
+non è suo. janet, invece, può eliminare i propri elementi:
+
+\begin{console}[Terminale]
+$ curl -i -X DELETE -H "Authorization: Bearer $TOKEN" localhost:3000/todos/2
+HTTP/1.1 204 No Content
+X-Powered-By: Express
+Access-Control-Allow-Origin: *
+Date: Fri, 06 Nov 2026 09:37:24 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+$ curl -s -w ' %{http_code}\n' -H "Authorization: Bearer $TOKEN" localhost:3000/todos/2
+{"code":403,"description":"Non hai i permessi per vedere o modificare questa risorsa"} 403
+$ curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' -d '{"usr": "janet", "pwd": "wrong"}' localhost:3000/auth
+{"error":"Credenziali non valide. Riprova."} 401
+$ curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' -d '{"usr": "eric", "pwd": "kewl2"}' localhost:3000/signup
+{"code":500,"description":"Impossibile salvare l'utente"} 500
+\end{console}
+
+La risposta \code{204} non ha corpo, né \code{Content-Type}. L'opzione
+\code{-w ' \%\{http\_code\}\textbackslash n'} fa stampare a \code{curl} lo
+stato in fondo al corpo. Le ultime tre richieste chiedono l'elemento appena
+eliminato, provano un login con la password sbagliata e registrano di nuovo
+eric. Nel terminale del server, \code{morgan} ha registrato tutto:
+
+\begin{console}[Terminale del server]
+$ node index.js
+undefined
+GET /todos 401 2.300 ms - 41
+POST /auth 200 8.473 ms - 150
+POST /auth 200 2.216 ms - 150
+GET /todos 200 3.271 ms - 2
+POST /todos 201 5.130 ms - 142
+POST /todos 201 4.620 ms - 141
+POST /todos 201 4.100 ms - 145
+POST /todos 201 5.738 ms - 145
+PUT /todos/1 200 7.750 ms - 141
+GET /todos 200 1.646 ms - 577
+GET /todos?done=false 200 1.531 ms - 435
+GET /todos?size=2&page=2 200 2.027 ms - 293
+POST /signup 200 4.298 ms - 115
+POST /auth 200 1.922 ms - 149
+GET /todos 200 1.382 ms - 2
+undefined
+DELETE /todos/1 403 1.451 ms - 86
+DELETE /todos/2 204 4.968 ms - -
+undefined
+GET /todos/2 403 1.439 ms - 86
+POST /auth 401 1.218 ms - 44
+undefined
+POST /signup 500 1.964 ms - 57
+\end{console}
+
+Nessun \code{302} e nessuna pagina HTML: ogni richiesta riceve direttamente la
+sua risposta in JSON, e lo stato HTTP dice com'è andata. A guardare bene, però,
+la sessione mostra anche qualche difetto.
+
+\subsection{Cinque ritocchi}
+
+\textbf{1. La password nella risposta.} \code{POST /signup} risponde con
+\code{res.json(user)}, e l'oggetto di Sequelize contiene \textbf{tutti} i
+campi: la password di eric è tornata indietro nella risposta. In un'API vera,
+dove passerebbe per proxy, log e strumenti di debug, è una fuga di dati. Basta
+restituire solo ciò che serve:
+
+\begin{lstlisting}[style=js, name=routes/authenticationRouter.js, firstnumber=17]
+  AuthController.saveUser(req, res).then((user) => {
+    res.json({ userName: user.userName });   // non la password!
+\end{lstlisting}
+
+Nella stessa rotta, un nome utente già preso produce un generico \code{500}:
+il codice più preciso sarebbe \code{409 Conflict}, «la richiesta è in conflitto
+con lo stato attuale della risorsa». E il login sbagliato risponde
+\code{\{"error": \ldots\}}, mentre tutti gli altri errori hanno la forma
+\code{\{"code", "description"\}}: per i client è più comodo un formato solo.
+
+\textbf{2. Un \code{403} dove servirebbe un \code{404}.} Dopo la cancellazione,
+la richiesta \codel{GET /todos/2} riceve \code{403}, non \code{404}: per il
+metodo \code{canUserModifyTodo} un elemento che non esiste non è «dell'utente», e
+\code{ensureUsersModifyOnlyOwnTodos} risponde prima che il gestore della rotta
+possa accorgersene. Il ramo \code{404} della rotta delle slide, di fatto, non
+viene mai eseguito. Un URI che non corrisponde a nessuna risorsa merita un
+\code{404}; basta distinguere i due casi nel middleware, che ora cerca da sé
+l'elemento (con \code{import \{ Todo \} from "../models/Database.js"} in cima
+al file):
+
+\begin{lstlisting}[style=js, name=middleware/authorization.js, firstnumber=21]
+export async function ensureUsersModifyOnlyOwnTodos(req, res, next) {
+  const todo = await Todo.findByPk(req.params.id);
+  if (todo === null) {
+    next({ status: 404, message: "Elemento non trovato" });
+  } else if (todo.UserUserName === req.username) {
+    next();
+  } else {
+    next({
+      status: 403,
+      message: "Non hai i permessi per vedere o modificare questa risorsa"
+    });
+  }
+}
+\end{lstlisting}
+
+C'è anche chi sceglie di proposito la soluzione opposta, un \code{404} pure per
+gli elementi altrui (come la web app del capitolo 16), per non rivelare quali
+identificatori esistono. L'importante è che sia una scelta, non un incidente.
+
+\textbf{3. Gli \code{undefined} nel log.} Il gestore degli errori stampa
+\code{err.stack}, ma gli errori passati a \code{next} come oggetti
+\code{\{ status, message \}} non sono veri \code{Error}, e non hanno una
+traccia: ogni errore segnalato così lascia nel log una riga \code{undefined}
+(il login sbagliato no, perché risponde da sé senza passare dal gestore).
+Conviene stampare la traccia solo quando c'è:
+
+\begin{lstlisting}[style=js, name=index.js, firstnumber=27]
+  if (err.stack) console.log(err.stack);   // solo per i veri errori
+\end{lstlisting}
+
+\textbf{4. Il \code{Content-Type} dimenticato.} È la trappola più comune
+provando un'API con \code{curl}. Senza \codel{-H 'Content-Type:
+application/json'}, \code{curl -d} invia il corpo dichiarandolo come i dati di
+un form; \code{express.json} lo ignora (capitolo 15), \code{req.body} resta
+\code{undefined} (in Express 5 non è più un oggetto vuoto) e la lettura di
+\code{req.body.usr} solleva un'eccezione:
+
+\begin{console}[Terminale]
+$ curl -s -w ' %{http_code}\n' -d '{"usr": "janet", "pwd": "rocky"}' localhost:3000/auth
+{"code":500,"description":"Cannot read properties of undefined (reading 'usr')"} 500
+$ curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' -d "{'usr': 'janet', 'pwd': 'rocky'}" localhost:3000/auth
+{"code":400,"description":"Expected property name or '}' in JSON at position 1 (line 1 column 2)"} 400
+\end{console}
+
+\begin{console}[Terminale del server (segue)]
+TypeError: Cannot read properties of undefined (reading 'usr')
+    at AuthController.checkCredentials (file:///[cartella del progetto]/controllers/AuthController.js:8:26)
+    at file:///[cartella del progetto]/routes/authenticationRouter.js:7:46
+    ...
+POST /auth 500 0.502 ms - 80
+SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at parse ([cartella del progetto]/node_modules/body-parser/lib/types/json.js:93:21)
+    ...
+POST /auth 400 0.722 ms - 98
+\end{console}
+
+Il primo errore, un \code{TypeError} del nostro codice, arriva al gestore degli
+errori senza stato e diventa un \code{500}: l'API dà la colpa a sé stessa per
+un errore del client. Un'API scrupolosa controllerebbe il corpo e risponderebbe
+\code{400 Bad Request} (o \code{415 Unsupported Media Type}). Il secondo
+comando invia un JSON non valido (gli apici singoli non sono ammessi in JSON):
+qui è \code{express.json} a sollevare l'errore, con \code{status} già
+impostato a \code{400}, e il nostro gestore lo rispetta.
+
+\textbf{5. Un \code{404} in HTML.} Un percorso che nessuna rotta gestisce,
+richiesto con un token valido, riceve la pagina d'errore predefinita di Express:
+
+\begin{console}[Terminale]
+$ curl -i -H "Authorization: Bearer $TOKEN" localhost:3000/nonesiste
+HTTP/1.1 404 Not Found
+X-Powered-By: Express
+Access-Control-Allow-Origin: *
+Content-Security-Policy: default-src 'none'
+X-Content-Type-Options: nosniff
+Content-Type: text/html; charset=utf-8
+Content-Length: 148
+...
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot GET /nonesiste</pre>
+</body>
+</html>
+\end{console}
+
+Per un'API è meglio un \textit{catch-all} che passi un \code{404} al gestore
+degli errori, come nel capitolo 16, ma in JSON. Va dopo tutti i router e prima
+del gestore degli errori:
+
+\begin{lstlisting}[style=js, name=index.js, firstnumber=25]
+// catch-all: nessuna rotta ha risposto
+app.use((req, res, next) => {
+  next({ status: 404, message: "Risorsa non trovata" });
+});
+\end{lstlisting}
+
+Rifatte le prove con queste modifiche (dopo il login di janet e la creazione
+di un elemento), le risposte sono quelle attese:
+
+\begin{console}[Terminale]
+$ curl -s -H 'Content-Type: application/json' -d '{"usr": "eric", "pwd": "kewl"}' localhost:3000/signup
+{"userName":"eric"}
+$ curl -s -w ' %{http_code}\n' -H "Authorization: Bearer $ERIC" localhost:3000/todos/1
+{"code":403,"description":"Non hai i permessi per vedere o modificare questa risorsa"} 403
+$ curl -s -w ' %{http_code}\n' -H "Authorization: Bearer $TOKEN" localhost:3000/todos/99
+{"code":404,"description":"Elemento non trovato"} 404
+$ curl -s -w ' %{http_code}\n' -H "Authorization: Bearer $TOKEN" localhost:3000/nonesiste
+{"code":404,"description":"Risorsa non trovata"} 404
+$ curl -s -w ' %{http_code}\n' localhost:3000/nonesiste
+{"code":401,"description":"Unauthorized"} 401
+\end{console}
+
+\begin{console}[Terminale del server]
+$ node index.js
+POST /auth 200 13.049 ms - 150
+POST /todos 201 6.165 ms - 142
+POST /signup 200 3.745 ms - 19
+POST /auth 200 2.759 ms - 149
+GET /todos/1 403 2.514 ms - 86
+GET /todos/99 404 1.596 ms - 49
+GET /nonesiste 404 0.429 ms - 48
+GET /nonesiste 401 0.191 ms - 41
+\end{console}
+
+Il log non contiene più righe \code{undefined}. L'ultima richiesta, senza
+token, riceve \code{401} anche per un percorso inesistente:
+\code{enforceAuthentication} è montato per tutti i percorsi, quindi chi non è
+autenticato non scopre nemmeno quali risorse esistono. È la stessa dinamica
+della trappola del capitolo 16 (un middleware senza percorso intercetta tutto),
+ma per un'API è un comportamento ragionevole.
+
+\section{Regole e linee guida}
+
+Ecco le regole da tenere presenti progettando una API REST, comprese quelle già
+viste per gli archetipi e per le URI:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}>{\raggedright\arraybackslash\leavevmode}p{8.4cm}%
+                >{\raggedright\arraybackslash\leavevmode}p{8.4cm}@{}}
+  \textbf{Regola} & \textbf{Esempi} \\ \hline
+  \code{401 Unauthorized} va usato quando ci sono problemi con le
+    credenziali &
+    token mancante, scaduto o alterato; password sbagliata \\
+  nomi al plurale per collection e store &
+    \merr\ \code{/todo} \quad \mok\ \code{/todos} \\
+  nomi al singolare per i document &
+    \mok\ \code{/leagues/serie-a/teams/napoli} \\
+  i nomi dei controller contengono un verbo o una locuzione verbale &
+    \mok\ \code{/alerts/1234/resend} \quad \mok\ \code{/reset-app} \\
+  niente barra finale nelle URI &
+    \merr\ \code{/todos/} \quad \mok\ \code{/todos} \\
+  niente nomi di funzioni CRUD nelle URI &
+    \merr\ \code{GET /deleteTodo?id=2} \newline
+    \merr\ \code{POST /todo/2/delete} \newline
+    \mok\ \code{DELETE /todos/2} \\
+  la barra (\code{/}) indica relazioni gerarchiche &
+    \mok\ \code{/leagues/serie-a/teams} \\
+  \code{GET} va usato solo per recuperare la rappresentazione di una risorsa &
+    \merr\ \code{GET /todos/2/delete} \\
+  URI in minuscolo e senza trattini bassi (\code{\_}) &
+    \merr\ \code{/My\_Todos} \quad \mok\ \code{/my-todos} \\
+  trattini (\code{-}) per rendere le URI più leggibili, al posto del
+    CamelCase &
+    \merr\ \code{/resetApp} \quad \mok\ \code{/reset-app} \\
+\end{tabular}
+\end{center}
+
+Qualche commento:
+
+\begin{itemize}
+  \item la nostra API le rispetta, la web app del capitolo 16 no: \code{/todo}
+        era al singolare e \code{/todo/:id/delete} conteneva l'operazione nel
+        percorso (ma lì i form non lasciavano alternative);
+  \item Express è tollerante: per impostazione predefinita \code{/todos/} e
+        \code{/TODOS} portano alla stessa rotta di \code{/todos} (lo si
+        verifica con \code{curl}). Un'API, però, dovrebbe documentare e usare
+        una sola forma, per la regola «una risorsa, una URI»;
+  \item il minuscolo evita ambiguità: schema e nome dell'host non distinguono
+        maiuscole e minuscole, il percorso in generale sì, quindi su un altro
+        server \code{/Todos} e \code{/todos} potrebbero essere risorse
+        diverse. I trattini bassi, nei link sottolineati, si confondono con la
+        sottolineatura.
+\end{itemize}
+
+Un buon insieme di regole e linee guida di base, comprese queste, è definito
+nel libro di Mark Massé, \textit{REST API Design Rulebook: Designing Consistent
+RESTful Web Service Interfaces} (O'Reilly, 2011). Esistono anche strumenti che
+individuano automaticamente le violazioni di queste regole, i cosiddetti
+\term{anti-pattern} REST: per esempio RESTRuler (Bogner e altri, \textit{IEEE
+21st International Conference on Software Architecture}, 2024,
+\urlx{https://arxiv.org/abs/2402.13710}), che le cerca analizzando le
+descrizioni OpenAPI delle API, il formato a cui è dedicata la prossima sezione.
 
 \section{OpenAPI}
 
@@ -712,6 +1871,11 @@ Perché serve?
 
 È lo standard industriale più adottato.
 
+\warning{Che cosa serve sapere all'esame}{
+  Per il corso è richiesto sapere \textbf{che cos'è} lo standard OpenAPI,
+  \textbf{perché} è stato introdotto e \textbf{a che cosa} può servire. Non è
+  richiesto saper scrivere file di specifica OpenAPI da zero.}
+
 \subsection{La specifica}
 
 Le descrizioni OpenAPI sono documenti di testo strutturato: ogni documento
@@ -731,7 +1895,7 @@ Gli endpoint si chiamano \term{path}. Per ciascuno si specificano i metodi
 supportati e, per ciascun metodo, i parametri di ingresso attesi, l'eventuale
 corpo della richiesta e le possibili risposte.
 
-\begin{affianco}[0.5][c]
+\begin{affianco}[0.46][c]
 \begin{lstlisting}[style=plain, name=openapi.yaml]
 /auth:
   post:
@@ -757,22 +1921,32 @@ corpo della richiesta e le possibili risposte.
         description: Invalid credentials
 \end{lstlisting}
 \risultato
-\begin{immagine}[Come la stessa specifica appare in Swagger UI.]
+\begin{immagine}[Come la stessa specifica appare in Swagger UI,\\
+                 con l'operazione espansa.]
 \begin{tikzpicture}[
-    bar/.style={rounded corners=3pt, draw=green-gradient-6, fill=green-gradient-1!35!white,
-      line width=0.7pt, minimum width=6.0cm, minimum height=0.6cm, anchor=north west},
     verb/.style={rounded corners=2pt, fill=green-gradient-6, text=white,
-      font=\Lato\scriptsize\bfseries, inner sep=3pt},
-    r/.style={font=\FiraCodeNL\scriptsize, anchor=west}]
-  \node[bar] (b) at (0,0) {};
-  \node[verb, anchor=west] (v) at ([xshift=4pt]b.west) {POST};
-  \node[r] at ([xshift=4pt]v.east) {/auth};
-  \node[mnota, anchor=east] at ([xshift=-4pt]b.east) {Authenticate user};
-  \node[mnota, anchor=north west, font=\Lato\scriptsize\bfseries] at (0.1,-0.75) {Request body \textcolor{merr}{* required}};
-  \node[r, anchor=north west] at (0.1,-1.15) {\{ "usr": "Kyle", "pwd": "p4ssw0rd" \}};
-  \node[mnota, anchor=north west, font=\Lato\scriptsize\bfseries] at (0.1,-1.65) {Responses};
-  \node[r, anchor=north west] at (0.1,-2.05) {200 \quad User authenticated};
-  \node[r, anchor=north west] at (0.1,-2.45) {401 \quad Invalid credentials};
+      font=\Lato\scriptsize\bfseries, inner sep=3pt, anchor=west},
+    r/.style={font=\FiraCodeNL\scriptsize, anchor=west, inner sep=1pt},
+    t/.style={font=\Lato\scriptsize, anchor=west, inner sep=1pt},
+    tb/.style={t, font=\Lato\scriptsize\bfseries}]
+  \filldraw[rounded corners=3pt, draw=green-gradient-6, fill=green-gradient-1!30!white,
+    line width=0.7pt] (0,0) rectangle (6.6,-5.3);
+  \draw[green-gradient-6, line width=0.5pt] (0,-0.62) -- (6.6,-0.62);
+  \node[verb] (v) at (0.12,-0.31) {POST};
+  \node[r] at ([xshift=5pt]v.east) {/auth};
+  \node[t] at (0.2,-0.95) {Authenticate user};
+  \node[tb] at (0.2,-1.45) {Request body \textsuperscript{\textcolor{merr}{required}}};
+  \node[t] at (0.2,-1.85) {user to authenticate};
+  \node[tb, font=\Lato\tiny\bfseries] at (0.2,-2.2) {Example Value \textcolor{neutral!55!white}{|}
+    \textmd{Schema}};
+  \node[fill=black!80, text=white, font=\FiraCodeNL\scriptsize,
+    rounded corners=2pt, anchor=north west, inner sep=4pt, align=left,
+    text width=5.9cm] at (0.2,-2.4)
+    {\{\\\ \ "usr": \textcolor{green-gradient-3}{"Kyle"},\\
+     \ \ "pwd": \textcolor{green-gradient-3}{"p4ssw0rd"}\\\}};
+  \node[tb] at (0.2,-4.1) {Responses};
+  \node[t] at (0.2,-4.55) {200\qquad User authenticated};
+  \node[t] at (0.2,-4.95) {401\qquad Invalid credentials};
 \end{tikzpicture}
 \end{immagine}
 \end{affianco}
@@ -810,7 +1984,7 @@ diversi.
 
 \subsection{Generare la specifica dal codice}
 
-Nel corso si usano due pacchetti Node:
+Nel corso si usano due pacchetti Node (qui nelle versioni 6.3.0 e 5.0.1):
 
 \begin{itemize}
   \item \code{swagger-jsdoc}, che genera automaticamente le specifiche OpenAPI a
@@ -827,6 +2001,9 @@ npm install swagger-ui-express
 \begin{affianco}[0.58][c]
 \codicepiccolo
 \begin{lstlisting}[style=js, name=index.js]
+import swaggerJSDoc from "swagger-jsdoc";
+import swaggerUI from "swagger-ui-express";
+
 const swaggerSpec = swaggerJSDoc({
   definition: {
     openapi: '3.1.0',
@@ -838,12 +2015,17 @@ const swaggerSpec = swaggerJSDoc({
   apis: ['./routes/*Router.js'],   // file contenenti le annotazioni
 });
 
-// Swagger UI sara' disponibile su /api-docs
+// Swagger UI sarà disponibile su /api-docs
 app.use('/api-docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
+// la specifica in JSON, per gli strumenti che la leggono
+app.get('/api-docs.json', (req, res) => res.json(swaggerSpec));
 \end{lstlisting}
 \risultato
-\begin{browser}[localhost:3000/api-docs]
-  {\Lato\bfseries\Large To-do List REST API}\ {\Lato\scriptsize\colorbox{neutral!30!white}{1.0.0}}\\[6pt]
+\begin{browser}[localhost:3000/api-docs/]
+  {\Lato\bfseries\Large To-do List REST API}\
+  {\Lato\scriptsize\colorbox{neutral!50!white}{\textcolor{white}{1.0.0}}}\,%
+  {\Lato\scriptsize\colorbox{green-gradient-6}{\textcolor{white}{OAS 3.1}}}\\[6pt]
+  {\Lato\bfseries default}\\[3pt]
   \begin{tikzpicture}
     \node[rounded corners=3pt, draw=green-gradient-6, fill=green-gradient-1!35!white,
           line width=0.7pt, minimum width=5.4cm, minimum height=0.55cm] (b) at (0,0) {};
@@ -855,6 +2037,20 @@ app.use('/api-docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 \wtnota{La documentazione interattiva generata\\ dalle annotazioni nei router.}
 \end{affianco}
 
+Le righe vanno in \code{index.js} \textbf{prima} di
+\code{app.use(enforceAuthentication)}, altrimenti anche la documentazione
+richiederebbe il token. La rotta \code{/api-docs.json} non è nelle slide:
+espone la specifica generata, così che la possano leggere gli strumenti
+(generatori di codice, o RESTRuler).
+
+\subsection{Dalle annotazioni alla specifica}
+
+Le annotazioni stanno nei router, in commenti JSDoc che cominciano con
+\code{@swagger} e contengono, in YAML, la descrizione dell'operazione che
+segue. A destra, ciò che \code{swagger-jsdoc} ne ricava:
+
+\begin{affianco}[0.55][c]
+\codicepiccolo
 \begin{lstlisting}[style=js, name=routes/authenticationRouter.js]
 /**
  * @swagger
@@ -874,11 +2070,43 @@ app.use('/api-docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
  */
 authenticationRouter.post("/auth", async (req, res) => { /* ... */ });
 \end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ curl -s localhost:3000/api-docs.json | jq -c .info
+{"title":"To-do List REST API","version":"1.0.0"}
+$ curl -s localhost:3000/api-docs.json | jq --indent 1 .paths
+{
+ "/auth": {
+  "post": {
+   "description": "Authenticate user",
+   "requestBody": {
+    "content": {
+     "application/json": {
+      "schema": {
+       "type": "object",
+       "properties": {
+        "usr": {
+         "type": "string"
+        },
+        "pwd": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}
+\end{console}
+\end{affianco}
 
-\warning{Che cosa serve sapere all'esame}{
-  Per il corso è richiesto sapere \textbf{che cos'è} lo standard OpenAPI,
-  \textbf{perché} è stato introdotto e \textbf{a che cosa} può servire. Non è
-  richiesto saper scrivere file di specifica OpenAPI da zero.}
+Il commento YAML è diventato un oggetto JSON nella specifica, sotto
+\code{paths}, accanto alle informazioni passate a \code{swaggerJSDoc}. Swagger UI
+lo mostra come nella figura: \code{POST /auth} nell'elenco e, aperta
+l'operazione, la descrizione e un esempio del corpo,
+\code{\{"usr": "string", "pwd": "string"\}}, costruito dai tipi dello schema.
 
 \section{Riferimenti}
 
@@ -891,14 +2119,26 @@ authenticationRouter.post("/auth", async (req, res) => { /* ... */ });
         names}.
   \item \textbf{REST API Checklist}, Kenneth Lange. \\
         \urlx{https://kennethlange.com/rest-api-checklist/}
+  \item \textbf{REST API Design Rulebook: Designing Consistent RESTful Web
+        Service Interfaces}, Mark Massé (O'Reilly, 2011).
   \item \textbf{OpenAPI} --- sito ufficiale. \\
         \urlx{https://www.openapis.org/} \\
-        \urlx{https://learn.openapis.org/} \\
-        \urlx{https://spec.openapis.org/oas/v3.1.0}
-  \item \textbf{Esempi con altri framework}: \\
-        \urlx{https://github.com/luistar/jakartaee-rest-example} (JakartaEE) \\
-        \urlx{https://github.com/luistar/rest-service-pizzashop} (Spring) \\
-        \urlx{https://github.com/marciovrl/fastapi} (FastAPI, Python) \\
-        Non sono richiesti per il corso, ma è istruttivo vedere framework che
-        adottano un approccio basato su annotazioni.
+        \urlx{https://learn.openapis.org/} (da leggere: \textit{Getting
+        started}, \textit{Introduction}) \\
+        \urlx{https://spec.openapis.org/oas/v3.1.0} (la specifica completa di
+        OpenAPI 3.1.0)
+  \item \textbf{API Documentation: The Secret to a Great API Developer
+        Experience}, ebook di SmartBear Software. Non richiesto per il corso,
+        ma utile per capire le difficoltà di progettare e documentare una API. \\
+        \urlx{https://swagger.io/resources/ebooks/api-documentation-the-secret-to-a-great-api-developer-experience}
+  \item \textbf{Esempi con altri framework}, del prof. Starace: \\
+        \urlx{https://github.com/luistar/jakartaee-rest-example} (la lista di
+        cose da fare con JakartaEE, con Dockerfile e istruzioni) \\
+        \urlx{https://github.com/luistar/rest-service-pizzashop} (una pizzeria
+        con Spring) \\
+        e, nel materiale didattico (cartella \textit{Extra-content -- Spring
+        Boot and Django}), le slide con i tutorial su Spring Boot (Java) e
+        Django Ninja (Python). Non sono richiesti per il corso, ma è
+        istruttivo vedere framework diversi da Express: JakartaEE e Spring
+        Boot, per esempio, adottano un approccio basato su annotazioni.
 \end{itemize}
