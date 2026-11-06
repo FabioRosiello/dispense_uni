@@ -1,0 +1,214 @@
+% ============================================================
+% Cheat sheet, argomento 9: il diagramma di sequenza (dispensa, capitolo 8)
+% ============================================================
+\argomento{Il diagramma di sequenza}{Dispensa: capitolo 8. Chi chiama chi, nel tempo, in uno scenario}[Diagramma di
+sequenza]
+
+\voce{partecipante}{Partecipante e linea di vita}{il tempo scorre verso il basso}
+  {\begin{tikzpicture}
+     \node[partec, minimum width=1.8cm] (a) at (0,0) {\underline{o1 : Ordine}};
+     \draw[vita] (a.south) -- ++(0,-1.0);
+     \node[partec, minimum width=1.6cm] (b) at (2.2,0) {\underline{:Cliente}};
+     \draw[vita] (b.south) -- ++(0,-1.0);
+     \node[partec, minimum width=1.6cm] (c) at (4.3,0) {unProdotto};
+     \draw[vita] (c.south) -- ++(0,-1.0);
+   \end{tikzpicture}}
+  {Ogni partecipante è un \textbf{oggetto}: \underline{\code{nome : Classe}} sottolineato (anche senza nome,
+   \underline{\code{:Cliente}}), oppure un nome che fa capire la classe (\code{unProdotto}). La linea tratteggiata è la
+   sua \textbf{vita}. Gli attori, con l'omino, stanno a sinistra.}
+
+\voce{sincrono}{Messaggio sincrono e attivazione}{freccia a triangolo pieno: una chiamata di metodo}
+  {\begin{tikzpicture}
+     \foreach \n/\x/\t in {a/0/{:A}, b/3.2/{:B}}{
+       \node[partec, minimum width=1.2cm] (\n) at (\x,0) {\t};
+       \draw[vita] (\n.south) -- ++(0,-1.5);}
+     \attiv{0}{-0.6}{-1.5}
+     \draw[sinc] (0.08,-0.8) -- node[msgl]{calcola(x)} (3.12,-0.8);
+     \attiv{3.2}{-0.8}{-1.25}
+   \end{tikzpicture}}
+  {\code{b.calcola(x)} nel codice di \code{A}. Chi chiama \textbf{aspetta} la fine del metodo. Il rettangolino sulla
+   linea di vita (\textbf{attivazione}) è il tempo in cui il metodo è in esecuzione. Ogni messaggio che \code{:B}
+   riceve dev'essere un'\textbf{operazione} della classe \code{B}.}
+
+\voce{ritorno}{Ritorno}{tratteggiato, si può omettere}
+  {\begin{tikzpicture}
+     \foreach \n/\x/\t in {a/0/{:A}, b/3.2/{:B}}{
+       \node[partec, minimum width=1.2cm] (\n) at (\x,0) {\t};
+       \draw[vita] (\n.south) -- ++(0,-1.5);}
+     \attiv{0}{-0.6}{-1.5}
+     \draw[sinc] (0.08,-0.75) -- node[msgl]{getPrezzo()} (3.12,-0.75);
+     \attiv{3.2}{-0.75}{-1.2}
+     \draw[ritorno] (3.12,-1.2) -- node[msgl]{prezzo} (0.08,-1.2);
+   \end{tikzpicture}}
+  {\code{double prezzo = b.getPrezzo();}: la risposta torna indietro con una freccia tratteggiata, etichettata con il
+   valore. Si disegna quando il valore serve a capire il seguito.}
+
+\voce{asincrono}{Messaggio asincrono}{freccia aperta: chi invia non aspetta}
+  {\begin{tikzpicture}
+     \foreach \n/\x/\t in {a/0/{:A}, b/3.2/{:Stampante}}{
+       \node[partec, minimum width=1.4cm] (\n) at (\x,0) {\t};
+       \draw[vita] (\n.south) -- ++(0,-1.3);}
+     \attiv{0}{-0.6}{-1.3}
+     \draw[asinc] (0.08,-0.8) -- node[msgl]{stampa(doc)} (3.12,-0.8);
+     \attiv{3.2}{-0.8}{-1.3}
+   \end{tikzpicture}}
+  {Il mittente prosegue subito, senza aspettare: un messaggio in una coda, un evento, un compito avviato su un altro
+   \textit{thread} (\code{CompletableFuture.runAsync}, \code{new Thread(\ldots).start()}).}
+
+\voce{autoanello}{Chiamata a se stesso}{il messaggio torna sulla stessa linea}
+  {\begin{tikzpicture}
+     \node[partec, minimum width=1.4cm] (a) at (0,0) {:Ordine};
+     \draw[vita] (a.south) -- ++(0,-1.6);
+     \attiv{0}{-0.55}{-1.6}
+     \draw[sinc] (0.08,-0.75) -- (1.2,-0.75) -- (1.2,-1.0) -- (0.24,-1.0);
+     \draw[fill=white, line width=0.6pt] (0.08,-1.0) rectangle (0.24,-1.45);
+     \node[font=\tiny, anchor=west] at (1.25,-0.88) {applicaSconto()};
+   \end{tikzpicture}}
+  {\code{this.applicaSconto()}, o \code{applicaSconto()} senza oggetto davanti: l'oggetto chiama un proprio metodo. Sulla
+   barra di attivazione se ne appoggia una seconda, un po' spostata.}
+
+\voce{creazione}{Creazione}{il rettangolo alla punta della freccia}
+  {\begin{tikzpicture}
+     \node[partec, minimum width=1.4cm] (a) at (0,0) {:Cassa};
+     \draw[vita] (a.south) -- ++(0,-1.6);
+     \attiv{0}{-0.55}{-1.6}
+     \node[partec, minimum width=1.6cm] (r) at (3.2,-0.85) {:Ricevuta};
+     \draw[dipend] (0.08,-0.85) -- node[msgl]{«create»} (r.west);
+     \draw[vita] (r.south) -- ++(0,-0.45);
+   \end{tikzpicture}}
+  {\code{new Ricevuta(totale)}: l'oggetto nasce in quel momento, quindi il suo rettangolo sta \textbf{più in basso},
+   alla punta del messaggio (\code{new} o «create»). Gli oggetti che esistono già (anche quelli \code{static}) partono
+   dalla cima.}
+
+\voce{distruzione}{Distruzione}{una croce chiude la linea di vita}
+  {\begin{tikzpicture}
+     \foreach \n/\x/\t in {a/0/{:Comando}, b/3.2/{:Statement}}{
+       \node[partec, minimum width=1.6cm] (\n) at (\x,0) {\t};}
+     \draw[vita] (a.south) -- ++(0,-1.4);
+     \draw[vita] (b.south) -- ++(0,-0.95);
+     \draw[sinc] (0.08,-0.95) -- node[msgl]{close()} (3.12,-0.95);
+     \draw[line width=1pt] (3.02,-0.77) -- (3.38,-1.13) (3.02,-1.13) -- (3.38,-0.77);
+   \end{tikzpicture}}
+  {L'oggetto finisce di esistere: \code{close()}, \code{dispose()}, o non serve più. Può distruggerlo un altro oggetto o
+   chiudersi da solo (croce alla fine della sua linea).}
+
+\voce{trovato}{Messaggio trovato}{un pallino: arriva da fuori}
+  {\begin{tikzpicture}
+     \node[partec, minimum width=1.4cm] (a) at (2.4,0) {:Ordine};
+     \draw[vita] (a.south) -- ++(0,-1.2);
+     \fill (0,-0.7) circle (0.07);
+     \draw[sinc] (0,-0.7) -- node[msgl]{calcolaPrezzo()} (2.32,-0.7);
+     \attiv{2.4}{-0.7}{-1.2}
+   \end{tikzpicture}}
+  {La chiamata arriva da qualcuno che il diagramma non mostra: è il punto di partenza del metodo che si sta
+   descrivendo. In alternativa si disegna l'attore che avvia lo scenario.}
+
+\voce{frame}{Frame loop, alt, opt}{cicli e condizioni (UML 2)}
+  {\begin{tikzpicture}
+     \sdframe{0}{0}{4.8}{-0.9}{loop}{[per ogni riga]}
+     \sdframe{0}{-1.15}{4.8}{-2.55}{alt}{[valore > 10000]}
+     \draw[dashed, line width=0.6pt] (0,-1.85) -- (4.8,-1.85);
+     \node[font=\tiny, anchor=north west] at (0.05,-1.9) {[else]};
+     \sdframe{0}{-2.8}{4.8}{-3.6}{opt}{[serve conferma]}
+   \end{tikzpicture}}
+  {Riquadri che racchiudono i messaggi ripetuti o condizionati, con la condizione fra quadre: \textbf{loop} =
+   \code{for}/\code{while}; \textbf{alt} = \code{if-else} (i rami separati dal tratteggio, l'ultimo
+   \code{[else]}); \textbf{opt} = \code{if} senza \code{else}. Esistono anche \textbf{par} (in parallelo) e
+   \textbf{critical} (sezione critica).}
+
+\begin{guida}{Dal codice Java al diagramma di sequenza}
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}l l@{}}
+  \textbf{Nel codice del metodo} & \textbf{Nel diagramma} \\ \hline
+  \code{b.metodo(x)} & messaggio sincrono \code{metodo(x)} verso la linea di \code{b} \\
+  \code{y = b.metodo()} & messaggio sincrono e ritorno tratteggiato \code{y} \\
+  \code{this.metodo()} o \code{metodo()} & chiamata a se stesso \\
+  \code{new B(\ldots)} & creazione: il rettangolo di \code{:B} alla punta della freccia \\
+  \code{B.metodoStatico()} & messaggio verso il partecipante \code{B} (la classe) \\
+  \code{for}, \code{while}, \code{forEach} & frame \textbf{loop} con la condizione \\
+  \code{if} \ldots\ \code{else} \ldots & frame \textbf{alt} con due zone \\
+  \code{if} senza \code{else} & frame \textbf{opt} \\
+  \code{CompletableFuture.runAsync}, eventi, code & messaggio asincrono \\
+  \code{close()}, \code{dispose()}, oggetto non più usato & croce di distruzione \\
+\end{tabular}
+
+\raggedright Si disegna \textbf{un} scenario alla volta, con gli oggetti \textbf{davvero} coinvolti; un diagramma pieno
+di frame annidati vuol dire che serve un diagramma di attività (\vv{azione}).
+\end{guida}
+
+\begin{caso}[lefthand width=86mm]{codicesequenza}{Un metodo e il suo diagramma di sequenza}
+\begin{lstlisting}[style=javacs]
+class Ordine {
+    private final List<Riga> righe =
+            new ArrayList<>();
+    private Cliente cliente;
+
+    double calcolaPrezzo() {
+        double totale = 0;
+        for (Riga r : righe) {           // loop
+            int q = r.getQuantita();
+            Prodotto p = r.getProdotto();
+            totale += q * p.getPrezzo();
+        }
+        if (cliente.isFedele())          // opt
+            totale = applicaSconto(totale);
+        new Ricevuta(totale);       // creazione
+        return totale;
+    }
+    double applicaSconto(double t) {
+        return t * 0.9;
+    }
+}
+class Riga {
+    private int quantita;
+    private Prodotto prodotto;
+    int getQuantita() { return quantita; }
+    Prodotto getProdotto() { return prodotto; }
+}
+class Prodotto {
+    double getPrezzo() { return 10; }
+}
+class Cliente {
+    boolean isFedele() { return true; }
+}
+class Ricevuta {
+    Ricevuta(double totale) { }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \foreach \n/\x/\t in {o/0/{:Ordine}, r/2.1/{:Riga}, p/4.2/{:Prodotto}, c/6.3/{:Cliente}}{
+    \node[partec, minimum width=1.5cm] (\n) at (\x,0) {\t};
+    \draw[vita] (\n.south) -- (\x,-7.7);}
+  \fill (-1.5,-0.8) circle (0.07);
+  \draw[sinc] (-1.5,-0.8) -- node[msgl]{calcolaPrezzo()} (-0.08,-0.8);
+  \attiv{0}{-0.8}{-7.4}
+  \sdframe{-0.7}{-1.15}{5.0}{-3.95}{loop}{[per ogni riga r]}
+  \draw[sinc] (0.08,-1.7) -- node[msgl]{getQuantita()} (2.02,-1.7);
+  \attiv{2.1}{-1.7}{-2.0}
+  \draw[ritorno] (2.02,-2.0) -- node[msgl]{q} (0.08,-2.0);
+  \draw[sinc] (0.08,-2.45) -- node[msgl]{getProdotto()} (2.02,-2.45);
+  \attiv{2.1}{-2.45}{-2.75}
+  \draw[ritorno] (2.02,-2.75) -- node[msgl]{p} (0.08,-2.75);
+  \draw[sinc] (0.08,-3.2) -- node[msgl, pos=0.3]{getPrezzo()} (4.12,-3.2);
+  \attiv{4.2}{-3.2}{-3.5}
+  \draw[ritorno] (4.12,-3.5) -- node[msgl, pos=0.7]{prezzo} (0.08,-3.5);
+  \draw[sinc] (0.08,-4.3) -- node[msgl, pos=0.25]{isFedele()} (6.22,-4.3);
+  \attiv{6.3}{-4.3}{-4.6}
+  \draw[ritorno] (6.22,-4.6) -- node[msgl, pos=0.25]{true} (0.08,-4.6);
+  \sdframe{-0.7}{-4.9}{2.9}{-6.0}{opt}{[fedele]}
+  \draw[sinc] (0.08,-5.45) -- (1.0,-5.45) -- (1.0,-5.7) -- (0.24,-5.7);
+  \node[font=\tiny, anchor=west] at (1.05,-5.57) {applicaSconto(t)};
+  \draw[fill=white, line width=0.6pt] (0.08,-5.7) rectangle (0.24,-5.9);
+  \node[partec, minimum width=1.6cm] (ri) at (3.4,-6.5) {:Ricevuta};
+  \draw[dipend] (0.08,-6.5) -- node[msgl, pos=0.4]{«create»} (ri.west);
+  \draw[vita] (ri.south) -- (3.4,-7.7);
+  \draw[ritorno] (-0.08,-7.4) -- node[msgl]{totale} (-1.5,-7.4);
+\end{tikzpicture}
+\regola{Una linea di vita per ogni oggetto che il metodo usa; un messaggio per ogni chiamata, nell'ordine del codice.
+Il \code{for} diventa \textbf{loop}, l'\code{if} senza \code{else} \textbf{opt}, la chiamata a
+\code{applicaSconto} un \textbf{autoanello}, il \code{new} una \textbf{creazione} più in basso. Le chiamate
+\code{getQuantita()}, \code{getProdotto()}\ldots\ sono operazioni delle classi \code{Riga}, \code{Prodotto}: i due
+diagrammi devono essere coerenti.}
+\end{caso}

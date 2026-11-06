@@ -1,0 +1,273 @@
+% ============================================================
+% Cheat sheet, argomento 7: dal codice al diagramma, dipendenze, tutto-parti e casi difficili
+% ============================================================
+\argomento{Dal codice al diagramma: dipendenze e tutto-parti}{Dispensa: capitolo 7. Che cosa non è un campo, e
+quando un campo è una parte}[Dal codice: dipendenze e tutto-parti]
+
+\begin{guida}{Associazione, dipendenza, aggregazione o composizione?}
+\begin{enumerate}[nosep, leftmargin=*]
+  \item La classe B compare \textbf{solo dentro un metodo} di A (parametro, variabile locale, tipo restituito,
+        \code{new B()}, \code{B.metodoStatico()})? \textbf{Dipendenza} tratteggiata, con «call», «use» o «create».
+  \item B è il tipo di un \textbf{campo} di A? \textbf{Associazione} (argomenti 4 e 5). Poi ci si chiede se B è
+        \textbf{parte} di A («è fatto di», «contiene», «è composto da»):
+  \item no $\to$ resta un'\textbf{associazione}; sì, ma le parti arrivano da fuori, si possono togliere e
+        sopravvivono $\to$ \textbf{aggregazione} (rombo vuoto); sì, e A crea le parti, non le cede e le parti non
+        esistono senza A $\to$ \textbf{composizione} (rombo pieno).
+\end{enumerate}
+Nel codice aggregazione e composizione si scrivono quasi come un'associazione: la differenza la fanno
+\textbf{chi crea} le parti e \textbf{se le parti escono}.
+\end{guida}
+
+\begin{caso}{dipendenzecodice}{Le tre dipendenze: «call», «use», «create»}
+\begin{lstlisting}[style=javacs]
+class A {
+    void esegui(B b) {
+        b.calcola();             // «call»
+        int limite = b.soglia;   // «use»
+        C registro = new C();    // «create»
+        registro.annota(limite);
+    }
+}
+class B {
+    int soglia = 10;
+    void calcola() { }
+}
+class C {
+    void annota(int x) { }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[2.2cm]{a}{(0,0)}{A}{}{\textasciitilde\ esegui(b: B)}
+  \umlclass[2.4cm]{b}{(4.6,0.9)}{B}{\textasciitilde\ soglia: int = 10}{\textasciitilde\ calcola()}
+  \umlclass[2.4cm]{c}{(4.6,-1.3)}{C}{}{\textasciitilde\ annota(x: int)}
+  \draw[dep] ($(a.east)+(0,0.2)$) -- node[stereo, above, sloped]{«call» «use»} (b.west);
+  \draw[dep] ($(a.east)+(0,-0.2)$) -- node[stereo, below, sloped]{«create» «call»} (c.west);
+\end{tikzpicture}
+\regola{A non ha campi di tipo B o C: niente associazioni, solo \textbf{dipendenze}, perché li usa dentro un metodo.
+Si chiama un metodo: «call»; si legge un attributo: «use»; si crea un oggetto: «create». Più stereotipi sulla
+stessa freccia si possono scrivere insieme. Se B o C cambiano, A può non compilare più.}
+\end{caso}
+
+\begin{caso}{dipendenzeparametri}{Parametri, valori restituiti, metodi statici}
+\begin{lstlisting}[style=javacs]
+class Report {
+    String testo(Vendite v) {          // parametro
+        return Formato.euro(v.totale()); // statico
+    }
+    Grafico grafico() {        // tipo restituito
+        return new Grafico();
+    }
+}
+class Vendite {
+    double totale() { return 0; }
+}
+class Formato {
+    static String euro(double x) {
+        return x + " euro";
+    }
+}
+class Grafico { }
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[3.4cm]{r}{(0,0)}{Report}{}{\textasciitilde\ testo(v: Vendite): String\\\textasciitilde\ grafico(): Grafico}
+  \node[classe1=1.6cm] (v) at (5.0,1.2) {Vendite};
+  \umlclass[3.4cm]{f}{(5.0,-0.1)}{Formato}{}{\underline{\textasciitilde\ euro(x: double): String}}
+  \node[classe1=1.6cm] (g) at (5.0,-1.4) {Grafico};
+  \draw[dep] ($(r.east)+(0,0.3)$) -- node[stereo, above, sloped]{«call»} (v.west);
+  \draw[dep] (r.east) -- node[stereo, above]{«call»} (r.east -| f.west);
+  \draw[dep] ($(r.east)+(0,-0.3)$) -- node[stereo, below, sloped]{«create»} (g.west);
+\end{tikzpicture}
+\regola{Una classe che compare come \textbf{tipo di un parametro} o \textbf{del valore restituito}, o di cui si
+chiama un \textbf{metodo statico} (\code{Formato.euro}), è una dipendenza: non c'è un campo che la tenga. Il tipo
+del parametro resta comunque nella firma dell'operazione.}
+\end{caso}
+
+\begin{caso}{composizionecodice}{Composizione: il tutto crea le parti e non le cede}
+\begin{lstlisting}[style=javacs]
+class Casa {
+    private final List<Stanza> stanze =
+            new ArrayList<>();
+    Casa(int quante) {
+        for (int i = 0; i < quante; i++)
+            stanze.add(new Stanza(this));
+    }
+}
+class Stanza {
+    private final Casa casa;
+    Stanza(Casa c) { casa = c; } // dentro una casa
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[classe1=1.6cm] (c) at (0,0) {Casa};
+  \node[classe1=1.6cm] (s) at (4.6,0) {Stanza};
+  \draw[compos] (c) -- (s);
+  \estE{(c.east)}{1}{casa}
+  \estO{(s.west)}{*}{stanze}
+\end{tikzpicture}
+\regola{Gli indizi della \textbf{composizione}: le parti sono create \textbf{dentro} il tutto (\code{new Stanza} nel
+costruttore di \code{Casa}), stanno in un campo privato che non esce mai (niente getter della lista, niente
+\code{add} dall'esterno), e ricevono il tutto nel costruttore, \code{final}. Rombo pieno dal lato di
+\code{Casa}, molteplicità \code{1}.}
+\end{caso}
+
+\begin{caso}{aggregazionecodice}{Aggregazione: le parti arrivano da fuori e sopravvivono}
+\begin{lstlisting}[style=javacs]
+class Veicolo {
+    private final List<Ruota> ruote =
+            new ArrayList<>();
+    void monta(Ruota r) {
+        ruote.add(r);
+        r.setVeicolo(this);
+    }
+    Ruota smonta(int i) {
+        Ruota r = ruote.remove(i);
+        r.setVeicolo(null);
+        return r;          // la ruota esiste ancora
+    }
+}
+class Ruota {
+    private Veicolo veicolo;   // null: di scorta
+    void setVeicolo(Veicolo v) { veicolo = v; }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[classe1=1.6cm] (v) at (0,0) {Veicolo};
+  \node[classe1=1.6cm] (r) at (4.6,0) {Ruota};
+  \draw[aggr] (v) -- (r);
+  \estE{(v.east)}{0..1}{veicolo}
+  \estO{(r.west)}{*}{ruote}
+\end{tikzpicture}
+\regola{Le ruote sono create \textbf{fuori} e passate a \code{monta}; \code{smonta} le restituisce, e possono finire
+su un altro veicolo o restare di scorta (\code{null}): \textbf{aggregazione}, \code{0..1} dal lato del tutto. Se
+le ruote non fossero «parti» del veicolo (per esempio i passeggeri), sarebbe una semplice associazione.}
+\end{caso}
+
+\begin{caso}{associativacodice}{Un dato sulla coppia: classe associativa}
+\begin{lstlisting}[style=javacs]
+class Voto {
+    private final Studente studente;
+    private final Esame esame;
+    private final int valore;
+    Voto(Studente s, Esame e, int valore) {
+        studente = s;
+        esame = e;
+        this.valore = valore;
+    }
+}
+class Studente {
+    private final List<Voto> voti =
+            new ArrayList<>();
+}
+class Esame {
+    private final List<Voto> voti =
+            new ArrayList<>();
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[classe1=1.6cm] (s) at (0,0) {Studente};
+  \node[classe1=1.6cm] (e) at (4.6,0) {Esame};
+  \draw[assocl] (s) -- node[molt, above, pos=0.12]{*} node[molt, above, pos=0.88]{*} (e);
+  \umlclass[2.2cm]{v}{(2.3,-1.25)}{Voto}{- valore: int}{}
+  \draw[tratt] (2.3,0) -- (v.north);
+  \node[font=\scriptsize] at (2.3,-2.35) {oppure};
+  \node[classe1=1.6cm] (s2) at (0,-3.2) {Studente};
+  \umlclass[1.6cm]{v2}{(2.3,-3.2)}{Voto}{- valore: int}{}
+  \node[classe1=1.4cm] (e2) at (4.6,-3.2) {Esame};
+  \draw[assocl] (s2.east) -- node[molt, above, pos=0.15]{1} node[molt, above, pos=0.82]{*} (v2.west |- s2.east);
+  \draw[assocl] (v2.east |- e2.west) -- node[molt, above, pos=0.18]{*} node[molt, above, pos=0.85]{1} (e2.west);
+\end{tikzpicture}
+\regola{Una classe con un riferimento a \textbf{due} classi più un dato che riguarda la coppia: \textbf{classe
+associativa} sul molti a molti (sopra), oppure due uno a molti (sotto). La seconda forma ammette più voti per la
+stessa coppia studente--esame (un esame ripetuto); la prima no.}
+\end{caso}
+
+\begin{caso}{iniezione}{La dipendenza passata da fuori (Dependency Injection)}
+\begin{lstlisting}[style=javacs]
+interface Archivio {
+    void salva(String dato);
+}
+class ArchivioFile implements Archivio {
+    public void salva(String dato) { }
+}
+class Servizio {
+    private final Archivio archivio;
+    Servizio(Archivio a) {     // iniettato da fuori
+        archivio = a;
+    }
+}
+public class Main {
+    public static void main(String[] args) {
+        Archivio a = new ArchivioFile();
+        Servizio s = new Servizio(a);
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[classe1=1.6cm] (s) at (0,0) {Servizio};
+  \umlclass[3.1cm]{a}{(5.0,0)}{\stereotipo{interface}{Archivio}}{}{+ salva(dato: String)}
+  \node[classe1=2.0cm] (f) at (5.0,-1.9) {ArchivioFile};
+  \umlclass[3.2cm]{m}{(0,-1.9)}{Main}{}{\underline{+ main(args: String [*])}}
+  \draw[navig] (s.east) -- (s.east -| a.west);
+  \estO{(s.east -| a.west)}{1}{archivio}
+  \draw[realizza] (f.north) -- (a.south);
+  \draw[dep] (m.north) -- node[stereo, left]{«create»} (s.south);
+  \draw[dep] (m.east) -- node[stereo, above]{«create»} (f.west);
+\end{tikzpicture}
+\regola{\code{Servizio} conosce solo l'interfaccia (associazione verso \code{Archivio}); la classe concreta la sceglie
+e la crea \code{Main}, che ha le dipendenze «create». Nei test al posto di \code{ArchivioFile} si passa un oggetto
+finto. È la Dependency Injection (\vv{di-struttura}).}
+\end{caso}
+
+\begin{caso}{ascoltatori}{Una lista di oggetti da avvisare}
+\begin{lstlisting}[style=javacs]
+interface Ascoltatore {
+    void avvisa(String evento);
+}
+class Pulsante {
+    private final List<Ascoltatore> ascoltatori =
+            new ArrayList<>();
+    void aggiungi(Ascoltatore a) {
+        ascoltatori.add(a);
+    }
+    void premi() {
+        for (Ascoltatore a : ascoltatori)
+            a.avvisa("click");
+    }
+}
+class Finestra implements Ascoltatore {
+    public void avvisa(String evento) { }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[3.8cm]{p}{(0,0)}{Pulsante}{}{\textasciitilde\ aggiungi(a: Ascoltatore)\\\textasciitilde\ premi()}
+  \umlclass[3.5cm]{a}{(4.9,0)}{\stereotipo{interface}{Ascoltatore}}{}{+ avvisa(evento: String)}
+  \node[classe1=1.8cm] (f) at (4.9,-1.9) {Finestra};
+  \draw[navig] (p.east) -- (a.west);
+  \estO{(a.west)}{*}{ascoltatori}
+  \draw[realizza] (f.north) -- (a.south);
+\end{tikzpicture}
+\regola{Una collezione di oggetti di un'\textbf{interfaccia}, un metodo per aggiungerli e uno che li percorre
+chiamando lo stesso metodo su tutti: associazione \code{*} verso l'interfaccia. È la firma dell'Observer
+(\vv{observer-struttura}).}
+\end{caso}
+
+\begin{attenzione}{Errori frequenti quando si disegna dal codice}
+\begin{itemize}[nosep, leftmargin=*]
+  \item Scrivere un campo sia fra gli attributi sia come associazione: è un \textbf{doppione} (\vv{tipiattributo}).
+  \item Frecce di generalizzazione \textbf{al contrario}: la punta va sempre verso la \textbf{superclasse}.
+  \item Realizzazione con la linea continua, o generalizzazione fra classe e interfaccia: \code{implements} è
+        \textbf{tratteggiato}.
+  \item Molteplicità dal lato sbagliato: la molteplicità di una lista sta vicino alla classe degli
+        \textbf{elementi}.
+  \item Rombo dal lato della parte: il rombo sta sempre dal lato del \textbf{tutto}.
+  \item Disegnare \code{ArrayList}, \code{HashMap} o \code{String} come classi del diagramma.
+  \item Riempire ogni classe di getter e setter: non aggiungono informazioni.
+\end{itemize}
+\end{attenzione}

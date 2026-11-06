@@ -1,0 +1,167 @@
+% ============================================================
+% Cheat sheet, argomento: il pattern State (dispensa, capitoli 9 e 15)
+% ============================================================
+\argomento{State}{Dispensa: capitoli 9 e 15. Pattern comportamentale della GoF}[Pattern State]
+
+\scheda{Carta d'identità}{
+  \pintento{Permettere a un oggetto di \textbf{cambiare comportamento quando cambia il suo stato interno}: sembra che
+    cambi classe. È il modo a oggetti di realizzare un \textbf{diagramma di stato}.}
+  \ptesto{«si comporta in modo diverso a seconda dello stato (della fase)», «lo stesso comando ha effetti diversi», un
+    \textbf{diagramma di stato} da implementare, «stati e transizioni»; gli esempi tipici: il \textbf{distributore
+    automatico}, un ordine (in preparazione, spedito, consegnato), una connessione (aperta, chiusa), un'interfaccia
+    grafica con più schermate.}
+  \pcodice{il \textbf{contesto} ha un campo di un tipo astratto (\code{State stato}) e \textbf{delega} ogni evento allo
+    stato corrente passandogli se stesso: \code{stato.inserisciMoneta(this)}; una \textbf{sottoclasse per stato}, con un
+    metodo per evento; le \textbf{transizioni le fanno gli stati stessi}, chiamando \code{contesto.setState(\ldots)};
+    spesso gli stati sono oggetti condivisi, creati una volta in campi statici.}
+  \pdiagramma{\code{Context} con una composizione (o aggregazione) \code{1} verso la classe astratta \code{State}, e le
+    sottoclassi \code{ConcreteStateA}, \code{ConcreteStateB}\ldots; la nota \code{state.handle()} sul contesto.}
+  \pvarianti{\code{State} classe astratta con i metodi vuoti (un evento non previsto viene ignorato) o interfaccia;
+    stati condivisi e senza campi (i dati stanno nel contesto) oppure uno stato per contesto, se lo stato deve
+    ricordare qualcosa; senza pattern, gli \code{switch} annidati (\vv{statoswitch}).}
+  \pconfondere{lo \textbf{Strategy} (\vv{strategy-struttura}): \textbf{stessa struttura}, ma l'oggetto lo sceglie il
+    \textbf{client} e le strategie non si conoscono fra loro; nello State sono gli \textbf{stati} a decidere il
+    prossimo stato, e ognuno sa in quali altri si può passare.}
+}
+
+\begin{struttura}{state-struttura}{La struttura e la corrispondenza con il diagramma di stato}
+\begin{tikzpicture}
+  \umlclass[2.2cm]{c}{(0,0)}{Context}{}{+ request()}
+  \umlclass[2.2cm]{s}{(4.0,0)}{\textit{State}}{}{+ handle(c)}
+  \umlclass[2.6cm]{a}{(2.4,-2.4)}{ConcreteStateA}{}{+ handle(c)}
+  \umlclass[2.6cm]{b}{(5.6,-2.4)}{ConcreteStateB}{}{+ handle(c)}
+  \draw[compos] (c.east) -- (s.west);
+  \estO{(s.west)}{1}{state}
+  \draw[gen] (a.north) |- ++(0,0.45) -| (s.south);
+  \draw[gen] (b.north) |- ++(0,0.45) -| (s.south);
+  \node[notauml, anchor=north] (n) at (0,-1.3) {state.handle(this)};
+  \draw[tratt] (c.south) -- (n.north);
+\end{tikzpicture}
+\tcblower
+\textbf{Context}: l'oggetto che il client usa; tiene lo stato corrente e i dati. \textbf{State}: un metodo per ogni
+evento, vuoti. \textbf{ConcreteState}: uno per stato del diagramma; ridefinisce solo gli eventi che lì hanno un
+effetto.
+
+\renewcommand{\arraystretch}{1.15}\footnotesize
+\begin{tabular}{@{}l l@{}}
+  \textbf{Diagramma di stato} & \textbf{Codice} \\ \hline
+  stato & sottoclasse di \code{State} \\
+  evento & metodo di \code{State} \\
+  guardia & \code{if} nel metodo \\
+  azione & corpo del metodo \\
+  transizione & \code{setState(\ldots)} \\
+\end{tabular}
+\end{struttura}
+
+\begin{programma}{state-esempio}{L'esempio del corso: il distributore automatico (ridotto)}
+\begin{lstlisting}[style=javacs, name=Cliente.java]
+public class Cliente {
+    public static void main(String[] args) {
+        Distributore d = new Distributore();
+        d.selezionaProdotto();
+        d.inserisciMoneta();
+        d.inserisciMoneta();
+        d.selezionaProdotto();
+        d.inserisciMoneta();
+        d.prelevaProdotto();
+    }
+}
+class Distributore {                     // Context
+    static final State ATTESA = new Attesa(),
+            SCELTA = new AttesaScelta(),
+            EROGAZIONE = new Erogazione();
+    private State stato = ATTESA;
+    private int credito = 0;
+
+    void setState(State s) { stato = s; }
+    int getCredito() { return credito; }
+    void setCredito(int c) { credito = c; }
+    // ogni evento è delegato allo stato corrente
+    void inserisciMoneta() { stato.moneta(this); }
+    void selezionaProdotto() { stato.scelta(this); }
+    void prelevaProdotto() { stato.prelievo(this); }
+}
+abstract class State {            // eventi: vuoti
+    void moneta(Distributore d) { }
+    void scelta(Distributore d) { }
+    void prelievo(Distributore d) { }
+}
+class Attesa extends State {
+    void moneta(Distributore d) {
+        d.setCredito(d.getCredito() + 1);
+        System.out.println("Credito: "
+                + d.getCredito());
+        if (d.getCredito() >= 2)       // guardia
+            d.setState(Distributore.SCELTA);
+    }
+    void scelta(Distributore d) {
+        System.out.println("Credito insufficiente");
+    }
+}
+class AttesaScelta extends State {
+    void moneta(Distributore d) {
+        d.setCredito(d.getCredito() + 1);
+        System.out.println("Credito: "
+                + d.getCredito());
+    }
+    void scelta(Distributore d) {
+        System.out.println("Erogazione...");
+        d.setState(Distributore.EROGAZIONE);
+    }
+}
+class Erogazione extends State {
+    void moneta(Distributore d) {
+        System.out.println("Attendi l'erogazione");
+    }
+    void prelievo(Distributore d) {
+        d.setCredito(d.getCredito() - 2);
+        System.out.println("Ecco il prodotto, "
+                + "credito: " + d.getCredito());
+        if (d.getCredito() >= 2)
+            d.setState(Distributore.SCELTA);
+        else
+            d.setState(Distributore.ATTESA);
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[3.6cm]{d}{(0,0)}{Distributore}{\underline{\textasciitilde\ ATTESA: State}\\\underline{\textasciitilde\ SCELTA: State}\\\underline{\textasciitilde\ EROGAZIONE: State}\\- credito: int = 0}{\textasciitilde\ inserisciMoneta()\\\textasciitilde\ selezionaProdotto()\\\textasciitilde\ prelevaProdotto()\\\textasciitilde\ setState(s: State)}
+  \umlclass[2.6cm]{s}{(4.2,0)}{\textit{State}}{}{\textasciitilde\ moneta(d)\\\textasciitilde\ scelta(d)\\\textasciitilde\ prelievo(d)}
+  \node[classe1=1.4cm] (a) at (2.2,-3.0) {Attesa};
+  \node[classe1=1.9cm] (b) at (3.95,-3.0) {AttesaScelta};
+  \node[classe1=1.8cm] (e) at (5.8,-3.0) {Erogazione};
+  \draw[compos] (d.east |- s.west) -- (s.west);
+  \estO{(s.west)}{1}{stato}
+  \foreach \x in {a, b, e}{ \draw[gen] (\x.north) |- ($(s.south)+(0,-0.4)$) -- (s.south); }
+\end{tikzpicture}
+
+\medskip
+\begin{tikzpicture}
+  \node[iniziale] (i) at (-1.4,0) {};
+  \node[stato, minimum width=1.4cm, minimum height=0.6cm] (at) at (0,0) {Attesa};
+  \node[stato, minimum width=1.6cm, minimum height=0.6cm] (sc) at (3.6,0) {AttesaScelta};
+  \node[stato, minimum width=1.6cm, minimum height=0.6cm] (er) at (3.6,-1.9) {Erogazione};
+  \draw[tr] (i) -- (at);
+  \draw[tr] ($(at.east)+(0,0.12)$) -- node[above, font=\tiny]{moneta [credito$\geq$2]} ($(sc.west)+(0,0.12)$);
+  \draw[tr] ($(sc.south)+(0.3,0)$) -- node[right, font=\tiny]{scelta} ($(er.north)+(0.3,0)$);
+  \draw[tr] ($(er.north)+(-0.3,0)$) -- node[left, font=\tiny, align=right]{prelievo\\{}[credito$\geq$2]} ($(sc.south)+(-0.3,0)$);
+  \draw[tr] (er.west) -| node[below, font=\tiny, pos=0.3]{prelievo [credito$<$2]} (at.south);
+\end{tikzpicture}
+
+\medskip
+\begin{lstlisting}[style=shellcs, name=Terminale]
+$ javac Cliente.java
+$ java Cliente
+Credito insufficiente
+Credito: 1
+Credito: 2
+Erogazione...
+Attendi l'erogazione
+Ecco il prodotto, credito: 0
+\end{lstlisting}
+\regola{La stessa chiamata (\code{selezionaProdotto()}) fa cose diverse a seconda dello stato: in Attesa rifiuta, in
+AttesaScelta avvia l'erogazione. Una \textbf{transizione} non crea oggetti: \code{setState} sposta il riferimento
+fra tre oggetti stato creati una volta sola, senza campi (il credito sta nel distributore). Il codice del corso ha
+più eventi (restituzione del credito, time out, spegnimento).}
+\end{programma}

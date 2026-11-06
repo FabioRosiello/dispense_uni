@@ -1,0 +1,143 @@
+% ============================================================
+% Cheat sheet, argomento: il pattern Decorator (dispensa, capitolo 15)
+% ============================================================
+\argomento{Decorator}{Dispensa: capitolo 15. Pattern strutturale della GoF}[Pattern Decorator]
+
+\scheda{Carta d'identità}{
+  \pintento{Aggiungere \textbf{dinamicamente} responsabilità a un oggetto, \textbf{avvolgendolo} in un altro oggetto con
+    la \textbf{stessa interfaccia}: un'alternativa flessibile alle sottoclassi.}
+  \ptesto{«aggiungere funzionalità (ingredienti, optional, opzioni, filtri) a un oggetto», «a tempo di esecuzione»,
+    «in qualunque combinazione, anche ripetuta» (la doppia mozzarella), «senza una sottoclasse per ogni
+    combinazione» (con 10 ingredienti sarebbero $2^{10}$ classi), «un flusso di dati con buffer, cifratura,
+    compressione».}
+  \pcodice{una classe (spesso astratta) che \textbf{\code{implements} il Component} \textbf{e} ha \textbf{un} campo dello
+    \textbf{stesso tipo}, ricevuto nel costruttore (\code{protected Pizza pizza}); i decoratori concreti chiamano il
+    metodo dell'oggetto avvolto e \textbf{aggiungono} qualcosa (\code{pizza.getCost() + 1.50}); il client scrive
+    catene come \code{new Mozzarella(new Fungo(new OlioEPomodoro()))}.}
+  \pdiagramma{\code{Decorator} realizza (o estende) \code{Component} \textbf{e} ha un'aggregazione verso
+    \code{Component} con molteplicità \code{1}; i \code{ConcreteDecorator} estendono il Decorator; il
+    \code{ConcreteComponent} realizza il Component.}
+  \pvarianti{il Decorator come classe astratta che delega tutto per default (i decoratori concreti ridefiniscono solo
+    ciò che cambiano); nella libreria di Java i flussi di I/O: \code{new BufferedReader(new InputStreamReader(System.in))}
+    (byte $\to$ caratteri $\to$ righe).}
+  \pconfondere{il \textbf{Composite}: contiene \textbf{molti} componenti, il Decorator \textbf{uno}; l'\textbf{Adapter}:
+    l'oggetto avvolto ha un'interfaccia \textbf{diversa} e l'adapter la traduce, il Decorator ha la \textbf{stessa}
+    interfaccia e aggiunge; l'ereditarietà: aggiunge funzioni in modo statico, nel codice, non a tempo di esecuzione.}
+}
+
+\begin{struttura}{decorator-struttura}{La struttura}
+\begin{tikzpicture}
+  \umlclass[2.6cm]{c}{(1.6,0)}{\textit{Component}}{}{+ operation()}
+  \umlclass[3.1cm]{cc}{(-0.6,-2.4)}{ConcreteComponent}{}{+ operation()}
+  \umlclass[3.3cm]{d}{(3.4,-2.4)}{\textit{Decorator}}{- component: Component}{+ operation()}
+  \umlclass[3.1cm]{cd}{(3.4,-4.9)}{ConcreteDecorator}{}{+ operation()}
+  \draw[gen] (cc.north) |- ++(0,0.5) -| ([xshift=-0.45cm]c.south);
+  \draw[gen] (d.north) |- ++(0,0.35) -| ([xshift=0.45cm]c.south);
+  \draw[aggr] (d.east) -- ++(0.5,0) |- (c.east);
+  \node[molt, anchor=south west] at ($(c.east)+(0.1,0.05)$) {1};
+  \node[ruolo, anchor=north west] at ($(c.east)+(0.1,-0.05)$) {component};
+  \draw[gen] (cd.north) -- (d.south);
+  \node[notauml, anchor=east, text width=3.0cm] (n) at (1.1,-4.9) {component.operation();\\// più il comportamento\\// aggiunto};
+  \draw[tratt] (cd.west) -- (n.east);
+\end{tikzpicture}
+\tcblower
+\textbf{Component}: l'interfaccia comune. \textbf{ConcreteComponent}: l'oggetto di base. \textbf{Decorator}:
+\textbf{è} un Component (eredita l'interfaccia) e \textbf{ha} un Component (il campo a cui delega): è questa doppia
+relazione che permette di avvolgere un decoratore dentro un altro. \textbf{ConcreteDecorator}: chiama l'oggetto
+avvolto e aggiunge il suo pezzo. La chiamata scende lungo la catena fino all'oggetto di base, e i risultati
+risalgono.
+\end{struttura}
+
+\begin{programma}{decorator-esempio}{L'esempio del corso: la pizza}
+\begin{lstlisting}[style=javacs, name=Pizzeria.java]
+public class Pizzeria {
+    public static void main(String[] args) {
+        Pizza p = new OlioEPomodoro();
+        stampa(p);
+        p = new Mozzarella(p); // ogni new avvolge
+        p = new Fungo(p);      // la pizza di prima
+        p = new Mozzarella(p); // doppia mozzarella
+        stampa(p);
+    }
+    static void stampa(Pizza p) {
+        System.out.println(p.getDescription());
+        System.out.println("  " + p.getCost());
+    }
+}
+interface Pizza {                     // Component
+    String getDescription();
+    double getCost();
+}
+class OlioEPomodoro implements Pizza {   // di base
+    public String getDescription() {
+        return "Olio e Pomodoro";
+    }
+    public double getCost() { return 3.00; }
+}
+abstract class PizzaDecorator implements Pizza {
+    protected final Pizza pizza;         // avvolta
+    PizzaDecorator(Pizza pizza) {
+        this.pizza = pizza;
+    }
+}
+class Mozzarella extends PizzaDecorator {
+    Mozzarella(Pizza p) { super(p); }
+    public String getDescription() {
+        return pizza.getDescription()
+                + ", Mozzarella";
+    }
+    public double getCost() {
+        return pizza.getCost() + 1.50;
+    }
+}
+class Prosciutto extends PizzaDecorator {
+    Prosciutto(Pizza p) { super(p); }
+    public String getDescription() {
+        return pizza.getDescription()
+                + ", Prosciutto";
+    }
+    public double getCost() {
+        return pizza.getCost() + 1.00;
+    }
+}
+class Fungo extends PizzaDecorator {
+    Fungo(Pizza p) { super(p); }
+    public String getDescription() {
+        return pizza.getDescription()
+                + ", Funghi";
+    }
+    public double getCost() {
+        return pizza.getCost() + 2.00;
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[3.6cm]{pz}{(1.2,0)}{\stereotipo{interface}{Pizza}}{}{+ getDescription(): String\\+ getCost(): double}
+  \umlclass[3.4cm]{b}{(-0.8,-2.6)}{OlioEPomodoro}{}{+ getDescription(): String\\+ getCost(): double}
+  \umlclass[3.8cm]{d}{(3.2,-2.6)}{\textit{PizzaDecorator}}{\# pizza: Pizza \{readOnly\}}{\textasciitilde\ PizzaDecorator(pizza: Pizza)}
+  \node[classe1=1.7cm] (m) at (1.5,-4.7) {Mozzarella};
+  \node[classe1=1.7cm] (r) at (3.3,-4.7) {Prosciutto};
+  \node[classe1=1.4cm] (f) at (5.0,-4.7) {Fungo};
+  \draw[realizza] (b.north) |- ++(0,0.5) -| ([xshift=-0.45cm]pz.south);
+  \draw[realizza] (d.north) |- ++(0,0.35) -| ([xshift=0.45cm]pz.south);
+  \draw[aggr] (d.east) -- ++(0.55,0) |- (pz.east);
+  \node[molt, anchor=south west] at ($(pz.east)+(0.1,0.05)$) {1};
+  \node[ruolo, anchor=north west] at ($(pz.east)+(0.1,-0.05)$) {pizza};
+  \foreach \x in {m, r, f}{ \draw[gen] (\x.north) |- ($(d.south)+(0,-0.35)$) -- (d.south); }
+\end{tikzpicture}
+
+\medskip
+\begin{lstlisting}[style=shellcs, name=Terminale]
+$ javac Pizzeria.java
+$ java Pizzeria
+Olio e Pomodoro
+  3.0
+Olio e Pomodoro, Mozzarella, Funghi, Mozzarella
+  8.0
+\end{lstlisting}
+\regola{\code{getCost()} sull'anello più esterno scende fino alla pizza base, che risponde 3,00; poi i risultati
+risalgono e ogni decoratore aggiunge il suo pezzo: $3 + 1{,}5 + 2 + 1{,}5 = 8$. Le combinazioni (anche ripetute)
+si scelgono a tempo di esecuzione con una classe per ingrediente. Il prezzo da pagare: ogni chiamata attraversa
+tutta la catena.}
+\end{programma}

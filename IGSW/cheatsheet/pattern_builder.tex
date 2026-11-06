@@ -1,0 +1,216 @@
+% ============================================================
+% Cheat sheet, argomento: il pattern Builder (dispensa, capitolo 15)
+% ============================================================
+\argomento{Builder}{Dispensa: capitolo 15. Pattern creazionale della GoF}[Pattern Builder]
+
+\scheda{Carta d'identità}{
+  \pintento{Rendere la costruzione di un oggetto complesso \textbf{flessibile e scomponibile in passi}, separandola
+    dal costruttore dell'oggetto; con un Director, gli \textbf{stessi passi} producono \textbf{rappresentazioni
+    diverse}.}
+  \ptesto{«molti parametri, alcuni obbligatori e molti facoltativi», «configurazioni diverse dello stesso
+    prodotto», «costruito un pezzo alla volta», «in futuro le opzioni aumenteranno», «controllare i dati prima di
+    creare l'oggetto», «la stessa procedura deve produrre risultati diversi» (una casa e un grattacielo, una scheda
+    tecnica e un preventivo).}
+  \pcodice{una classe \code{XBuilder} con gli stessi campi del prodotto; i parametri obbligatori nel suo costruttore;
+    metodi \code{withY(\ldots)} (o \code{setY}) che impostano un'opzione e fanno \textbf{\code{return this}}, così le
+    chiamate si concatenano; un metodo finale \textbf{\code{build()}} (o \code{getResult()}) che controlla i dati e
+    fa \code{new Prodotto(\ldots)}. Il prodotto ha campi \code{final} e un costruttore non pubblico.}
+  \pdiagramma{il Builder con una dipendenza «create» verso il prodotto, e operazioni che restituiscono il Builder
+    stesso. Con il Director: un'interfaccia (o classe astratta) Builder con più ConcreteBuilder, e il Director che la
+    usa.}
+  \pvarianti{senza Director (il client chiama i passi: \vv{builder-esempio}) o con il Director che conosce le
+    «ricette» (\vv{builder-director}); il builder come classe annidata statica del prodotto
+    (\code{Computer.builder()}) \oltre. Nella libreria di Java: \code{StringBuilder}, \code{Locale.Builder},
+    \code{DateTimeFormatterBuilder}, \code{HttpRequest.newBuilder()}.}
+  \pconfondere{un costruttore con dieci parametri senza nome o tanti \code{set} su un oggetto già creato (che resta
+    a metà e modificabile per sempre); il Decorator, dove le catene sono di oggetti uno dentro l'altro
+    (\code{new A(new B(\ldots))}), non di chiamate sullo stesso oggetto.}
+}
+
+\begin{struttura}{builder-struttura}{La struttura}
+\begin{tikzpicture}
+  \umlclass[2.2cm]{d}{(0,0)}{Director}{}{+ construct()}
+  \umlclass[2.4cm]{b}{(3.9,0)}{\textit{Builder}}{}{+ buildPart()}
+  \umlclass[2.6cm]{c}{(3.9,-2.4)}{ConcreteBuilder}{}{+ buildPart()\\+ getResult()}
+  \node[classe1=1.6cm] (p) at (7.3,-2.4) {Product};
+  \draw[aggr] (d.east) -- (b.west);
+  \estO{(b.west)}{}{builder}
+  \draw[gen] (c.north) -- (b.south);
+  \draw[dep] (c.east) -- node[stereo, above]{«create»} (p.west);
+  \node[notauml, anchor=north, text width=2.6cm] (n) at (0,-1.5) {for all parti:\\\hspace*{1em}builder.buildPart()};
+  \draw[tratt] (d.south) -- (n.north);
+\end{tikzpicture}
+\tcblower
+\textbf{Builder}: l'interfaccia dei passi di costruzione. \textbf{ConcreteBuilder}: li implementa, tiene il
+prodotto in costruzione e lo consegna alla fine (\code{getResult}, \code{build}). \textbf{Director}: conosce la
+sequenza dei passi e la ripete con qualunque builder. \textbf{Product}: l'oggetto complesso. \code{getResult()} sta
+solo nei builder concreti, perché ogni builder può produrre un tipo diverso.
+\end{struttura}
+
+\begin{programma}{builder-esempio}{L'esempio del corso: costruire un computer (senza Director)}
+\begin{lstlisting}[style=javacs, name=Main.java]
+public class Main {
+    public static void main(String[] args) {
+        Computer gaming =
+            new ComputerBuilder("AMD Ryzen 7", 32)
+                .withDedicatedGPU("RX 7800")
+                .withSSD(2000)
+                .includeOS()
+                .build();
+        System.out.println(gaming);
+        try {
+            new ComputerBuilder("Intel Core i3", 2)
+                .build();
+        } catch (IllegalStateException e) {
+            System.out.println(e.getMessage());
+        }
+    }
+}
+class Computer {
+    private final String cpu, gpu, disco;
+    private final int ramGB;
+    private final boolean hasOS;
+    Computer(String cpu, int ramGB, String gpu,
+             String disco, boolean hasOS) {
+        this.cpu = cpu;     this.ramGB = ramGB;
+        this.gpu = gpu;     this.disco = disco;
+        this.hasOS = hasOS;
+    }
+    public String toString() {
+        String os = hasOS ? ", con OS" : "";
+        return cpu + ", " + ramGB + " GB, " + gpu
+                + ", " + disco + os;
+    }
+}
+class ComputerBuilder {
+    private final String cpu;      // obbligatori
+    private final int ramGB;
+    private String gpu = "GPU integrata"; // opzioni
+    private String disco = "nessun disco";
+    private boolean hasOS = false;
+
+    ComputerBuilder(String cpu, int ramGB) {
+        this.cpu = cpu;
+        this.ramGB = ramGB;
+    }
+    ComputerBuilder withDedicatedGPU(String gpu) {
+        this.gpu = gpu;
+        return this;
+    }
+    ComputerBuilder withSSD(int gb) {
+        disco = "SSD " + gb + " GB";
+        return this;
+    }
+    ComputerBuilder includeOS() {
+        hasOS = true;
+        return this;
+    }
+    Computer build() {
+        if (ramGB < 4)
+            throw new IllegalStateException(
+                    "RAM insufficiente: min 4 GB");
+        return new Computer(cpu, ramGB, gpu, disco,
+                            hasOS);
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[3.2cm]{m}{(0,2.4)}{Main}{}{\underline{+ main(args: String [*])}}
+  \umlclass[7.0cm]{b}{(0,-0.5)}{ComputerBuilder}{- cpu: String \{readOnly\}\\- ramGB: int \{readOnly\}\\- gpu: String = "GPU integrata"\\- disco: String = "nessun disco"\\- hasOS: boolean = false}{\textasciitilde\ ComputerBuilder(cpu: String, ramGB: int)\\\textasciitilde\ withDedicatedGPU(gpu: String): ComputerBuilder\\\textasciitilde\ withSSD(gb: int): ComputerBuilder\\\textasciitilde\ includeOS(): ComputerBuilder\\\textasciitilde\ build(): Computer}
+  \umlclass[3.6cm]{c}{(0,-5.1)}{Computer}{- cpu: String \{readOnly\}\\- gpu: String \{readOnly\}\\- disco: String \{readOnly\}\\- ramGB: int \{readOnly\}\\- hasOS: boolean \{readOnly\}}{\textasciitilde\ Computer(\ldots)\\+ toString(): String}
+  \draw[dep] (m.south) -- node[stereo, right]{«use»} (b.north);
+  \draw[dep] (b.south) -- node[stereo, right]{«create»} (c.north);
+\end{tikzpicture}
+
+\medskip
+\begin{lstlisting}[style=shellcs, name=Terminale]
+$ javac Main.java
+$ java Main
+AMD Ryzen 7, 32 GB, RX 7800, SSD 2000 GB, con OS
+RAM insufficiente: min 4 GB
+\end{lstlisting}
+\regola{Ogni \code{with\ldots} restituisce \code{this}: la catena lavora sempre sullo \textbf{stesso} builder.
+\code{build()} controlla i dati e solo alla fine crea il \code{Computer}, che non cambia più (campi \code{final}).
+Il secondo computer non viene creato: la regola sta nel builder, non nel prodotto.}
+\end{programma}
+
+\begin{programma}{builder-director}{Con il Director: stessa ricetta, prodotti diversi}
+\begin{lstlisting}[style=javacs, name=Negozio.java]
+public class Negozio {
+    public static void main(String[] args) {
+        Configuratore dir = new Configuratore();
+        SchedaTecnica scheda = new SchedaTecnica();
+        dir.pcGaming(scheda);      // stessa ricetta
+        System.out.print(scheda.getResult());
+        Preventivo prev = new Preventivo();
+        dir.pcGaming(prev);        // altro prodotto
+        System.out.println("Prezzo: "
+                + prev.getResult());
+    }
+}
+interface BuilderPC {                    // Builder
+    void cpu(String modello, int ramGB);
+    void gpu(String modello);
+    void ssd(int capacitaGB);
+}
+class Configuratore {                    // Director
+    void pcGaming(BuilderPC b) {
+        b.cpu("AMD Ryzen 7", 32);
+        b.gpu("AMD Radeon RX 7800");
+        b.ssd(2000);
+    }
+    void pcUfficio(BuilderPC b) {
+        b.cpu("Intel Core i3", 8);
+        b.ssd(256);
+    }
+}
+class SchedaTecnica implements BuilderPC {
+    private final StringBuilder testo =
+            new StringBuilder();
+    public void cpu(String modello, int ramGB) {
+        testo.append("CPU " + modello + ", RAM "
+                + ramGB + " GB\n");
+    }
+    public void gpu(String modello) {
+        testo.append("GPU " + modello + "\n");
+    }
+    public void ssd(int gb) {
+        testo.append("SSD " + gb + " GB\n");
+    }
+    String getResult() { return testo.toString(); }
+}
+class Preventivo implements BuilderPC {
+    private double totale = 0;
+    public void cpu(String modello, int ramGB) {
+        totale += 250 + 4 * ramGB;
+    }
+    public void gpu(String m) { totale += 550; }
+    public void ssd(int gb) { totale += 0.08 * gb; }
+    double getResult() { return totale; }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[3.4cm]{d}{(0,0)}{Configuratore}{}{\textasciitilde\ pcGaming(b: BuilderPC)\\\textasciitilde\ pcUfficio(b: BuilderPC)}
+  \umlclass[3.6cm]{i}{(4.1,0)}{\stereotipo{interface}{BuilderPC}}{}{+ cpu(modello, ramGB)\\+ gpu(modello)\\+ ssd(capacitaGB)}
+  \umlclass[3.0cm]{s}{(2.2,-2.9)}{SchedaTecnica}{- testo: StringBuilder}{\textasciitilde\ getResult(): String}
+  \umlclass[2.7cm]{p}{(5.4,-2.9)}{Preventivo}{- totale: double = 0}{\textasciitilde\ getResult(): double}
+  \draw[dep] (d.east) -- node[stereo, above]{«use»} (d.east -| i.west);
+  \draw[realizza] (s.north) |- ($(i.south)+(0,-0.45)$) -- (i.south);
+  \draw[realizza] (p.north) |- ($(i.south)+(0,-0.45)$);
+\end{tikzpicture}
+
+\medskip
+\begin{lstlisting}[style=shellcs, name=Terminale]
+$ javac Negozio.java
+$ java Negozio
+CPU AMD Ryzen 7, RAM 32 GB
+GPU AMD Radeon RX 7800
+SSD 2000 GB
+Prezzo: 1088.0
+\end{lstlisting}
+\regola{Il \textbf{Director} (\code{Configuratore}) conosce le ricette ma non il prodotto; i due \textbf{ConcreteBuilder}
+eseguono gli stessi passi e producono una scheda (\code{String}) e un prezzo (\code{double}): per questo
+\code{getResult()} non sta nell'interfaccia. Prezzi di fantasia: $378 + 550 + 160 = 1088$.}
+\end{programma}

@@ -1,0 +1,164 @@
+% ============================================================
+% Cheat sheet, argomento: il pattern Observer (dispensa, capitolo 15)
+% ============================================================
+\argomento{Observer}{Dispensa: capitolo 15. Pattern comportamentale della GoF}[Pattern Observer]
+
+\scheda{Carta d'identità}{
+  \pintento{Definire una dipendenza \textbf{1:N} fra oggetti: quando il \textbf{soggetto} cambia stato, tutti gli
+    \textbf{osservatori} vengono avvisati e aggiornati \textbf{automaticamente}.}
+  \ptesto{«quando X cambia, Y deve aggiornarsi automaticamente», «notificare», «avvisare tutti gli interessati»,
+    «iscriversi» e «cancellarsi», «abbonati», «più viste degli stessi dati», «osservatori di tipi diversi, aggiunti
+    mentre il programma gira», «un sensore o un servizio fornisce un dato aggiornato», «eventi dell'interfaccia
+    grafica»; nelle slide: aggiornare il valore delle azioni quando cambia la quotazione della società.}
+  \pcodice{il soggetto ha una \textbf{lista di un'interfaccia} (\code{List<Osservatore>}), un metodo per
+    \textbf{registrare} e uno per \textbf{togliere} gli osservatori (\code{attach}/\code{detach},
+    \code{add\ldots Listener}), e un metodo di \textbf{notifica} che percorre la lista chiamando \code{update()} su
+    tutti; il metodo che cambia lo stato (\code{setStato}) chiama la notifica. L'osservatore implementa l'interfaccia,
+    ha un riferimento al soggetto e nel suo \code{update()} ne legge il nuovo stato.}
+  \pdiagramma{\code{Subject} $\to$ \code{«interface» Observer} con molteplicità \code{*} (ruolo \code{observers});
+    \code{ConcreteObserver} realizza Observer e ha un'associazione \code{1} verso \code{ConcreteSubject}; spesso la
+    nota \code{for all o in observers: o.update()}.}
+  \pvarianti{soggetto astratto (classe con la lista) o interfaccia; i \textit{listener} di Swing con una
+    \textit{lambda} (\code{pulsante.addActionListener(e -> \ldots)}); il modello \textit{pull} (l'osservatore chiede lo
+    stato, come qui) o \textit{push} (il soggetto passa il dato a \code{update(valore)}) \oltre; il cuore dell'MVC (la
+    View osserva il Model). \code{java.util.Observable} esiste ma è deprecata da Java 9. In Java il metodo non può
+    chiamarsi \code{notify()}: esiste già, \code{final}, in \code{Object}.}
+  \pconfondere{il \textbf{Composite}: anche il composto ha una lista e chiama un metodo su tutti, ma i figli hanno la
+    \textbf{stessa interfaccia} del composto e formano un albero; lo \textbf{Strategy}: il contesto ha \textbf{un} oggetto
+    di un'interfaccia, non una lista, e gli delega un calcolo.}
+}
+
+\begin{struttura}{observer-struttura}{La struttura e il diagramma di sequenza}
+\begin{tikzpicture}
+  \umlclass[3.0cm]{as}{(0,0)}{\textit{Subject}}{}{+ attach(o: Observer)\\+ detach(o: Observer)\\+ notify()}
+  \umlclass[2.4cm]{ob}{(5.4,0)}{\stereotipo{interface}{Observer}}{}{+ update()}
+  \umlclass[3.0cm]{cs}{(0,-2.8)}{ConcreteSubject}{- state}{+ getState()\\+ setState(s)}
+  \umlclass[2.8cm]{co}{(5.4,-2.8)}{ConcreteObserver}{- observerState}{+ update()}
+  \draw[navig] (as.east) -- (as.east -| ob.west);
+  \estO{(as.east -| ob.west)}{*}{observers}
+  \draw[gen] (cs.north) -- (as.south);
+  \draw[realizza] (co.north) -- (ob.south);
+  \draw[navig] (co.west) -- (co.west -| cs.east);
+  \estE{(co.west -| cs.east)}{1}{subject}
+\end{tikzpicture}
+
+\medskip
+\begin{tikzpicture}
+  \foreach \n/\x/\t in {q1/0/{:ConcreteObserver}, q2/3.6/{:ConcreteSubject}, q3/7.0/{sorgente}}{
+    \node[partec, minimum width=2.4cm] (\n) at (\x,0) {\t};
+    \draw[vita] (\n.south) -- ++(0,-3.7);}
+  \draw[sinc] (0.08,-0.75) -- node[msgl]{attach(this)} (3.52,-0.75);
+  \attiv{3.6}{-0.75}{-1.0}
+  \draw[sinc] (6.92,-1.4) -- node[msgl]{setState(s)} (3.68,-1.4);
+  \attiv{3.6}{-1.4}{-3.4}
+  \draw[sinc] (3.68,-1.75) -- (4.6,-1.75) -- (4.6,-2.0) -- (3.68,-2.0);
+  \node[font=\tiny, anchor=west] at (4.65,-1.87) {notify()};
+  \draw[sinc] (3.52,-2.35) -- node[msgl]{update()} (0.08,-2.35);
+  \attiv{0}{-2.35}{-3.3}
+  \draw[sinc] (0.08,-2.7) -- node[msgl]{getState()} (3.52,-2.7);
+  \draw[ritorno] (3.52,-3.05) -- node[msgl]{s} (0.08,-3.05);
+\end{tikzpicture}
+\tcblower
+\textbf{Subject}: tiene la lista degli osservatori e li avvisa (\code{notify}). \textbf{Observer}: l'interfaccia con
+\code{update()}. \textbf{ConcreteSubject}: ha lo stato; quando cambia, chiama \code{notify}. \textbf{ConcreteObserver}:
+conosce il soggetto e, ricevuto \code{update()}, gli chiede il nuovo stato.
+
+Sotto, la sequenza: l'osservatore si registra; più tardi una sorgente esterna cambia lo stato; il soggetto notifica
+tutti, e ogni osservatore rilegge lo stato. Il soggetto conosce gli osservatori \textbf{solo} attraverso
+l'interfaccia: se ne possono aggiungere di nuovi senza toccarlo.
+\end{struttura}
+
+\begin{programma}{observer-esempio}{Il problema delle slide: il valore delle azioni}
+\begin{lstlisting}[style=javacs, name=Portafoglio.java]
+public class Portafoglio {
+    public static void main(String[] args) {
+        Societa acme = new Societa("ACME", 10.0);
+        AzioneAcquistata mie =
+                new AzioneAcquistata(acme, 100);
+        AzioneAcquistata tue =
+                new AzioneAcquistata(acme, 40);
+        System.out.println(mie + "\n" + tue);
+        acme.setQuotazione(12.5); // la borsa cambia
+        System.out.println(mie + "\n" + tue);
+    }
+}
+interface OsservatoreQuotazione {       // Observer
+    void update();
+}
+abstract class AbstractSocieta {        // Subject
+    private final List<OsservatoreQuotazione>
+            observers = new ArrayList<>();
+    public void attach(OsservatoreQuotazione o) {
+        observers.add(o);
+    }
+    public void detach(OsservatoreQuotazione o) {
+        observers.remove(o);
+    }
+    protected void notifica() {         // il notify
+        for (OsservatoreQuotazione o : observers)
+            o.update();
+    }
+}
+class Societa extends AbstractSocieta {
+    private final String nome;
+    private double quotazione;
+    Societa(String nome, double quotazione) {
+        this.nome = nome;
+        this.quotazione = quotazione;
+    }
+    String getNome() { return nome; }
+    double getQuotazione() { return quotazione; }
+    void setQuotazione(double q) {
+        quotazione = q;
+        notifica();     // avvisa gli osservatori
+    }
+}
+class AzioneAcquistata
+        implements OsservatoreQuotazione {
+    private final Societa societa;
+    private final int quantita;
+    private double valore;
+    AzioneAcquistata(Societa s, int quantita) {
+        societa = s;
+        this.quantita = quantita;
+        s.attach(this);           // si iscrive
+        update();                 // valore iniziale
+    }
+    public void update() {
+        valore = societa.getQuotazione() * quantita;
+    }
+    public String toString() {
+        return quantita + " azioni "
+                + societa.getNome() + " = " + valore
+                + " euro";
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[3.4cm]{as}{(0,0)}{\textit{AbstractSocieta}}{}{+ attach(o)\\+ detach(o)\\\# notifica()}
+  \umlclass[3.4cm]{oq}{(4.6,0)}{\stereotipo{interface}{OsservatoreQuotazione}}{}{+ update()}
+  \umlclass[3.4cm]{so}{(0,-3.0)}{Societa}{- nome: String \{readOnly\}\\- quotazione: double}{\textasciitilde\ getQuotazione(): double\\\textasciitilde\ setQuotazione(q: double)}
+  \umlclass[3.4cm]{az}{(4.6,-3.0)}{AzioneAcquistata}{- quantita: int \{readOnly\}\\- valore: double}{+ update()}
+  \draw[navig] (as.east) -- (as.east -| oq.west);
+  \estO{(as.east -| oq.west)}{*}{observers}
+  \draw[gen] (so.north) -- (as.south);
+  \draw[realizza] (az.north) -- (oq.south);
+  \draw[navig] (az.west) -- (az.west -| so.east);
+  \estE{(az.west -| so.east)}{1}{societa}
+\end{tikzpicture}
+
+\medskip
+\begin{lstlisting}[style=shellcs, name=Terminale]
+$ javac Portafoglio.java
+$ java Portafoglio
+100 azioni ACME = 1000.0 euro
+40 azioni ACME = 400.0 euro
+100 azioni ACME = 1250.0 euro
+40 azioni ACME = 500.0 euro
+\end{lstlisting}
+\regola{Il \code{main} non chiede mai alle azioni di ricalcolarsi: cambia la quotazione, e le due azioni lo vengono a
+sapere da sole. \code{AzioneAcquistata} si iscrive nel costruttore (\code{attach}); \code{setQuotazione} è un setter
+con una riga in più, la notifica. Le slide danno il diagramma; il codice è della dispensa. L'esempio di codice
+delle slide ha la stessa forma, con \code{Soggetto}, \code{Osservatore} e \code{aggiorna()}.}
+\end{programma}

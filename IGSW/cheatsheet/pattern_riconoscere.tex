@@ -1,0 +1,140 @@
+% ============================================================
+% Cheat sheet, argomento: come si riconosce un design pattern (dispensa, capitolo 15)
+% ============================================================
+\argomento{Come si riconosce un pattern}{Dispensa: capitolo 15. Dal testo, dal codice o dal diagramma al nome del
+pattern}[Riconoscere un pattern]
+
+\begin{guida}{La procedura, in cinque domande}
+\begin{enumerate}[nosep, leftmargin=*]
+  \item \textbf{C'è un'interfaccia (o una classe astratta) al centro?} Quasi tutti i pattern ne hanno una; non ce
+        l'hanno il Singleton e il Builder senza Director.
+  \item \textbf{Chi la implementa ha anche un campo dello stesso tipo?} Uno solo $\to$ Decorator; una collezione
+        $\to$ Composite. Se invece ha un campo di un tipo \textbf{diverso}, con un'altra interfaccia, e ne traduce le
+        chiamate $\to$ Adapter.
+  \item \textbf{Chi crea gli oggetti?} Costruttore privato e metodo statico che restituisce sempre lo stesso oggetto
+        $\to$ Singleton; metodi che restituiscono \code{this} e un \code{build()} finale $\to$ Builder; dipendenze
+        ricevute nel costruttore invece di \code{new} $\to$ Dependency Injection.
+  \item \textbf{Chi cambia l'oggetto a cui un campo punta?} Gli oggetti puntati stessi (\code{setState}) $\to$ State;
+        il client (\code{setStrategia}) $\to$ Strategy.
+  \item \textbf{C'è una lista che riceve iscrizioni e avvisa tutti?} \code{attach}, \code{detach} e un ciclo che chiama
+        \code{update()} $\to$ Observer.
+\end{enumerate}
+Se due pattern hanno la stessa forma (State e Strategy, Decorator e Proxy\ldots) decide l'\textbf{intento}: che
+problema risolve (\vv{confronti}).
+\end{guida}
+
+\begin{guida}{Le firme: il disegno tipico e che cosa cercare nel codice}
+\tikzset{mini/.style={rectangle, draw=q9!75!black, fill=yellow!10, line width=0.6pt, font=\tiny\bfseries,
+  inner sep=2pt, minimum height=0.42cm, align=center}}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}>{\bfseries\raggedright\arraybackslash}m{2.2cm} >{\centering\arraybackslash}m{5.6cm} >{\raggedright\arraybackslash}m{9.7cm}@{}}
+  Pattern & \textbf{Disegno tipico} & \textbf{Nel codice} \\ \hline
+  Singleton \vv{singleton-struttura} &
+  \tikz{\node[rectangle split, rectangle split parts=3, draw=q9!75!black, fill=yellow!10, line width=0.6pt, font=\tiny,
+         inner sep=1.5pt, text width=3.1cm, align=left] {\centering\textbf{Singleton}\par\nodepart{two}\underline{- istanza:
+         Singleton}\nodepart{three}- Singleton()\\\underline{+ getInstance(): Singleton}};} &
+  costruttore \code{private}; campo \code{private static} del tipo della classe stessa; \code{public static
+  getInstance()} con \code{if (istanza == null) istanza = new \ldots}; chi lo usa non fa mai \code{new} \\ \hline
+  Builder \vv{builder-struttura} &
+  \tikz{\node[mini] (b) at (0,0) {ProdottoBuilder}; \node[mini] (p) at (3.0,0) {Prodotto};
+        \draw[dep] (b) -- node[stereo, above, font=\tiny\itshape]{«create»} (p);
+        \node[font=\tiny, anchor=north west, inner sep=1pt] at (b.south west) {withX(): Builder\quad build(): Prodotto};} &
+  metodi \code{withX(\ldots)} (o \code{setX}) che fanno \code{return this}; \code{build()} che controlla e fa \code{new
+  Prodotto(\ldots)}; uso a catena \code{new XBuilder(\ldots).withA().withB().build()}; con il Director, un'interfaccia
+  di passi e più builder \\ \hline
+  Adapter \vv{adapter-struttura} &
+  \tikz{\node[mini] (t) at (0,0.55) {«interface» Target}; \node[mini] (a) at (0,-0.45) {Adapter};
+        \node[mini] (e) at (2.9,-0.45) {Adaptee}; \draw[realizza] (a) -- (t);
+        \draw[navig] (a) -- node[molt, above]{1} (e);} &
+  \code{class Adapter implements Target} con un campo \code{Adaptee} di un tipo \textbf{diverso} (o \code{extends
+  Adaptee}); ogni metodo converte i parametri e chiama un metodo con un altro nome: \code{evaluate(\ldots)} chiama
+  \code{calcolaIMC(\ldots)} \\ \hline
+  Composite \vv{composite-struttura} &
+  \tikz{\node[mini] (c) at (0,0.55) {«interface» Component}; \node[mini] (l) at (-0.9,-0.45) {Leaf};
+        \node[mini] (k) at (0.9,-0.45) {Composite}; \draw[realizza] (l) -- (c); \draw[realizza] (k) -- (c);
+        \draw[aggr] (k.east) -- ++(0.55,0) |- node[molt, pos=0.75, above]{*} (c.east);} &
+  \code{class Composite implements Component} con \code{List<Component> figli}, \code{add} e \code{remove}; il metodo
+  fa \code{for (Component f : figli) f.metodo();} (ricorsione su un albero); anche le foglie implementano
+  \code{Component} \\ \hline
+  Decorator \vv{decorator-struttura} &
+  \tikz{\node[mini] (c) at (0,0.55) {«interface» Component}; \node[mini] (l) at (-1.0,-0.45) {Base};
+        \node[mini] (k) at (0.9,-0.45) {Decorator}; \draw[realizza] (l) -- (c); \draw[realizza] (k) -- (c);
+        \draw[aggr] (k.east) -- ++(0.55,0) |- node[molt, pos=0.75, above]{1} (c.east);} &
+  \code{class Decorator implements Component} con \textbf{un} campo \code{Component} ricevuto nel costruttore; il
+  metodo fa \code{avvolto.metodo()} più qualcosa (\code{+ 1.50}); uso \code{new A(new B(new Base()))} \\ \hline
+  Observer \vv{observer-struttura} &
+  \tikz{\node[mini] (s) at (0,0) {Soggetto}; \node[mini] (o) at (3.0,0) {«interface» Osservatore};
+        \node[mini] (c) at (3.0,-0.9) {OsservatoreConcreto}; \draw[navig] (s) -- node[molt, above, pos=0.7]{*} (o);
+        \draw[realizza] (c) -- (o); \draw[navig] (c.west) -| node[molt, left, pos=0.85]{1} (s.south);} &
+  \code{List<Osservatore>}; \code{attach}/\code{detach} (o \code{addXListener}); un metodo di notifica con
+  \code{for (Osservatore o : osservatori) o.update();}; il setter dello stato chiama la notifica; l'osservatore
+  rilegge lo stato dal soggetto \\ \hline
+  State \vv{state-struttura} &
+  \tikz{\node[mini] (c) at (0,0) {Contesto}; \node[mini] (s) at (2.8,0) {\textit{State}};
+        \node[mini] (a) at (2.1,-1.0) {StatoA}; \node[mini] (b) at (3.5,-1.0) {StatoB};
+        \draw[compos] (c) -- node[molt, above, pos=0.8]{1} (s); \draw[gen] (a) -- (s); \draw[gen] (b) -- (s);
+        \draw[dep] (a.west) -| node[stereo, below, pos=0.3]{setState} (c.south);} &
+  campo \code{State stato}; ogni metodo del contesto fa \code{stato.evento(this)}; una sottoclasse per stato; gli
+  \textbf{stati} chiamano \code{contesto.setState(\ldots)}; stati spesso in campi \code{static} \\ \hline
+  Strategy \vv{strategy-struttura} &
+  \tikz{\node[mini] (c) at (0,0) {Contesto}; \node[mini] (s) at (2.8,0) {«interface» Strategia};
+        \node[mini] (a) at (2.1,-1.0) {AlgoritmoA}; \node[mini] (b) at (3.6,-1.0) {AlgoritmoB};
+        \node[mini] (k) at (0,-1.0) {Client};
+        \draw[aggr] (c) -- node[molt, above, pos=0.8]{1} (s); \draw[realizza] (a) -- (s); \draw[realizza] (b) -- (s);
+        \draw[dep] (k) -- node[stereo, left]{set\ldots} (c);} &
+  campo di un'interfaccia con un solo metodo (l'algoritmo), impostato \textbf{dal client} con il costruttore o un
+  setter; il contesto fa \code{strategia.calcola(\ldots)}; le strategie non si conoscono; spesso lambda o
+  \code{Comparator} \\ \hline
+  Dependency Injection \vv{di-struttura} &
+  \tikz{\node[mini] (c) at (0,0) {Classe}; \node[mini] (s) at (2.8,0) {«interface» Servizio};
+        \node[mini] (v) at (2.8,-1.0) {ServizioVero}; \node[mini] (m) at (0,-1.0) {main};
+        \draw[navig] (c) -- (s); \draw[realizza] (v) -- (s);
+        \draw[dep] (m) -- node[stereo, left]{«create»} (c); \draw[dep] (m) -- node[stereo, below]{«create»} (v);} &
+  costruttore che riceve un'\textbf{interfaccia} e la salva in un campo \code{final}; nella classe nessun \code{new} della
+  classe concreta; il \code{main} o il test fanno \code{new Classe(new Dipendenza())}; \code{@Autowired}, \code{@Inject} \\
+\end{tabular}
+\end{guida}
+
+\begin{guida}{Le parole del testo}
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}P{12.4cm} >{\bfseries}l@{}}
+  \textbf{Se il testo dice\ldots} & \textbf{\normalfont pensa a} \\ \hline
+  «una sola istanza», «unico», «condiviso da tutta l'applicazione», «accesso globale», «la connessione al database»
+    & Singleton \\
+  «molti parametri, alcuni facoltativi», «costruito passo per passo», «configurazioni diverse», «stessa procedura,
+    risultati diversi» & Builder \\
+  «riusare una classe, una libreria o un servizio esistente», «interfaccia incompatibile», «non si può modificare»,
+    «convertire unità o formati» & Adapter \\
+  «gerarchia», «albero», «contiene elementi che contengono altri elementi», «cartelle e file», «menu e
+    sottomenu», «trattare in modo uniforme singoli e gruppi» & Composite \\
+  «aggiungere funzionalità a un oggetto», «a tempo di esecuzione», «combinazioni, anche ripetute», «senza una
+    sottoclasse per ogni combinazione», «ingredienti, optional, filtri» & Decorator \\
+  «quando X cambia, aggiornare automaticamente Y», «notificare», «iscriversi», «abbonati», «più viste degli stessi
+    dati», «eventi» & Observer \\
+  «si comporta diversamente a seconda dello stato», «fasi», «transizioni», «distributore automatico», un diagramma
+    di stato da implementare & State \\
+  «modi diversi di calcolare», «politiche», «l'utente sceglie il metodo», «cambiare l'algoritmo a tempo di
+    esecuzione», «aggiungerne di nuovi senza modificare la classe» & Strategy \\
+  «testare senza il servizio reale», «oggetto fittizio», «cambiare implementazione senza modificare la classe»,
+    «configurare dall'esterno» & Dependency Injection \\
+\end{tabular}
+\end{guida}
+
+\begin{guida}{Le famiglie della GoF}
+I 23 pattern della \textit{Gang of Four} (Gamma, Helm, Johnson, Vlissides, 1995) sono divisi secondo il problema che
+risolvono. In grassetto quelli che il corso approfondisce; gli altri sono solo nominati nelle slide (\vv{altri-gof}).
+\begin{itemize}[nosep, leftmargin=*]
+  \item \textbf{Creazionali}, come si \textbf{creano} gli oggetti: \textbf{Singleton}, \textbf{Builder}, Abstract
+        Factory, Factory Method, Prototype.
+  \item \textbf{Strutturali}, come si \textbf{compongono} classi e oggetti: \textbf{Adapter}, \textbf{Composite},
+        \textbf{Decorator}, Bridge, Facade, Proxy, Flyweight.
+  \item \textbf{Comportamentali}, come si dividono \textbf{algoritmi e responsabilità}: \textbf{Observer},
+        \textbf{State}, \textbf{Strategy}, Template Method, Visitor (e altri che le slide non riportano, come Iterator
+        e Command).
+  \item Fuori dal catalogo, \textbf{moderno}: la \textbf{Dependency Injection}.
+\end{itemize}
+Ogni pattern ha quattro parti: \textbf{nome}, \textbf{problema}, \textbf{soluzione} (uno schema di classi da adattare)
+e \textbf{conseguenze}. Prima si definisce il problema, poi si cerca il pattern: applicato dove non serve, aggiunge
+solo classi.
+\end{guida}

@@ -1,0 +1,263 @@
+% ============================================================
+% Cheat sheet, argomento 4: dal codice al diagramma, riferimenti fra classi
+% ============================================================
+\argomento{Dal codice al diagramma: riferimenti fra classi}{Dispensa: capitolo 7. Un campo il cui tipo è una
+classe del diagramma diventa un'associazione}[Dal codice: riferimenti fra classi]
+
+\begin{guida}{Come si legge un campo che punta a un'altra classe}
+\begin{enumerate}[nosep, leftmargin=*]
+  \item Il campo \code{T nome} nella classe \code{A} diventa una linea da \code{A} a \code{T}, con la \textbf{freccia}
+        verso \code{T} (da \code{A} si arriva a \code{T}). Se anche \code{T} ha un campo verso \code{A}, la linea è una
+        sola e \textbf{senza frecce}.
+  \item Il \textbf{nome del campo} è il \textbf{ruolo}: si scrive vicino a \code{T}.
+  \item La \textbf{molteplicità vicino a \code{T}} viene dal campo: \code{0..1} se può essere \code{null},
+        \code{1} se è sempre impostato (costruttore, \code{final}), \code{*}, \code{1..*}, \code{0..4}\ldots\ se è una
+        collezione (argomento 5).
+  \item La \textbf{molteplicità vicino a \code{A}} (quanti \code{A} per uno stesso \code{T}) nel codice di \code{A} non
+        c'è: viene dal campo inverso, se esiste, o dal testo dell'esercizio. Se nessuno la dice, si lascia vuota.
+\end{enumerate}
+\end{guida}
+
+\begin{caso}{rif01}{Un riferimento che può mancare}
+\begin{lstlisting}[style=javacs]
+class Persona {
+    private Automobile auto;  // null se non compra
+    void compra(Automobile a) { auto = a; }
+}
+class Automobile {
+    private String targa;
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[classe1=1.6cm] (p) at (0,0) {Persona};
+  \umlclass[2.4cm]{a}{(4.6,-0.12)}{Automobile}{- targa: String}{}
+  \draw[navig] (p.east) -- (p.east -| a.west);
+  \estO{(p.east -| a.west)}{0..1}{auto}
+\end{tikzpicture}
+\regola{Freccia da chi ha il campo verso il tipo del campo; ruolo \code{auto}; \code{0..1} perché \code{auto} può
+valere \code{null}. \code{Automobile} non ha campi verso \code{Persona}: non è navigabile all'indietro (si può
+aggiungere la croce, \vv{navigazione}).}
+\end{caso}
+
+\begin{caso}{rif1}{Un riferimento obbligatorio}
+\begin{lstlisting}[style=javacs]
+class Prenotazione {
+    private final Passeggero passeggero;
+
+    Prenotazione(Passeggero p) {
+        if (p == null)
+            throw new IllegalArgumentException();
+        passeggero = p;
+    }
+}
+class Passeggero {
+    private String nome;
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[classe1=2.0cm] (r) at (0,0) {Prenotazione};
+  \umlclass[2.2cm]{p}{(4.9,-0.12)}{Passeggero}{- nome: String}{}
+  \draw[navig] (r.east) -- (r.east -| p.west);
+  \estO{(r.east -| p.west)}{1}{passeggero}
+\end{tikzpicture}
+\regola{Il campo è \code{final}, assegnato nel costruttore e mai \code{null}: molteplicità \code{1}. Non può esistere
+una prenotazione senza passeggero, e il costruttore è il punto in cui il codice lo garantisce.}
+\end{caso}
+
+\begin{caso}{duecampi}{Due campi dello stesso tipo}
+\begin{lstlisting}[style=javacs]
+class Volo {
+    private final Aeroporto partenza;
+    private final Aeroporto arrivo;
+
+    Volo(Aeroporto da, Aeroporto a) {
+        partenza = da;
+        arrivo = a;
+    }
+}
+class Aeroporto {
+    private String codice;
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[classe1=1.4cm, minimum height=1.1cm] (v) at (0,0) {Volo};
+  \umlclass[2.2cm]{a}{(4.6,0)}{Aeroporto}{- codice: String}{}
+  \draw[navig] ($(v.east)+(0,0.3)$) -- node[molt, above, pos=0.85]{1} node[ruolo, above, pos=0.35]{partenza} ($(a.west)+(0,0.3)$);
+  \draw[navig] ($(v.east)+(0,-0.3)$) -- node[molt, below, pos=0.85]{1} node[ruolo, below, pos=0.35]{arrivo} ($(a.west)+(0,-0.3)$);
+\end{tikzpicture}
+\regola{\textbf{Due} campi, \textbf{due} associazioni, ciascuna con il suo ruolo. Non una sola linea con
+molteplicità \code{2}: i due aeroporti hanno significati diversi.}
+\end{caso}
+
+\begin{caso}{unouno}{Uno a uno, nei due versi}
+\begin{lstlisting}[style=javacs]
+class Studente {
+    private final Badge badge;
+    Studente() {
+        badge = new Badge(this);   // crea il badge
+    }
+}
+class Badge {
+    private final Studente studente;
+    Badge(Studente s) {        // riceve lo studente
+        studente = s;
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[classe1=1.6cm] (s) at (0,0) {Studente};
+  \node[classe1=1.6cm] (b) at (4.4,0) {Badge};
+  \draw[assocl] (s) -- node[molt, above, pos=0.12]{1} node[ruolo, below, pos=0.16]{studente}
+     node[molt, above, pos=0.88]{1} node[ruolo, below, pos=0.86]{badge} (b);
+\end{tikzpicture}
+\regola{Un campo in \textbf{entrambe} le classi: una sola linea, \textbf{senza frecce}, con un ruolo e una molteplicità
+a ogni estremo. \code{1}--\code{1}: un lato crea l'altro e gli passa \code{this}. Se ognuno creasse l'altro
+(\code{new Badge()} che fa \code{new Studente()}\ldots) la ricorsione non finirebbe mai (\code{StackOverflowError}).}
+\end{caso}
+
+\begin{caso}{unomolti}{Uno a molti, nei due versi}
+\begin{lstlisting}[style=javacs]
+class Persona {
+    private final List<Automobile> automobili =
+            new ArrayList<>();
+    Persona() {               // almeno un'auto
+        automobili.add(new Automobile(this));
+    }
+    void compraNuova() {
+        automobili.add(new Automobile(this));
+    }
+}
+class Automobile {
+    private final Persona proprietario;
+    Automobile(Persona p) { proprietario = p; }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[classe1=1.6cm] (p) at (0,0) {Persona};
+  \node[classe1=1.8cm] (a) at (5.2,0) {Automobile};
+  \draw[assocl] (p) -- node[above, font=\scriptsize, yshift=4pt]{Possiede $\blacktriangleright$} (a);
+  \estE{(p.east)}{1}{proprietario}
+  \estO{(a.west)}{1..*}{automobili}
+\end{tikzpicture}
+\regola{La \textbf{lista} sta dal lato «uno» (\code{Persona}), il riferimento singolo dal lato «molti»
+(\code{Automobile}). \code{1..*}: il costruttore di \code{Persona} crea subito un'automobile. \code{1}: ogni
+automobile riceve il proprietario nel costruttore e non lo cambia più.}
+\end{caso}
+
+\begin{caso}{moltimolti}{Molti a molti}
+\begin{lstlisting}[style=javacs]
+class Studente {
+    private final List<Esame> esami =
+            new ArrayList<>();
+    void supera(Esame e) {
+        esami.add(e);
+        e.registra(this);   // allinea l'altro lato
+    }
+}
+class Esame {
+    private final List<Studente> studenti =
+            new ArrayList<>();
+    void registra(Studente s) { studenti.add(s); }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \node[classe1=1.6cm] (s) at (0,0) {Studente};
+  \node[classe1=1.6cm] (e) at (4.4,0) {Esame};
+  \draw[assocl] (s) -- node[molt, above, pos=0.1]{*} node[ruolo, below, pos=0.18]{studenti}
+     node[molt, above, pos=0.9]{*} node[ruolo, below, pos=0.84]{esami} (e);
+\end{tikzpicture}
+\regola{Una collezione in \textbf{ciascuna} classe: \code{*} da entrambe le parti, senza frecce. I metodi devono tenere
+allineati i due lati. Se serve un dato sulla coppia (il voto) ci vuole una classe associativa
+(\vv{associativacodice}).}
+\end{caso}
+
+\begin{caso}{riflessivacodice}{Un campo del tipo della classe stessa}
+\begin{lstlisting}[style=javacs]
+class Persona {
+    private String nome;
+    private Persona coniuge;                 // 0..1
+    private final List<Persona> figli =
+            new ArrayList<>();               // *
+
+    void sposa(Persona p) {
+        coniuge = p;
+        p.coniuge = this;
+    }
+    void nasce(Persona f) { figli.add(f); }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[2.6cm]{p}{(0,0)}{Persona}{- nome: String}{}
+  % coniuge: nei due versi, a destra
+  \draw[assocl] ($(p.east)+(0,0.15)$) -- ++(1.0,0) -- ++(0,1.15) -| ($(p.north)+(0.7,0)$);
+  \node[molt, anchor=north west] at ($(p.east)+(0.08,0.08)$) {0..1};
+  \node[molt, anchor=south east] at ($(p.north)+(0.64,0.06)$) {0..1};
+  \node[ruolo, anchor=south] at ($(p.east)+(-0.1,1.32)$) {coniuge};
+  % figli: solo dal genitore, a sinistra
+  \draw[navig] ($(p.north)+(-0.7,0)$) -- ++(0,0.95) -| ($(p.west)+(-1.0,0.15)$) -- ($(p.west)+(0,0.15)$);
+  \node[molt, anchor=south east] at ($(p.west)+(-0.1,0.22)$) {*};
+  \node[ruolo, anchor=north east] at ($(p.west)+(-0.1,0.08)$) {figli};
+\end{tikzpicture}
+\regola{Un'associazione dalla classe a se stessa (\textbf{riflessiva}). \code{coniuge} va nei due versi
+(\code{sposa} aggiorna entrambi): linea senza frecce, \code{0..1} da ogni lato. \code{figli} si naviga solo dal
+genitore: freccia, \code{*}.}
+\end{caso}
+
+\begin{caso}{rifinterfaccia}{Un campo di tipo interfaccia}
+\begin{lstlisting}[style=javacs]
+interface Notificatore {
+    void invia(String testo);
+}
+class Email implements Notificatore {
+    public void invia(String testo) { /* ... */ }
+}
+class Ordine {
+    private final Notificatore notificatore;
+    Ordine(Notificatore n) { notificatore = n; }
+    void conferma() {
+        notificatore.invia("Ordine confermato");
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[2.4cm]{o}{(0,0)}{Ordine}{}{+ conferma()}
+  \umlclass[3.0cm]{n}{(5.2,0)}{\stereotipo{interface}{Notificatore}}{}{+ invia(testo: String)}
+  \node[classe1=1.5cm] (e) at (5.2,-2.0) {Email};
+  \draw[navig] (o.east) -- (n.west);
+  \estO{(n.west)}{1}{notificatore}
+  \draw[realizza] (e.north) -- (n.south);
+\end{tikzpicture}
+\regola{La freccia va all'\textbf{interfaccia}, il tipo del campo, non alla classe concreta: \code{Ordine} non sa
+nulla di \code{Email}. L'oggetto concreto arriva dal costruttore. È la forma della Dependency Injection e dello
+Strategy (\vv{iniezione}).}
+\end{caso}
+
+\begin{caso}{rifenum}{Un campo di tipo enumerazione}
+\begin{lstlisting}[style=javacs]
+enum Stato { BOZZA, PUBBLICATO, ARCHIVIATO }
+
+class Articolo {
+    private String titolo;
+    private Stato stato = Stato.BOZZA;
+    void pubblica() { stato = Stato.PUBBLICATO; }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[3.4cm]{a}{(0,0)}{Articolo}{- titolo: String\\- stato: Stato = BOZZA}{+ pubblica()}
+  \node[rectangle split, rectangle split parts=2, draw=q9!75!black, fill=yellow!10, line width=0.7pt,
+        font=\scriptsize, text width=2.1cm, align=left, inner sep=2.5pt] (s) at (4.2,0)
+        {\centering{\tiny«enumeration»}\\\textbf{Stato}\par\nodepart{two}BOZZA\\PUBBLICATO\\ARCHIVIATO};
+  \draw[assocl] (a.east) -- (s.west |- a.east);
+\end{tikzpicture}
+\regola{Il campo di tipo \code{enum} resta un \textbf{attributo}, con il default (\code{= BOZZA}); l'enumerazione si
+disegna a parte con i suoi letterali. La linea fra le due è facoltativa, di solito senza ruoli né molteplicità.}
+\end{caso}

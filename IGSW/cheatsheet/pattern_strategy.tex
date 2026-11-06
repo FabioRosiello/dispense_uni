@@ -1,0 +1,125 @@
+% ============================================================
+% Cheat sheet, argomento: il pattern Strategy (dispensa, capitolo 15)
+% ============================================================
+\argomento{Strategy}{Dispensa: capitolo 15. Pattern comportamentale della GoF}[Pattern Strategy]
+
+\scheda{Carta d'identità}{
+  \pintento{Definire una \textbf{famiglia di algoritmi}, incapsularli uno per classe e renderli
+    \textbf{intercambiabili}: l'algoritmo può variare indipendentemente da chi lo usa.}
+  \ptesto{«modi diversi di calcolare (spedire, pagare, ordinare, scontare, validare)», «politiche», «il cliente
+    sceglie il metodo di spedizione», «cambiare l'algoritmo a tempo di esecuzione», «aggiungere un nuovo modo di
+    calcolare senza modificare la classe che lo usa».}
+  \pcodice{un'interfaccia con \textbf{un} metodo (o pochi), che è l'algoritmo (\code{double costo(double pesoKg)}); più
+    classi che la implementano, ognuna con la sua formula; il \textbf{contesto} ha un campo di quel tipo,
+    \textbf{impostato dal client} (costruttore o \code{setSpedizione(\ldots)}), e gli delega il calcolo. Spesso al posto
+    delle classi c'è una \textit{lambda} o un \code{Comparator}.}
+  \pdiagramma{\code{Context} con un'aggregazione verso \code{«interface» Strategy}, realizzata da
+    \code{ConcreteStrategyA}, \code{B}, \code{C}: la stessa forma dello State.}
+  \pvarianti{la strategia nel costruttore (fissa) o in un setter (cambia quando il client vuole); con una lambda
+    (\code{ordine.setSpedizione(peso -> 0.0)}); nella libreria di Java: \code{lista.sort(comparatore)}, dove il
+    \code{Comparator} è la strategia di confronto.}
+  \pconfondere{lo \textbf{State} (\vv{state-struttura}): stessa struttura, ma lì l'oggetto cambia \textbf{da solo},
+    perché gli stati chiamano \code{setState}; la \textbf{Dependency Injection} (\vv{di-struttura}): dice \textbf{come}
+    arriva l'oggetto (da fuori), non che cosa rappresenta; una strategia di solito arriva proprio per iniezione.}
+}
+
+\begin{struttura}{strategy-struttura}{La struttura}
+\begin{tikzpicture}
+  \umlclass[2.6cm]{c}{(0,0)}{Context}{}{+ esegui()}
+  \umlclass[3.0cm]{s}{(4.05,0)}{\stereotipo{interface}{Strategy}}{}{+ algoritmo()}
+  \node[classe1=2.7cm] (a) at (1.1,-2.2) {ConcreteStrategyA};
+  \node[classe1=2.7cm] (b) at (4.05,-2.2) {ConcreteStrategyB};
+  \node[classe1=2.7cm] (cc) at (7.0,-2.2) {ConcreteStrategyC};
+  \draw[aggr] (c.east) -- (s.west);
+  \estO{(s.west)}{1}{strategia}
+  \foreach \x in {a, b, cc}{ \draw[realizza] (\x.north) |- ($(s.south)+(0,-0.45)$) -- (s.south); }
+  \node[notauml, anchor=north] (n) at (0,-1.3) {strategia.algoritmo()};
+  \draw[tratt] (c.south) -- (n.north);
+\end{tikzpicture}
+\tcblower
+\textbf{Strategy}: l'interfaccia comune degli algoritmi. \textbf{ConcreteStrategy}: un algoritmo ciascuna; non si
+conoscono fra loro. \textbf{Context}: usa una strategia senza sapere quale; la sceglie il \textbf{client}.
+
+\renewcommand{\arraystretch}{1.15}\footnotesize
+\begin{tabular}{@{}l l l@{}}
+   & \textbf{State} & \textbf{Strategy} \\ \hline
+  chi cambia l'oggetto & gli stati & il client \\
+  si conoscono? & sì & no \\
+  rappresenta & una fase & un modo di fare \\
+\end{tabular}
+\end{struttura}
+
+\begin{programma}{strategy-esempio}{L'esempio della dispensa: il costo della spedizione}
+\begin{lstlisting}[style=javacs, name=Negozio.java]
+public class Negozio {
+    public static void main(String[] args) {
+        Ordine ordine = new Ordine(40.0, 6.0);
+        System.out.println("Standard:   "
+                + ordine.totale());
+        ordine.setSpedizione(new Express());
+        System.out.println("Express:    "
+                + ordine.totale());
+        ordine.setSpedizione(new RitiroInNegozio());
+        System.out.println("In negozio: "
+                + ordine.totale());
+    }
+}
+interface StrategiaSpedizione {         // Strategy
+    double costo(double pesoKg);
+}
+class Standard implements StrategiaSpedizione {
+    public double costo(double pesoKg) {
+        return 5.0 + 0.5 * pesoKg;
+    }
+}
+class Express implements StrategiaSpedizione {
+    public double costo(double pesoKg) {
+        return 12.0 + 1.0 * pesoKg;
+    }
+}
+class RitiroInNegozio
+        implements StrategiaSpedizione {
+    public double costo(double pesoKg) {
+        return 0.0;
+    }
+}
+class Ordine {                          // Context
+    private final double merce, pesoKg;
+    private StrategiaSpedizione spedizione =
+            new Standard();
+    Ordine(double merce, double pesoKg) {
+        this.merce = merce;
+        this.pesoKg = pesoKg;
+    }
+    void setSpedizione(StrategiaSpedizione s) {
+        spedizione = s;      // la sceglie il client
+    }
+    double totale() {
+        return merce + spedizione.costo(pesoKg);
+    }
+}
+\end{lstlisting}
+\tcblower
+\begin{tikzpicture}
+  \umlclass[3.0cm]{o}{(0,0)}{Ordine}{- merce: double\\- pesoKg: double}{\textasciitilde\ setSpedizione(s)\\\textasciitilde\ totale(): double}
+  \umlclass[3.2cm]{s}{(4.1,0)}{\stereotipo{interface}{StrategiaSpedizione}}{}{+ costo(pesoKg): double}
+  \node[classe1=1.6cm] (a) at (2.0,-2.6) {Standard};
+  \node[classe1=1.5cm] (b) at (3.75,-2.6) {Express};
+  \node[classe1=2.3cm] (c) at (5.9,-2.6) {RitiroInNegozio};
+  \draw[aggr] (o.east) -- (o.east -| s.west);
+  \estO{(o.east -| s.west)}{1}{spedizione}
+  \foreach \x in {a, b, c}{ \draw[realizza] (\x.north) |- ($(s.south)+(0,-0.45)$) -- (s.south); }
+\end{tikzpicture}
+
+\medskip
+\begin{lstlisting}[style=shellcs, name=Terminale]
+$ javac Negozio.java
+$ java Negozio
+Standard:   48.0
+Express:    58.0
+In negozio: 40.0
+\end{lstlisting}
+\regola{Lo stesso ordine (40 euro di merce, 6 kg) cambia algoritmo tre volte, e \code{Ordine} non cambia mai: per una
+nuova spedizione basta una classe nuova. Le slide nominano lo Strategy nella tabella dei pattern senza un esempio;
+questo è quello della dispensa.}
+\end{programma}
