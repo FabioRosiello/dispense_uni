@@ -7,11 +7,12 @@
 
 Per ogni domanda con codice confronta la risposta marcata come giusta con ciò
 che succede davvero: l'output di Node, la console di Chromium, lo stile
-calcolato da Chromium, le risposte di un'applicazione Express. Per le domande
-parametriche (famiglie) prova più varianti.
+calcolato da Chromium, l'HTML prodotto da Pug, le risposte di un server Node
+o Express avviato davvero. Per le domande parametriche (famiglie) prova più
+varianti.
 
-Serve Node.js con Playwright (per Chromium) e, per le domande su Express, i
-pacchetti di questa cartella (npm install).
+Serve Node.js con Playwright (per Chromium) e, per le domande su Pug ed
+Express, i pacchetti di questa cartella (npm install).
 """
 
 import argparse
@@ -76,6 +77,9 @@ def confronta(caso, domanda, reale):
             return "errore nella pagina: %s" % reale["errore"]
         if reale["valore"] != caso["atteso"]:
             return "atteso %r, ottenuto %r" % (caso["atteso"], reale["valore"])
+    elif tipo == "pug":
+        if reale["html"] != caso["atteso"]:
+            return "HTML atteso %r, ottenuto %r" % (caso["atteso"], reale["html"])
     elif tipo == "express":
         if reale.get("stderr"):
             return "il server non è partito: " + reale["stderr"]

@@ -9,10 +9,12 @@
 //             pagina), con eventuali clic e attese dopo il caricamento
 //   css       il valore calcolato di una proprietà di un elemento
 //   dom       il valore di un'espressione valutata nella pagina caricata
-//   express   un'applicazione Express avviata davvero e interrogata con fetch
+//   pug       un template Pug trasformato in HTML con i locals dati
+//   express   un'applicazione (Express o il modulo http di Node) avviata
+//             davvero e interrogata con fetch
 //
-// Chromium arriva da Playwright (require('playwright')); Express dai pacchetti
-// installati in questa cartella (npm install).
+// Chromium arriva da Playwright (require('playwright')); Pug ed Express dai
+// pacchetti installati in questa cartella (npm install).
 
 "use strict";
 
@@ -38,7 +40,14 @@ function righe(testo) {
   return r;
 }
 
+function scriviFile(caso, cartella) {
+  for (const [nome, contenuto] of Object.entries(caso.file || {})) {
+    fs.writeFileSync(path.join(cartella, nome), contenuto);
+  }
+}
+
 function eseguiNode(caso, cartella) {
+  scriviFile(caso, cartella);
   const estensione = caso.modulo ? ".mjs" : ".js";
   const file = path.join(cartella, "caso" + estensione);
   const testa = caso.strict && !caso.modulo ? '"use strict";\n' : "";
@@ -69,14 +78,11 @@ async function apriPagina(caso, cartella, html) {
   const console_ = [];
   const errori = [];
   pagina.on("console", (m) => console_.push(m.text()));
-  pagina.on("pageerror", (e) => errori.push(e.name || "Error"));
+  // gli errori degli script esterni arrivano come "Uncaught TypeError"
+  pagina.on("pageerror", (e) => errori.push((e.name || "Error").replace(/^Uncaught /, "")));
   const file = path.join(cartella, "pagina.html");
   fs.writeFileSync(file, html);
-  if (caso.file) {
-    for (const [nome, contenuto] of Object.entries(caso.file)) {
-      fs.writeFileSync(path.join(cartella, nome), contenuto);
-    }
-  }
+  scriviFile(caso, cartella);
   await pagina.goto("file://" + file, { waitUntil: "load" });
   return { pagina, contesto, console_, errori };
 }
@@ -125,6 +131,15 @@ async function eseguiDom(caso, cartella) {
   await contesto.close();
   return { valore: typeof valore === "string" ? valore : JSON.stringify(valore),
            errore: errori.length ? errori[0] : null };
+}
+
+function eseguiPug(caso, cartella) {
+  // i template inclusi o estesi stanno nella stessa cartella del principale
+  const pug = require(path.join(QUI, "node_modules", "pug"));
+  scriviFile(caso, cartella);
+  const principale = path.join(cartella, caso.principale);
+  fs.writeFileSync(principale, caso.sorgente);
+  return { html: pug.renderFile(principale, caso.locals || {}) };
 }
 
 function portaLibera(porta) {
@@ -191,6 +206,7 @@ async function main() {
       else if (caso.tipo === "browser") risultati[caso.chiave] = await eseguiBrowser(caso, cartella);
       else if (caso.tipo === "css") risultati[caso.chiave] = await eseguiCss(caso, cartella);
       else if (caso.tipo === "dom") risultati[caso.chiave] = await eseguiDom(caso, cartella);
+      else if (caso.tipo === "pug") risultati[caso.chiave] = eseguiPug(caso, cartella);
       else if (caso.tipo === "express") risultati[caso.chiave] = await eseguiExpress(caso);
       else risultati[caso.chiave] = { eccezione: "tipo sconosciuto: " + caso.tipo };
     } catch (e) {

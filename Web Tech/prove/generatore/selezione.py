@@ -15,7 +15,7 @@ from .modello import Famiglia
 SERIE = 10
 
 # Quanto spesso un capitolo compare fra le domande chiuse (peso relativo).
-PESI = {1: 2, 2: 2, 3: 3, 4: 2, 5: 3, 6: 3, 7: 3, 8: 3, 9: 2, 10: 1, 11: 2, 12: 1, 13: 2,
+PESI = {1: 2, 2: 2, 3: 3, 4: 2, 5: 3, 6: 3, 7: 3, 8: 3, 9: 2, 10: 1, 11: 2, 12: 2, 13: 2,
         14: 2, 15: 3, 16: 1}
 
 TITOLI = {
@@ -83,7 +83,7 @@ class _Serie:
         for c in mazzi:
             crediti[c] += pesi[c] * quante / totale
         usati = dict.fromkeys(mazzi, 0)
-        pescate = []
+        pescate, presenti = [], set()
         for _ in range(quante):
             # prima i capitoli non ancora usati in questa prova, poi il credito
             # (un capitolo già coperto dalle domande chiuse parte svantaggiato)
@@ -94,7 +94,20 @@ class _Serie:
             mazzo = mazzi[c]
             giro, indice = divmod(posizioni[c], len(mazzo))
             posizioni[c] += 1
-            domanda, variante = mazzo[indice]
+            # una domanda (o famiglia) non compare due volte nella stessa prova:
+            # se quella di turno c'è già, si anticipa la prima del mazzo che
+            # manca (succede solo scegliendo pochi capitoli)
+            for j in list(range(indice, len(mazzo))) + list(range(indice)):
+                if mazzo[j][0].id not in presenti:
+                    break
+            else:
+                j = indice
+            if j >= indice:
+                mazzo[indice], mazzo[j] = mazzo[j], mazzo[indice]
+                domanda, variante = mazzo[indice]
+            else:
+                domanda, variante = mazzo[j]
+            presenti.add(domanda.id)
             pescate.append((domanda, variante, giro))
         return pescate
 

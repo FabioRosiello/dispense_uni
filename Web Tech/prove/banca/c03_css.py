@@ -1,7 +1,9 @@
 """Capitolo 3: CSS (regole, inclusione, selettori, combinatori, pseudo-classi,
 pseudo-elementi, cascata, specificità, ereditarietà)."""
 
-from generatore import L, aperta, chiusa, colore_css, famiglia
+import json
+
+from generatore import FONTE_2024, FONTE_AULA, L, aperta, chiusa, colore_css, famiglia
 
 CAP = 3
 R = "cap. 3, «%s»"
@@ -291,6 +293,125 @@ def _nth_misti(rng):
 d(_nth_misti)
 
 # ----------------------------------------------------------------------
+# Famiglia: comporre un selettore (prima prova intercorso 2024, Es. 2)
+# (descrizione della posizione, espressioni giuste, condizione sulla
+#  posizione, espressioni sbagliate tipiche, pseudo-classe inventata)
+POSIZIONI_VOCE = [
+    ("di posto pari", ["even", "2n"], lambda p: p % 2 == 0, ["odd", "2"], "even-child"),
+    ("di posto dispari", ["odd", "2n+1"], lambda p: p % 2 == 1, ["even", "1"], "odd-child"),
+    ("in posizione multipla di 3", ["3n"], lambda p: p % 3 == 0, ["3", "n+3"], "third-child"),
+]
+LISTE = {"ul": ("non ordinata", "ol"), "ol": ("ordinata", "ul")}
+CONTENUTI = {"a": "tutti i link contenuti", "img": "tutte le immagini contenute"}
+SIGNIFICATI = {"odd": "seleziona le voci di posto dispari",
+               "even": "seleziona le voci di posto pari",
+               "1": "seleziona solo la prima voce", "2": "seleziona solo la seconda voce",
+               "3": "seleziona solo la terza voce",
+               "n+3": "seleziona le voci dalla terza in poi"}
+
+
+def _voci(prefisso, n):
+    return "\n".join('  <li><a href="#">%s%d</a> <img src="data:," alt=""></li>'
+                     % (prefisso, i) for i in range(1, n + 1))
+
+
+SELETTORE_HTML = ('<!DOCTYPE html><html><body>\n<p><a href="#">home</a></p>\n'
+                  '<ul class="%(c)s">\n' + _voci("u", 7) + '\n</ul>\n'
+                  '<ol class="%(c)s">\n' + _voci("o", 6) + '\n</ol>\n'
+                  '<ul>\n' + _voci("x", 4) + '\n</ul>\n</body></html>')
+
+
+@famiglia("c03-selettore-lista", CAP, "selettori", varianti=3)
+def _selettore_lista(rng):
+    ufficiale = rng.random() < 0.35
+    if ufficiale:
+        tipo, classe, voce, espr, el = "ul", "lst", POSIZIONI_VOCE[0], "even", "a"
+    else:
+        tipo = rng.choice(["ul", "ul", "ol"])
+        classe = rng.choice(["lst", "menu", "voci", "elenco"])
+        voce = rng.choice(POSIZIONI_VOCE)
+        espr = rng.choice(voce[1])
+        el = rng.choice(["a", "a", "img"])
+    nome_lista, altro = LISTE[tipo]
+    posto, _, condizione, errate, inventata = voce
+    lista = "%s.%s" % (tipo, classe)
+    giusta = "%s li:nth-child(%s) %s" % (lista, espr, el)
+    if ufficiale:
+        # le cinque alternative della prova originale
+        scelte = [("ol.lst li:nth-child(even) a", ["lista"]),
+                  ("ul.lst::nth-child(2) a", ["pseudo"]),
+                  ("ol.lst li:even-child a", ["lista", "inventata"]),
+                  ("ul.lst::nth-child(even) a", ["pseudo"]),
+                  ("a li:even-child ul .lst", ["inventata", "inverso"])]
+    else:
+        sintassi = [  # non validi: pseudo-classi inesistenti o scritte come pseudo-elementi
+            ("%s::nth-child(%s) %s" % (lista, espr, el), ["pseudo"]),
+            ("%s.%s li:%s %s" % (altro, classe, inventata, el), ["lista", "inventata"]),
+            ("%s li:%s %s .%s" % (el, inventata, tipo, classe), ["inventata", "inverso"]),
+            ("%s li::nth-child(%s) %s" % (lista, espr, el), ["pseudo"]),
+        ]
+        significato = [  # validi, ma selezionano altro
+            ("%s li:nth-child(%s) %s" % (lista, errate[0], el), ["errata0"]),
+            ("%s li:nth-child(%s) %s" % (lista, errate[1], el), ["errata1"]),
+            ("%s .%s li:nth-child(%s) %s" % (tipo, classe, espr, el), ["spazio"]),
+            ("%s:nth-child(%s) %s" % (lista, espr, el), ["su-lista"]),
+            ("%s %s:nth-child(%s)" % (lista, el, espr), ["su-elemento"]),
+            ("%s#%s li:nth-child(%s) %s" % (tipo, classe, espr, el), ["id"]),
+            ("%s li:nth-child(%s) %s" % (el, espr, lista), ["inverso"]),
+        ]
+        rng.shuffle(sintassi)
+        rng.shuffle(significato)
+        # la lista del tipo sbagliato è l'errore più frequente: c'è sempre
+        scelte = ([("%s.%s li:nth-child(%s) %s" % (altro, classe, espr, el), ["lista"])]
+                  + sintassi[:2] + significato[:2])
+    motivi = {
+        "lista": "`%s.%s` è una lista %s" % (altro, classe, LISTE[altro][0]),
+        "pseudo": "`::` introduce gli pseudo-elementi, e `::nth-child` non esiste",
+        "inventata": "`:%s` non esiste" % inventata,
+        "errata0": "`:nth-child(%s)` %s" % (errate[0], SIGNIFICATI[errate[0]]),
+        "errata1": "`:nth-child(%s)` %s" % (errate[1], SIGNIFICATI[errate[1]]),
+        "spazio": "`%s .%s`, con lo spazio, è un elemento di classe `%s` dentro una `%s`"
+                  % (tipo, classe, classe, tipo),
+        "su-lista": "`%s:nth-child(…)` guarda la posizione della lista stessa" % lista,
+        "su-elemento": "`%s:nth-child(…)` guarda la posizione di `%s` dentro la voce" % (el, el),
+        "id": "`#%s` indica un id, non una classe" % classe,
+        "inverso": "l'ordine conta: a sinistra va il contenitore più esterno",
+    }
+    usati = {m for _, chiavi in scelte for m in chiavi}
+    sbagliate = [s for s, _ in scelte]
+    posizioni = [p for p in range(1, 8 if tipo == "ul" else 7) if condizione(p)]
+    controllo = (
+        "(() => { const opzioni = %s;"
+        " const lista = document.querySelector('body > %s');"
+        " const attesi = [];"
+        " Array.from(lista.children).forEach((li, i) => {"
+        " if (%s.includes(i + 1)) attesi.push(...li.getElementsByTagName('%s')); });"
+        " const uguali = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);"
+        " return opzioni.filter(s => { try {"
+        " return uguali(Array.from(document.querySelectorAll(s)), attesi); }"
+        " catch (e) { return false; } }).join(' | '); })()"
+        % (json.dumps([giusta] + sbagliate), lista, json.dumps(posizioni), el))
+    return chiusa(
+        "c03-selettore-lista", CAP, "selettori",
+        "Quale dei seguenti selettori CSS seleziona %s in `<li>` %s in una lista %s con "
+        "classe `%s`?" % (CONTENUTI[el], posto, nome_lista, classe),
+        "`%s`" % giusta, ["`%s`" % s for s in sbagliate], n=6,
+        spiegazione="Il selettore si legge da sinistra a destra, dal contenitore più esterno: "
+                    "`%s` è una lista %s **e** di classe `%s` (senza spazio: selettore "
+                    "composto); lo spazio è il combinatore discendente; `li:nth-child(%s)` "
+                    "sono le voci %s; `%s` sono gli elementi cercati, a qualunque profondità "
+                    "dentro la voce. Nelle alternative: %s." % (
+                        lista, nome_lista, classe, espr, posto, el,
+                        "; ".join(v for k, v in motivi.items() if k in usati)),
+        rif=R % "Combinatori" + "; «Relazioni di posizione»",
+        fonte=FONTE_2024 if ufficiale else None,
+        verifica=dict(tipo="dom", html=SELETTORE_HTML % {"c": classe}, espressione=controllo,
+                      atteso=giusta))
+
+
+d(_selettore_lista)
+
+# ----------------------------------------------------------------------
 # Le domande delle prove degli anni scorsi (verificate in Chromium)
 d(colore_css("c03-prova-2024", CAP, "cascata e specificità",
              """
@@ -309,7 +430,7 @@ h1 .f { color: green !important; }
                          "inline. Fra le due marcate `!important`, `h1 .f` **non** seleziona "
                          "l'`h1`: indica un elemento di classe `f` *dentro* un `h1` (combinatore "
                          "discendente). Resta `div h1`, quindi il colore è `pink`.",
-             rif=R % "La cascata", fonte="prova intercorso 2024"))
+             rif=R % "La cascata", fonte=FONTE_2024))
 
 d(colore_css("c03-prova-2025", CAP, "cascata e specificità",
              """
@@ -327,7 +448,7 @@ div.y h1.w { color: green; }""",
                          "(0, 0, 2), `#x .w` (1, 1, 0), `.y #z` (1, 1, 0), `div.y h1.w` "
                          "(0, 2, 2). Vincono a pari merito le due con un id e una classe; a "
                          "parità di specificità prevale l'ultima nell'ordine: `red`.",
-             rif=R % "Specificità", fonte="facsimile 2025/26"))
+             rif=R % "Specificità", fonte=FONTE_AULA))
 
 d(colore_css("c03-ereditarieta", CAP, "ereditarietà",
              """
@@ -585,7 +706,7 @@ d(aperta("c03-a-origini", CAP, "origine e importanza",
           "utente `!important`, user agent `!important`.",
           "L'inversione fra le `!important` protegge le esigenze dell'utente (accessibilità); "
           "a parità di bucket decidono livelli (stili inline in cima), specificità e ordine."],
-         rif=R % "Origine e importanza", fonte="prova intercorso 2024"))
+         rif=R % "Origine e importanza", fonte=FONTE_2024))
 
 d(aperta("c03-a-specificita", CAP, "cascata e specificità",
          "Si spieghi come si calcola e come si confronta la **specificità** di un selettore "

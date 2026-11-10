@@ -147,7 +147,9 @@ class Chiusa:
             raise ErroreBanca("%s: nessuna risposta giusta" % dove)
         if len(self.sbagliate) < (1 if self.fisse else 3):
             raise ErroreBanca("%s: servono almeno 3 distrattori" % dove)
-        tutte = [testo_semplice(t).strip().lower() for t in self.giuste + self.sbagliate]
+        # maiuscole e minuscole contano solo nel codice (H1 e h1 sono opzioni diverse)
+        tutte = [testo_semplice(t).strip() if t.lstrip().startswith("`")
+                 else testo_semplice(t).strip().lower() for t in self.giuste + self.sbagliate]
         if len(set(tutte)) != len(tutte):
             doppie = sorted({t for t in tutte if tutte.count(t) > 1})
             raise ErroreBanca("%s: opzioni ripetute: %s" % (dove, doppie))

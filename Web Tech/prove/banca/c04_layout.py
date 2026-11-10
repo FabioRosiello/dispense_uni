@@ -95,6 +95,12 @@ def _em(rng):
                  16 * vc if unita != "%" else 16 * vc / 100, b, a, radice * eb * (vc if unita != "%" else vc / 100)]
     sbagliate = [x for x in _px(candidati) if x != "`%gpx`" % c]
     rng.shuffle(sbagliate)
+    # quando gli errori tipici danno lo stesso numero, valori vicini a quello giusto
+    for riserva in _px([c * 2, c / 2, c + 4, c - 4]):
+        if len(sbagliate) >= 3:
+            break
+        if riserva != "`%gpx`" % c and riserva not in sbagliate:
+            sbagliate.append(riserva)
     html = '<div class="a">A <div class="b">B <span class="c">C</span></div></div>'
     return chiusa(
         "c04-em-rem", CAP, "unità di misura",

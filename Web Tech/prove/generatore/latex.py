@@ -96,7 +96,9 @@ PREAMBOLO = r"""\documentclass[10pt,a4paper]{article}
     {×}{{\texttimes}}1 {–}{{--}}1 {—}{{---}}1}
 
 % ---- domande e opzioni --------------------------------------------------
-\newcommand{\cod}[1]{\texttt{#1}}
+% nel codice gli spazi hanno tutti la stessa larghezza, anche dopo «:» o «.»;
+% \@: un punto alla fine del codice (es. ?.) non allarga lo spazio che segue
+\newcommand{\cod}[1]{{\frenchspacing\texttt{#1}}\@}
 % punto in cui il codice in linea può andare a capo, se proprio serve
 \newcommand{\codbreak}{\penalty300\relax}
 \newcommand{\punti}[1]{\textbf{(#1 punti)}}
@@ -134,6 +136,7 @@ PREAMBOLO = r"""\documentclass[10pt,a4paper]{article}
   \vspace{2pt}}
 \newsavebox{\scatolasoluzione}
 \newcommand{\rif}[1]{\textit{(Dispensa: #1)}}
+\newcommand{\fonte}[1]{\textit{— Fonte: #1.}}
 \newlist{traccia}{itemize}{1}
 \setlist[traccia]{label=\textbullet, leftmargin=12pt, itemsep=1pt, parsep=0pt, topsep=2pt}
 \newcommand{\capitolo}[1]{\par\vspace{14pt}{\large\bfseries #1}\par\vspace{2pt}\hrule
@@ -231,6 +234,10 @@ def _risposta(istanza):
                                                a_latex(istanza.spiegazione)))
     if istanza.rif:
         righe.append("\\rif{%s}" % a_latex(istanza.rif))
+    fonte = getattr(istanza.domanda, "fonte", None)
+    if fonte:
+        # la domanda viene da una prova vera del corso
+        righe.append("\\fonte{%s}" % a_latex(fonte))
     righe.append("\\end{soluzione}")
     return "\n".join(righe) + "\n"
 
