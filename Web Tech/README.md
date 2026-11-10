@@ -59,6 +59,22 @@ escluse: restano sulle slide e sul sito del docente, dove vengono aggiornate.
 | `sources/` | Logo dell'ateneo, risorse della copertina, immagine di Fu-Tzu (`fu-tzu.jpg`, dalle slide) |
 | `build.ps1` | Script di compilazione |
 | `DispensaWebTech.pdf` | PDF già compilato |
+| `prove/` | Generatore di simulazioni della prova intercorso (capitoli 1–16, fino a Express incluso) nello stile delle prove del corso, con le soluzioni; prove d'esempio in `prove/generate/`. Vedi `prove/README.md` |
+
+## Simulazioni della prova intercorso
+
+La cartella `prove/` contiene un generatore di prove nello stile della prova
+intercorso (8 domande chiuse da 2 punti e 3 aperte da 5, 45 minuti), con il
+programma fino a Express incluso. Ogni prova ha il suo PDF di soluzioni, con le
+spiegazioni e il rimando alla sezione della dispensa. Le domande con codice sono
+verificate eseguendolo davvero (Node.js, Chromium, Pug, Express). In
+`prove/generate/` ci sono già dieci prove con le soluzioni e la raccolta di
+tutte le domande; per generarne altre:
+
+```bash
+cd prove
+python3 genera_prova.py --id 11 --quante 10
+```
 
 ## Come compilare
 
