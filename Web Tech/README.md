@@ -6,7 +6,7 @@ Federico II, corso di laurea in Informatica.
 
 Copre **l'intero corso**: tutte le lezioni, più la lezione bonus su CMS e
 GraphQL (inclusa come capitolo finale e segnalata come fuori programma).
-25 capitoli, 427 pagine.
+26 capitoli, 456 pagine.
 
 Il codice è quasi sempre accompagnato, **accanto**, da ciò che produce: il
 rendering nel browser, l'output in console o nel terminale, oppure uno schema
@@ -46,14 +46,15 @@ escluse: restano sulle slide e sul sito del docente, dove vengono aggiornate.
 | `chapters/15. Express.tex` | Framework e inversione del controllo (schema a passi numerati), opinionated e no, Express 5.3.0 con output reali (`curl -i`, log del server): routing, percorsi delle rotte e differenze fra Express 4 ed Express 5 (`PathError`, sintassi `{}` e `*nome`), parametri di rotta e gruppi con nome, più gestori, `app.route()` e router modulari, risposte e template Pug con `res.locals`, ciclo richiesta-risposta, middleware, errori sincroni e asincroni, gestori personalizzati, Promise in Express 5 e il crash di Express 4, `express.static`, `urlencoded`, `json`, `express-session` (cookie firmato), `cookie-parser` (cookie manomesso), messaggi flash con `connect-flash` |
 | `chapters/16. Web app con Express.tex` | ORM (oggetti e tabelle) e Sequelize 6 con SQLite, tutto eseguito davvero e con i log SQL reali: connessione, modelli, sincronizzazione (`force`, `alter`), creazione di entità e query parametriche, modelli come classi e associazioni (chiave esterna `UserId`), dati collegati e annidati, `findAll` con `Op`, `include` e `findByPk`, modifica ed eliminazione, pro e contro degli ORM; organizzazione di un'app Express, configurazione con `.env` e `dotenv` (precedenza delle variabili d'ambiente); la lista di cose da fare con Express e Sequelize (modelli, middleware, rotte con `'/*splat'`, router, controller, autenticazione, una sessione di lavoro con il log di `morgan`, la trappola di `router.use` senza percorso e il rimedio). Quattro sviste delle slide segnalate (`firstName`/`name`, `console.err`, apici tipografici, `true`/`false`) |
 | `chapters/17. REST.tex` | Limiti delle web app tradizionali e contesto architetturale (client di ogni tipo, server che interrogano altri server), API e stile REST, rappresentazioni JSON e XML, verbi e URI, risorse annidate; i quattro archetipi di risorse (document, collection, store, controller) con le loro regole di nomenclatura; filtri e paginazione nella query string (come li consegna Express) e ricerche complesse con un controller; autenticazione con token e JWT con prove reali (il token delle slide decodificato, la firma HMAC ricalcolata a mano, payload alterato, chiave sbagliata, token scaduto), HS256 e RS256, il logout senza sessione, funzioni di hash (i digest delle slide verificati con `sha256sum`); l'API REST della lista di cose da fare con Express 5.3.0, Sequelize, `jsonwebtoken` 9.0.3 e `cors`, eseguita davvero (`curl -i` e `-v`, log di `morgan`): `201` con `Location`, `204`, `401`, `403`, filtro e paginazione con la query SQL generata, e cinque ritocchi verificati (la password nella risposta di `/signup`, un `403` al posto del `404`, gli `undefined` nel log, il `Content-Type` dimenticato, il `404` in HTML); regole e linee guida (Massé, RESTRuler); OpenAPI con `swagger-jsdoc` 6.3.0 e `swagger-ui-express` 5.0.1 (la specifica generata dalle annotazioni, Swagger UI ridisegnata dal vero). Tre sviste delle slide segnalate (i dati «dell'esame», i campi `user`/`pws` e il `{"token": …}` del diagramma) |
-| `chapters/18. TypeScript.tex` | Transpiler, tipi, unioni, interfacce, generici, livelli di severità |
-| `chapters/19. Frontend Tooling.tex` | Sass, framework CSS, bundling, tree shaking, minificazione, Vite |
-| `chapters/20. Single Page App.tex` | Routing lato client, componenti, Web Components API |
-| `chapters/21. Angular.tex` | Componenti, template, eventi, `@Input`/`@Output`, Router |
-| `chapters/22. Angular avanzato.tex` | Form, servizi e DI, guardie, HttpClient, Observable, signal, la SPA completa |
-| `chapters/23. Sicurezza.tex` | XSS, CSRF, SQL injection, session hijacking, same-origin policy e CORS |
-| `chapters/24. Testing.tex` | Piramide del testing, Jasmine, test double, E2E, fragilità e flakiness, Playwright |
-| `chapters/25. CMS e GraphQL.tex` | *(fuori programma)* CMS tradizionali e headless, Strapi, GraphQL, siti statici |
+| `chapters/18. API in produzione.tex` | Dalle API che funzionano alle API pronte per la produzione, con Express 5.3.0, Spring Boot 4.1.2 e Django Ninja 1.8.0 eseguiti davvero: la struttura degli oggetti di una specifica OpenAPI e la validazione con Redocly CLI; l'API come contratto, modifiche compatibili e non retrocompatibili, versionamento nell'URI e negli header (`Accept` con un tipo *vendor* e `Vary`), ciclo di vita delle versioni e header `Deprecation`, `Sunset` e `Link`; l'OWASP API Security Top 10 (2023), con la BOLA mostrata sull'API del capitolo 17, il rate limiting con `express-rate-limit` 8.7.4 (header `RateLimit` della bozza 8), il throttling di Django Ninja e Bucket4j, una SSRF che raggiunge davvero un servizio interno, le tracce degli errori in sviluppo e in produzione, un formato coerente per gli errori; osservabilità con Spring Boot Actuator (stato di salute, metriche, il conteggio dei `429`), un `/health` che risponde `503` e che cosa scrivere (e non scrivere) nei log. Sei sviste delle slide segnalate (`produces` di Swagger 2.0, `Deprecation: true` invece della data della RFC 9745, giovedì 31 dicembre 2026 scritto `Wed`, `create_response` senza `status`, che solleva `AssertionError`, il commento «100 richieste in 15 minuti» accanto a `limit: 10`, `Bandwidth.classic` e `Refill` deprecati in Bucket4j 8) |
+| `chapters/19. TypeScript.tex` | Transpiler, tipi, unioni, interfacce, generici, livelli di severità |
+| `chapters/20. Frontend Tooling.tex` | Sass, framework CSS, bundling, tree shaking, minificazione, Vite |
+| `chapters/21. Single Page App.tex` | Routing lato client, componenti, Web Components API |
+| `chapters/22. Angular.tex` | Componenti, template, eventi, `@Input`/`@Output`, Router |
+| `chapters/23. Angular avanzato.tex` | Form, servizi e DI, guardie, HttpClient, Observable, signal, la SPA completa |
+| `chapters/24. Sicurezza.tex` | XSS, CSRF, SQL injection, session hijacking, same-origin policy e CORS |
+| `chapters/25. Testing.tex` | Piramide del testing, Jasmine, test double, E2E, fragilità e flakiness, Playwright |
+| `chapters/26. CMS e GraphQL.tex` | *(fuori programma)* CMS tradizionali e headless, Strapi, GraphQL, siti statici |
 | `unina_doc_class.cls` | Classe di documento (ripresa dalle *Dispense APA*, non modificata) |
 | `fonts/` | Font usati dalla classe (Lato, Gobold, FiraCode, Lora, IcoMoon, …) |
 | `sources/` | Logo dell'ateneo, risorse della copertina, immagine di Fu-Tzu (`fu-tzu.jpg`, dalle slide) |
@@ -190,7 +191,7 @@ dispensa perché abbiano lo stesso aspetto:
 `\mok` e `\merr` sono il segno di spunta verde e la croce rossa.
 
 Per i listati: `\begin{lstlisting}[style=html, name=file.html]`. Gli stili
-disponibili sono `html`, `css`, `js`, `ts`, `pug`, `php`, `json`, `shell`,
+disponibili sono `html`, `css`, `js`, `ts`, `pug`, `php`, `json`, `shell`, `java`, `python`, `xml`,
 `sql`, `http` e `plain`. Il `name` compare nella scheda in alto, accanto
 all'icona del linguaggio scelta dallo stile; se omesso, la finestra non ha la
 barra delle schede.

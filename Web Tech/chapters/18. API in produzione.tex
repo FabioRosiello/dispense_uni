@@ -1,0 +1,1933 @@
+\chapter{API pronte per la produzione}
+
+Nel capitolo precedente abbiamo costruito una API REST che funziona: ci si
+registra, si ottiene un token, si gestiscono le proprie cose da fare. Un backend,
+però, non è finito appena gli endpoint funzionano. Diventa \textbf{maturo}
+quando può \textbf{evolvere}, \textbf{sopravvivere ai client} che lo usano,
+\textbf{resistere agli abusi} ed essere \textbf{gestito in sicurezza} una volta
+in produzione. Sono domande a cui dovremmo saper rispondere:
+
+\begin{itemize}
+  \item come si \textbf{documenta} una API?
+  \item come la si \textbf{modifica} senza rompere i client che già la usano?
+  \item come si \textbf{proteggono} le risorse dagli accessi non autorizzati?
+  \item come si \textbf{limitano} gli abusi e il traffico eccessivo?
+  \item come si \textbf{osserva} che cosa succede in produzione?
+  \item come si \textbf{ritirano} in sicurezza le funzionalità vecchie?
+\end{itemize}
+
+Il capitolo le affronta in quest'ordine. Gli esempi principali sono in Express
+5.3.0, sulla falsariga del capitolo 17; le slide mostrano le stesse idee anche
+con Spring Boot (Java) e Django Ninja (Python), e anche quegli esempi sono stati
+eseguiti davvero, con Spring Boot 4.1.2 (Java 21) e con Django 5.2.19 e
+django-ninja 1.8.0. Ne è uscita qualche sorpresa, segnalata al momento giusto.
+
+\info{Spring Boot e Django Ninja}{
+  Come nel capitolo 17, gli esempi con altri framework servono a vedere che le
+  idee non dipendono da Express: non è richiesto saperli scrivere. Basta
+  riconoscere nel codice i concetti (versioni, header, limiti, controlli), che
+  sono gli stessi ovunque.}
+
+\section{Documentare: OpenAPI}
+
+Il primo passo verso una API matura è descriverla. Lo standard \term{OpenAPI}
+(già noto come Swagger) l'abbiamo incontrato alla fine del capitolo 17: una
+descrizione formale delle API HTTP, leggibile sia dalle persone sia dalle
+macchine, da cui si generano documentazione e codice. Vale la stessa
+avvertenza: all'esame bisogna sapere \textbf{che cos'è}, \textbf{perché} è
+stato introdotto e \textbf{a che cosa} serve, non scrivere specifiche da zero.
+Qui aggiungiamo come è fatta una specifica e che cosa ci si può fare.
+
+\subsection{Com'è fatta una specifica}
+
+Una descrizione OpenAPI è un documento di testo strutturato che rappresenta un
+oggetto JSON, scritto in JSON oppure in YAML: le due forme sono equivalenti. Le
+chiavi principali sono la versione dello standard (\code{openapi}), le
+informazioni sull'API (\code{info}) e gli endpoint (\code{paths}):
+
+\begin{affianco}[0.46]
+\begin{lstlisting}[style=plain, name=openapi.yaml]
+# formato YAML
+openapi: 3.1.0
+info:
+  title: A minimal specification
+  version: 0.0.1
+paths: {}   # nessun endpoint definito
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=json, name=openapi.json]
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "A minimal specification",
+    "version": "0.0.1"
+  },
+  "paths": {}
+}
+\end{lstlisting}
+\end{affianco}
+
+In YAML i commenti cominciano con \code{\#}. In JSON i commenti non esistono:
+nelle slide la nota \code{// No endpoints defined} accanto a \code{paths} è
+un'annotazione per chi legge, e in un file vero un parser JSON la rifiuterebbe.
+
+Gli endpoint, nella specifica, si chiamano \term{path}, e la struttura scende
+per livelli: l'oggetto principale contiene i path; ogni path elenca i metodi
+che supporta; ogni metodo è un'\textit{operazione}, che descrive i parametri
+attesi (nel percorso, nella query, negli header), l'eventuale corpo della
+richiesta e le possibili risposte, una per codice di stato.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    a/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.7pt, draw=mref}]
+  \mchiave{0.4cm}
+  \oggetto[anchor=north west]{oa}{(0,0)}{2.3cm}{OpenAPI Object}
+    {openapi/, info/, paths/, \ldots/}
+  \oggetto[anchor=west]{pa}{([xshift=0.4cm]oa-3.east)}{2.3cm}{Paths Object}
+    {{/endpoint1}/, {/endpoint2}/, {/endpoint3}/, \ldots/}
+  \oggetto[anchor=west]{pi}{([xshift=0.4cm]pa-2.east)}{2.3cm}{Path Item Object}
+    {get/, put/, post/, delete/, \ldots/}
+  \oggetto[anchor=west]{op}{([xshift=0.4cm]pi-2.east)}{2.4cm}{Operation Object}
+    {summary/, description/, requestBody/, responses/, operationId/, \ldots/}
+  \oggetto[anchor=west]{rs}{([xshift=0.4cm]op-4.east)}{2.4cm}{Responses Object}
+    {"HTTP code1"/, "HTTP code2"/, "HTTP code3"/, \ldots/}
+  \oggetto[anchor=west]{re}{([xshift=0.4cm]rs-2.east)}{2.3cm}{Response Object}
+    {description/, content/, \ldots/}
+  \draw[a] (oa-3.east) -- (pa.west);
+  \foreach \i in {1,2,3} \draw[a] (pa-\i.east) to[out=0, in=180] (pi.west);
+  \foreach \i in {1,2,3,4} \draw[a] (pi-\i.east) to[out=0, in=180] (op.west);
+  \draw[a] (op-4.east) -- (rs.west);
+  \foreach \i in {1,2,3} \draw[a] (rs-\i.east) to[out=0, in=180] (re.west);
+\end{tikzpicture}
+\caption{La struttura di una specifica OpenAPI (ridisegnata da
+\urlx{https://learn.openapis.org/specification/paths}). I nomi degli oggetti
+sono quelli dello standard.}
+\label{fig:oas-oggetti}
+\end{figure}
+
+Le chiavi delle risposte sono i codici di stato \textbf{fra virgolette}, come
+nella figura. YAML accetterebbe anche \code{200:} senza, ma allora la chiave
+diventa un numero e non una stringa: la specifica chiede le virgolette proprio
+per la compatibilità fra JSON e YAML.
+
+\subsection{Che cosa ci si fa}
+
+Scrivere una specifica OpenAPI è parecchio lavoro, ma ripaga in tre modi:
+\textbf{supporto alla progettazione} (si scoprono errori e incoerenze prima di
+scrivere codice), \textbf{generazione di codice} (scheletri di server, SDK per
+i client, test) e \textbf{documentazione} interattiva generata
+automaticamente.
+
+Il primo uso si prova subito. Ecco l'esempio di \code{/auth} delle slide, così
+com'è, controllato con Redocly CLI (versione 2.77.0), un validatore open source:
+
+\begin{affianco}[0.4]
+\codicepiccolo
+\begin{lstlisting}[style=plain, name=auth.yaml]
+openapi: 3.1.0
+info:
+  title: My API
+  version: 1.0.0
+paths:
+  /auth:
+    post:
+      description: Authenticate user
+      produces:
+        - application/json
+      requestBody:
+        description: user to authenticate
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                usr:
+                  type: string
+                  example: Kyle
+                pwd:
+                  type: string
+                  example: p4ssw0rd
+      responses:
+        200:
+          description: User authenticated
+        401:
+          description: Invalid credentials
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ npx redocly lint --extends=minimal auth.yaml
+validating auth.yaml...
+[1] auth.yaml:9:7 at #/paths/~1auth/post/produces
+
+Property `produces` is not expected here.
+
+ 7 | post:
+ 8 |   description: Authenticate user
+ 9 |   produces:
+   |   ^^^^^^^^
+10 |     - application/json
+11 |   requestBody:
+
+Error was generated by the struct rule.
+...
+Validation failed with 1 error and 4 warnings.
+\end{console}
+\end{affianco}
+
+\code{produces} è una chiave di Swagger 2.0, la versione precedente dello
+standard: in OpenAPI 3 il tipo del contenuto si dichiara sotto \code{content},
+come fa già \code{requestBody} qualche riga più in basso (nel capitolo 17, infatti,
+l'esempio compariva senza quella riga). I quattro avvisi sono consigli di stile:
+mancano \code{servers}, \code{operationId}, \code{summary} e uno schema di
+sicurezza. Tolte le due righe di \code{produces}, il validatore risponde
+\textit{Your API description is valid} e restano solo gli avvisi.
+
+Gli strumenti open source più diffusi sono quelli della famiglia Swagger:
+
+\begin{itemize}
+  \item \textbf{Swagger Editor} (\urlx{https://swagger.io/tools/swagger-editor/}):
+        la specifica a sinistra e, a destra, la documentazione generata con
+        Swagger UI, aggiornata mentre si scrive;
+  \item \textbf{Swagger Codegen} (\urlx{https://swagger.io/tools/swagger-codegen/}):
+        la generazione di codice, disponibile anche dalla barra dell'editor
+        (\textit{Generate Server} e \textit{Generate Client});
+  \item \textbf{Swagger UI} (\urlx{https://swagger.io/tools/swagger-ui/}): la
+        documentazione interattiva, quella servita da \code{swagger-ui-express}
+        nel capitolo 17.
+\end{itemize}
+
+Un'alternativa libera per la generazione di codice è OpenAPI Generator
+(\urlx{https://openapi-generator.tech/}).
+
+Lato server la generazione produce ovviamente solo \textbf{scheletri}: le
+rotte con i tipi giusti, da riempire con la logica. Fra i linguaggi e i
+framework supportati ci sono ASP.NET, Go, Java, JaxRS, Micronaut, Kotlin,
+Node.js, Python (Flask), Scala e Spring. Lato client, invece, si ottengono
+\textbf{SDK} completi, cioè librerie pronte per chiamare l'API, in decine di
+linguaggi: C\#, Dart, Go, Java, JavaScript, Kotlin, PHP, Python, R, Ruby, Scala,
+Swift, TypeScript e altri. È un modo molto comodo di rendere un'API usabile da
+chiunque.
+
+Per questo spesso si scrive la specifica \textbf{prima} del codice (lo sviluppo
+guidato dalla specifica, \textit{OpenAPI-driven development}, già visto nel
+capitolo 17): si sfrutta al massimo la generazione di codice e i gruppi
+coinvolti (front-end, back-end, chi fa i test) lavorano in parallelo, allineati
+dalla stessa definizione dell'API. Quella definizione, come vedremo subito, è
+un contratto.
+
+\section{Far evolvere una API}
+
+\subsection{L'API è un contratto}
+
+Quando esponiamo una API, stipuliamo un \term{contratto} con chi la usa. Il
+contratto comprende:
+
+\begin{itemize}
+  \item i percorsi delle URL e i metodi HTTP;
+  \item il formato del corpo delle richieste e quello delle risposte;
+  \item i codici di stato;
+  \item i requisiti di autenticazione e le regole di autorizzazione;
+  \item il formato degli errori;
+  \item le prestazioni attese.
+\end{itemize}
+
+Anche se non lo scriviamo da nessuna parte (una specifica OpenAPI è il modo di
+scriverlo), i client ci faranno affidamento: un'app che legge
+\code{task.completed} smette di funzionare il giorno in cui quel campo sparisce.
+
+\subsection{Perché le API cambiano}
+
+Come ogni software che serve a qualcosa, anche le API evolvono nel tempo. Le
+cause tipiche:
+
+\begin{itemize}
+  \item cambiano le regole di business;
+  \item cambiano i requisiti del front-end (un'app mobile ha bisogno di nuovi
+        campi);
+  \item il modello dei dati di partenza non basta più;
+  \item emergono problemi di prestazioni;
+  \item cambiano i requisiti di sicurezza;
+  \item evolvono le integrazioni con servizi di terze parti.
+\end{itemize}
+
+\subsection{Modifiche compatibili e modifiche che rompono}
+
+Alcune modifiche sono \textbf{sicure} rispetto al contratto: i client esistenti
+non se ne accorgono. Altre no: possono far smettere di funzionare i client che
+usano la versione precedente, e si chiamano \term{breaking change}, modifiche
+(potenzialmente) \textbf{non retrocompatibili}.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{7.9cm}@{\hspace{0.8cm}}%
+                >{\raggedright\arraybackslash}p{7.9cm}@{}}
+  \textbf{Di solito sicure} & \textbf{Potenzialmente non retrocompatibili} \\
+  \hline
+  \mok\ aggiungere un nuovo endpoint & \merr\ rinominare un campo \\
+  \mok\ aggiungere un campo facoltativo alla richiesta & \merr\ togliere un campo \\
+  \mok\ aggiungere un campo facoltativo alla risposta & \merr\ cambiare il tipo di un campo \\
+  \mok\ aggiungere un parametro di filtro, con un valore predefinito &
+    \merr\ cambiare i codici di stato \\
+  \mok\ migliorare l'implementazione interna (per esempio con un refactoring)
+    senza cambiarne il comportamento &
+    \merr\ cambiare il formato delle risposte di errore \\
+  & \merr\ cambiare il significato di un endpoint esistente \\
+  & \merr\ cambiare i requisiti di autenticazione o di autorizzazione \\
+\end{tabular}
+\end{center}
+
+Aggiungere un campo alla risposta è di solito sicuro, purché i client
+\textbf{ignorino i campi che non conoscono}. Un client che rifiutasse le
+risposte con un campo in più (per esempio validandole contro uno schema che non
+ammette altri campi) trasformerebbe anche questa modifica in una rottura.
+
+\begin{affianco}[0.48]
+\begin{lstlisting}[style=json, name=prima]
+{
+  "id": 1,
+  "title": "Prepare lecture",
+  "completed": false
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=json, name=dopo: un campo in più]
+{
+  "id": 1,
+  "title": "Prepare lecture",
+  "completed": false,
+  "createdAt": "2026-05-16T09:30:00Z"
+}
+\end{lstlisting}
+\end{affianco}
+
+Ora un nuovo requisito: lo stato di un'attività va tracciato in modo più fine,
+con tre valori, \code{TODO}, \code{IN-PROGRESS} e \code{DONE}. Il booleano
+\code{completed} non basta più, e nella nuova rappresentazione delle slide
+cambiano anche i nomi:
+
+\begin{affianco}[0.48]
+\begin{lstlisting}[style=json, name=prima]
+{
+  "id": 1,
+  "title": "Prepare lecture",
+  "completed": false
+}
+\end{lstlisting}
+\risultato
+\begin{lstlisting}[style=json, name=dopo: non retrocompatibile]
+{
+  "taskId": 1,
+  "name": "Prepare lecture",
+  "status": "IN-PROGRESS"
+}
+\end{lstlisting}
+\end{affianco}
+
+Sono tre modifiche che rompono in una volta: un campo rinominato
+(\code{id}~$\to$~\code{taskId}), un altro rinominato
+(\code{title}~$\to$~\code{name}) e uno sostituito da un campo di tipo diverso
+(\code{completed}, booleano, $\to$~\code{status}, stringa). Un client che legge
+\code{task.title} riceve \code{undefined}.
+
+\subsection{Versionare}
+
+Non possiamo limitare la nostra API alle sole modifiche sicure: prima o poi una
+modifica che rompe diventa necessaria, e far finta di niente non aiuta (la
+slide lo dice con uno struzzo che nasconde la testa sotto la sabbia). Quando la
+retrocompatibilità si rompe serve una \textbf{strategia evolutiva}.
+
+L'idea di base del \term{versionamento} è mantenere attive, almeno per un po',
+sia la versione vecchia sia quella nuova, e lasciare a ogni client la scelta di
+quale usare. Le strategie più comuni:
+
+\begin{itemize}
+  \item la versione nell'\textbf{URI}: \code{/api/v1/tasks} e \code{/api/v2/tasks};
+  \item la versione in un \textbf{header} della richiesta, scelta dal client:
+        un header apposito, come \codel{X-API-Version: 2}, oppure il tipo di
+        contenuto richiesto con \code{Accept}, come
+        \codel{Accept: application/vnd.academy.tasks.v2+json} (il prefisso
+        \code{vnd.}, da \textit{vendor}, indica un tipo definito da chi
+        fornisce l'API).
+\end{itemize}
+
+Il \textbf{versionamento nell'URI} (\code{GET /api/v1/tasks/1},
+\code{GET /api/v2/tasks/1}) è il più immediato: è facile da capire e da provare
+(basta un browser), facile da documentare e facile da instradare in quasi tutti
+i framework. Lo svantaggio è qualche duplicazione nei router e nei controller.
+
+In Express le due versioni sono due router montati su prefissi diversi. I dati
+sono gli stessi: cambia solo come le due versioni li rappresentano.
+
+\begin{lstlisting}[style=js, name=versioni.js]
+import express from "express";
+
+const app = express();
+
+// i dati sono gli stessi: cambia solo come li rappresentano le due versioni
+const tasks = [
+  { id: 1, title: "Prepare lecture", status: "IN-PROGRESS" },
+  { id: 2, title: "Book the room", status: "DONE" },
+];
+
+function findTask(req, res, next) {
+  req.task = tasks.find((t) => t.id === Number(req.params.id));
+  if (req.task) next();
+  else res.status(404).json({ error: "NOT_FOUND", message: "Task not found" });
+}
+
+const toV1 = ({ id, title, status }) => ({ id, title, completed: status === "DONE" });
+
+const v1 = express.Router();
+v1.use((req, res, next) => {                 // la v1 è deprecata
+  res.set("Deprecation", "@1780272000");      // dal 1° giugno 2026
+  res.set("Sunset", "Thu, 31 Dec 2026 23:59:59 GMT");
+  res.links({ deprecation: "/docs/migrate-v1-to-v2" });
+  next();
+});
+v1.get("/tasks/:id", findTask, (req, res) => res.json(toV1(req.task)));
+
+const v2 = express.Router();
+v2.get("/tasks/:id", findTask, (req, res) => res.json(req.task));
+
+app.use("/api/v1", v1);
+app.use("/api/v2", v2);
+\end{lstlisting}
+
+Il middleware alle righe 20--25 riguarda la deprecazione della v1, di cui
+parliamo fra poco. La funzione \code{toV1} ricostruisce la vecchia
+rappresentazione da quella nuova: la v1 continua a esistere senza un secondo
+modello dei dati.
+
+\begin{console}[Terminale]
+$ curl -s localhost:3000/api/v1/tasks/1; echo
+{"id":1,"title":"Prepare lecture","completed":false}
+$ curl -s localhost:3000/api/v2/tasks/1; echo
+{"id":1,"title":"Prepare lecture","status":"IN-PROGRESS"}
+$ curl -s -w " %{http_code}\n" localhost:3000/api/v2/tasks/9
+{"error":"NOT_FOUND","message":"Task not found"} 404
+\end{console}
+
+Nello stesso file, la versione scelta con un header: una sola URI per tutte le
+versioni, e il client chiede la v2 indicandone il tipo in \code{Accept}.
+
+\begin{affianco}[0.53]
+\codicepiccolo
+\begin{lstlisting}[style=js, name=versioni.js, firstnumber=34]
+// versione scelta con un header: una sola URI per tutte le versioni
+const V2 = "application/vnd.academy.tasks.v2+json";
+app.get("/api/tasks/:id", findTask, (req, res) => {
+  res.vary("Accept");
+  if (req.accepts(["application/json", V2]) === V2) {
+    res.type(V2).json(req.task);
+  } else {
+    res.json(toV1(req.task));
+  }
+});
+
+app.listen(3000);
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ curl -i localhost:3000/api/tasks/1
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Vary: Accept
+Content-Type: application/json; charset=utf-8
+...
+
+{"id":1,"title":"Prepare lecture","completed":false}
+$ curl -i -H "Accept: application/vnd.academy.tasks.v2+json" localhost:3000/api/tasks/1
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Vary: Accept
+Content-Type: application/vnd.academy.tasks.v2+json; charset=utf-8
+...
+
+{"id":1,"title":"Prepare lecture","status":"IN-PROGRESS"}
+\end{console}
+\end{affianco}
+
+\code{req.accepts} sceglie, fra i tipi che il server sa produrre, quello
+preferito dal client: \code{curl} di suo invia \codel{Accept: */*}, che
+accetta tutto, e vince il primo della lista (la v1); chi chiede esplicitamente
+il tipo della v2 la ottiene. L'header \codel{Vary: Accept} avverte le cache
+(capitolo 2) che la risposta dipende da \code{Accept}: senza, una cache potrebbe
+servire a un client la versione chiesta da un altro.
+
+\subsubsection{Lo stesso in Django Ninja e in Spring Boot}
+
+In Django Ninja ogni versione è un'istanza di \code{NinjaAPI}, con il proprio
+numero di versione, e le due si montano su percorsi diversi in \code{urls.py}:
+
+\begin{affianco}[0.5]
+\codicepiccolo
+\begin{lstlisting}[style=python, name=tasks/api_v1.py]
+from ninja import NinjaAPI
+
+api = NinjaAPI(version="1.0.0")
+
+@api.get("/tasks/{task_id}")
+def get_task(request, task_id: int):
+  return {
+     "id": task_id,
+     "title": "Prepare lecture",
+     "completed": False,
+  }
+\end{lstlisting}
+\risultato
+\codicepiccolo
+\begin{lstlisting}[style=python, name=tasks/api_v2.py]
+from ninja import NinjaAPI
+
+api = NinjaAPI(version="2.0.0")
+
+@api.get("/tasks/{task_id}")
+def get_task(request, task_id: int):
+  return {
+     "id": task_id,
+     "title": "Prepare lecture",
+     "status": "OPEN",
+  }
+\end{lstlisting}
+\end{affianco}
+
+\begin{affianco}[0.5]
+\codicepiccolo
+\begin{lstlisting}[style=python, name=academy/urls.py]
+from django.contrib import admin
+from django.urls import path
+from tasks.api_v1 import api as api_v1
+from tasks.api_v2 import api as api_v2
+
+urlpatterns = [
+  path("admin/", admin.site.urls),
+  path("api/v1/", api_v1.urls),
+  path("api/v2/", api_v2.urls)
+]
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ curl -s localhost:8000/api/v1/tasks/1; echo
+{"id": 1, "title": "Prepare lecture", "completed": false}
+$ curl -s localhost:8000/api/v2/tasks/1; echo
+{"id": 1, "title": "Prepare lecture", "status": "OPEN"}
+$ curl -s -o /dev/null -w "%{http_code}\n" localhost:8000/api/v1/docs
+200
+$ curl -s -o /dev/null -w "%{http_code}\n" localhost:8000/api/v2/docs
+200
+\end{console}
+\end{affianco}
+
+Django Ninja genera da sé la specifica OpenAPI e la documentazione di ciascuna
+versione, in percorsi separati: \code{/api/v1/docs} e \code{/api/v2/docs}.
+
+In Spring Boot, che usa le annotazioni, ogni versione è una classe controller
+con il proprio prefisso (\code{@RequestMapping}) e il proprio tipo di risposta,
+un \code{record} Java. Ecco la v2:
+
+\begin{affianco}[0.6]
+\codicepiccolo
+\begin{lstlisting}[style=java, name=TaskControllerV2.java]
+@RestController
+@RequestMapping("/api/v2/tasks")
+public class TaskControllerV2 {
+
+    @GetMapping("/{id}")
+    public TaskResponseV2 getTask(@PathVariable Long id) {
+      return new TaskResponseV2(
+           id,
+           "Prepare lecture",
+           "OPEN"
+      );
+    }
+}
+
+public record TaskResponseV2(
+     Long id,
+     String title,
+     String status
+) {}
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ curl -s localhost:8080/api/v2/tasks/1; echo
+{"id":1,"title":"Prepare lecture","status":"OPEN"}
+\end{console}
+\wtnota{Spring trasforma il record in JSON:\\ i nomi dei campi diventano le chiavi.}
+\end{affianco}
+
+La v1 è uguale, con \code{@RequestMapping("/api/v1/tasks")} e un record
+\code{TaskResponseV1} con il booleano \code{completed}; la vedremo fra poco
+nella forma deprecata. (Nella slide sul requisito nuovo gli stati sono
+\code{TODO}, \code{IN-PROGRESS} e \code{DONE}, mentre gli esempi di codice
+restituiscono \code{"OPEN"}: è solo un valore di prova.)
+
+\subsection{Quando versionare}
+
+Mantenere più versioni contemporaneamente è un \textbf{grande sforzo}: ogni
+correzione va portata in tutte, e ogni versione va documentata, provata e
+sorvegliata. Le regole:
+
+\begin{itemize}
+  \item non creare una nuova versione per ogni piccola modifica;
+  \item versionare solo quando c'è una modifica che rompe.
+\end{itemize}
+
+\info{Una buona regola}{
+  \textbf{Aggiungere} senza cambiare versione; \textbf{togliere} o
+  \textbf{ridefinire} con una versione nuova.}
+
+\subsection{Deprecazione e dismissione}
+
+Versionare non basta: serve anche \textbf{comunicare} il ciclo di vita delle
+versioni, perché in genere non vogliamo sostenere per sempre una API vecchia. Il
+ciclo tipico ha quattro fasi:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    fase/.style={rounded corners=3pt, line width=0.8pt, minimum width=3.6cm,
+      minimum height=2.2cm, text width=3.3cm, align=left, anchor=north west,
+      font=\Lato\scriptsize, inner sep=5pt},
+    a/.style={-{Stealth[length=6pt,width=6pt]}, line width=1.6pt,
+      draw=neutral!55!white}]
+  \node[fase, fill=primary!80!black, draw=primary!80!black, text=white] (f1) at (0,0)
+    {{\small\bfseries Active}\\[3pt] la versione consigliata\\[3pt]
+     \textit{nessun header}};
+  \node[fase, fill=primary!60!white, draw=primary!70!black, text=white] (f2) at (4.3,0)
+    {{\small\bfseries Deprecated}\\[3pt] funziona ancora, ma i client dovrebbero passare
+     alla versione attiva\\[3pt] \FiraCodeNL Deprecation, Link};
+  \node[fase, fill=primary!35!white, draw=primary!55!black, text=primary!25!black] (f3) at (8.6,0)
+    {{\small\bfseries Sunset}\\[3pt] funziona ancora, ma la data di rimozione è
+     annunciata\\[3pt] \FiraCodeNL Sunset};
+  \node[fase, fill=neutral!18!white, draw=neutral!45!white, text=neutral!35!black] (f4) at (12.9,0)
+    {{\small\bfseries Removed}\\[3pt] la versione non è più disponibile};
+  \draw[a] ([xshift=1pt]f1.east) -- ([xshift=-1pt]f2.west);
+  \draw[a] ([xshift=1pt]f2.east) -- ([xshift=-1pt]f3.west);
+  \draw[a] ([xshift=1pt]f3.east) -- ([xshift=-1pt]f4.west);
+\end{tikzpicture}
+\caption{Il ciclo di vita di una versione di una API, con gli header che ne
+annunciano le fasi.}
+\label{fig:ciclo-vita-api}
+\end{figure}
+
+L'idea importante è \textbf{non rompere i client in silenzio}: prima di una
+modifica che rompe, vanno avvisati per tempo. Un endpoint deprecato continua a
+funzionare come prima, ma può aggiungere alla risposta degli header di
+avvertimento:
+
+\begin{itemize}
+  \item \code{Deprecation}: la risorsa è deprecata (dalla data indicata);
+  \item \code{Sunset}: la data in cui smetterà di rispondere;
+  \item \code{Link} con \code{rel="deprecation"}: dove trovare le informazioni
+        (per esempio, come passare alla nuova versione).
+\end{itemize}
+
+Un client ben scritto li registra nel proprio log, o li segnala a chi lo
+sviluppa, molto prima del giorno della rimozione. Nel router della v1 di
+Express li aggiunge il middleware delle righe 20--25 (\code{res.links} è il
+metodo di Express che compone l'header \code{Link}):
+
+\begin{console}[Terminale]
+$ curl -i localhost:3000/api/v1/tasks/1
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Deprecation: @1780272000
+Sunset: Thu, 31 Dec 2026 23:59:59 GMT
+Link: </docs/migrate-v1-to-v2>; rel="deprecation"
+Content-Type: application/json; charset=utf-8
+Content-Length: 52
+ETag: W/"34-301dHifN5Map+rcbxGdlrTXkybk"
+Date: Wed, 11 Nov 2026 12:38:09 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"id":1,"title":"Prepare lecture","completed":false}
+\end{console}
+
+Nelle slide la risposta d'esempio porta \codel{Deprecation: true} e
+\codel{Sunset: Wed, 31 Dec 2026 23:59:59 GMT}. Due precisazioni, piccole ma
+utili:
+
+\begin{itemize}
+  \item \codel{Deprecation: true} è la forma delle prime bozze dello standard,
+        ancora molto diffusa. La RFC 9745 (marzo 2025), che ha standardizzato
+        l'header, prevede invece la \textbf{data} della deprecazione, scritta
+        come numero di secondi dal 1° gennaio 1970 preceduto da \code{@}:
+        \code{@1780272000} è il 1° giugno 2026 a mezzanotte (UTC). La data di
+        \code{Sunset} (RFC 8594) non deve essere precedente a quella di
+        \code{Deprecation}.
+  \item Il 31 dicembre 2026 è un \textbf{giovedì}: \code{Thu}, non
+        \code{Wed}. Nelle date HTTP il giorno della settimana è ridondante, ma
+        deve essere quello giusto.
+\end{itemize}
+
+In Spring Boot gli header si aggiungono con il costruttore della risposta,
+\code{ResponseEntity}. È il controller della v1, con i valori delle slide:
+
+\begin{affianco}[0.6]
+\codicepiccolo
+\begin{lstlisting}[style=java, name=TaskControllerV1.java]
+@RestController
+public class TaskControllerV1 {
+
+  @GetMapping("/api/v1/tasks/{id}")
+  public ResponseEntity<TaskResponseV1> getTaskV1(@PathVariable Long id) {
+    TaskResponseV1 body = new TaskResponseV1(
+         id,
+         "Prepare lecture",
+         false
+    );
+
+      return ResponseEntity.ok()
+          .header("Deprecation", "true")
+          .header("Sunset", "Wed, 31 Dec 2026 23:59:59 GMT")
+          .header("Link", "</docs/migrate-v1-to-v2>; rel=\"deprecation\"")
+          .body(body);
+  }
+}
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ curl -i localhost:8080/api/v1/tasks/1; echo
+HTTP/1.1 200
+Deprecation: true
+Sunset: Wed, 31 Dec 2026 23:59:59 GMT
+Link: </docs/migrate-v1-to-v2>; rel="deprecation"
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Wed, 11 Nov 2026 12:40:27 GMT
+
+{"id":1,"title":"Prepare lecture","completed":false}
+\end{console}
+\wtnota{Tomcat, il server di Spring Boot, non scrive\\ la frase dopo il codice
+di stato: è facoltativa.}
+\end{affianco}
+
+In Django Ninja l'esempio delle slide crea la risposta con
+\code{api.create\_response} e poi le aggiunge gli header. Così com'è, però,
+con django-ninja 1.8.0 non funziona:
+
+\begin{affianco}[0.5]
+\codicepiccolo
+\begin{lstlisting}[style=python, name=tasks/api_v1.py, firstnumber=7]
+@api.get("/tasks/{task_id}")
+def get_task_v1(request: HttpRequest, task_id: int):
+  response = api.create_response(
+     request,
+     {
+        "id": task_id,
+        "title": "Prepare lecture",
+        "completed": False,
+     },
+  )
+  response["Deprecation"] = "true"
+  response["Sunset"] = "Wed, 31 Dec 2026 23:59:59 GMT"
+  response["Link"] = '</docs/migrate-v1-to-v2>; rel="deprecation"'
+  return response
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ curl -i localhost:8000/api/v1/tasks/1
+HTTP/1.1 500 Internal Server Error
+Date: Wed, 11 Nov 2026 12:39:53 GMT
+Server: WSGIServer/0.2 CPython/3.11.17
+Content-Type: text/plain
+...
+
+Traceback (most recent call last):
+  File "[...]/site-packages/ninja/operation.py", line 235, in run
+    result = self.view_func(request, **values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "[cartella del progetto]/tasks/api_v1.py", line 9, in get_task_v1
+    response = api.create_response(
+               ^^^^^^^^^^^^^^^^^^^^
+  File "[...]/site-packages/ninja/main.py", line 611, in create_response
+    assert status
+           ^^^^^^
+AssertionError
+\end{console}
+\end{affianco}
+
+Il metodo \code{create\_response} ha un parametro \code{status} senza valore
+predefinito utile, e la prima cosa che fa è verificare di averlo ricevuto
+(\code{assert status}). Basta aggiungere \code{status=200} fra gli argomenti
+(dopo il dizionario) perché la risposta arrivi con i suoi tre header, come
+quella di Spring. In alternativa, Django Ninja permette di dichiarare nella
+vista un parametro \code{response: HttpResponse}: si scrivono gli header su
+quello e si restituisce il dizionario come al solito.
+
+La risposta d'errore qui sopra, con la traceback completa, è anche un esempio
+di un problema di cui parleremo nella sezione sulla sicurezza: il server di
+sviluppo di Django gira con \code{DEBUG = True}, e in quella modalità gli
+errori vengono mostrati a chiunque.
+
+Dopo la data di \code{Sunset} la versione viene \textbf{rimossa}. Che cosa
+risponde allora il suo URI è una scelta, ma va fatta: un \code{404}, oppure il
+più esplicito \code{410 Gone} («la risorsa non c'è più, e la cosa è
+permanente»). E la versione va rimossa davvero: un endpoint vecchio dimenticato
+in funzione è uno dei rischi della prossima sezione.
+
+\section{Sicurezza e robustezza}
+
+Una API in produzione è raggiungibile da chiunque, e non tutti i client sono il
+nostro front-end. L'\term{OWASP} (\textit{Open Worldwide Application Security
+Project}), una fondazione che raccoglie e diffonde conoscenze sulla sicurezza
+del software, pubblica l'\textbf{OWASP API Security Top 10}, l'elenco dei dieci
+rischi più critici per le API. Questa è l'edizione del 2023:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}r@{\hspace{0.3cm}}>{\raggedright\arraybackslash}p{7.2cm}@{\hspace{0.5cm}}%
+                >{\raggedright\arraybackslash}p{8.2cm}@{}}
+  & \textbf{Rischio} & \textbf{In breve} \\ \hline
+  1 & Broken Object Level Authorization &
+      si accede agli oggetti altrui cambiando un identificatore \\
+  2 & Broken Authentication &
+      l'autenticazione si aggira o si forza \\
+  3 & Broken Object Property Level Authorization &
+      si leggono o si cambiano proprietà riservate di un oggetto \\
+  4 & Unrestricted Resource Consumption &
+      nessun limite alle risorse che un client può consumare \\
+  5 & Broken Function Level Authorization &
+      si usano funzioni riservate ad altri ruoli \\
+  6 & Unrestricted Access to Sensitive Business Flows &
+      un flusso di business viene sfruttato in modo automatico \\
+  7 & Server Side Request Forgery &
+      il server fa richieste dove vuole l'attaccante \\
+  8 & Security Misconfiguration &
+      configurazioni sbagliate, o di sviluppo, in produzione \\
+  9 & Improper Inventory Management &
+      non si sa bene quali API, versioni ed endpoint siano esposti \\
+  10 & Unsafe Consumption of APIs &
+      ci si fida troppo delle API di terze parti \\
+\end{tabular}
+\end{center}
+
+Gli attacchi alle applicazioni web in generale (XSS, CSRF, SQL injection, furto
+della sessione) sono l'argomento del capitolo 24; qui guardiamo ai rischi
+specifici delle API, uno alla volta.
+
+\subsection{Autorizzazione a livello di oggetto}
+
+L'endpoint \code{GET /api/tasks/42} è pericoloso: il client può essere
+autenticato, ma l'attività 42 potrebbe non essere sua. Chi sviluppa si
+dimentica spesso dell'autorizzazione \textbf{a livello di oggetto} e si affida
+troppo all'autenticazione: «se ha un token valido, può». È il primo rischio
+della classifica (BOLA, \textit{Broken Object Level Authorization}), e lo
+conosciamo già: nell'API del capitolo 17 lo evita il middleware
+\code{ensureUsersModifyOnlyOwnTodos}. Vediamo che cosa succede senza,
+togliendolo dalla rotta \code{GET /todos/:id}:
+
+\begin{lstlisting}[style=js, name=routes/todoRouter.js, firstnumber=16]
+todoRouter.get("/todos/:id", (req, res, next) => {   // manca il controllo!
+  TodoController.findById(req).then((item) => {
+    if (item)
+      res.json(item);
+    else
+      next({ status: 404, message: "Elemento non trovato" });
+  }).catch(err => {
+    next(err);
+  })
+});
+\end{lstlisting}
+
+Sul database nuovo, janet ha creato un elemento (l'1) ed eric si è registrato,
+come nel capitolo 17. Ora eric chiede l'elemento 1, e poi i successivi:
+
+\begin{console}[Terminale]
+$ TOKEN_ERIC=$(curl -s -H 'Content-Type: application/json' -d '{"usr": "eric", "pwd": "cartman"}' localhost:3000/auth | jq -r .)
+$ curl -s -w ' %{http_code}\n' -H "Authorization: Bearer $TOKEN_ERIC" localhost:3000/todos/1
+{"todo":"Prenotare le analisi mediche","done":false,"id":1,"createdAt":"2026-11-11T12:38:50.052Z","updatedAt":"2026-11-11T12:38:50.052Z","UserUserName":"janet"} 200
+$ for id in 2 3; do curl -s -w ' %{http_code}\n' -H "Authorization: Bearer $TOKEN_ERIC" localhost:3000/todos/$id; done
+{"code":404,"description":"Elemento non trovato"} 404
+{"code":404,"description":"Elemento non trovato"} 404
+\end{console}
+
+eric, con il suo token perfettamente valido, legge un elemento di janet. E
+poiché gli identificatori sono numeri consecutivi, provarli tutti è banale: le
+risposte \code{404} gli dicono pure quali non esistono. Con il middleware del
+capitolo 17 al suo posto, la stessa richiesta riceve un \code{403} (anche per
+l'elemento 2, che non esiste: è il ritocco 2 del capitolo 17):
+
+\begin{console}[Terminale]
+$ for id in 1 2; do curl -s -w ' %{http_code}\n' -H "Authorization: Bearer $TOKEN_ERIC" localhost:3000/todos/$id; done
+{"code":403,"description":"Non hai i permessi per vedere o modificare questa risorsa"} 403
+{"code":403,"description":"Non hai i permessi per vedere o modificare questa risorsa"} 403
+\end{console}
+
+Le slide mostrano la soluzione più robusta: cercare l'oggetto \textbf{fra
+quelli dell'utente}, mettendo il proprietario nella query stessa. In Spring Boot
+con un metodo del repository che filtra per identificatore \emph{e}
+proprietario, in Django Ninja con le due condizioni nella \code{get} (sono
+estratti: dipendono da modelli e da un'autenticazione che le slide non
+mostrano):
+
+\begin{affianco}[0.47]
+\codicepiccolo
+\begin{lstlisting}[style=java, name=TaskService.java]
+public TaskResponse getMyTaskById(Long userId, Long taskId) {
+  Task task = taskRepository.findByIdAndOwnerId(taskId, userId)
+       .orElseThrow(() -> new ResponseStatusException(
+            HttpStatus.NOT_FOUND, "Task not found"
+       ));
+
+  return toResponse(task);
+}
+\end{lstlisting}
+\risultato
+\codicepiccolo
+\begin{lstlisting}[style=python, name=tasks/api.py]
+@api.get("/tasks/{task_id}", response={200: TaskOut, 404: ErrorOut}, auth=jwt_auth)
+def get_task(request, task_id: int):
+  try:
+     task = Task.objects.prefetch_related("tags").get(
+       id=task_id,
+       owner=request.auth,
+     )
+  except Task.DoesNotExist:
+     return 404, {"error": "Task not found"}
+
+  return task_to_out(task)
+\end{lstlisting}
+\end{affianco}
+
+In Express, con Sequelize, la stessa idea è una \code{findOne} con due
+condizioni:
+
+\begin{affianco}[0.58]
+\codicepiccolo
+\begin{lstlisting}[style=js, name=routes/todoRouter.js, firstnumber=17]
+todoRouter.get("/todos/:id", async (req, res, next) => {
+  // l'elemento si cerca fra quelli dell'utente: per gli altri non esiste
+  const item = await Todo.findOne({
+    where: { id: req.params.id, UserUserName: req.username }
+  });
+  if (item) res.json(item);
+  else next({ status: 404, message: "Elemento non trovato" });
+});
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ for id in 1 2; do curl -s -w ' %{http_code}\n' -H "Authorization: Bearer $TOKEN_ERIC" localhost:3000/todos/$id; done
+{"code":404,"description":"Elemento non trovato"} 404
+{"code":404,"description":"Elemento non trovato"} 404
+\end{console}
+\end{affianco}
+
+Per eric l'elemento di janet semplicemente \textbf{non esiste}: le due risposte
+sono identiche, e non rivelano nemmeno quali identificatori sono in uso. In più
+il controllo non si può dimenticare in una rotta, perché sta nella query che
+recupera i dati (in cima al file serve \code{import \{ Todo \} from
+"../models/Database.js"}).
+
+\subsection{Autenticazione debole}
+
+Se l'autenticazione si può aggirare o forzare, un attaccante prende il
+controllo degli account altrui: legge dati personali e compie operazioni
+delicate a nome di altri. Una API è vulnerabile se:
+
+\begin{itemize}
+  \item la chiave segreta dei JWT è esposta o prevedibile;
+  \item permette password deboli;
+  \item permette di cambiare email o password, o di fare altre operazioni
+        delicate, senza chiedere di nuovo la password;
+  \item non valida correttamente i token (per esempio ne ignora la scadenza);
+  \item permette tentativi di accesso a raffica (\textit{brute force}) senza
+        alcun meccanismo di blocco.
+\end{itemize}
+
+L'API del capitolo 17 tiene la chiave in \code{.env}, fuori dal codice, e
+\code{jwt.verify} controlla la firma \emph{e} la scadenza (lo abbiamo visto con
+il token scaduto). Contro i tentativi a raffica serve un limite, il
+\textit{rate limiting}, di cui parliamo fra poco.
+
+\subsection{Autorizzazione a livello di proprietà}
+
+Il terzo rischio riguarda le singole \textbf{proprietà} di un oggetto: l'utente
+può vedere l'oggetto, ma non tutti i suoi campi, e non può cambiarli tutti. Una
+API è vulnerabile se:
+
+\begin{itemize}
+  \item espone proprietà di un oggetto considerate riservate;
+  \item permette di cambiare, aggiungere o cancellare il valore di una proprietà
+        riservata.
+\end{itemize}
+
+Succede tipicamente quando si restituiscono \textbf{direttamente i modelli} del
+database invece di oggetti fatti apposta per la risposta, i \term{DTO}
+(\textit{Data Transfer Object}) o gli schemi. Ne abbiamo visto un esempio nel
+capitolo 17: \code{POST /signup} rispondeva con \code{res.json(user)}, e nella
+risposta c'era anche la password (ritocco 1). Il secondo punto è il cosiddetto
+\textit{mass assignment}: se l'aggiornamento di un elemento facesse
+\code{item.set(req.body)}, un client potrebbe mandare anche
+\code{"UserUserName": "eric"} e regalare l'elemento a un altro utente. Il
+controller del capitolo 17 copia invece solo i campi previsti, \code{todo} e
+\code{done}. In Spring Boot il ruolo dei DTO lo fanno i \code{record} come
+\code{TaskResponseV1}, in Django Ninja gli schemi di risposta come
+\code{TaskOut}.
+
+\subsection{Consumo di risorse senza limiti}
+
+Spesso le API non pongono limiti a quanto un client può chiedere, e un
+attaccante può approfittarne per un \textbf{attacco DoS} (\textit{Denial of
+Service}, rendere il servizio inutilizzabile per gli altri) o per far salire i
+costi di chi lo gestisce. Una API è vulnerabile se anche uno solo di questi
+limiti manca o è impostato male:
+
+\begin{itemize}
+  \item il tempo massimo di esecuzione di una richiesta;
+  \item il numero di richieste per client nell'unità di tempo (\textit{rate
+        limit});
+  \item la memoria massima allocabile e il numero massimo di processi;
+  \item la dimensione massima dei file caricati;
+  \item il numero di elementi restituiti in una sola risposta;
+  \item la spesa massima per i servizi di terze parti (invio di SMS, API a
+        pagamento\ldots).
+\end{itemize}
+
+L'API del capitolo 17, per dire, legge la dimensione della pagina da
+\code{?size=} senza un massimo: \code{?size=1000000} restituisce tutto in una
+volta. Basterebbe \code{Math.min(Number(req.query.size) || 10, 100)}.
+
+\subsection{Rate limiting}
+
+Il \term{rate limiting} controlla \textbf{quante richieste} può fare un client.
+Serve a prevenire gli abusi, a rendere molto più lenti i tentativi a raffica
+sulle password, a tenere sotto controllo i costi, a garantire un uso equo fra i
+client, a proteggere gli endpoint costosi e a ridurre i sovraccarichi
+accidentali (un client con un bug che ripete la stessa richiesta in un ciclo).
+In pratica si impone un numero massimo di richieste per utente, per
+funzionalità, nell'unità di tempo.
+
+In Express c'è il pacchetto \code{express-rate-limit} (qui nella versione
+8.7.4), un middleware. Questa è la configurazione delle slide, con un limite
+più stretto, in aggiunta, sul login:
+
+\begin{lstlisting}[style=js, name=limiti.js]
+import express from "express";
+import { rateLimit } from "express-rate-limit";
+
+const app = express();
+app.use(express.json());
+
+const limiter = rateLimit({
+  windowMs: 60 * 1000,         // finestra di 1 minuto
+  limit: 10,                   // al massimo 10 richieste per IP nella finestra
+  standardHeaders: "draft-8",  // header RateLimit-Policy e RateLimit
+  legacyHeaders: false,        // niente header X-RateLimit-*
+  ipv6Subnet: 56,              // gli IPv6 dello stesso /56 contano come uno
+});
+app.use(limiter);
+
+// sul login un limite più stretto, e una risposta nel formato degli errori dell'API
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "RATE_LIMITED", message: "Too many login attempts" },
+});
+
+app.post("/login", loginLimiter, (req, res) => {
+  res.status(401).json({ error: "INVALID_CREDENTIALS", message: "Invalid credentials" });
+});
+
+app.get("/tasks", (req, res) => res.json([]));
+
+app.listen(3000);
+\end{lstlisting}
+
+Nelle slide, accanto a \code{limit: 10}, c'è il commento \textit{Limit each IP
+to 100 requests per `window' (here, per 15 minutes)}: viene dall'esempio della
+documentazione del pacchetto e non corrisponde al codice, che consente 10
+richieste al minuto. Quello che succede davvero:
+
+\begin{console}[Terminale]
+$ curl -i localhost:3000/tasks
+HTTP/1.1 200 OK
+X-Powered-By: Express
+RateLimit: "10-in-1min"; r=9; t=60
+RateLimit-Policy: "10-in-1min"; q=10; w=60; pk=:MTJjYTE3YjQ5YWYy:
+Content-Type: application/json; charset=utf-8
+...
+
+[]
+$ for i in $(seq 1 10); do curl -s -o /dev/null -w "%{http_code} " localhost:3000/tasks; done; echo
+200 200 200 200 200 200 200 200 200 429
+$ curl -i localhost:3000/tasks
+HTTP/1.1 429 Too Many Requests
+X-Powered-By: Express
+RateLimit: "10-in-1min"; r=0; t=60
+RateLimit-Policy: "10-in-1min"; q=10; w=60; pk=:MTJjYTE3YjQ5YWYy:
+Retry-After: 60
+Content-Type: text/html; charset=utf-8
+...
+
+Too many requests, please try again later.
+\end{console}
+
+L'undicesima richiesta del minuto riceve \code{429 Too Many Requests}, il codice
+di stato fatto apposta. Gli header raccontano il limite:
+
+\begin{itemize}
+  \item \code{RateLimit-Policy} descrive la regola: una quota (\code{q}) di 10
+        richieste in una finestra (\code{w}) di 60 secondi. \code{pk} è
+        un'impronta del client (i primi 12 caratteri dell'hash SHA-256 del suo
+        IP, in Base64), non l'IP in chiaro;
+  \item \code{RateLimit} dice quante richieste restano (\code{r}) e fra quanti
+        secondi la finestra riparte (\code{t});
+  \item \code{Retry-After}, nella risposta \code{429}, dice al client quanto
+        aspettare prima di riprovare.
+\end{itemize}
+
+Il nome \code{"draft-8"} indica l'ottava bozza dello standard IETF che definisce
+questi header: con \code{legacyHeaders: false} non si inviano più quelli vecchi
+e non standard, \code{X-RateLimit-*}. Con \code{ipv6Subnet: 56}, infine, gli
+indirizzi IPv6 vengono raggruppati per prefisso: un solo utente domestico
+dispone in genere di un'intera rete IPv6, e cambiando indirizzo a ogni
+richiesta aggirerebbe il limite.
+
+Il limite generale conta \textbf{tutte} le richieste dell'IP, login compresi.
+Sul login, dove si provano le password, ne serve uno più stretto, con la
+risposta nel formato degli errori dell'API (riavviato il server, con una
+finestra nuova):
+
+\begin{console}[Terminale]
+$ for i in $(seq 1 6); do curl -s -w " %{http_code}\n" -H "Content-Type: application/json" -d '{"usr": "janet", "pwd": "x"}' localhost:3000/login; done
+{"error":"INVALID_CREDENTIALS","message":"Invalid credentials"} 401
+{"error":"INVALID_CREDENTIALS","message":"Invalid credentials"} 401
+{"error":"INVALID_CREDENTIALS","message":"Invalid credentials"} 401
+{"error":"INVALID_CREDENTIALS","message":"Invalid credentials"} 401
+{"error":"INVALID_CREDENTIALS","message":"Invalid credentials"} 401
+{"error":"RATE_LIMITED","message":"Too many login attempts"} 429
+\end{console}
+
+Cinque tentativi al minuto per chi prova le password a mano non sono un
+problema; per un programma che ne vorrebbe provare migliaia, sì.
+
+\subsubsection{Throttling in Django Ninja}
+
+In Django Ninja la stessa cosa si chiama \textit{throttling}, e si può
+applicare a tutta l'API, a un router o a una singola operazione (la guida è su
+\urlx{https://django-ninja.dev/guides/throttling/}). Due regole globali, nel
+file della v2: un client anonimo (riconosciuto dall'IP) può fare una richiesta
+al secondo, un utente autenticato dieci. Sul login, una regola più stretta:
+
+\begin{affianco}[0.55]
+\codicepiccolo
+\begin{lstlisting}[style=python, name=tasks/api_v2.py]
+from ninja import NinjaAPI
+from ninja.throttling import AnonRateThrottle, AuthRateThrottle
+
+api = NinjaAPI(
+  title="Namirial Academy Tasks API",
+  version="2.0.0",
+  description="REST API for users, tasks, tags, and JWT authentication.",
+  throttle=[
+     AnonRateThrottle("1/s"),
+     AuthRateThrottle("10/s"),
+  ]
+)
+
+# ... get_task come prima
+
+@api.post("/login", throttle=[AnonRateThrottle("5/m")])
+def login(request, payload: LoginSchema):
+  ...
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ curl -s localhost:8000/api/v2/tasks/1; echo; curl -i localhost:8000/api/v2/tasks/1
+{"id": 1, "title": "Prepare lecture", "status": "OPEN"}
+HTTP/1.1 429 Too Many Requests
+Date: Wed, 11 Nov 2026 12:39:57 GMT
+Server: WSGIServer/0.2 CPython/3.11.17
+Content-Type: application/json; charset=utf-8
+Retry-After: 1
+...
+
+{"detail": "Too many requests."}
+$ for i in $(seq 1 7); do curl -s -w " %{http_code}\n" -H "Content-Type: application/json" -d '{"username": "kyle", "password": "x"}' localhost:8000/api/v2/login; done
+{"error": "invalid credentials"} 401
+{"error": "invalid credentials"} 401
+{"error": "invalid credentials"} 401
+{"error": "invalid credentials"} 401
+{"error": "invalid credentials"} 401
+{"detail": "Too many requests."} 429
+{"detail": "Too many requests."} 429
+\end{console}
+\end{affianco}
+
+Nella prova, il login risponde sempre \code{401} (con
+\codel{api.create\_response(request, \{"error": "invalid credentials"\},
+status=401)}: le slide lasciano il corpo della funzione ai puntini) e
+\code{LoginSchema} è uno schema con \code{username} e \code{password}. Due
+richieste di fila alla stessa operazione, nello stesso secondo: la seconda
+riceve \code{429}, con \code{Retry-After: 1}. Sul login, invece, passano cinque
+richieste di fila: la regola indicata sull'operazione \textbf{sostituisce} quelle
+dell'API (altrimenti la seconda richiesta, nello stesso secondo, sarebbe già
+stata bloccata dalla regola \code{1/s}).
+
+\subsubsection{Bucket4j in Spring Boot}
+
+In Spring Boot, per il rate limiting, le slide suggeriscono la libreria
+Bucket4j:
+
+\begin{lstlisting}[style=xml, name=pom.xml]
+<!-- Bucket4j for java 17+ -->
+<dependency>
+  <groupId>com.bucket4j</groupId>
+  <artifactId>bucket4j_jdk17-core</artifactId>
+  <version>8.18.0</version>
+</dependency>
+\end{lstlisting}
+
+Il nome viene dall'algoritmo che implementa, il \term{token bucket}: ogni client
+ha un secchio di gettoni; ogni richiesta ne consuma uno e, quando il secchio è
+vuoto, viene respinta; il secchio si riempie di nuovo a una velocità fissa. Qui
+un secchio da 5 gettoni, che ne recupera 5 al minuto. \textit{Greedy} vuol dire
+che li recupera poco alla volta, appena può (uno ogni 12 secondi), invece che
+tutti insieme alla fine del minuto. Un secchio per chiave, in una mappa:
+
+\begin{lstlisting}[style=java, name=LoginRateLimiter.java]
+@Service
+public class LoginRateLimiter {
+
+    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+
+    public boolean tryConsume(String key) {
+      Bucket bucket = buckets.computeIfAbsent(key, this::newBucket);
+      return bucket.tryConsume(1);
+    }
+
+    private Bucket newBucket(String key) {
+      Bandwidth limit = Bandwidth.classic(
+           5,
+           Refill.greedy(5, Duration.ofMinutes(1))
+      );
+      return Bucket.builder().addLimit(limit).build();
+    }
+}
+\end{lstlisting}
+
+Compilato con la versione 8.18.0 indicata nel \code{pom.xml}, il codice funziona,
+ma il compilatore avverte che \code{Bandwidth.classic} e \code{Refill} sono
+\textbf{deprecati}:
+
+\begin{console}[Terminale]
+$ mvn compile
+...
+[WARNING] [cartella del progetto]/src/main/java/it/unina/tasks/LoginRateLimiter.java:[24,12] io.github.bucket4j.Refill in io.github.bucket4j has been deprecated
+[WARNING] [cartella del progetto]/src/main/java/it/unina/tasks/LoginRateLimiter.java:[24,18] greedy(long,java.time.Duration) in io.github.bucket4j.Refill has been deprecated
+[WARNING] [cartella del progetto]/src/main/java/it/unina/tasks/LoginRateLimiter.java:[22,34] classic(long,io.github.bucket4j.Refill) in io.github.bucket4j.Bandwidth has been deprecated
+...
+\end{console}
+
+Nella versione 8 di Bucket4j la stessa regola si scrive con un costruttore, e
+senza più bisogno della classe \code{Refill}:
+
+\begin{lstlisting}[style=java, name=LoginRateLimiter.java, firstnumber=20]
+    private Bucket newBucket(String key) {
+      Bandwidth limit = Bandwidth.builder()
+           .capacity(5)
+           .refillGreedy(5, Duration.ofMinutes(1))
+           .build();
+      return Bucket.builder().addLimit(limit).build();
+    }
+\end{lstlisting}
+
+Il controller del login consuma un gettone prima di fare qualunque altra cosa:
+
+\begin{affianco}[0.6]
+\codicepiccolo
+\begin{lstlisting}[style=java, name=AuthController.java]
+@PostMapping("/login")
+public ResponseEntity<?> login(@RequestBody AuthRequest request, HttpServletRequest httpRequest) {
+  //rate limiting enforcement
+  String key = getClientIp(httpRequest) + ":" + request.username();
+
+    if (!loginRateLimiter.tryConsume(key)) {
+       return ResponseEntity
+            .status(HttpStatus.TOO_MANY_REQUESTS)
+            .body(Map.of(
+                 "error", "RATE_LIMITED",
+                 "message", "Too many login attempts"
+            ));
+    }
+
+    return ResponseEntity.ok(authService.login(request));
+}
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ for i in $(seq 1 6); do curl -s -w " %{http_code}\n" -H "Content-Type: application/json" -d '{"username": "kyle", "password": "x"}' localhost:8080/login; done
+{"error":"INVALID_CREDENTIALS"} 401
+{"error":"INVALID_CREDENTIALS"} 401
+{"error":"INVALID_CREDENTIALS"} 401
+{"error":"INVALID_CREDENTIALS"} 401
+{"error":"INVALID_CREDENTIALS"} 401
+{"error":"RATE_LIMITED","message":"Too many login attempts"} 429
+$ curl -s -w " %{http_code}\n" -H "Content-Type: application/json" -d '{"username": "stan", "password": "x"}' localhost:8080/login
+{"error":"INVALID_CREDENTIALS"} 401
+\end{console}
+\end{affianco}
+
+Nella prova \code{getClientIp} restituisce \code{request.getRemoteAddr()} e, al
+posto di \code{authService.login}, il controller risponde sempre \code{401}
+(le slide non mostrano né l'uno né l'altro). La chiave unisce IP e nome utente:
+dopo cinque tentativi kyle è bloccato, ma stan, dallo stesso IP, no. Protegge
+bene il singolo account; chi provasse \textbf{la stessa} password su
+\textbf{molti} account diversi (il cosiddetto \textit{password spraying})
+avrebbe però un secchio nuovo per ogni nome, e per lui servirebbe anche un
+limite per IP.
+
+\subsection{Autorizzazione a livello di funzione}
+
+Il quinto rischio riguarda le \textbf{funzionalità} invece degli oggetti: un
+utente riesce a usare operazioni riservate ad altri ruoli. Per esempio, solo il
+personale dovrebbe poter eseguire \code{DELETE /api/tags/\{id\}}, ma il
+controllo è scritto male, oppure manca del tutto (magari perché nessun pulsante
+del front-end porta a quella richiesta: ma \code{curl} non ha bisogno di
+pulsanti). In Express il controllo è un middleware sulla rotta, come
+\code{ensureUsersModifyOnlyOwnTodos}, che verifica il \textbf{ruolo} dell'utente
+autenticato e risponde \code{403} a chi non ce l'ha.
+
+\subsection{Flussi di business sensibili}
+
+Alcune API espongono flussi di business delicati, che un attaccante può
+sfruttare in modo automatico, senza violare alcuna regola tecnica:
+
+\begin{itemize}
+  \item l'\textbf{acquisto} di un prodotto: un attaccante compra in un colpo
+        tutte le scorte di un articolo molto richiesto e le rivende a un prezzo
+        più alto (\textit{scalping});
+  \item la \textbf{pubblicazione} di commenti o post: un attaccante inonda il
+        sistema di spam;
+  \item la \textbf{prenotazione}: un attaccante prenota tutte le fasce orarie
+        disponibili e impedisce agli altri di usare il servizio.
+\end{itemize}
+
+La difesa è limitare l'accesso ai flussi sensibili: prima si individuano;
+poi si adottano soluzioni tecniche, come l'impronta del dispositivo
+(\textit{device fingerprinting}), il riconoscimento degli esseri umani (i
+CAPTCHA), il rilevamento di schemi d'uso non umani (cento acquisti in un
+secondo) e il blocco degli indirizzi IP.
+
+\subsection{Server-Side Request Forgery}
+
+Se un endpoint fa una richiesta a un URI remoto ricevuto dal client, l'URI va
+\textbf{validato con cura}. Altrimenti un attaccante può costringere l'API a
+fare richieste verso destinazioni impreviste, per esempio i servizi della rete
+interna, che da fuori non si raggiungono ma dal server sì: è la
+\term{Server-Side Request Forgery} (SSRF), «falsificazione di richieste lato
+server». L'esempio delle slide è un endpoint che scarica l'immagine del profilo
+da un URL:
+
+\begin{lstlisting}[style=js, name=ssrf.js]
+import express from "express";
+
+const app = express();
+app.use(express.json());
+
+app.post("/api/profile/upload_picture", async (req, res) => {
+  try {
+    const response = await fetch(req.body.picture_url);   // qualunque URL!
+    const image = await response.arrayBuffer();
+    // ... qui si salverebbe l'immagine del profilo
+    res.json({ status: "saved", bytes: image.byteLength });
+  } catch (err) {
+    res.status(502).json({ error: "DOWNLOAD_FAILED", message: err.cause?.code ?? err.message });
+  }
+});
+
+app.listen(3000);
+\end{lstlisting}
+
+Sullo stesso computer gira un servizio interno, in ascolto sulla porta 8080 del
+solo indirizzo \code{127.0.0.1} (un pannello di amministrazione che risponde con
+un piccolo JSON). Dall'esterno non lo si vede; l'attaccante però chiede all'API
+di «scaricare l'immagine» da lì:
+
+\begin{console}[Terminale]
+$ curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' -d '{"picture_url": "http://localhost:8080/"}' localhost:3000/api/profile/upload_picture
+{"status":"saved","bytes":38} 200
+$ curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' -d '{"picture_url": "http://localhost:8081/"}' localhost:3000/api/profile/upload_picture
+{"error":"DOWNLOAD_FAILED","message":"ECONNREFUSED"} 502
+$ curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' -d '{"picture_url": "localhost:8080"}' localhost:3000/api/profile/upload_picture
+{"error":"DOWNLOAD_FAILED","message":"fetch failed"} 502
+\end{console}
+
+La porta 8080 risponde (e il server ha davvero letto i 38 byte del pannello di
+amministrazione), la 8081 rifiuta la connessione: l'attaccante sta esplorando la
+rete interna attraverso il server. Le slide osservano che basta il
+\textbf{tempo di risposta} per capire se una porta è aperta; qui il messaggio
+d'errore lo dice ancora più chiaramente. Nel corpo d'esempio delle slide,
+\code{"localhost:8080"}, manca lo schema: \code{fetch} lo legge come un URL con
+schema \code{localhost:} (e \code{8080} come percorso), e fallisce con
+\textit{unknown scheme}. Per l'attacco serve \code{http://}. Bersagli tipici
+sono i servizi interni e, nel cloud, l'indirizzo \code{169.254.169.254}, dove
+molte piattaforme espongono i metadati della macchina, credenziali comprese.
+
+La difesa è validare l'URL prima di usarlo: interpretarlo con \code{new URL},
+accettare solo \code{https} e solo i server da cui ci si aspettano immagini (una
+lista di quelli ammessi, non di quelli vietati), e non seguire i
+reindirizzamenti (\code{redirect: "error"}), perché un server ammesso potrebbe
+rimandare la richiesta verso l'interno:
+
+\begin{lstlisting}[style=js, name=ssrf.js, firstnumber=6]
+const ALLOWED_HOSTS = new Set(["images.example.com"]);   // da dove si accettano immagini
+
+function checkPictureUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;                                          // non è nemmeno un URL
+  }
+  if (url.protocol !== "https:" || !ALLOWED_HOSTS.has(url.hostname)) return null;
+  return url;
+}
+
+app.post("/api/profile/upload_picture", async (req, res) => {
+  const url = checkPictureUrl(req.body.picture_url);
+  if (!url) {
+    return res.status(400).json({ error: "INVALID_URL", message: "Picture URL not allowed" });
+  }
+  try {
+    const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(5000) });
+    const image = await response.arrayBuffer();
+    res.json({ status: "saved", bytes: image.byteLength });
+  } catch {
+    res.status(502).json({ error: "DOWNLOAD_FAILED", message: "Could not download the picture" });
+  }
+});
+\end{lstlisting}
+
+\begin{console}[Terminale]
+$ curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' -d '{"picture_url": "http://localhost:8080/"}' localhost:3000/api/profile/upload_picture
+{"error":"INVALID_URL","message":"Picture URL not allowed"} 400
+$ curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' -d '{"picture_url": "http://169.254.169.254/latest/meta-data/"}' localhost:3000/api/profile/upload_picture
+{"error":"INVALID_URL","message":"Picture URL not allowed"} 400
+$ curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' -d '{"picture_url": "https://images.example.com.evil.it/a.jpg"}' localhost:3000/api/profile/upload_picture
+{"error":"INVALID_URL","message":"Picture URL not allowed"} 400
+\end{console}
+
+Il terzo tentativo mostra perché si confronta il nome dell'host
+(\code{url.hostname}) per intero: un controllo come «l'URL contiene
+\code{images.example.com}» sarebbe stato aggirato da un dominio dell'attaccante.
+Anche il messaggio d'errore del download, ora, è generico: non dice più
+\textit{perché} la richiesta è fallita. E il timeout di 5 secondi impedisce che
+un server lento tenga occupata l'API.
+
+\subsection{Configurazioni insicure}
+
+I framework per le API hanno configurazioni complesse, fatte per adattarsi a
+molti usi diversi. Chi sviluppa o chi gestisce i server può trascurarle, o non
+seguire le buone pratiche, e aprire la porta ad attacchi di ogni tipo. Esempi:
+
+\begin{itemize}
+  \item l'API messa in produzione in modalità di sviluppo o di debug, che
+        espone le tracce degli errori (\textit{stack trace});
+  \item TLS non configurato (niente HTTPS, capitolo 9);
+  \item gli aggiornamenti di sicurezza più recenti non installati.
+\end{itemize}
+
+Il primo esempio, in Express, dipende da una variabile d'ambiente. Una rotta
+con un bug:
+
+\begin{lstlisting}[style=js, name=errori1.js]
+import express from "express";
+
+const app = express();
+app.use(express.json());
+
+app.post("/tasks", (req, res) => {
+  const title = req.body.title.trim();   // senza corpo JSON: TypeError
+  res.status(201).json({ id: 3, title });
+});
+
+app.listen(3000);
+\end{lstlisting}
+
+Lo avviamo due volte: con \code{node errori1.js} e con
+\codel{NODE\_ENV=production node errori1.js}. Una \code{POST} senza corpo fa
+fallire \code{req.body.title}, e l'errore arriva al gestore predefinito di
+Express. In modalità di sviluppo (quella in cui Express si trova se
+\code{NODE\_ENV} non dice altro), la risposta contiene la traccia completa:
+
+\begin{console}[Terminale]
+$ curl -i -X POST localhost:3000/tasks
+HTTP/1.1 500 Internal Server Error
+X-Powered-By: Express
+Content-Security-Policy: default-src 'none'
+X-Content-Type-Options: nosniff
+Content-Type: text/html; charset=utf-8
+Content-Length: 1853
+...
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>TypeError: Cannot read properties of undefined (reading &#39;title&#39;)<br> &nbsp; &nbsp;at file:///[cartella del progetto]/errori1.js:7:26<br> &nbsp; &nbsp;at Layer.handleRequest ([cartella del progetto]/node_modules/router/lib/layer.js:152:17)<br> &nbsp; &nbsp;at next ([cartella del progetto]/node_modules/router/lib/route.js:157:13)<br> [...]</pre>
+</body>
+</html>
+\end{console}
+
+Chiunque legge il nome del file, la riga del bug, i percorsi del server e i
+pacchetti usati: informazioni preziose per preparare un attacco. Con
+\code{NODE\_ENV=production}, invece:
+
+\begin{console}[Terminale]
+$ curl -i -X POST localhost:3000/tasks
+HTTP/1.1 500 Internal Server Error
+X-Powered-By: Express
+Content-Security-Policy: default-src 'none'
+X-Content-Type-Options: nosniff
+Content-Type: text/html; charset=utf-8
+Content-Length: 148
+Date: Wed, 11 Nov 2026 12:39:14 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Internal Server Error</pre>
+</body>
+</html>
+\end{console}
+
+La traccia non sparisce: finisce, in entrambi i casi, nel log del server, dove
+serve a chi deve correggere il bug. Lo stesso vale per Django: il server di
+sviluppo gira con \code{DEBUG = True}, ed è per questo che la risposta all'errore
+di \code{create\_response}, qualche pagina fa, conteneva la traceback. In
+produzione \code{DEBUG} va spento.
+
+C'è poi un dettaglio presente in tutte le risposte di Express viste finora:
+l'header \code{X-Powered-By: Express}. Non è grave, ma dice a chiunque quale
+software gira sul server, e quindi quali vulnerabilità note provare;
+\code{app.disable("x-powered-by")} lo toglie. Un altro esempio, Spring Boot
+Actuator con tutti gli endpoint esposti, lo vedremo parlando di osservabilità.
+
+\subsection{Le risposte di errore}
+
+Gli errori \textbf{fanno parte del contratto} dell'API: un'API matura restituisce
+errori prevedibili e coerenti, sempre nello stesso formato, che i client possono
+gestire senza indovinare. Il formato delle slide:
+
+\begin{lstlisting}[style=json, name=risposta di errore]
+{
+    "error": "VALIDATION_ERROR",
+    "message": "Title must not be blank",
+    "details": {
+      "field": "title"
+    }
+}
+\end{lstlisting}
+
+E soprattutto senza far trapelare i dettagli interni, come in questa risposta
+(l'esempio è delle slide):
+
+\begin{lstlisting}[style=json, name=da evitare]
+{
+    "error": "NullPointerException at TaskService.java:47"
+}
+\end{lstlisting}
+
+In Express basta una classe per gli errori previsti, che li porta con codice e
+dettagli, e un gestore degli errori che distingue tre casi: gli errori previsti
+vanno al client così come sono; gli errori del client riconosciuti da Express
+(per esempio il JSON malformato, che \code{express.json} segnala con
+\code{status} 400 ed \code{expose: true}) anche; tutti gli altri, cioè i bug,
+diventano un \code{500} generico, e i dettagli restano nel log.
+
+\begin{lstlisting}[style=js, name=errori2.js]
+import express from "express";
+
+class ApiError extends Error {
+  constructor(status, code, message, details) {
+    super(message);
+    Object.assign(this, { status, code, details });
+  }
+}
+
+const app = express();
+app.disable("x-powered-by");                 // non dire a tutti che è Express
+app.use(express.json());
+
+app.post("/tasks", (req, res) => {
+  const title = req.body?.title;
+  if (typeof title !== "string" || title.trim() === "") {
+    throw new ApiError(400, "VALIDATION_ERROR", "Title must not be blank", { field: "title" });
+  }
+  res.status(201).json({ id: 3, title: title.trim() });
+});
+
+app.get("/boom", (req, res) => {
+  null.title;                                // un bug qualunque
+});
+
+app.use((err, req, res, next) => {
+  if (err instanceof ApiError) {             // errori previsti: al client
+    return res.status(err.status).json({ error: err.code, message: err.message, details: err.details });
+  }
+  if (err.expose) {                          // es. JSON malformato (400 di express.json)
+    return res.status(err.status).json({ error: "BAD_REQUEST", message: err.message });
+  }
+  console.error(err);                        // i dettagli restano nel log
+  res.status(500).json({ error: "INTERNAL_ERROR", message: "Something went wrong" });
+});
+
+app.listen(3000);
+\end{lstlisting}
+
+\begin{console}[Terminale]
+$ curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' -d '{"title": "  "}' localhost:3000/tasks
+{"error":"VALIDATION_ERROR","message":"Title must not be blank","details":{"field":"title"}} 400
+$ curl -s -w ' %{http_code}\n' -H 'Content-Type: application/json' -d '{title: 1}' localhost:3000/tasks
+{"error":"BAD_REQUEST","message":"Expected property name or '}' in JSON at position 1 (line 1 column 2)"} 400
+$ curl -i localhost:3000/boom
+HTTP/1.1 500 Internal Server Error
+Content-Type: application/json; charset=utf-8
+Content-Length: 59
+ETag: W/"3b-/ll7elRAljlBjRVGlTXRkMhN9bM"
+Date: Wed, 11 Nov 2026 12:39:16 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"error":"INTERNAL_ERROR","message":"Something went wrong"}
+\end{console}
+
+\begin{console}[Terminale del server]
+TypeError: Cannot read properties of null (reading 'title')
+    at file:///[cartella del progetto]/errori2.js:23:8
+    ...
+\end{console}
+
+Il titolo fatto di soli spazi produce l'errore di validazione nel formato delle
+slide; il JSON malformato un \code{400} con lo stesso schema; il bug di
+\code{/boom} un \code{500} che non rivela nulla, mentre la traccia è nel
+terminale del server. E \code{X-Powered-By} non c'è più. Nel capitolo 17 il
+gestore degli errori usava la forma \code{\{"code", "description"\}}: quale
+formato scegliere conta poco, conta usarne \textbf{uno solo} in tutta l'API (il
+ritocco 1 del capitolo 17 lo faceva notare).
+
+\info{Un formato standard per gli errori}{
+  Esiste anche uno standard per il corpo delle risposte di errore: i
+  \textit{Problem Details for HTTP APIs} della RFC 9457, con il tipo di
+  contenuto \code{application/problem+json} e campi come \code{type},
+  \code{title}, \code{status} e \code{detail}. Molti framework lo producono già
+  (Spring Boot, per esempio, lo può usare per i propri errori).}
+
+\subsection{Inventario delle API}
+
+A volte un'organizzazione non sa con precisione quali API, endpoint, versioni,
+ambienti e flussi di dati sono esposti in un dato momento. Diventa pericoloso
+quando versioni vecchie o dimenticate restano raggiungibili:
+
+\begin{lstlisting}[style=plain, name=endpoint dimenticati]
+/api/v1/admin/users
+/api/test/tasks
+/api/debug/tokens
+/api/v0/legacy-login
+\end{lstlisting}
+
+Gli attaccanti cercano proprio gli endpoint dimenticati, perché spesso hanno
+un'autenticazione più debole, controlli di autorizzazione mancanti o
+vulnerabilità note mai corrette. Le difese le abbiamo già incontrate: una
+specifica OpenAPI aggiornata (generata dal codice, come con \code{swagger-jsdoc}
+o in Django Ninja, così non può restare indietro) è l'inventario; il ciclo di
+vita delle versioni, rimozione compresa, impedisce che una \code{v0} sopravviva
+per anni.
+
+\subsection{Consumo insicuro di API}
+
+Chi sviluppa tende a fidarsi dei dati che arrivano dalle API di terze parti più
+di quelli che arrivano dai client. È pericoloso: anche i servizi esterni sono
+fuori dal nostro controllo, e vanno trattati con lo stesso sospetto. Un
+attaccante che compromette un'API «fidata» può usarla per mandarci
+reindirizzamenti verso servizi malevoli, o dati malevoli (per esempio pensati
+per una SQL injection) che noi useremmo senza controllarli. Le stesse regole
+valgono in entrambe le direzioni: validare quello che arriva, non seguire i
+reindirizzamenti alla cieca, porre limiti di tempo e di dimensione.
+
+\section{Osservabilità}
+
+In produzione dovremmo poter osservare, possibilmente in modo automatico, lo
+stato dell'API:
+
+\begin{itemize}
+  \item l'applicazione è in esecuzione? Il database è raggiungibile?
+  \item quante richieste falliscono, e quali endpoint sono lenti?
+  \item gli utenti ricevono risposte \code{401}, \code{403}, \code{404} o
+        \code{500}?
+  \item scattano i limiti del rate limiting?
+  \item le versioni vecchie dell'API sono ancora usate?
+\end{itemize}
+
+Senza \term{osservabilità}, i problemi in produzione diventano congetture.
+
+\subsection{Spring Boot Actuator}
+
+In Spring Boot l'osservabilità arriva con un modulo, \textbf{Actuator}: basta
+aggiungere la dipendenza al \code{pom.xml} e, in
+\code{application.properties}, una riga che espone sul web le informazioni e le
+metriche raccolte.
+
+\begin{affianco}[0.6]
+\codicepiccolo
+\begin{lstlisting}[style=xml, name=pom.xml]
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+\end{lstlisting}
+\risultato
+\codicepiccolo
+\begin{lstlisting}[style=plain, name=application.properties]
+#Actuator config
+management.endpoints.web.exposure.include=*
+\end{lstlisting}
+\end{affianco}
+
+La richiesta più semplice è quella sullo stato di salute (è la stessa risposta
+della slide, ottenuta lì con un client grafico):
+
+\begin{console}[Terminale]
+$ curl -s localhost:8080/actuator/health; echo
+{"groups":["liveness","readiness"],"status":"UP"}
+\end{console}
+
+Gli stati possibili sono \code{UP}, \code{DOWN}, \code{OUT\_OF\_SERVICE} e
+\code{UNKNOWN}; con un database configurato, Actuator lo controllerebbe da sé e
+lo includerebbe nello stato complessivo. I due gruppi \code{liveness} e
+\code{readiness} servono agli orchestratori di container come Kubernetes: il
+primo dice se l'applicazione è viva (altrimenti va riavviata), il secondo se è
+pronta a ricevere traffico.
+
+Le metriche sono su \code{/actuator/metrics}: la \code{GET} restituisce
+l'elenco dei nomi disponibili, e il valore di ciascuna si chiede con una
+richiesta successiva a \code{/actuator/metrics/\{nome\}}:
+
+\begin{console}[Terminale]
+$ curl -s localhost:8080/actuator/metrics | jq '.names | length'
+53
+$ curl -s localhost:8080/actuator/metrics | jq -c '.names[:12]'
+["application.ready.time","application.started.time","disk.free","disk.total","executor.active","executor.completed","executor.pool.core","executor.pool.max","executor.pool.size","executor.queue.remaining","executor.queued","http.server.requests"]
+$ curl -s localhost:8080/actuator/metrics/system.cpu.usage; echo
+{"availableTags":[],"description":"The \"recent cpu usage\" of the system the application is running in","measurements":[{"statistic":"VALUE","value":0.0}],"name":"system.cpu.usage"}
+\end{console}
+
+L'uso recente della CPU è una frazione fra 0 e 1: qui 0, perché la macchina era
+a riposo (nella slide era circa 0,14). La metrica più utile per un'API è però
+\code{http.server.requests}, che conta e cronometra le richieste e si può
+filtrare per rotta e per codice di stato. Dopo la prova del login con Bucket4j,
+risponde a una delle domande dell'inizio: «scattano i limiti?»
+
+\begin{console}[Terminale]
+$ curl -s 'localhost:8080/actuator/metrics/http.server.requests?tag=uri:/login&tag=status:429' | jq -c .measurements
+[{"statistic":"COUNT","value":1.0},{"statistic":"TOTAL_TIME","value":0.002516803},{"statistic":"MAX","value":0.002516803}]
+\end{console}
+
+Una risposta \code{429} su \code{/login}, servita in 2,5 millisecondi: è il sesto
+tentativo di kyle.
+
+\begin{warningbox}{{Non esporre tutto in produzione}}
+Con \code{include=*} Actuator pubblica \textbf{tutti} i suoi endpoint:
+
+\begin{console}[Terminale]
+$ curl -s localhost:8080/actuator | jq -r '._links | keys | join(", ")'
+beans, conditions, configprops, configprops-prefix, env, env-toMatch, health, health-path, info, loggers, loggers-name, mappings, metrics, metrics-requiredMetricName, sbom, sbom-id, scheduledtasks, self, threaddump
+\end{console}
+
+Fra questi ci sono la configurazione dell'applicazione (\code{env},
+\code{configprops}), l'elenco di tutte le rotte (\code{mappings}), lo stato dei
+thread (\code{threaddump}), le dipendenze usate (\code{sbom}, con le loro
+versioni) e la possibilità di cambiare il livello dei log (\code{loggers}). Va
+benissimo durante lo sviluppo; in produzione è una configurazione insicura,
+come quelle della sezione precedente. Si espone solo ciò che serve (per esempio
+\code{include=health,info,metrics}) e il resto si protegge con
+l'autenticazione.
+\end{warningbox}
+
+\subsection{Un controllo di salute fatto a mano}
+
+Senza Actuator, il minimo indispensabile è un endpoint che risponda «sto bene»
+solo dopo averlo verificato. In Django Ninja, nelle slide, il controllo esegue
+una query banale sul database:
+
+\begin{affianco}[0.55]
+\codicepiccolo
+\begin{lstlisting}[style=python, name=tasks/api_v2.py]
+@api.get("/health", auth=None)
+def health(request):
+  with connection.cursor() as cursor:
+     cursor.execute("SELECT 1")
+
+  return {
+     "status": "ok",
+     "database": "ok"
+  }
+\end{lstlisting}
+\risultato
+\begin{console}[Terminale]
+$ curl -s -w " %{http_code}\n" localhost:8000/api/v2/health
+{"status": "ok", "database": "ok"} 200
+\end{console}
+\wtnota{\code{auth=None}: il controllo non richiede\\ l'autenticazione,
+anche se il resto dell'API sì.}
+\end{affianco}
+
+Funziona finché il database risponde. Se invece la query fallisce, l'eccezione
+non viene gestita e la risposta diventa un \code{500} qualunque: con
+\code{DEBUG} attivo il corpo è la traceback, senza è una pagina HTML generica
+(\textit{Server Error (500)}). Un sistema di monitoraggio vede un errore del
+server, non «il database è irraggiungibile». Meglio intercettare il problema e
+dirlo, con lo stato giusto, \code{503 Service Unavailable}.
+
+\subsection{Il controllo in Express}
+
+In Express il controllo intercetta l'errore e risponde \code{503}:
+
+\begin{lstlisting}[style=js, name=salute.js]
+import express from "express";
+import { Sequelize } from "sequelize";
+
+const database = new Sequelize(process.env.DB_URL, { logging: false });
+const app = express();
+
+app.get("/health", async (req, res) => {
+  try {
+    await database.query("SELECT 1");      // il database risponde?
+    res.json({ status: "ok", database: "ok", uptime: Math.round(process.uptime()) });
+  } catch (err) {
+    console.error("health check fallito:", err.message);
+    res.status(503).json({ status: "error", database: "unreachable" });
+  }
+});
+
+app.listen(3000);
+\end{lstlisting}
+
+Lo avviamo prima con un database SQLite
+(\codel{DB\_URL=sqlite:database.db node salute.js}), poi con l'URL di un
+database PostgreSQL che non è in esecuzione
+(\codel{DB\_URL=postgres://app:segreto@127.0.0.1:5432/tasks}, con il driver
+\code{pg} 8.23.1 installato):
+
+\begin{console}[Terminale]
+$ curl -s -w " %{http_code}\n" localhost:3000/health
+{"status":"ok","database":"ok","uptime":3} 200
+$ curl -s -w " %{http_code}\n" localhost:3000/health
+{"status":"error","database":"unreachable"} 503
+\end{console}
+
+\begin{console}[Terminale del server (secondo avvio)]
+health check fallito: connect ECONNREFUSED 127.0.0.1:5432
+\end{console}
+
+Il \code{503} dice esattamente che cosa sta succedendo, a un sistema di
+monitoraggio o a un bilanciatore di carico che interroga \code{/health} ogni
+pochi secondi; il motivo preciso è nel log, non nella risposta. Il campo
+\code{uptime} (i secondi trascorsi dall'avvio del processo) fa scoprire anche i
+riavvii inattesi.
+
+\warning{Un controllo che passa anche quando non dovrebbe}{
+  Provando a simulare il guasto con SQLite, indicando un file in una cartella
+  inesistente (\code{sqlite:/non/esiste/database.db}), il controllo risponde
+  \code{ok}: Sequelize crea da sé il file \emph{e} le cartelle che mancano, e la
+  query riesce su un database nuovo e vuoto. Un controllo di salute verifica
+  solo quello che controlla davvero: qui che il database risponda, non che sia
+  quello giusto.}
+
+\subsection{Il log}
+
+Il log è l'altro strumento fondamentale. È utile registrare:
+
+\begin{itemize}
+  \item i fallimenti dell'autenticazione e dell'autorizzazione;
+  \item le violazioni dei limiti di richieste;
+  \item gli errori inattesi del server;
+  \item l'uso delle API deprecate (così si sa chi sta ancora usando la v1);
+  \item le azioni degli amministratori e le operazioni che modificano i dati;
+  \item i fallimenti dei servizi esterni.
+\end{itemize}
+
+E va evitato di registrare:
+
+\begin{itemize}
+  \item le password e i token;
+  \item gli header \code{Authorization} completi;
+  \item i dati personali sensibili;
+  \item i corpi completi delle richieste, almeno per impostazione predefinita (il
+        corpo di \code{POST /auth} contiene una password).
+\end{itemize}
+
+I log sono strumenti operativi, ma possono diventare essi stessi un
+\textbf{rischio di sicurezza}: vengono copiati, conservati a lungo e letti da
+molte persone e da molti sistemi. Il formato \code{dev} di \code{morgan}, usato
+nel capitolo 17, registra metodo, URL, stato e tempo di risposta: niente header
+e niente corpi. Ma registra l'URL completo, query compresa: un token passato
+come \code{?token=\ldots} finirebbe nel log, ed è un buon motivo per tenerlo
+nell'header \code{Authorization}.
+
+\section{Regole e linee guida}
+
+La lezione si chiude riprendendo le regole di progettazione delle URI raccolte
+nel capitolo 17 (sezione «Regole e linee guida»): \code{401} per i problemi con
+le credenziali, nomi al plurale per collection e store e al singolare per i
+document, un verbo nei nomi dei controller, niente barra finale e niente nomi
+di operazioni CRUD nelle URI, la barra per le relazioni gerarchiche,
+\code{GET} solo per leggere, URI in minuscolo con i trattini al posto dei
+trattini bassi e del CamelCase. Sono tratte dal libro di Mark Massé, \textit{REST
+API Design Rulebook} (O'Reilly, 2011), e strumenti come RESTRuler ne cercano le
+violazioni automaticamente nelle specifiche OpenAPI.
+
+\section{Riferimenti}
+
+\begin{itemize}
+  \item \textbf{OWASP API Security Top 10}, edizione 2023. \\
+        \urlx{https://owasp.org/API-Security/editions/2023/en/0x11-t10/}
+  \item \textbf{RFC 9745}, \textit{The Deprecation HTTP Response Header Field}
+        (2025), e \textbf{RFC 8594}, \textit{The Sunset HTTP Header Field}
+        (2019). \\
+        \urlx{https://www.rfc-editor.org/rfc/rfc9745} \\
+        \urlx{https://www.rfc-editor.org/rfc/rfc8594}
+  \item \textbf{RFC 9457}, \textit{Problem Details for HTTP APIs} (2023). \\
+        \urlx{https://www.rfc-editor.org/rfc/rfc9457}
+  \item \textbf{express-rate-limit}. \\
+        \urlx{https://www.npmjs.com/package/express-rate-limit}
+  \item \textbf{Django Ninja}, la guida al throttling. \\
+        \urlx{https://django-ninja.dev/guides/throttling/}
+  \item \textbf{Bucket4j}. \\ \urlx{https://bucket4j.com/}
+  \item \textbf{Spring Boot Actuator}. \\
+        \urlx{https://docs.spring.io/spring-boot/reference/actuator/}
+  \item \textbf{OpenAPI} --- sito ufficiale, introduzione e specifica 3.1.0. \\
+        \urlx{https://www.openapis.org/} \\
+        \urlx{https://learn.openapis.org/} \\
+        \urlx{https://spec.openapis.org/oas/v3.1.0}
+  \item I riferimenti generali sulle API REST della lezione (The Little Book on
+        REST Services, la API design guide di Google Cloud, la REST API
+        Checklist, il libro di Massé, l'ebook di SmartBear sulla
+        documentazione) sono gli stessi del capitolo 17.
+  \item \textbf{Esempi con altri framework}: la lista di cose da fare con
+        JakartaEE (\urlx{https://github.com/luistar/jakartaee-rest-example},
+        con Dockerfile e istruzioni) e la pizzeria con Spring
+        (\urlx{https://github.com/luistar/rest-service-pizzashop}), del prof.
+        Starace, e un'API per i quiz con FastAPI, in Python, di Márcio Lemos
+        (\urlx{https://github.com/marciovrl/fastapi}). JakartaEE, Spring e
+        FastAPI non sono richiesti per il corso, ma è istruttivo guardare
+        framework diversi da Express, per esempio quelli basati sulle
+        annotazioni.
+\end{itemize}
