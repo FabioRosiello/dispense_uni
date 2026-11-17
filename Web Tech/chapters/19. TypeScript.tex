@@ -140,110 +140,439 @@ standard}: CoffeeScript, TypeScript, Dart, Elm e circa altri 350.
 Essendo un superset, \textbf{qualunque codice JavaScript valido è anche codice
 TypeScript valido}: si può adottare gradualmente, un file alla volta.
 
+I numeri confermano il primato. Nel sondaggio \textit{State of JavaScript 2022},
+fra le 27\,294 persone che hanno risposto alla domanda sui linguaggi che
+compilano verso JavaScript, 26\,988 hanno dichiarato di usare TypeScript; il
+secondo classificato, Elm, si ferma a 624.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\footnotesize]
+    % lunghezza della barra = utenti / 3000 (in cm): pgfmath non accetta
+    % numeri oltre 16383, quindi le lunghezze sono gia' calcolate
+    \foreach \nome/\lung/\val [count=\i] in {TypeScript/8.996/26988,
+        Elm/0.208/624, CoffeeScript/0.171/512, Flow/0.154/462,
+        PureScript/0.107/322, ClojureScript/0.100/301, ReScript/0.083/248,
+        Reason/0.070/211, Imba/0.035/106} {
+      \pgfmathsetmacro{\yy}{-0.5*\i}
+      \ifnum\i=1 \def\colore{primary!75!white}\else\def\colore{neutral!40!white}\fi
+      \node[anchor=east] at (-0.15,\yy) {\nome};
+      \fill[\colore] (0,\yy-0.16) rectangle (\lung,\yy+0.16);
+      \node[anchor=west, font=\FiraCodeNL\scriptsize] at (\lung+0.06,\yy) {\val};
+    }
+    \draw[neutral!55!black, line width=0.6pt] (0,-0.2) -- (0,-4.8);
+  \end{tikzpicture}
+  \caption{Persone che usano i linguaggi che compilano verso JavaScript, secondo
+           il sondaggio State of JavaScript 2022 (i dati delle slide).}
+  \label{fig:ts-adozione}
+\end{figure}
+
 \section{Primi passi}
 
 TypeScript si installa come pacchetto npm:
 
-\begin{lstlisting}[style=shell]
-npm install -g typescript
-\end{lstlisting}
+\begin{console}[Terminale]
+$ npm install -g typescript
 
-Il comando rende disponibile globalmente il compilatore \code{tsc}. I file
-TypeScript hanno tipicamente estensione \code{.ts}.
+added 2 packages in 837ms
+$ tsc --version
+Version 7.0.2
+\end{console}
 
-\begin{esempio}{Il compilatore trova un bug nel JavaScript puro}
-\begin{affianco}[0.48]
+Il comando rende disponibile globalmente il compilatore \code{tsc}. In
+alternativa lo si può installare \textbf{nel progetto}, come dipendenza di
+sviluppo, e lanciare con \code{npx}, che esegue i comandi dei pacchetti
+presenti nella cartella \code{node\_modules} locale:
+
+\begin{console}[Terminale]
+$ npm install --save-dev typescript
+
+added 2 packages in 623ms
+$ npx tsc --version
+Version 7.0.2
+\end{console}
+
+Così ogni progetto usa la versione del compilatore scritta nel proprio
+\code{package.json}. I file TypeScript hanno tipicamente estensione \code{.ts}.
+
+\info{Le versioni di questo capitolo}{
+  Gli esempi sono stati eseguiti con TypeScript 7.0.2 (luglio 2026) e Node.js
+  22.22.0, mentre le slide sono state preparate con TypeScript 5. Nel frattempo
+  alcune impostazioni predefinite sono cambiate: dalla versione 6.0 (marzo
+  2026) i \textbf{controlli severi} sono attivi fin dall'inizio e il JavaScript
+  prodotto segue lo standard ES2025. Dove l'output è diverso da quello delle
+  slide lo segnaliamo; per ritrovare il comportamento di allora basta
+  l'opzione \code{-{}-strict false}. Con la versione 7, inoltre, il compilatore
+  è diventato un eseguibile nativo, riscritto in Go: per questo npm installa
+  \textbf{due} pacchetti, \code{typescript} e quello con l'eseguibile adatto al
+  sistema (qui \code{@typescript/typescript-linux-x64}).}
+
+\subsection{Il primo programma}
+
+Il codice JavaScript standard è anche codice TypeScript valido: questa funzione
+di saluto si può eseguire con Node come un normale file JavaScript.
+
 \begin{lstlisting}[style=ts, name=hello.ts]
+// Funzione di saluto di livello industriale, buona per ogni uso:
 function greet(entity, date) {
   console.log(`Hello ${entity}, today is ${date}!`);
 }
 
 greet("Web Technologies");
 \end{lstlisting}
-\risultato
+
 \begin{console}[Terminale]
 $ node hello.ts
 Hello Web Technologies, today is undefined!
 \end{console}
+
+Abbiamo dimenticato il secondo argomento. Che cosa succede se compiliamo il
+file con \code{tsc}?
+
 \begin{console}[Terminale]
 $ tsc hello.ts
-hello.ts:5:1 - error TS2554:
-  Expected 2 arguments, but got 1.
+hello.ts:2:16 - error TS7006: Parameter 'entity' implicitly has an 'any' type.
 
-5 greet("Web Technologies");
-  ~~~~~~~~~~~~~~~~~~~~~~~~~
-  hello.ts:1:24
-    An argument for 'date' was
-    not provided.
+2 function greet(entity, date) {
+                 ~~~~~~
+
+hello.ts:2:24 - error TS7006: Parameter 'date' implicitly has an 'any' type.
+
+2 function greet(entity, date) {
+                         ~~~~
+
+hello.ts:6:1 - error TS2554: Expected 2 arguments, but got 1.
+
+6 greet("Web Technologies");
+  ~~~~~
+
+  hello.ts:2:24 - An argument for 'date' was not provided.
+    2 function greet(entity, date) {
+                             ~~~~
+
+
+Found 3 errors in the same file, starting at: hello.ts:2
+
+$ ls
+hello.js
+hello.ts
 \end{console}
-\end{affianco}
 
-A destra le due prove: eseguito con Node, il file funziona (è JavaScript
-valido) ma stampa un risultato sbagliato; compilato con \code{tsc}, l'errore
-viene segnalato prima dell'esecuzione.
+L'ultimo errore, \code{TS2554}, è proprio il nostro bug: la funzione si aspetta
+due argomenti e ne riceve uno, e la nota sotto indica il parametro rimasto
+senza valore. Il compilatore lo ha individuato \textbf{pur avendo scritto
+soltanto JavaScript standard}, senza una sola annotazione di tipo.
+
+Nelle slide compare soltanto questo errore. Gli altri due (\code{TS7006})
+segnalano che i parametri \code{entity} e \code{date} hanno implicitamente il
+tipo \code{any}, cioè «qualunque»: è uno dei controlli severi che TypeScript
+6.0 ha reso predefiniti (ne parliamo nella sezione \textit{Livelli di
+severità}, in fondo al capitolo). Spegnendoli si ottiene l'output delle slide:
+
+\begin{console}[Terminale]
+$ tsc --strict false hello.ts
+hello.ts:6:1 - error TS2554: Expected 2 arguments, but got 1.
+
+6 greet("Web Technologies");
+  ~~~~~
+
+  hello.ts:2:24 - An argument for 'date' was not provided.
+    2 function greet(entity, date) {
+                             ~~~~
 
 
-Il compilatore ha individuato il bug \textbf{pur avendo scritto soltanto
-JavaScript standard}, senza una sola annotazione di tipo.
-\end{esempio}
+Found 1 error in hello.ts:6
+
+\end{console}
+
+L'\code{ls} dopo la compilazione rivela anche un altro dettaglio: nonostante gli errori,
+\code{tsc} ha generato \code{hello.js}. Per impostazione predefinita il
+compilatore produce comunque il JavaScript: gli errori di tipo avvertono di ciò
+che potrebbe andare storto, ma non bloccano la traduzione (a meno di attivare
+l'opzione \code{noEmitOnError}).
+
+\subsection{Correggere e compilare}
+
+Correggiamo il bug passando anche la data:
+
+\begin{lstlisting}[style=ts, name=hello.ts]
+// Funzione di saluto di livello industriale, buona per ogni uso:
+function greet(entity, date) {
+  console.log(`Hello ${entity}, today is ${date}!`);
+}
+
+greet("Web Technologies", Date());
+\end{lstlisting}
+
+Come nelle slide, compiliamo senza i controlli severi (con i controlli attivi
+\code{tsc} ripeterebbe i due \code{TS7006}, generando comunque il file):
+
+\begin{console}[Terminale]
+$ ls
+hello.ts
+$ tsc --strict false hello.ts
+$ ls
+hello.js
+hello.ts
+$ node hello.js
+Hello Web Technologies, today is Tue Nov 17 2026 10:26:54 GMT+0000 (Coordinated Universal Time)!
+\end{console}
+
+Il compilatore ha \textbf{tradotto} \code{hello.ts} nel nuovo file
+\code{hello.js}, che si esegue con Node come al solito. Ecco il codice
+generato:
+
+\begin{lstlisting}[style=js, name=hello.js]
+"use strict";
+// Funzione di saluto di livello industriale, buona per ogni uso:
+function greet(entity, date) {
+    console.log(`Hello ${entity}, today is ${date}!`);
+}
+greet("Web Technologies", Date());
+\end{lstlisting}
+
+Il compilatore conserva commenti e indentazione (portata a quattro spazi): il
+codice tradotto sembra scritto da una persona. In testa compare la direttiva
+\code{"use strict"}, che attiva la modalità rigorosa di JavaScript (capitolo
+5): TypeScript 7 la aggiunge di serie, mentre TypeScript 5, come vedremo fra
+un attimo, per impostazione predefinita non lo faceva.
 
 \subsection{Downleveling}
 
-Corretto il bug e compilato il file, \code{tsc} produce un \code{hello.js}
-eseguibile con Node. Il codice generato conserva commenti e indentazione, e
-sembra scritto da una persona. Un dettaglio però cambia:
+Nelle slide il file generato è diverso: il template literal è diventato una
+catena di chiamate a \code{concat}. Lo si ottiene ancora oggi facendo compilare
+il file a TypeScript 5, che \code{npx} sa scaricare al volo (l'opzione
+\code{-p} indica il pacchetto da usare, \code{-{}-yes} evita la domanda di
+conferma):
 
-\begin{affianco}[0.42]
-\codicepiccolo
-\begin{lstlisting}[style=ts, name=hello.ts]
-console.log(`Hello ${entity}, today is ${date}!`);
+\begin{console}[Terminale]
+$ npx --yes -p typescript@5.9.3 tsc --version
+Version 5.9.3
+$ npx --yes -p typescript@5.9.3 tsc hello.ts
+$ cat hello.js
+// Funzione di saluto di livello industriale, buona per ogni uso:
+function greet(entity, date) {
+    console.log("Hello ".concat(entity, ", today is ").concat(date, "!"));
+}
+greet("Web Technologies", Date());
+\end{console}
+
+I template literal sono una funzionalità di ES6 (2015), e TypeScript 5 produceva
+per impostazione predefinita codice ES5 (2009); fino alla versione 4.9 il
+bersaglio predefinito era addirittura ES3, del 1999, quello citato nelle slide.
+TypeScript sa \textbf{riscrivere} il codice da versioni più recenti del
+linguaggio a versioni più vecchie: è il \term{downleveling}. Possiamo usare le
+funzionalità moderne e far girare il risultato anche su browser antichi.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[font=\Lato\small,
+      n/.style={wtnode, minimum width=2.9cm, minimum height=1.0cm},
+      a/.style={-{Stealth[length=6pt,width=5pt]}, line width=1pt,
+                draw=neutral!45!black}]
+    \node[n] (es6) at (0,0) {codice ES6\\ \FiraCodeNL\scriptsize`Hello \$\{x\}`};
+    \node[n, draw=orange-gradient-6, fill=orange-gradient-1!40!white]
+      (tsc) at (4.2,0) {\textbf{tsc}};
+    \node[n] (es5) at (8.4,0) {codice ES5\\ \FiraCodeNL\scriptsize"Hello ".concat(x)};
+    \draw[a] (es6) -- (tsc);
+    \draw[a] (tsc) -- (es5);
+  \end{tikzpicture}
+  \caption{Il downleveling: la stessa funzione, riscritta con i mezzi di una
+           versione più vecchia del linguaggio.}
+  \label{fig:downleveling}
+\end{figure}
+
+Il bersaglio si sceglie con l'opzione \code{-{}-target}: con
+\code{tsc -{}-target es6 hello.ts} il template literal resta com'è. Con
+TypeScript 7 i bersagli ES3 ed ES5 non esistono più: il minimo è ES6 (che si
+può scrivere anche \code{es2015}) e, se non si indica nulla, il compilatore
+produce ES2025. Per questo il nostro \code{hello.js} conservava il template
+literal.
+
+\begin{console}[Terminale]
+$ tsc --target es3 hello.ts
+error TS6046: Argument for '--target' option must be: 'es6', 'es2015', 'es2016', 'es2017', 'es2018', 'es2019', 'es2020', 'es2021', 'es2022', 'es2023', 'es2024', 'es2025', 'esnext'.
+$ tsc --target es5 hello.ts
+error TS5108: Option 'target=ES5' has been removed. Please remove it from your configuration.
+
+Found 1 error.
+
+\end{console}
+
+Attenzione anche ai trattini. Nelle slide il comando è scritto
+\code{tsc –target es6 hello.ts}, con un trattino tipografico (–) al posto dei
+due trattini normali: copiato nel terminale non funziona, perché \code{tsc}
+prende \code{–target} ed \code{es6} per due nomi di file da compilare.
+
+% Il trattino tipografico (U+2013) e' fuori dalle tabelle di listings, che lo
+% stamperebbe fuori posto ("path –'target'" invece di "path '–target'"): nel
+% sorgente e' scritto "¬", che listings sostituisce con il trattino.
+{\lstset{extendedchars=true, literate={¬}{{\textendash}}1}%
+\begin{console}[Terminale]
+$ tsc ¬target es6 hello.ts
+error TS6231: Could not resolve the path 'es6' with the extensions: '.ts', '.tsx', '.d.ts', '.cts', '.d.cts', '.mts', '.d.mts'.
+  The file is in the program because:
+    Root file specified for compilation
+error TS6231: Could not resolve the path '¬target' with the extensions: '.ts', '.tsx', '.d.ts', '.cts', '.d.cts', '.mts', '.d.mts'.
+  The file is in the program because:
+    Root file specified for compilation
+
+Found 2 errors.
+
+\end{console}}
+
+Il downleveling, naturalmente, resta: riguarda le funzionalità arrivate dopo
+ES6. Due esempi sono di ES2020: l'optional chaining \code{a?.b} (capitolo 5) e
+l'operatore \code{a ?? b}, che vale \code{b} quando \code{a} è \code{null} o
+\code{undefined}. Il \code{?} dopo un nome di parametro o di proprietà, nella
+prima riga, li rende facoltativi; lo riprenderemo fra poco.
+
+\begin{lstlisting}[style=ts, name=down.ts]
+function greet(user?: { name?: string }) {
+  const name = user?.name ?? "anonymous";
+  console.log(`Hello ${name}!`);
+}
+
+greet();
+greet({ name: "Web Technologies" });
 \end{lstlisting}
-\risultato
-\codicepiccolo
-\begin{lstlisting}[style=js, name=hello.js]
-console.log("Hello ".concat(entity, ", today is ").concat(date, "!"));
-\end{lstlisting}
-\end{affianco}
 
-I template literal sono una funzionalità di ES6 e, per impostazione predefinita,
-TypeScript ha come bersaglio ES5 (del 2009; nelle versioni precedenti alla 5.0
-era addirittura ES3, del 1999). TypeScript sa \textbf{riscrivere}
-il codice da versioni più recenti a versioni più vecchie: è il
-\term{downleveling}. Possiamo usare le funzionalità moderne e far girare il
-risultato anche su browser antichi.
+\begin{console}[Terminale]
+$ tsc down.ts
+$ cat down.js
+"use strict";
+function greet(user) {
+    const name = user?.name ?? "anonymous";
+    console.log(`Hello ${name}!`);
+}
+greet();
+greet({ name: "Web Technologies" });
+$ tsc --target es2019 down.ts
+$ cat down.js
+"use strict";
+function greet(user) {
+    var _a;
+    const name = (_a = user === null || user === void 0 ? void 0 : user.name) !== null && _a !== void 0 ? _a : "anonymous";
+    console.log(`Hello ${name}!`);
+}
+greet();
+greet({ name: "Web Technologies" });
+$ node down.js
+Hello anonymous!
+Hello Web Technologies!
+\end{console}
 
-Il bersaglio si può specificare:
-
-\begin{lstlisting}[style=shell]
-tsc --target es6 hello.ts
-\end{lstlisting}
+Con il bersaglio predefinito il codice passa invariato (a parte le annotazioni
+di tipo, che spariscono sempre). Chiedendo ES2019 i due operatori vengono
+riscritti con confronti espliciti con \code{null} e \code{undefined}
+(\code{void 0} è un modo sicuro di scrivere \code{undefined}), e la variabile
+d'appoggio \code{\_a} evita di valutare due volte \code{user.name}. Il
+comportamento non cambia.
 
 \section{Dichiarare i tipi}
 
-I tipi primitivi più comuni sono \code{string}, \code{number} e
-\code{boolean}.
+Finora abbiamo scritto soltanto JavaScript. TypeScript permette di dichiarare i
+tipi di variabili, parametri e valori restituiti; i tipi primitivi più comuni
+sono \code{string}, \code{number} e \code{boolean}.
 
 \begin{lstlisting}[style=ts, name=primitive_types.ts]
 let courseName: string = "Web Technologies";
 let credits: number = 6;
 let isGreat: boolean = true;
+
+console.log(`
+  Welcome to ${courseName}!
+  Credits: ${credits} ETCS
+  Status: ${isGreat ? "Great" : "Could be better"}
+`);
 \end{lstlisting}
 
-A questo punto il file \textbf{non è più JavaScript valido}: eseguirlo
-direttamente con Node produce un \code{SyntaxError}. Va compilato prima.
+A questo punto il file \textbf{non è più JavaScript valido}. Nelle slide,
+eseguito con Node 22.14, produce un \code{SyntaxError} sui due punti della
+prima annotazione. Con Node 22.22 lo stesso errore si ottiene solo spegnendo
+una funzionalità di cui parliamo fra poco:
 
-\begin{affianco}[0.47][c]
-\begin{lstlisting}[style=ts]
-credits = "9 CFU";   // in JavaScript sarebbe lecito
-\end{lstlisting}
-\risultato
+\begin{console}[Terminale]
+$ node --no-experimental-strip-types primitive_types.ts
+[cartella del progetto]/primitive_types.ts:1
+let courseName: string = "Web Technologies";
+              ^
+
+SyntaxError: Unexpected token ':'
+    at wrapSafe (node:internal/modules/cjs/loader:1638:18)
+    ...
+
+Node.js v22.22.0
+\end{console}
+
+Per eseguire l'esempio, il file va prima compilato:
+
 \begin{console}[Terminale]
 $ tsc primitive_types.ts
-primitive_types.ts:5:1 - error TS2322:
-  Type 'string' is not assignable to
-  type 'number'.
+$ node primitive_types.js
+
+  Welcome to Web Technologies!
+  Credits: 6 ETCS
+  Status: Great
+
 \end{console}
-\end{affianco}
+
+\subsection{Node e la rimozione dei tipi}
+
+Da Node 22.18 (luglio 2025) il comando \code{node} accetta direttamente i file
+\code{.ts}: prima di eseguirli ne \textbf{cancella} le annotazioni di tipo
+(\term{type stripping}) e manda in esecuzione il JavaScript che resta.
+
+\begin{console}[Terminale]
+$ node primitive_types.ts
+
+  Welcome to Web Technologies!
+  Credits: 6 ETCS
+  Status: Great
+
+\end{console}
+
+\warning{Togliere i tipi non vuol dire controllarli}{
+  Node non verifica nulla: rimuove le annotazioni e basta. Il programma della
+  prossima sottosezione, che \code{tsc} rifiuta, con Node gira senza proteste.
+  Il controllo dei tipi resta compito del compilatore (e dell'editor, che usa
+  lo stesso motore). Inoltre la rimozione funziona solo per la sintassi che si
+  può cancellare senza conseguenze: le enumerazioni, per esempio, non ne fanno
+  parte (sezione \textit{Tipi letterali ed enumerazioni}).}
+
+\subsection{Il controllo dei tipi}
+
+Ora TypeScript può farci da guardia. Proviamo ad assegnare a \code{credits} una
+stringa (rispetto alle slide abbiamo aggiunto il \code{console.log} finale, per
+vedere che cosa fa Node):
+
+\begin{lstlisting}[style=ts, name=primitive_types.ts]
+let courseName: string = "Web Technologies";
+let credits: number = 6;
+let isGreat: boolean = true;
+
+credits = "9 CFU";   // in JavaScript sarebbe lecito
+console.log(credits);
+\end{lstlisting}
+
+\begin{console}[Terminale]
+$ tsc primitive_types.ts
+primitive_types.ts:5:1 - error TS2322: Type 'string' is not assignable to type 'number'.
+
+5 credits = "9 CFU";   // in JavaScript sarebbe lecito
+  ~~~~~~~
+
+
+Found 1 error in primitive_types.ts:5
+
+$ node primitive_types.ts
+9 CFU
+\end{console}
+
+Il compilatore indica il punto dell'errore (riga 5, colonna 1), il suo codice
+(\code{TS2322}) e un estratto del sorgente con la parte incriminata
+sottolineata. Node invece, come annunciato, esegue il file e stampa
+\code{9 CFU}.
 
 \subsection{Array}
 
@@ -253,24 +582,49 @@ Il tipo di un array si indica con la sintassi \code{tipo[]}.
 let langs: string[] = ["TypeScript", "JavaScript", "PHP", "Java"];
 let primes: number[] = [2, 5, 7, 97, 829, 839];
 
-langs.push({ name: "C#" });
-// error TS2345: Argument of type '{ name: string; }' is not assignable
-// to parameter of type 'string'.
+langs.push({ name: "C#" });   // in JavaScript sarebbe lecito
 \end{lstlisting}
+
+\begin{console}[Terminale]
+$ tsc array.ts
+array.ts:4:12 - error TS2345: Argument of type '{ name: string; }' is not assignable to parameter of type 'string'.
+
+4 langs.push({ name: "C#" });   // in JavaScript sarebbe lecito
+             ~~~~~~~~~~~~~~
+
+
+Found 1 error in array.ts:4
+
+\end{console}
 
 \subsection{Il tipo any}
 
 TypeScript include un tipo speciale: \code{any}. Quando un valore è di tipo
 \code{any} possiamo farci qualunque cosa e il compilatore non protesterà.
 
-\begin{lstlisting}[style=ts]
+\begin{lstlisting}[style=ts, name=any.ts]
 let x: any;
+
 x = { name: "Angular", lang: "TypeScript" };
-x.foo();              // compila, ma solleva TypeError a runtime
+x.foo();              // compila, ma a runtime solleva TypeError
 
 x = "Hello!";
-let n: number = x;    // compila: stiamo mettendo una stringa in un number
+let n: number = x;    // compila: una stringa finisce in un number
 \end{lstlisting}
+
+\begin{console}[Terminale]
+$ tsc any.ts
+$ node any.js
+[cartella del progetto]/any.js:4
+x.foo(); // compila, ma a runtime solleva TypeError
+  ^
+
+TypeError: x.foo is not a function
+    at Object.<anonymous> ([cartella del progetto]/any.js:4:3)
+    ...
+
+Node.js v22.22.0
+\end{console}
 
 \warning{\code{any} disattiva i controlli}{
   Usare \code{any} equivale a rinunciare a tutto ciò per cui si è adottato
@@ -282,15 +636,25 @@ let n: number = x;    // compila: stiamo mettendo una stringa in un number
 
 Si possono specificare i tipi sia degli ingressi sia del valore restituito.
 
-\begin{lstlisting}[style=ts]
+\begin{lstlisting}[style=ts, name=functions.ts]
 function greet(name: string): string {
   return `Hello ${name.toUpperCase()}`;
 }
 
 console.log(greet(42));
-// error TS2345: Argument of type 'number' is not assignable to
-// parameter of type 'string'
 \end{lstlisting}
+
+\begin{console}[Terminale]
+$ tsc functions.ts
+functions.ts:5:19 - error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+
+5 console.log(greet(42));
+                    ~~
+
+
+Found 1 error in functions.ts:5
+
+\end{console}
 
 \subsection{Inferenza automatica}
 
@@ -299,17 +663,18 @@ Quando non si fornisce un'annotazione esplicita, TypeScript prova a
 
 \begin{affianco}[0.62][c]
 \codicepiccolo
-\begin{lstlisting}[style=ts]
-function greet(name) {         // function greet(name: any): string
+\begin{lstlisting}[style=ts, name=inference.ts]
+function greet(name) {             // function greet(name: any): string
   return `Hello ${name}`;
 }
 
-let arr = [1, 2, 3, 4, 5];     // let arr: number[]
+let arr = [1, 2, 3, 4, 5];         // let arr: number[]
+
 let course = "Web Technologies";   // let course: string
 
+greet(course);
+
 course = { name: "Web Technologies", credits: 6 };
-// TS2322: Type '{name: string; credits: number;}' is not assignable
-// to type 'string'
 \end{lstlisting}
 \risultato
 \begin{immagine}[Ciò che mostra l'editor passando sopra\\ ai nomi: i tipi dedotti.]
@@ -323,15 +688,83 @@ course = { name: "Web Technologies", credits: 6 };
 \end{immagine}
 \end{affianco}
 
-Quando non si specifica un tipo e TypeScript non riesce a dedurlo, il
-compilatore ripiega di norma su \code{any}. Il flag \code{noImplicitAny}
-permette di segnalare come errore ogni \code{any} implicito.
+Il tipo dedotto per \code{course} è \code{string}, e l'ultimo assegnamento lo
+viola. Con TypeScript 7 gli errori sono però due: anche il parametro
+\code{name} viene segnalato, perché il suo tipo non si può dedurre e resta un
+\code{any} implicito (il tipo restituito invece sì: \code{string}). Senza
+controlli severi resta solo l'errore delle slide:
 
 \begin{console}[Terminale]
-$ tsc --noImplicitAny implicit_any.ts
-implicit_any.ts:3:16 - error TS7006: Parameter 'name' implicitly has an
-'any' type.
+$ tsc inference.ts
+inference.ts:1:16 - error TS7006: Parameter 'name' implicitly has an 'any' type.
+
+1 function greet(name) {             // function greet(name: any): string
+                 ~~~~
+
+inference.ts:11:1 - error TS2322: Type '{ name: string; credits: number; }' is not assignable to type 'string'.
+
+11 course = { name: "Web Technologies", credits: 6 };
+   ~~~~~~
+
+
+Found 2 errors in the same file, starting at: inference.ts:1
+
+$ tsc --strict false inference.ts
+inference.ts:11:1 - error TS2322: Type '{ name: string; credits: number; }' is not assignable to type 'string'.
+
+11 course = { name: "Web Technologies", credits: 6 };
+   ~~~~~~
+
+
+Found 1 error in inference.ts:11
+
 \end{console}
+
+\subsection{Gli any impliciti}
+
+Quando non si specifica un tipo e TypeScript non riesce a dedurlo, il
+compilatore ripiega su \code{any}. Conviene evitarlo, perché su un \code{any}
+non si fa alcun controllo: il flag \code{noImplicitAny} segnala come errore
+ogni \code{any} implicito.
+
+\begin{lstlisting}[style=ts, name=implicit_any.ts]
+let x;                    // let x: any
+
+function greet(name) {    // function greet(name: any): void
+  console.log(`Hello, ${name}`);
+}
+
+greet(x);
+\end{lstlisting}
+
+\begin{console}[Terminale]
+$ tsc --strict false implicit_any.ts
+$ tsc --strict false --noImplicitAny implicit_any.ts
+implicit_any.ts:3:16 - error TS7006: Parameter 'name' implicitly has an 'any' type.
+
+3 function greet(name) {    // function greet(name: any): void
+                 ~~~~
+
+
+Found 1 error in implicit_any.ts:3
+
+$ tsc implicit_any.ts
+implicit_any.ts:3:16 - error TS7006: Parameter 'name' implicitly has an 'any' type.
+
+3 function greet(name) {    // function greet(name: any): void
+                 ~~~~
+
+
+Found 1 error in implicit_any.ts:3
+
+\end{console}
+
+I primi due comandi riproducono le slide, dove i controlli severi sono spenti:
+senza flag il file compila, con \code{-{}-noImplicitAny} no. Con TypeScript 6 e
+7 il flag è già attivo, perché fa parte della modalità severa, come mostra
+l'ultimo comando. La riga \code{let x;} invece non viene segnalata: a una
+variabile dichiarata senza valore TypeScript attribuisce, punto per punto, il
+tipo dell'ultimo valore ricevuto (al momento della chiamata, \code{undefined}).
 
 \section{Tipi oggetto}
 
@@ -347,11 +780,9 @@ function printCourse(course: { name: string, credits: number }) {
 
 printCourse({ name: "Web Technologies", credits: 6 });   // ok
 
-printCourse({ name: "Software Engineering" });
-// TS2345: Property 'credits' is missing
+printCourse({ name: "Software Engineering" });   // errore
 
-printCourse({ name: "Algebra", credits: 6, year: "First" });
-// TS2353: Object literal may only specify known properties
+printCourse({ name: "Algebra", credits: 6, year: "First" });   // errore
 \end{lstlisting}
 \risultato
 \begin{immagine}[L'oggetto deve avere esattamente la forma attesa.]
@@ -369,18 +800,77 @@ printCourse({ name: "Algebra", credits: 6, year: "First" });
 \end{immagine}
 \end{affianco}
 
+\begin{console}[Terminale]
+$ tsc object_types.ts
+object_types.ts:8:13 - error TS2741: Property 'credits' is missing in type '{ name: string; }' but required in type '{ name: string; credits: number; }'.
+
+8 printCourse({ name: "Software Engineering" });   // errore
+              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  object_types.ts:1:46 - 'credits' is declared here.
+    1 function printCourse(course: { name: string, credits: number }) {
+                                                   ~~~~~~~
+
+object_types.ts:10:44 - error TS2353: Object literal may only specify known properties, and 'year' does not exist in type '{ name: string; credits: number; }'.
+
+10 printCourse({ name: "Algebra", credits: 6, year: "First" });   // errore
+                                              ~~~~
+
+
+Found 2 errors in the same file, starting at: object_types.ts:8
+
+\end{console}
+
+Nelle slide il primo errore porta il codice TS2453, ma è un'inversione di
+cifre: TypeScript 5 lo segnala come \code{TS2345} (\textit{Argument of type
+\ldots{} is not assignable to parameter of type \ldots}), seguito dalla riga
+sulla proprietà mancante. TypeScript 7 riporta direttamente quest'ultima, con il
+codice \code{TS2741}, e indica dove \code{credits} è dichiarata.
+
+\subsection{Proprietà opzionali}
+
 Una proprietà si può dichiarare \textbf{opzionale} aggiungendo un \code{?} dopo
 il nome.
 
-\begin{lstlisting}[style=ts]
+\begin{lstlisting}[style=ts, name=optional.ts]
 function printCourse(course: { name: string, credits?: number }) {
   console.log(`Course name: ${course.name}`);
   console.log(`Course credits: ${course.credits}`);
   // andrebbe verificato se course.credits e' undefined!
 }
 
-printCourse({ name: "Software Engineering" });   // ok: stampa "undefined"
+printCourse({ name: "Web Technologies", credits: 6 });   // ok
+printCourse({ name: "Software Engineering" });   // ok, ma...
+
+printCourse({ name: "Algebra", credits: 6, year: "First" });   // errore
 \end{lstlisting}
+
+\begin{console}[Terminale]
+$ tsc optional.ts
+optional.ts:10:44 - error TS2353: Object literal may only specify known properties, and 'year' does not exist in type '{ name: string; credits?: number | undefined; }'.
+
+10 printCourse({ name: "Algebra", credits: 6, year: "First" });   // errore
+                                              ~~~~
+
+
+Found 1 error in optional.ts:10
+
+\end{console}
+
+Il messaggio riporta il tipo con la proprietà opzionale, \code{credits?: number
+| undefined} (nelle slide il commento ripete per svista il tipo dell'esempio
+precedente; il \code{| undefined} compare con i controlli severi). Commentata
+l'ultima chiamata, il programma compila e mostra il problema annunciato nel
+commento:
+
+\begin{console}[Terminale]
+$ tsc optional.ts
+$ node optional.js
+Course name: Web Technologies
+Course credits: 6
+Course name: Software Engineering
+Course credits: undefined
+\end{console}
 
 \section{Tipi unione}
 
@@ -395,18 +885,42 @@ function printError(code: number | string) {
 
 printError(404);                 // ok
 printError("401 Unauthorized");  // ok
-printError({ code: "403" });     // errore di compilazione
+printError({ code: "403", message: "Forbidden" });   // errore
 \end{lstlisting}
+
+\begin{console}[Terminale]
+$ tsc union.ts
+union.ts:7:12 - error TS2345: Argument of type '{ code: string; message: string; }' is not assignable to parameter of type 'string | number'.
+
+7 printError({ code: "403", message: "Forbidden" });   // errore
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+Found 1 error in union.ts:7
+
+\end{console}
 
 TypeScript garantisce che le operazioni su un tipo unione siano valide per
 \textbf{ciascuno} dei tipi possibili:
 
-\begin{lstlisting}[style=ts]
+\begin{lstlisting}[style=ts, name=union2.ts]
 function printError(code: number | string) {
-  console.log(`Error code: ${code.toUpperCase()}`);
-  // TS2339: Property 'toUpperCase' does not exist on type 'string | number'
+  console.log(`Error code: ${code.toUpperCase()}`);   // errore
 }
 \end{lstlisting}
+
+\begin{console}[Terminale]
+$ tsc union2.ts
+union2.ts:2:35 - error TS2339: Property 'toUpperCase' does not exist on type 'string | number'.
+  Property 'toUpperCase' does not exist on type 'number'.
+
+2   console.log(`Error code: ${code.toUpperCase()}`);   // errore
+                                    ~~~~~~~~~~~
+
+
+Found 1 error in union2.ts:2
+
+\end{console}
 
 In questi casi bisogna \term{restringere} il tipo con controlli espliciti (per
 esempio \code{typeof} o \code{Array.isArray()}); TypeScript sa dedurre tipi
@@ -414,7 +928,7 @@ specifici nei singoli rami.
 
 \begin{affianco}[0.6][c]
 \codicepiccolo
-\begin{lstlisting}[style=ts]
+\begin{lstlisting}[style=ts, name=narrowing.ts]
 function printError(code: number | string) {
   if (typeof code === "string") {
     console.log(`Error: ${code.toUpperCase()}`);   // qui code: string
@@ -422,6 +936,9 @@ function printError(code: number | string) {
     console.log(`Error: ${code}`);                 // qui code: number
   }
 }
+
+printError("not found");
+printError(404);
 \end{lstlisting}
 \risultato
 \begin{immagine}[Dentro ogni ramo il tipo è più preciso.]
@@ -439,10 +956,20 @@ function printError(code: number | string) {
 \end{immagine}
 \end{affianco}
 
+\begin{console}[Terminale]
+$ tsc narrowing.ts
+$ node narrowing.js
+Error: NOT FOUND
+Error: 404
+\end{console}
+
 \section{Alias di tipo e interfacce}
 
-Volendo riusare lo stesso tipo più volte, si può assegnargli un nome con la
-parola chiave \code{type}.
+Finora abbiamo scritto i tipi oggetto e i tipi unione direttamente nelle
+annotazioni. Volendo riusare lo stesso tipo più volte (la priorità è scrivere
+codice \term{DRY}, \textit{Don't Repeat Yourself}), gli si può assegnare un
+nome: è un \term{alias di tipo}, introdotto dalla parola chiave \code{type}
+con la sintassi \code{type <nome> = <definizione>}.
 
 \begin{affianco}[0.6][c]
 \codicepiccolo
@@ -458,8 +985,11 @@ function printCourse(course: Course) {
   console.log(`Name: ${course.name}, Credits: ${course.credits}`);
 }
 
-let webtech: Course = { name: "Web Technologies", credits: 6 };
-let softeng: Course = { name: "Software Engineering", credits: "10 CFU" };
+let webtech: Course = { name: "Web Technologies", credits: 9 };
+let softeng: Course = { name: "Software Engineering", credits: "9 CFU" };
+
+printCourse(webtech);
+printCourse(softeng);
 \end{lstlisting}
 \risultato
 \begin{immagine}[Un alias può comporre altri alias.]
@@ -473,6 +1003,13 @@ let softeng: Course = { name: "Software Engineering", credits: "10 CFU" };
 \end{immagine}
 \end{affianco}
 
+\begin{console}[Terminale]
+$ tsc aliases.ts
+$ node aliases.js
+Name: Web Technologies, Credits: 9
+Name: Software Engineering, Credits: 9 CFU
+\end{console}
+
 Le \term{interfacce} sono un altro modo di dare un nome ai tipi oggetto.
 
 \begin{lstlisting}[style=ts, name=interfaces.ts]
@@ -484,7 +1021,19 @@ interface Course {
 function printCourse(course: Course) {
   console.log(`Name: ${course.name}, Credits: ${course.credits}`);
 }
+
+let webtech: Course = { name: "Web Technologies", credits: 9 };
+
+printCourse(webtech);
+printCourse({ name: "Software Engineering", credits: 9 });
 \end{lstlisting}
+
+\begin{console}[Terminale]
+$ tsc interfaces.ts
+$ node interfaces.js
+Name: Web Technologies, Credits: 9
+Name: Software Engineering, Credits: 9
+\end{console}
 
 \subsection{Tipizzazione strutturale}
 
@@ -523,12 +1072,16 @@ printPerson(pet);      // Name: Chuck, age: 3   (!)
 \end{affianco}
 
 Un \code{Pet} viene accettato dove è atteso un \code{Person} perché ne ha la
-stessa forma. In Java sarebbe un errore di compilazione.
+stessa forma: il file compila e stampa le due righe dei commenti. In Java
+sarebbe un errore di compilazione.
 
 \subsection{Estendere interfacce e tipi}
 
+Un'interfaccia può \textbf{estenderne} un'altra con \code{extends}: eredita
+tutte le sue proprietà e ne aggiunge di nuove.
+
 \begin{affianco}[0.5][c]
-\begin{lstlisting}[style=ts]
+\begin{lstlisting}[style=ts, name=extending.ts]
 interface Pet {
   name: string
 }
@@ -538,8 +1091,7 @@ interface Bird extends Pet {
 }
 
 let chuck: Bird = { name: "Chuck", flies: true };
-let quentin: Bird = { flies: false };
-// TS2741: Property 'name' is missing
+let quentin: Bird = { flies: false };   // errore
 \end{lstlisting}
 \risultato
 \begin{immagine}[\code{Bird} ha tutto ciò che ha \code{Pet}, più \code{flies}.]
@@ -557,21 +1109,94 @@ let quentin: Bird = { flies: false };
 \end{immagine}
 \end{affianco}
 
+\begin{console}[Terminale]
+$ tsc extending.ts
+extending.ts:10:5 - error TS2741: Property 'name' is missing in type '{ flies: false; }' but required in type 'Bird'.
+
+10 let quentin: Bird = { flies: false };   // errore
+       ~~~~~~~
+
+  extending.ts:2:3 - 'name' is declared here.
+    2   name: string
+        ~~~~
+
+
+Found 1 error in extending.ts:10
+
+\end{console}
+
+Nelle slide l'errore è un \code{TS2322} che dice \textit{required in type
+'Pet'}. Le versioni recenti (già la 5.9) segnalano invece \code{TS2741}, citano
+\code{Bird}, il tipo della variabile, e indicano in \code{Pet} la dichiarazione
+della proprietà mancante. La sostanza non cambia: a \code{quentin} manca il
+nome.
+
 Alias di tipo e interfacce sono molto simili e spesso intercambiabili. Una
 distinzione chiave: i \code{type} \textbf{non possono essere riaperti} per
-aggiungere proprietà, mentre le interfacce sono sempre estendibili.
+aggiungere proprietà, mentre le interfacce sono sempre estendibili. Ecco lo
+stesso codice nelle due versioni:
 
-\begin{lstlisting}[style=ts]
-interface Pet { name: string }
-interface Pet { age: number }     // ok: le due dichiarazioni si fondono
+\begin{affianco}[0.5]
+\codicepiccolo
+\begin{lstlisting}[style=ts, name=reopen_interface.ts]
+interface Pet {
+  name: string
+}
 
-type Pet2 = { name: string }
-type Pet2 = { age: number }       // TS2300: Duplicate identifier
+interface Pet {
+  age: number
+}
+
+let matt: Pet = { name: "Matt", age: 2 };
 \end{lstlisting}
+\risultato
+\codicepiccolo
+\begin{lstlisting}[style=ts, name=reopen_type.ts]
+type Pet = {
+  name: string
+}
 
-Gli alias si estendono con i \term{tipi intersezione}, creati con \code{\&}:
+type Pet = {
+  age: number
+}
 
-\begin{lstlisting}[style=ts]
+let matt: Pet = { name: "Matt", age: 2 };
+\end{lstlisting}
+\end{affianco}
+
+\begin{console}[Terminale]
+$ tsc reopen_interface.ts
+$ tsc reopen_type.ts
+reopen_type.ts:1:6 - error TS2300: Duplicate identifier 'Pet'.
+
+1 type Pet = {
+       ~~~
+
+reopen_type.ts:5:6 - error TS2300: Duplicate identifier 'Pet'.
+
+5 type Pet = {
+       ~~~
+
+reopen_type.ts:9:33 - error TS2353: Object literal may only specify known properties, and 'age' does not exist in type 'Pet'.
+
+9 let matt: Pet = { name: "Matt", age: 2 };
+                                  ~~~
+
+
+Found 3 errors in the same file, starting at: reopen_type.ts:1
+
+\end{console}
+
+Le due dichiarazioni dell'interfaccia si fondono in una sola, con entrambe le
+proprietà. Con \code{type}, invece, il nome risulta dichiarato due volte
+(\code{TS2300}, segnalato su tutte e due le dichiarazioni) e il compilatore
+tiene la prima: per questo \code{age} diventa una proprietà sconosciuta.
+
+Gli alias si estendono con i \term{tipi intersezione}, creati con \code{\&}.
+Come le unioni, le intersezioni combinano più tipi in uno; il tipo risultante
+ha le proprietà di \textbf{ciascuno} dei tipi combinati.
+
+\begin{lstlisting}[style=ts, name=intersection.ts]
 type Pet = { name: string }
 
 type Bird = Pet & {
@@ -602,7 +1227,7 @@ const nameInput = document.getElementById("name") as HTMLInputElement;
 Oltre ai tipi \code{string} e \code{number}, si può fare riferimento a stringhe
 e numeri \textbf{specifici} in posizione di tipo.
 
-\begin{lstlisting}[style=ts]
+\begin{lstlisting}[style=ts, name=literals.ts]
 let alignment: "center";
 alignment = "center";
 alignment = "left";
@@ -612,7 +1237,7 @@ alignment = "left";
 Da solo non è molto utile, ma combinato con i tipi unione esprime un concetto
 molto potente: tipi che corrispondono a un \textbf{insieme di valori noti}.
 
-\begin{lstlisting}[style=ts]
+\begin{lstlisting}[style=ts, name=literals2.ts]
 type Alignment = "center" | "left" | "right";
 
 let alignment: Alignment;
@@ -653,12 +1278,56 @@ console.log(Priority.Medium);   // 1
 \end{immagine}
 \end{affianco}
 
+A differenza dei costrutti visti finora, un'enumerazione \textbf{non sparisce}
+nella traduzione: diventa un oggetto JavaScript, con la corrispondenza nei due
+sensi (\code{Priority.Medium} vale \code{1} e \code{Priority[1]} vale
+\code{"Medium"}).
+
+\begin{console}[Terminale]
+$ tsc enums.ts
+$ node enums.js
+1
+$ cat enums.js
+"use strict";
+var Priority;
+(function (Priority) {
+    Priority[Priority["Low"] = 0] = "Low";
+    Priority[Priority["Medium"] = 1] = "Medium";
+    Priority[Priority["High"] = 2] = "High";
+})(Priority || (Priority = {}));
+function computePriority(s) {
+    if (s.isPremium)
+        return Priority.High;
+    return Priority.Low;
+}
+console.log(Priority.Medium); // 1
+\end{console}
+
+Per questo Node non può eseguire il file limitandosi a togliere i tipi:
+
+\begin{console}[Terminale]
+$ node enums.ts
+[cartella del progetto]/enums.ts:3
+
+  > enum Priority {
+      Low,
+      Medium,
+      High
+  > }
+
+SyntaxError [ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX]: TypeScript enum is not supported in strip-only mode
+    at parseTypeScript (node:internal/modules/typescript:63:40)
+    ...
+
+Node.js v22.22.0
+\end{console}
+
 \section{Tipi funzione}
 
 Come si dichiara che una funzione riceve una \textbf{callback} con certi
 parametri e un certo risultato? Con le \term{espressioni di tipo funzione}.
 
-\begin{lstlisting}[style=ts]
+\begin{lstlisting}[style=ts, name=function_types.ts]
 type stringDecoratorFunction = (x: string, mode: boolean) => string;
 
 let fn: () => string;                  // funzione senza argomenti, ritorna string
@@ -666,9 +1335,34 @@ fn = () => { return "Hello Web Tech" };       // ok
 fn = (x: string) => { return `Hello ${x}` };  // errore di tipo
 \end{lstlisting}
 
+Il tipo \code{stringDecoratorFunction} descrive una funzione che riceve una
+\code{string} e un \code{boolean} e restituisce una \code{string}. La variabile
+\code{fn} invece può contenere soltanto funzioni senza argomenti: la seconda
+funzione ne vuole uno, che chi chiama \code{fn} non passerà mai.
+
+\begin{console}[Terminale]
+$ tsc function_types.ts
+function_types.ts:5:1 - error TS2322: Type '(x: string) => string' is not assignable to type '() => string'.
+  Target signature provides too few arguments. Expected 1 or more, but got 0.
+
+5 fn = (x: string) => { return `Hello ${x}` };  // errore di tipo
+  ~~
+
+
+Found 1 error in function_types.ts:5
+
+\end{console}
+
+Nelle slide l'ultima riga è commentata come \textit{TypeError}: non si tratta
+dell'eccezione di JavaScript a runtime, ma di un errore di tipo segnalato dal
+compilatore (\code{TS2322}), prima di eseguire alcunché.
+
+Un tipo funzione si può scrivere anche direttamente nella firma, come per il
+parametro \code{decorator} qui sotto:
+
 \begin{affianco}[0.62][c]
 \codicepiccolo
-\begin{lstlisting}[style=ts, name=function_types.ts]
+\begin{lstlisting}[style=ts, name=greet_case.ts]
 enum Case { Uppercase, Lowercase }
 
 function GREET(name: string, decorator: (x: string, mode: Case) => string) {
@@ -685,7 +1379,9 @@ function stringDecorator(x: string, mode: Case) {
 console.log(GREET("Web Technologies", stringDecorator));
 \end{lstlisting}
 \risultato
-\begin{console}
+\begin{console}[Terminale]
+$ tsc greet_case.ts
+$ node greet_case.js
 >>> HELLO WEB TECHNOLOGIES <<<
 \end{console}
 \wtnota{\code{GREET} chiama la callback\\ con \code{Case.Uppercase}.}
@@ -702,7 +1398,7 @@ di tipi.
 \begin{esempio}{La funzione identità}
 Supponiamo di dover realizzare una funzione che restituisce ciò che riceve.
 
-\begin{lstlisting}[style=ts]
+\begin{lstlisting}[style=ts, name=identity_any.ts]
 function identity(x) {        // function identity(x: any): any
   return x;
 }
@@ -711,12 +1407,25 @@ let y: string = "Hello";
 let z = identity(y);          // z: any (!)
 \end{lstlisting}
 
-Usare \code{any} è abbastanza generico, ma \textbf{perdiamo l'informazione} sul
-tipo al ritorno. Dare un tipo specifico risolve il problema ma funzionerebbe
-solo con le stringhe.
+Usare \code{any} (implicitamente o esplicitamente) è abbastanza generico, ma
+\textbf{perdiamo l'informazione} sul tipo al ritorno. (Con TypeScript 7 questa
+versione non compila nemmeno: \code{x} è un \code{any} implicito, errore
+\code{TS7006}.) Dare un tipo specifico risolve il problema, ma la funzione
+servirebbe solo per le stringhe:
 
-TypeScript permette di definire \term{variabili di tipo}, dichiarate dopo il
-nome della funzione fra \code{<} e \code{>}.
+\begin{lstlisting}[style=ts, name=identity_string.ts]
+function identity(x: string): string {
+  return x;
+}
+
+let y: string = "Hello";
+let z = identity(y);          // z: string (ma funziona solo con le stringhe)
+\end{lstlisting}
+
+TypeScript permette di definire \term{variabili di tipo}, che operano sui tipi
+invece che sui valori. Si dichiarano dopo il nome della funzione, fra \code{<}
+e \code{>}; qui la variabile si chiama \code{Type}, ma va bene qualunque
+identificatore.
 
 \begin{affianco}[0.55][c]
 \codicepiccolo
@@ -756,7 +1465,7 @@ ingresso viene \textbf{preservata}.
 Le variabili di tipo possono essere più di una, e funzionano anche con gli
 array:
 
-\begin{lstlisting}[style=ts]
+\begin{lstlisting}[style=ts, name=merge.ts]
 function merge<T1, T2>(x: T1, y: T2): { field: T2, otherField: T1 } {
   return { field: y, otherField: x };
 }
@@ -769,9 +1478,13 @@ function getFirst<T>(arr: T[]): T {
 }
 
 let first: string = getFirst(["hello", "web", "technologies"]);
+console.log(first);   // hello
 \end{lstlisting}
 
 \subsection{Classi generiche}
+
+Anche una classe può avere variabili di tipo. Questa collezione restituisce un
+elemento a caso, del tipo scelto alla creazione:
 
 \begin{lstlisting}[style=ts, name=generic_class.ts]
 class CustomCollection<T> {
@@ -788,14 +1501,28 @@ class CustomCollection<T> {
 }
 
 let c = new CustomCollection<string>();
-c.addElement("hello");
-c.addElement("web");
+c.addElement("hello"); c.addElement("web"); c.addElement("technologies");
 console.log(c.getRandomElement());
 \end{lstlisting}
 
+\begin{console}[Terminale]
+$ tsc generic_class.ts
+$ for i in 1 2 3 4 5; do node generic_class.js; done
+web
+technologies
+technologies
+hello
+web
+\end{console}
+
 \subsection{Vincoli sui generici}
 
-\begin{affianco}[0.55][c]
+Con \code{extends} si può \textbf{vincolare} una variabile di tipo: qui
+\code{T} può essere soltanto un \code{Animal} o un suo sottotipo, e per questo
+dentro la funzione si può leggere \code{species}.
+
+\begin{affianco}[0.6][c]
+\codicepiccolo
 \begin{lstlisting}[style=ts, name=constraints.ts]
 class Animal { species: string; }
 class Bird extends Animal  { canFly: boolean; }
@@ -805,8 +1532,14 @@ function animalInfo<T extends Animal>(animal: T): void {
   console.log(animal.species);
 }
 
-animalInfo(new Bird());              // ok
-animalInfo({ species: "Spider" });   // ok anche questo (!)
+let a: Animal = new Animal(); a.species = "Dog";
+let b: Bird = new Bird();     b.species = "Kiwi";  b.canFly = false;
+let c: Snake = new Snake();   c.species = "Cobra"; c.isVenomous = true;
+
+animalInfo(a);                       // Dog
+animalInfo(b);                       // Kiwi
+animalInfo(c);                       // Cobra
+animalInfo({ species: "Spider" });   // Spider (!)
 \end{lstlisting}
 \risultato
 \begin{immagine}[Basta avere \code{species}: per la tipizzazione\\
@@ -828,7 +1561,50 @@ animalInfo({ species: "Spider" });   // ok anche questo (!)
 L'ultima riga funziona per via della tipizzazione strutturale: l'oggetto
 letterale ha la stessa forma di \code{Animal}, quindi soddisfa il vincolo.
 
+Con TypeScript 7, però, il file così com'è non compila. Le classi dichiarano
+proprietà senza valore iniziale, e la modalità severa lo segnala
+(\code{TS2564}): leggendo \code{species} prima di averla assegnata si
+otterrebbe \code{undefined}, non una stringa.
+
+\begin{console}[Terminale]
+$ tsc constraints.ts
+constraints.ts:1:16 - error TS2564: Property 'species' has no initializer and is not definitely assigned in the constructor.
+
+1 class Animal { species: string; }
+                 ~~~~~~~
+
+constraints.ts:2:30 - error TS2564: Property 'canFly' has no initializer and is not definitely assigned in the constructor.
+
+2 class Bird extends Animal  { canFly: boolean; }
+                               ~~~~~~
+
+constraints.ts:3:30 - error TS2564: Property 'isVenomous' has no initializer and is not definitely assigned in the constructor.
+
+3 class Snake extends Animal { isVenomous: boolean; }
+                               ~~~~~~~~~~
+
+
+Found 3 errors in the same file, starting at: constraints.ts:1
+
+\end{console}
+
+Basterebbe dare un valore iniziale alle proprietà, come in
+\code{canFly = false}, oppure dichiararle con un punto esclamativo, come in
+\code{species!: string}: vuol dire «verrà assegnata prima dell'uso, me ne
+occupo io». Senza controlli severi il file compila come nelle slide:
+
+\begin{console}[Terminale]
+$ tsc --strict false constraints.ts
+$ node constraints.js
+Dog
+Kiwi
+Cobra
+Spider
+\end{console}
+
 \section{Altri tipi da conoscere}
+
+TypeScript include altri tre tipi, utili soprattutto con le funzioni.
 
 \begin{center}
 \renewcommand{\arraystretch}{1.45}
@@ -844,13 +1620,28 @@ letterale ha la stessa forma di \code{Animal}, quindi soddisfa il vincolo.
 \end{tabular}
 \end{center}
 
+\code{void} è anche il tipo dedotto per le funzioni senza \code{return}, o con
+un \code{return} vuoto:
+
+\begin{lstlisting}[style=ts, name=void.ts]
+function f(): void {
+  return;
+}
+
+function g() {            // function g(): void
+  console.log("Hello");
+}
+
+let x: void = g();
+\end{lstlisting}
+
 \begin{lstlisting}[style=ts, name=unknown.ts]
 function greet(a: any) {
   console.log(a.name);       // compila, ma possibile errore a runtime
 }
 
 function saferGreet(a: unknown) {
-  console.log(a.name);       // TS18046: 'a' is of type unknown
+  console.log(a.name);       // errore di compilazione
 }
 
 type namedObject = { name: string };
@@ -859,6 +1650,33 @@ function notSoSafeGreet(a: unknown) {
   console.log((a as namedObject).name);   // asserzione esplicita
 }
 \end{lstlisting}
+
+\begin{console}[Terminale]
+$ tsc unknown.ts
+unknown.ts:6:15 - error TS18046: 'a' is of type 'unknown'.
+
+6   console.log(a.name);       // errore di compilazione
+                ~
+
+
+Found 1 error in unknown.ts:6
+
+$ tsc --strict false unknown.ts
+unknown.ts:6:17 - error TS2339: Property 'name' does not exist on type 'unknown'.
+
+6   console.log(a.name);       // errore di compilazione
+                  ~~~~
+
+
+Found 1 error in unknown.ts:6
+
+\end{console}
+
+L'errore \code{TS18046} delle slide è quello della modalità severa; senza,
+TypeScript dice la stessa cosa in un altro modo: la proprietà \code{name} non
+esiste sul tipo \code{unknown} (\code{TS2339}). In entrambi i casi per usare il
+valore bisogna prima restringerne il tipo, o ricorrere a un'asserzione come in
+\code{notSoSafeGreet}, che però non controlla nulla.
 
 \begin{lstlisting}[style=ts, name=never.ts]
 function f(x: string | number) {
@@ -878,41 +1696,129 @@ function g(x: any): never {   // g non ritorna mai: solleva sempre un errore
 
 \section{Livelli di severità}
 
-Utenti diversi si aspettano cose diverse da TypeScript. Per impostazione
-predefinita offre un'esperienza \textbf{opzionale}: i tipi non sono obbligatori
-e si ricorre ad \code{any} quando non è possibile dedurre un tipo preciso. Il
-flag \code{noImplicitAny} rende più severo questo comportamento.
+Utenti diversi si aspettano cose diverse da TypeScript. Nelle slide, cioè
+fino a TypeScript 5, l'esperienza predefinita è \textbf{opzionale}: i tipi non
+sono obbligatori e si ricorre ad \code{any} quando non è possibile dedurre un
+tipo preciso. Il flag \code{noImplicitAny} rende più severo questo
+comportamento.
 
-Per non essere troppo invasivo, alcuni controlli sono disattivati di
-partenza. Per esempio \code{null} e \code{undefined} possono essere assegnati a
-qualunque tipo: dimenticarsi di gestirli esplicitamente è la causa di
-innumerevoli bug, tanto che il concetto è stato definito \guillemotleft l'errore da un
-miliardo di dollari\guillemotright.
+Per non essere troppo invasivo, TypeScript 5 tiene inoltre spenti di partenza
+alcuni controlli. Per esempio \code{null} e \code{undefined} possono essere
+assegnati a qualunque tipo: dimenticarsi di gestirli esplicitamente è la causa
+di innumerevoli bug, tanto che il concetto è stato definito \guillemotleft
+l'errore da un miliardo di dollari\guillemotright. Il flag
+\code{strictNullChecks} impone che \code{null} e \code{undefined} siano gestiti
+in modo esplicito.
 
-Il flag \code{strictNullChecks} impone che \code{null} e \code{undefined} siano
-gestiti in modo esplicito.
-
-\begin{affianco}[0.55][c]
 \begin{lstlisting}[style=ts, name=strict.ts]
+class CustomCollection<T> {
+  list: T[] = [];
+  add: (x: T) => number = (element: T) => {
+    return this.list.push(element);
+  }
+}
+
+let x = new CustomCollection<string>();
+x.add("Sam"); x.add("Cliff"); x.add("Mama");
+
 let character = x.list.find((val: string) => {
   return val === "Amelie"
 });
-
 // character potrebbe essere undefined!
 console.log(character.toUpperCase());
 \end{lstlisting}
-\risultato
-\begin{console}[Terminale]
-$ tsc -target es6 strict.ts
-$ tsc -target es6 -strictNullChecks strict.ts
-strict.ts:13:13 - error TS18048:
-  'character' is possibly 'undefined'.
-\end{console}
-\end{affianco}
 
-Senza il flag il codice compila e il bug esplode a runtime; con il flag viene
-intercettato subito. È il motivo per cui nei progetti nuovi conviene attivare
-fin dall'inizio la modalità severa.
+\code{find} restituisce il primo elemento che soddisfa la condizione, oppure
+\code{undefined} se non ne trova: è il caso di \code{"Amelie"}. Ecco i comandi
+delle slide, eseguiti con TypeScript 5:
+
+\begin{console}[Terminale]
+$ npx --yes -p typescript@5.9.3 tsc strict.ts
+strict.ts:11:24 - error TS2550: Property 'find' does not exist on type 'string[]'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2015' or later.
+
+11 let character = x.list.find((val: string) => {
+                          ~~~~
+
+
+Found 1 error in strict.ts:11
+
+$ npx --yes -p typescript@5.9.3 tsc -target es6 strict.ts
+$ npx --yes -p typescript@5.9.3 tsc -target es6 -strictNullChecks strict.ts
+strict.ts:15:13 - error TS18048: 'character' is possibly 'undefined'.
+
+15 console.log(character.toUpperCase());
+               ~~~~~~~~~
+
+
+Found 1 error in strict.ts:15
+
+\end{console}
+
+Il primo comando spiega perché nelle slide compare \code{-target es6} (le
+opzioni si possono scrivere anche con un trattino solo): \code{find} è
+arrivato con ES6, e con il bersaglio predefinito di TypeScript 5, ES5, il
+compilatore non lo conosce. Il secondo compila senza errori; il terzo, con
+\code{strictNullChecks}, intercetta il bug. (Nelle slide l'errore è alla riga
+13: il file compilato lì era evidentemente un po' più corto di quello
+mostrato.)
+
+Ecco che cosa succede se il bug arriva a runtime:
+
+\begin{console}[Terminale]
+$ tsc --strict false strict.ts
+$ node strict.js
+[cartella del progetto]/strict.js:16
+console.log(character.toUpperCase());
+                      ^
+
+TypeError: Cannot read properties of undefined (reading 'toUpperCase')
+    at Object.<anonymous> ([cartella del progetto]/strict.js:16:23)
+    ...
+
+Node.js v22.22.0
+\end{console}
+
+Da TypeScript 6.0 l'impostazione predefinita è cambiata: l'opzione
+\code{strict} è attiva di partenza, e con lei tutti i controlli della famiglia,
+fra cui \code{noImplicitAny}, \code{strictNullChecks} e
+\code{strictPropertyInitialization} (quello delle proprietà senza valore
+iniziale). Con TypeScript 7 il bug viene quindi intercettato anche senza flag:
+
+\begin{console}[Terminale]
+$ tsc --strict false --strictNullChecks strict.ts
+strict.ts:15:13 - error TS18048: 'character' is possibly 'undefined'.
+
+15 console.log(character.toUpperCase());
+               ~~~~~~~~~
+
+
+Found 1 error in strict.ts:15
+
+$ tsc strict.ts
+strict.ts:15:13 - error TS18048: 'character' is possibly 'undefined'.
+
+15 console.log(character.toUpperCase());
+               ~~~~~~~~~
+
+
+Found 1 error in strict.ts:15
+
+\end{console}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.45}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.2cm} l l@{}}
+  \textbf{Impostazione predefinita} & \textbf{TypeScript 5} & \textbf{TypeScript 6 e 7} \\
+  bersaglio (\code{target}) & ES5 (ES3 fino alla 4.9) & ES2025 \\
+  modalità severa (\code{strict}), con \code{noImplicitAny},
+  \code{strictNullChecks} e gli altri controlli & disattiva & attiva \\
+\end{tabular}
+\end{center}
+
+Senza il controllo il codice compila e il bug esplode a runtime; con il
+controllo viene intercettato subito. È il motivo per cui nei progetti nuovi
+conviene lavorare fin dall'inizio in modalità severa: dalla versione 6 è
+TypeScript stesso a sceglierla per noi.
 
 \section{Riferimenti}
 
@@ -929,5 +1835,8 @@ fin dall'inizio la modalità severa.
   \item \textbf{To Type or Not to Type? A Systematic Comparison of the Software
         Quality of JavaScript and TypeScript Applications on GitHub}, Justus
         Bogner e Manuel Merkel (2022). \\
-        \urlx{https://dl.acm.org/doi/pdf/10.1145/3524842.3528454}
+        \urlx{https://dl.acm.org/doi/pdf/10.1145/3524842.3528454} \\
+        Lettura interessante: gli autori confrontano applicazioni JavaScript e
+        TypeScript sotto molti aspetti, dalla qualità e leggibilità del codice
+        alla propensione ai bug e ai tempi di correzione.
 \end{itemize}
