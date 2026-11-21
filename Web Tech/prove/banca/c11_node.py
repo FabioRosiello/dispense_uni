@@ -1,7 +1,7 @@
 """Capitolo 11: Node.js (modello multi-thread ed event loop, differenze con
 il browser, npm e package.json, un server HTTP, strumenti di sviluppo)."""
 
-from generatore import FONTE_2024, L, aperta, chiusa, uscita_js
+from generatore import FONTE_2024, FONTE_2026, L, aperta, chiusa, uscita_js
 
 CAP = 11
 R = "cap. 11, «%s»"
@@ -48,7 +48,7 @@ console.log("calcolo finito");""",
                         "occupa l'event loop, e la callback del timer, pur scaduta, può essere "
                         "eseguita solo quando lo stack si svuota. Su un server, lo stesso calcolo "
                         "bloccherebbe **tutte** le richieste, non solo la propria.",
-            rif=R % "Il modello di Node.js"))
+            rif=R % "Il modello di Node.js", trabocchetto=True))
 
 d(chiusa("c11-node", CAP, "che cos'è Node.js",
          "Quali delle seguenti affermazioni su Node.js sono **vere**?",
@@ -214,3 +214,22 @@ d(aperta("c11-a-npm", CAP, "npm e package.json",
           "`node_modules` si ricostruisce con `npm install` a partire da `package.json`: "
           "basta versionare il proprio codice e il descrittore."],
          rif=R % "npm: il gestore di pacchetti"))
+
+# ----------------------------------------------------------------------
+# Dalla prima prova intercorso del 2026
+d(aperta("c11-prova-node-modules", CAP, "npm e package.json",
+         "Qual è lo scopo della directory `node_modules` in un progetto Node.js? Spiegare come "
+         "viene generalmente popolata e vantaggi/svantaggi del versionare tale directory in git.",
+         ["Contiene il codice dei pacchetti da cui il progetto dipende, in cui Node cerca i "
+          "moduli importati per nome (`import express from \"express\"`).",
+          "Si popola con `npm install`: npm legge `dependencies` e `devDependencies` del "
+          "`package.json` (e le versioni esatte di `package-lock.json`) e scarica i pacchetti, "
+          "ricorsivamente con le loro dipendenze.",
+          "Versionarla (pro): il progetto funziona subito dopo il clone, anche senza rete o se "
+          "un pacchetto sparisce dal registro.",
+          "Versionarla (contro): è enorme e piena di file generati, gonfia il repository e i "
+          "diff; contiene parti specifiche del sistema operativo; si ricostruisce comunque "
+          "con `npm install`.",
+          "Per questo di norma si mette in `.gitignore` e si versionano `package.json` e "
+          "`package-lock.json`."],
+         rif=R % "Installare dipendenze", fonte=FONTE_2026))

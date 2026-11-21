@@ -1,7 +1,7 @@
 """Capitolo 6: JavaScript avanzato (prototipi, array, destrutturazione,
 iterabili, Map e Set, classi, errori, moduli)."""
 
-from generatore import Err, L, aperta, chiusa, famiglia, uscita_js
+from generatore import Err, FONTE_2026, L, aperta, chiusa, esito, famiglia, uscita_js
 
 CAP = 6
 R = "cap. 6, «%s»"
@@ -120,7 +120,7 @@ console.log(Object.keys(gatto).length);""",
                         "creata (o modificata) **sull'oggetto stesso**: `gatto.zampe = 3` non "
                         "tocca `animale`. Le proprietà proprie di `gatto` sono `verso` e "
                         "`zampe`.",
-            rif=R % "I prototipi si usano solo in lettura"))
+            rif=R % "I prototipi si usano solo in lettura", trabocchetto=True))
 
 d(uscita_js("c06-prototipo-metodi", CAP, "prototipi ed ereditarietà",
             """
@@ -198,7 +198,7 @@ for (const v of a) console.log(v);""",
                         "stringhe anche per gli indici di un array (e includerebbe eventuali "
                         "proprietà aggiunte): per gli array non va usato. `for...of` scorre i "
                         "**valori** di un oggetto iterabile.",
-            rif=R % "Iterazione"))
+            rif=R % "Iterazione", trabocchetto=True))
 
 d(uscita_js("c06-destrutturazione", CAP, "destrutturazione e spread",
             """
@@ -249,7 +249,7 @@ console.log(Object.keys(o).length, m.size, m.get(1));""",
                         "sono la stessa proprietà. Una `Map` accetta chiavi di qualunque tipo "
                         "e le distingue: il numero 1 e la stringa `\"1\"` sono due chiavi "
                         "diverse.",
-            rif=R % "Mappe"))
+            rif=R % "Mappe", trabocchetto=True))
 
 d(uscita_js("c06-set", CAP, "Map e Set",
             """
@@ -293,7 +293,7 @@ class Pet {
                         "dichiarazione la classe è nella *temporal dead zone*. Già `typeof Pet` "
                         "solleva un `ReferenceError` (lo stesso `typeof` che, per un nome mai "
                         "dichiarato, restituirebbe `\"undefined\"`).",
-            rif=R % "Non solo zucchero sintattico"))
+            rif=R % "Non solo zucchero sintattico", trabocchetto=True))
 
 d(uscita_js("c06-classe", CAP, "classi",
             """
@@ -356,7 +356,7 @@ console.log(f());""",
                         "viene stampata. Ogni errore predefinito eredita da `Error`. Il "
                         "`return` nel `catch` viene eseguito, ma prima che la funzione "
                         "restituisca davvero il valore viene eseguito il blocco `finally`.",
-            rif=R % "try / catch / finally"))
+            rif=R % "try / catch / finally", trabocchetto=True))
 
 d(uscita_js("c06-throw", CAP, "gestione degli errori",
             """
@@ -479,3 +479,154 @@ d(aperta("c06-a-moduli", CAP, "moduli",
           "Nel browser: `<script type=\"module\">`, strict mode, esecuzione differita, una "
           "sola valutazione per modulo; servono un server (no `file://`)."],
          rif=R % "Moduli"))
+
+# ----------------------------------------------------------------------
+# Dalla prima prova intercorso del 2026
+d(uscita_js("c06-prova-instanceof", CAP, "prototipi ed ereditarietà",
+            """
+function A() {}; function B() {};
+B.prototype = A.prototype;
+const b = new B(); const a = new A();
+console.log(b instanceof A, b instanceof B, a instanceof B);""",
+            ["true true true"],
+            [["true true false"], ["false true true"], ["true false false"]],
+            testo="Qual è l'output del seguente codice JavaScript? Si assuma la presenza di "
+                  "`\"use strict\";`.",
+            fisse=True,
+            spiegazione="`x instanceof F` non controlla chi ha creato `x`: controlla se "
+                        "`F.prototype` compare nella catena dei prototipi di `x`. Dopo la riga 2 "
+                        "`A.prototype` e `B.prototype` sono **lo stesso oggetto**, e sia `a` sia "
+                        "`b` lo hanno come prototipo: tutte e tre le verifiche danno `true`, "
+                        "compresa `a instanceof B`.",
+            rif=R % "L'operatore instanceof", fonte=FONTE_2026, trabocchetto=True))
+
+d(uscita_js("c06-prova-setprototypeof", CAP, "prototipi ed ereditarietà",
+            """
+function F() {}
+const x = new F();
+Object.setPrototypeOf(F, {v: "F"});
+F.prototype.v = "I";
+console.log(F.v, x.v);""",
+            ["F I"],
+            [["undefined I"], ["I I"], ["F F"]],
+            testo="Qual è l'output del seguente codice JavaScript? Si assuma la presenza di "
+                  "`\"use strict\";`.",
+            fisse=True,
+            spiegazione="Bisogna distinguere due oggetti. `Object.setPrototypeOf(F, ...)` cambia "
+                        "il prototipo della **funzione** `F` (che è anch'essa un oggetto): "
+                        "`F.v` si trova lungo la sua catena e vale `\"F\"`. `F.prototype` invece "
+                        "è l'oggetto che fa da prototipo alle **istanze** create con `new F()`: "
+                        "la riga 3 non lo tocca, e la riga 4 vi aggiunge `v`, che `x` vede "
+                        "(anche se è stato creato prima): `\"I\"`.",
+            rif=R % "Costruttori e prototipi", fonte=FONTE_2026, trabocchetto=True))
+
+# ----------------------------------------------------------------------
+# Domande a trabocchetto
+d(uscita_js("c06-prototipo-condiviso", CAP, "prototipi ed ereditarietà",
+            """
+const pet = { zampe: 4, verso: { volte: 0 } };
+const gatto = Object.setPrototypeOf({}, pet);
+gatto.zampe = 3;
+gatto.verso.volte++;
+console.log(pet.zampe, pet.verso.volte, Object.keys(gatto).join(","));""",
+            ["4 1 zampe"],
+            [["3 1 zampe"], ["4 0 zampe,verso"], ["4 0 zampe"], ["3 0 zampe,verso"],
+             ["4 1 zampe,verso"]],
+            spiegazione="`Object.setPrototypeOf` restituisce l'oggetto stesso, ora con `pet` "
+                        "come prototipo. Scrivere `gatto.zampe` crea una proprietà **propria** "
+                        "di `gatto` e non tocca `pet`. Ma `gatto.verso.volte++` prima **legge** "
+                        "`gatto.verso`, che è ereditata: è l'oggetto di `pet`, e l'incremento "
+                        "modifica proprio quello. `gatto` resta con una sola proprietà propria, "
+                        "`zampe`.",
+            rif=R % "I prototipi si usano solo in lettura", trabocchetto=True))
+
+d(uscita_js("c06-for-in-metodi", CAP, "classi",
+            """
+function Pet(nome) { this.nome = nome; }
+Pet.prototype.verso = function () { return "..."; };
+class Cane {
+  constructor(nome) { this.nome = nome; }
+  abbaia() { return "Woof"; }
+}
+const chiavi = [];
+for (const k in new Pet("Fido")) chiavi.push(k);
+for (const k in new Cane("Rex")) chiavi.push(k);
+console.log(chiavi.join(","));""",
+            ["nome,verso,nome"],
+            [["nome,nome"], ["nome,verso,nome,abbaia"], ["nome,nome,abbaia"],
+             ["verso,nome,abbaia,nome"]],
+            spiegazione="`for..in` percorre anche le proprietà **ereditate**, purché "
+                        "enumerabili. Un metodo aggiunto con `Pet.prototype.verso = ...` è "
+                        "enumerabile, e compare dopo la proprietà propria `nome`; i metodi "
+                        "dichiarati in una classe, invece, non sono enumerabili. È una delle "
+                        "differenze fra classi e funzioni costruttore.",
+            rif=R % "Non solo zucchero sintattico", trabocchetto=True))
+
+d(uscita_js("c06-destrutturazione-null", CAP, "destrutturazione e spread",
+            """
+const { a = 5, b = 5, c = 5 } = { a: null, b: undefined };
+console.log(a, b, c);""",
+            ["null 5 5"],
+            [["5 5 5"], ["null undefined 5"], ["null 5 undefined"], Err("TypeError")],
+            spiegazione="Come per i parametri di una funzione, il valore predefinito di una "
+                        "destrutturazione si usa solo quando il valore è `undefined`: la "
+                        "proprietà `b` vale `undefined` e la `c` manca (quindi è `undefined`), "
+                        "mentre `null` è un valore a tutti gli effetti e resta.",
+            rif=R % "Assegnamenti destrutturanti", trabocchetto=True))
+
+_CONTATORE = """
+export let n = 0;
+export function incrementa() { n++; }"""
+_PROGRAMMA = """
+import { n, incrementa } from "./contatore.mjs";
+incrementa();
+incrementa();
+console.log(n);
+n = 10;
+console.log(n);"""
+
+d(chiusa("c06-import-vivi", CAP, "moduli",
+         "Il modulo `contatore.mjs` (a sinistra) viene importato dal programma `main.mjs` (a "
+         "destra), eseguito con Node. Qual è il risultato dell'esecuzione?",
+         esito(Err("TypeError", ["2"])),
+         [esito(e) for e in (["0", "10"], ["2", "10"], Err("TypeError", ["0"]), ["0", "0"])],
+         codice=[L("js", _CONTATORE), L("js", _PROGRAMMA)],
+         spiegazione="Un `import` non copia il valore: è un collegamento **in sola lettura** "
+                     "alla variabile del modulo. Dopo le due chiamate `n` vale 2 anche per chi "
+                     "la importa; ma assegnarle un valore dal programma solleva un `TypeError`, "
+                     "come assegnare a una costante.",
+         rif=R % "Cose da sapere sui moduli", trabocchetto=True,
+         verifica=dict(tipo="node", strict=False, modulo=True,
+                       codice=L("js", _PROGRAMMA).sorgente,
+                       file={"contatore.mjs": L("js", _CONTATORE).sorgente},
+                       righe=["2"], errore="TypeError")))
+
+_REGISTRO = """
+console.log("carico il registro");
+export let visite = 0;
+export function visita() { return ++visite; }"""
+_PRINCIPALE = """
+import { visita } from "./registro.mjs";
+import * as registro from "./registro.mjs";
+visita();
+console.log(registro.visita(), registro.visite);"""
+
+d(chiusa("c06-modulo-una-volta", CAP, "moduli",
+         "Il modulo `registro.mjs` (a sinistra) viene importato due volte dal programma "
+         "`main.mjs` (a destra), eseguito con Node. Qual è il risultato dell'esecuzione?",
+         esito(["carico il registro", "2 2"]),
+         [esito(e) for e in (["carico il registro", "carico il registro", "2 2"],
+                             ["carico il registro", "1 1"],
+                             ["carico il registro", "2 1"],
+                             ["carico il registro", "carico il registro", "1 1"])],
+         codice=[L("js", _REGISTRO), L("js", _PRINCIPALE)],
+         spiegazione="Un modulo viene eseguito **una volta sola**, anche se è importato più "
+                     "volte: la riga di log compare una sola volta, e tutti gli `import` "
+                     "ricevono le stesse funzioni e variabili. La prima `visita()` porta "
+                     "`visite` a 1, la seconda a 2, e `registro.visite` legge il valore "
+                     "aggiornato.",
+         rif=R % "Cose da sapere sui moduli", trabocchetto=True,
+         verifica=dict(tipo="node", strict=False, modulo=True,
+                       codice=L("js", _PRINCIPALE).sorgente,
+                       file={"registro.mjs": L("js", _REGISTRO).sorgente},
+                       righe=["carico il registro", "2 2"], errore=None)))

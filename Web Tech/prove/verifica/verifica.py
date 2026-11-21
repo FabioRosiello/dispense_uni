@@ -8,17 +8,20 @@
 Per ogni domanda con codice confronta la risposta marcata come giusta con ciò
 che succede davvero: l'output di Node, la console di Chromium, lo stile
 calcolato da Chromium, l'HTML prodotto da Pug, le risposte di un server Node
-o Express avviato davvero. Per le domande parametriche (famiglie) prova più
-varianti.
+o Express avviato davvero, gli errori segnalati da tsc, il CSS prodotto da
+Sass, il bundle prodotto da esbuild. Per le domande parametriche (famiglie)
+prova più varianti.
 
-Serve Node.js con Playwright (per Chromium) e, per le domande su Pug ed
-Express, i pacchetti di questa cartella (npm install).
+Serve Node.js con Playwright (per Chromium) e, per le domande su Pug,
+Express, TypeScript, Sass ed esbuild, i pacchetti di questa cartella
+(npm install).
 """
 
 import argparse
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import tempfile
@@ -55,6 +58,22 @@ def prepara(chiave, domanda):
     return caso
 
 
+def css_normalizzato(css):
+    """Il CSS senza differenze di spaziatura (Sass e la banca lo impaginano
+    in modo diverso)."""
+    css = re.sub(r"\s+", " ", css).strip()
+    css = re.sub(r"\s*([{};:,>])\s*", r"\1", css)
+    return css.replace(";}", "}")
+
+
+def _esecuzione(atteso, reale, nome):
+    if reale is None:
+        return "%s: nessuna esecuzione" % nome
+    if atteso["righe"] != reale["righe"] or atteso["errore"] != reale["errore"]:
+        return "%s: atteso %s, ottenuto %s" % (nome, json.dumps(atteso), json.dumps(reale))
+    return None
+
+
 def confronta(caso, domanda, reale):
     """Restituisce None se va tutto bene, altrimenti la descrizione del problema."""
     if reale is None:
@@ -87,6 +106,28 @@ def confronta(caso, domanda, reale):
             return "risposte attese %s, ottenute %s" % (caso["atteso"], reale["risposte"])
         if "log" in caso and reale["log"] != caso["log"]:
             return "log atteso %s, ottenuto %s" % (caso["log"], reale["log"])
+    elif tipo == "ts":
+        if reale["errori"] != caso["errori"]:
+            return "errori di tsc attesi %s, ottenuti %s" % (caso["errori"], reale["errori"])
+        for modo in ("js", "ts"):
+            if modo in caso:
+                problema = _esecuzione(caso[modo], reale.get(modo), modo)
+                if problema:
+                    return problema
+    elif tipo == "sass":
+        if "css" in caso:
+            if "css" not in reale:
+                return "Sass si è fermato: %s" % reale.get("errore")
+            if css_normalizzato(reale["css"]) != css_normalizzato(caso["css"]):
+                return "CSS atteso %r, ottenuto %r" % (caso["css"], reale["css"])
+        elif caso["errore"] not in (reale.get("errore") or ""):
+            return "errore atteso %r, ottenuto %r" % (caso["errore"], reale)
+    elif tipo == "bundle":
+        if reale["funzioni"] != caso["funzioni"]:
+            return "funzioni nel bundle %s, attese %s" % (reale["funzioni"], caso["funzioni"])
+        if reale["righe"] != caso["righe"] or reale["errore"]:
+            return "output del bundle %s (errore %s), atteso %s" % (
+                reale["righe"], reale["errore"], caso["righe"])
     return None
 
 

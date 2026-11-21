@@ -1,8 +1,8 @@
 """Capitolo 5: JavaScript (variabili, scope, hoisting, tipi, operatori,
 funzioni, closure, oggetti, this, costruttori, optional chaining)."""
 
-from generatore import (FONTE_2024, FONTE_AULA, Err, L, aperta, chiusa, esito, famiglia,
-                        uscita_js)
+from generatore import (Err, FONTE_2024, FONTE_2026, FONTE_AULA, L, aperta, chiusa, esito,
+                        famiglia, uscita_js)
 
 CAP = 5
 R = "cap. 5, «%s»"
@@ -121,7 +121,7 @@ if (true) {
                      "`ReferenceError`. Con `let x;` viene inizializzata a `undefined`. In Linea "
                      "1, fuori dal blocco, `x` non esiste affatto: l'esecuzione si ferma proprio "
                      "lì con un `ReferenceError`.",
-         rif=R % "Il ciclo di vita di una variabile", fonte=FONTE_2024))
+         rif=R % "Il ciclo di vita di una variabile", fonte=FONTE_2024, trabocchetto=True))
 
 d(uscita_js("c05-prova-try", CAP, "variabili, scope e hoisting",
             """
@@ -192,7 +192,7 @@ f();""",
                         "funzione e **nasconde** la `x` esterna, ma fino alla sua riga è nella "
                         "*temporal dead zone*: leggerla solleva un `ReferenceError`, non stampa "
                         "la variabile esterna.",
-            rif=R % "Hoisting"))
+            rif=R % "Hoisting", trabocchetto=True))
 
 d(uscita_js("c05-const-oggetto", CAP, "variabili, scope e hoisting",
             """
@@ -223,7 +223,7 @@ console.log(risposta());""",
                         "un a capo diventa `return;`: la funzione restituisce `undefined` e "
                         "`42;` è codice irraggiungibile. Il valore va scritto sulla stessa riga "
                         "del `return`.",
-            rif=R % "Il linguaggio"))
+            rif=R % "Il linguaggio", trabocchetto=True))
 
 d(uscita_js("c05-default", CAP, "funzioni",
             """
@@ -241,7 +241,7 @@ saluta(null);""",
             spiegazione="Il valore predefinito di un parametro si usa quando l'argomento manca o "
                         "vale `undefined`; `null` è un valore a tutti gli effetti, quindi viene "
                         "usato così com'è.",
-            rif=R % "Argomenti predefiniti"))
+            rif=R % "Argomenti predefiniti", trabocchetto=True))
 
 d(uscita_js("c05-hoisting-fn", CAP, "funzioni",
             """
@@ -258,7 +258,7 @@ var cubo = function (n) { return n * n * n; };""",
                         "l'hoisting vale `undefined`, e chiamarla solleva un `TypeError` (*cubo "
                         "is not a function*). Con `let` o `const` si avrebbe un "
                         "`ReferenceError`.",
-            rif=R % "Hoisting delle funzioni"))
+            rif=R % "Hoisting delle funzioni", trabocchetto=True))
 
 d(uscita_js("c05-prova-hoisting", CAP, "funzioni",
             """
@@ -309,7 +309,7 @@ console.log(a.x, a.dati.y);""",
                         "`a`. La sintassi `{ ...a }` crea una copia **superficiale**: `c.x` è "
                         "indipendente, ma `c.dati` punta allo stesso oggetto interno di "
                         "`a.dati`.",
-            rif=R % "Clonare un oggetto"))
+            rif=R % "Clonare un oggetto", trabocchetto=True))
 
 d(uscita_js("c05-this", CAP, "this e costruttori",
             """
@@ -326,7 +326,7 @@ f();""",
             spiegazione="`this` dipende da **come** si chiama la funzione: in `pet.saluta()` vale "
                         "`pet`. `f` è la stessa funzione chiamata da sola: in modalità strict "
                         "`this` vale `undefined`, e leggere `this.nome` solleva un `TypeError`.",
-            rif=R % "La parola chiave this"))
+            rif=R % "La parola chiave this", trabocchetto=True))
 
 d(uscita_js("c05-arrow-this", CAP, "this e costruttori",
             """
@@ -434,7 +434,7 @@ for (const v of valori) {
             spiegazione="Sono *falsy* `false`, `0`, `\"\"`, `null`, `undefined` e `NaN`: tutto il "
                         "resto è *truthy*, compresa la stringa `\"0\"` (non vuota) e l'array vuoto "
                         "(un oggetto).",
-            rif=R % "Operatori"))
+            rif=R % "Operatori", trabocchetto=True))
 
 d(chiusa("c05-let-const-var", CAP, "variabili, scope e hoisting",
          "Quali delle seguenti affermazioni su `var`, `let` e `const` sono **vere**?",
@@ -545,3 +545,102 @@ d(aperta("c05-a-hoisting", CAP, "variabili, scope e hoisting",
           "Espressioni di funzione: si comportano come la variabile che le contiene (con `var` "
           "`TypeError` *is not a function*, con `let`/`const` `ReferenceError`)."],
          rif=R % "Hoisting"))
+
+# ----------------------------------------------------------------------
+# Dalla prima prova intercorso del 2026
+d(uscita_js("c05-prova-arrow", CAP, "this e costruttori",
+            """
+const o = {
+  x: 7,
+  f() { return () => this.x; }
+};
+console.log(o.f()());""",
+            ["7"],
+            [["NaN"], Err("SyntaxError"), ["undefined"]],
+            testo="Cosa viene stampato dal seguente codice JavaScript?",
+            strict=False, fisse=True,
+            spiegazione="Un'arrow function non ha un proprio `this`: usa quello della funzione "
+                        "in cui è stata creata. `o.f()` è una chiamata di metodo, quindi dentro "
+                        "`f` `this` è `o`; la funzione restituita, chiamata subito dopo, legge "
+                        "`o.x` e stampa `7`. Se `f` stessa fosse una arrow function, `this` "
+                        "sarebbe quello del livello esterno, e non `o`.",
+            rif=R % "La parola chiave this", fonte=FONTE_2026, trabocchetto=True))
+
+# ----------------------------------------------------------------------
+# Domande a trabocchetto
+d(uscita_js("c05-null-confronti", CAP, "uguaglianza debole e stretta",
+            """
+console.log(null == 0, null >= 0, undefined == 0);""",
+            ["false true false"],
+            [["false false false"], ["true true false"], ["false true true"],
+             ["true true true"], ["false false true"]],
+            spiegazione="Con `==` `null` ha una regola speciale: è uguale solo a `undefined` (e "
+                        "a sé stesso), quindi `null == 0` è falso. Gli operatori di confronto "
+                        "come `>=` invece convertono `null` in numero, cioè 0, e `0 >= 0` è "
+                        "vero. Anche `undefined == 0` è falso.",
+            rif=R % "Uguaglianza debole e uguaglianza stretta", trabocchetto=True))
+
+d(uscita_js("c05-somme", CAP, "uguaglianza debole e stretta",
+            """
+console.log(1 + "2" - 1, "3" * "4", 1 + 2 + "3", "1" + 2 + 3);""",
+            ["11 12 33 123"],
+            [["2 12 33 123"], ["11 12 123 123"], ["11 12 33 15"], ["11 12 6 123"],
+             ["11 NaN 33 123"]],
+            spiegazione="Gli operatori si valutano da sinistra a destra. `+` con una stringa "
+                        "concatena (`1 + \"2\"` è `\"12\"`), mentre `-` e `*` convertono in "
+                        "numero (`\"12\" - 1` è 11, `\"3\" * \"4\"` è 12). In `1 + 2 + \"3\"` la "
+                        "prima somma è fra numeri (3), poi si concatena: `\"33\"`; in "
+                        "`\"1\" + 2 + 3` si concatena fin dall'inizio: `\"123\"`.",
+            rif=R % "Operatori", trabocchetto=True))
+
+d(uscita_js("c05-typeof-tdz", CAP, "variabili, scope e hoisting",
+            """
+console.log(typeof nonDichiarata);
+console.log(typeof x);
+let x = 1;""",
+            Err("ReferenceError", ["undefined"]),
+            [["undefined", "undefined"], ["undefined", "number"], Err("ReferenceError"),
+             Err("TypeError", ["undefined"])],
+            spiegazione="`typeof` applicato a un nome mai dichiarato restituisce "
+                        "`\"undefined\"` senza errori. Ma `x` è dichiarata con `let` più sotto: "
+                        "viene sollevata all'inizio dello scope e resta nella *temporal dead "
+                        "zone* fino alla sua riga, e in quella zona anche `typeof x` solleva un "
+                        "`ReferenceError`.",
+            rif=R % "Il ciclo di vita di una variabile", trabocchetto=True))
+
+d(uscita_js("c05-default-valutato", CAP, "funzioni",
+            """
+function aggiungi(voto, voti = []) {
+  voti.push(voto);
+  return voti.length;
+}
+console.log(aggiungi(30), aggiungi(28));
+const miei = [18];
+console.log(aggiungi(24, miei), miei.length);""",
+            ["1 1", "2 2"],
+            [["1 2", "2 2"], ["1 1", "2 1"], ["1 2", "3 3"], ["1 1", "1 1"]],
+            spiegazione="Il valore predefinito di un parametro viene **valutato a ogni "
+                        "chiamata** in cui l'argomento manca: ogni volta nasce un array nuovo, "
+                        "e le prime due chiamate stampano `1 1` (in Python, dove il valore "
+                        "predefinito si valuta una volta sola, si otterrebbe `1 2`). Passando "
+                        "`miei`, invece, la funzione modifica proprio quell'array: gli oggetti "
+                        "si passano per riferimento.",
+            rif=R % "Argomenti predefiniti", trabocchetto=True))
+
+d(uscita_js("c05-callback-this", CAP, "this e costruttori",
+            """
+const conto = {
+  saldo: 10,
+  stampa() {
+    [1].forEach(function () { console.log(this?.saldo); });
+    [1].forEach(() => console.log(this.saldo));
+  },
+};
+conto.stampa();""",
+            ["undefined", "10"],
+            [["10", "10"], Err("TypeError"), ["undefined", "undefined"], ["10", "undefined"]],
+            spiegazione="La funzione passata al primo `forEach` viene chiamata da sola, non come "
+                        "metodo: in modalità strict il suo `this` è `undefined` (l'optional "
+                        "chaining evita il `TypeError` e dà `undefined`). L'arrow function non "
+                        "ha un proprio `this` e usa quello di `stampa`, cioè `conto`.",
+            rif=R % "La parola chiave this", trabocchetto=True))

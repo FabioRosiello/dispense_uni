@@ -53,7 +53,7 @@ http.createServer((request, response) => {
                               "i DevTools) e ottenere la lista di bob **senza mai passare dal "
                               "login**. È il difetto critico dell'approccio a cookie: i dati "
                               "sono interamente controllati dal client.",
-                  rif=R % "I problemi dell'approccio a cookie"))
+                  rif=R % "I problemi dell'approccio a cookie", trabocchetto=True))
 
 d(risposte_server("c13-sessione-server", CAP, "sessioni web",
                   """

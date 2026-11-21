@@ -12,9 +12,15 @@
 //   pug       un template Pug trasformato in HTML con i locals dati
 //   express   un'applicazione (Express o il modulo http di Node) avviata
 //             davvero e interrogata con fetch
+//   ts        un frammento TypeScript compilato con tsc (errori segnalati) ed
+//             eseguito: il JavaScript prodotto e/o il file .ts direttamente
+//   sass      un foglio di stile SCSS compilato con Sass (CSS o errore)
+//   bundle    alcuni moduli impacchettati da esbuild (funzioni rimaste e
+//             output del bundle eseguito)
 //
-// Chromium arriva da Playwright (require('playwright')); Pug ed Express dai
-// pacchetti installati in questa cartella (npm install).
+// Chromium arriva da Playwright (require('playwright')); Pug, Express,
+// TypeScript, Sass ed esbuild dai pacchetti installati in questa cartella
+// (npm install).
 
 "use strict";
 
@@ -46,18 +52,73 @@ function scriviFile(caso, cartella) {
   }
 }
 
-function eseguiNode(caso, cartella) {
-  scriviFile(caso, cartella);
-  const estensione = caso.modulo ? ".mjs" : ".js";
-  const file = path.join(cartella, "caso" + estensione);
-  const testa = caso.strict && !caso.modulo ? '"use strict";\n' : "";
-  fs.writeFileSync(file, testa + caso.codice + "\n");
+function esegui(file, cartella) {
   const esito = spawnSync(process.execPath, [file], {
     cwd: cartella, encoding: "utf8", timeout: 15000,
     env: Object.assign({}, process.env, { NODE_OPTIONS: "", JAVA_TOOL_OPTIONS: "" }),
   });
   return { righe: righe(esito.stdout || ""),
            errore: esito.status === 0 ? null : nomeErrore(esito.stderr || "") };
+}
+
+function eseguiNode(caso, cartella) {
+  scriviFile(caso, cartella);
+  const estensione = caso.modulo ? ".mjs" : ".js";
+  const file = path.join(cartella, "caso" + estensione);
+  const testa = caso.strict && !caso.modulo ? '"use strict";\n' : "";
+  fs.writeFileSync(file, testa + caso.codice + "\n");
+  return esegui(file, cartella);
+}
+
+function eseguiTs(caso, cartella) {
+  // tsc senza tsconfig.json: le impostazioni predefinite di TypeScript 7
+  // (modalità severa, bersaglio ES2025), più le eventuali opzioni del caso
+  const file = path.join(cartella, "caso.ts");
+  fs.writeFileSync(file, caso.codice + "\n");
+  const tsc = spawnSync(path.join(QUI, "node_modules", ".bin", "tsc"),
+                        ["--pretty", "false", ...(caso.opzioni || []), "caso.ts"],
+                        { cwd: cartella, encoding: "utf8", timeout: 60000 });
+  const errori = [];
+  for (const riga of (tsc.stdout || "").split("\n")) {
+    const m = riga.match(/^caso\.ts\((\d+),\d+\): error (TS\d+):/);
+    if (m && !errori.includes(m[1] + ":" + m[2])) errori.push(m[1] + ":" + m[2]);
+  }
+  errori.sort((a, b) => parseInt(a) - parseInt(b) || (a < b ? -1 : a > b ? 1 : 0));
+  const risultato = { errori };
+  if (caso.js) {
+    const js = path.join(cartella, "caso.js");
+    risultato.js = fs.existsSync(js) ? esegui(js, cartella) : { righe: [], errore: "NessunFile" };
+  }
+  if (caso.ts) risultato.ts = esegui(file, cartella);
+  return risultato;
+}
+
+function eseguiSass(caso, cartella) {
+  const sass = require(path.join(QUI, "node_modules", "sass"));
+  scriviFile(caso, cartella);
+  const file = path.join(cartella, "stile.scss");
+  fs.writeFileSync(file, caso.sorgente + "\n");
+  try {
+    const r = sass.compile(file, { style: "expanded", logger: sass.Logger.silent,
+                                   loadPaths: [cartella] });
+    return { css: r.css };
+  } catch (e) {
+    return { errore: String(e.sassMessage || e.message) };
+  }
+}
+
+async function eseguiBundle(caso, cartella) {
+  const esbuild = require(path.join(QUI, "node_modules", "esbuild"));
+  scriviFile(caso, cartella);
+  const r = await esbuild.build({
+    entryPoints: [path.join(cartella, caso.ingresso)], bundle: true, format: "esm",
+    write: false, logLevel: "silent",
+  });
+  const codice = r.outputFiles[0].text;
+  const funzioni = [...codice.matchAll(/function\s+([A-Za-z_$][\w$]*)\s*\(/g)].map((m) => m[1]);
+  const file = path.join(cartella, "bundle.mjs");
+  fs.writeFileSync(file, codice);
+  return Object.assign({ funzioni: [...new Set(funzioni)].sort(), codice }, esegui(file, cartella));
 }
 
 let browser = null;
@@ -200,7 +261,10 @@ async function main() {
   const casi = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
   const risultati = {};
   for (const caso of casi) {
-    const cartella = fs.mkdtempSync(path.join(os.tmpdir(), "verifica-"));
+    // i casi che importano pacchetti npm girano in una cartella dentro questa,
+    // così Node trova node_modules risalendo l'albero
+    const base = caso.pacchetti ? QUI : os.tmpdir();
+    const cartella = fs.mkdtempSync(path.join(base, caso.pacchetti ? ".caso-" : "verifica-"));
     try {
       if (caso.tipo === "node") risultati[caso.chiave] = eseguiNode(caso, cartella);
       else if (caso.tipo === "browser") risultati[caso.chiave] = await eseguiBrowser(caso, cartella);
@@ -208,6 +272,9 @@ async function main() {
       else if (caso.tipo === "dom") risultati[caso.chiave] = await eseguiDom(caso, cartella);
       else if (caso.tipo === "pug") risultati[caso.chiave] = eseguiPug(caso, cartella);
       else if (caso.tipo === "express") risultati[caso.chiave] = await eseguiExpress(caso);
+      else if (caso.tipo === "ts") risultati[caso.chiave] = eseguiTs(caso, cartella);
+      else if (caso.tipo === "sass") risultati[caso.chiave] = eseguiSass(caso, cartella);
+      else if (caso.tipo === "bundle") risultati[caso.chiave] = await eseguiBundle(caso, cartella);
       else risultati[caso.chiave] = { eccezione: "tipo sconosciuto: " + caso.tipo };
     } catch (e) {
       risultati[caso.chiave] = { eccezione: String(e && e.stack || e).slice(0, 600) };

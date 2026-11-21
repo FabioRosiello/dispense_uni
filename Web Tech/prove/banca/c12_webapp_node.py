@@ -417,7 +417,7 @@ d(chiusa("c12-url", CAP, "routing",
          spiegazione="Per `/delete?id=3`, `request.url` vale proprio `\"/delete?id=3\"`, che non è "
                      "uguale a `\"/delete\"`. La classe `URL` separa il percorso "
                      "(`url.pathname`) dai parametri (`url.searchParams.get(\"id\")`).",
-         rif=R % "Estendere l'applicazione: cancellare un elemento"))
+         rif=R % "Estendere l'applicazione: cancellare un elemento", trabocchetto=True))
 
 d(chiusa("c12-get-sicuro", CAP, "routing",
          "Per cancellare un elemento, un'applicazione mostra accanto a ogni voce un link "
@@ -550,3 +550,25 @@ d(aperta("c12-a-prg", CAP, "corpo delle richieste",
           "`request.url` contiene anche la query."],
          rif="cap. 12, «Mettere insieme i pezzi» ed «Estendere l'applicazione: cancellare "
              "un elemento»"))
+
+# ----------------------------------------------------------------------
+# Domande a trabocchetto
+d(risposte_server("c12-frammento", CAP, "routing",
+                  """
+import http from "node:http";
+http.createServer((req, res) => {
+  res.end(req.url);
+}).listen(3000);""",
+                  ["GET /pagina?x=1#sezione"],
+                  ["200 /pagina?x=1"],
+                  [["200 /pagina?x=1#sezione"], ["200 /pagina"], ["200 /pagina#sezione"],
+                   ["200 ?x=1#sezione"]],
+                  testo="Con un browser (o con `fetch`) si apre la URL "
+                        "`http://localhost:3000/pagina?x=1#sezione`, servita dall'applicazione "
+                        "Node.js seguente. Quale risposta si ottiene?",
+                  spiegazione="`request.url` contiene il percorso **e** la query string (per "
+                              "questo un router che confronta `request.url` con `\"/pagina\"` "
+                              "non riconoscerebbe la richiesta). Il frammento `#sezione`, "
+                              "invece, non arriva mai al server: lo usa solo il browser, per "
+                              "scorrere la pagina fino all'ancora.",
+                  rif=R % "Instradare in base al percorso", trabocchetto=True))

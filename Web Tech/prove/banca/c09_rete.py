@@ -2,7 +2,7 @@
 porte, DNS, TCP, UDP e QUIC, versioni di HTTP, metodi sicuri e idempotenti,
 codici di stato, HTTPS)."""
 
-from generatore import aperta, chiusa, famiglia
+from generatore import FONTE_2026, L, aperta, chiusa, famiglia
 
 CAP = 9
 R = "cap. 9, «%s»"
@@ -514,3 +514,125 @@ d(aperta("c09-a-viaggio", CAP, "HTTPS",
           "Visite successive: DNS in cache, connessione persistente già aperta (niente "
           "connessione né TLS), risorse in cache verificate con `ETag` e `304`."],
          rif=R % "Dal clic alla pagina: il viaggio completo"))
+
+# ----------------------------------------------------------------------
+# Dalla prima prova intercorso del 2026
+d(chiusa("c09-prova-http3", CAP, "TCP, UDP e QUIC",
+         "Quale protocollo di trasporto viene utilizzato da HTTP/3?",
+         "UDP, tramite il protocollo QUIC.",
+         ["TCP, come nelle versioni precedenti di HTTP.",
+          "ICMP, per ridurre la latenza delle comunicazioni.",
+          "SCTP, per garantire la consegna ordinata dei pacchetti."],
+         fisse=True,
+         spiegazione="HTTP/3 viaggia su **QUIC**, che a sua volta usa UDP e implementa da sé "
+                     "affidabilità, controllo di congestione e cifratura TLS, con flussi "
+                     "indipendenti (niente *head-of-line blocking* fra un flusso e l'altro). "
+                     "Le versioni precedenti usavano TCP; ICMP serve ai messaggi di controllo "
+                     "della rete (come `ping`), SCTP non è usato dal Web.",
+         rif=R % "QUIC", fonte=FONTE_2026))
+
+d(chiusa("c09-prova-host", CAP, "messaggi HTTP",
+         "In una richiesta HTTP/1.1 verso un origin server, quale header identifica l'host di "
+         "destinazione?",
+         "`Host`",
+         ["`Origin`", "`User-Agent`", "`Referer`"],
+         fisse=True,
+         spiegazione="`Host` è obbligatorio in HTTP/1.1: contiene il nome (ed eventualmente la "
+                     "porta) del server a cui è diretta la richiesta, e permette a un solo "
+                     "indirizzo IP di ospitare molti siti. `Origin` indica l'origine della "
+                     "pagina che ha avviato la richiesta, `Referer` la pagina da cui si arriva, "
+                     "`User-Agent` il software del client.",
+         rif=R % "La richiesta", fonte=FONTE_2026))
+
+# ----------------------------------------------------------------------
+# Domande a trabocchetto
+_HEAD = """
+import express from "express";
+const app = express();
+app.get("/pagina", (req, res) => {
+  res.send("<html><head><title>T</title></head><body>Ciao</body></html>");
+});
+app.listen(3000);"""
+
+d(chiusa("c09-head", CAP, "metodi HTTP",
+         "L'applicazione Express seguente definisce soltanto una rotta `GET`. Che cosa riceve "
+         "un client che invia `HEAD /pagina`?",
+         "Lo stesso codice di stato e gli stessi header di `GET /pagina`, ma senza corpo.",
+         ["Solo l'elemento `<head>` della pagina.",
+          "`404`: la rotta gestisce soltanto `GET`.",
+          "Il corpo della pagina, ma senza header.",
+          "`405 Method Not Allowed`: il metodo non è previsto."],
+         codice=L("js", _HEAD),
+         spiegazione="`HEAD` chiede la stessa risposta di `GET` **senza il corpo**: serve, per "
+                     "esempio, a sapere se una risorsa è cambiata o quanto è grande, senza "
+                     "scaricarla. Non ha nulla a che vedere con l'elemento `<head>` dell'HTML. "
+                     "Express risponde da sé alle richieste `HEAD` con le rotte `GET`.",
+         rif=R % "I metodi, uno per uno", trabocchetto=True,
+         verifica=dict(tipo="express", codice=L("js", _HEAD).sorgente,
+                       richieste=[{"metodo": "HEAD", "percorso": "/pagina"},
+                                  {"metodo": "GET", "percorso": "/pagina"}],
+                       atteso=["200 ", "200 <html><head><title>T</title></head>"
+                                       "<body>Ciao</body></html>"])))
+
+d(chiusa("c09-dns-porta", CAP, "DNS",
+         "Il browser apre `https://www.unina.it:8443/corsi/web`. Che cosa chiede al DNS?",
+         "Solo l'indirizzo IP di `www.unina.it`: porta e percorso non riguardano il DNS.",
+         ["L'indirizzo IP e la porta del servizio.",
+          "L'indirizzo IP di `www.unina.it:8443`.",
+          "L'indirizzo IP del server che ospita `/corsi/web`.",
+          "Il certificato TLS del sito."],
+         spiegazione="Il DNS traduce **nomi di host** in indirizzi IP, e basta: la porta è "
+                     "scritta nella URL (o è quella predefinita dello schema), e il percorso "
+                     "viene inviato al server nella richiesta HTTP. Il certificato arriva dal "
+                     "server durante la negoziazione TLS.",
+         rif=R % "Dalla URL all'indirizzo: il DNS", trabocchetto=True))
+
+d(chiusa("c09-socket-client", CAP, "processi, socket e porte",
+         "Un server web gestisce contemporaneamente le connessioni di due browser, entrambe "
+         "sulla sua porta 443. Come distingue le due connessioni?",
+         "Dall'indirizzo IP e dalla porta del client: ogni connessione ha il proprio socket.",
+         ["Assegnando a ogni client una porta diversa del server.",
+          "Non può: una porta accetta un solo client per volta.",
+          "Dall'header `Host` delle richieste.",
+          "Dal nome del browser nell'header `User-Agent`."],
+         spiegazione="Una connessione TCP è identificata dalla coppia di estremi: indirizzo e "
+                     "porta del server **e** indirizzo e porta del client (la porta del client "
+                     "è scelta dal suo sistema operativo). Due browser, anche sullo stesso "
+                     "computer, usano porte di origine diverse: il server ha un socket per "
+                     "ciascuna connessione, tutte sulla stessa porta 443.",
+         rif=R % "Il socket", trabocchetto=True))
+
+d(chiusa("c09-https-visibile", CAP, "HTTPS",
+         "Un utente visita `https://www.example.org/esami?matricola=123` da una rete Wi-Fi "
+         "pubblica. Che cosa può vedere chi osserva il traffico della rete?",
+         ["L'indirizzo IP e la porta del server.",
+          "Quanti dati vengono scambiati, e quando."],
+         ["Il percorso `/esami` e la query `matricola=123`.",
+          "I cookie inviati con la richiesta.",
+          "Il corpo della risposta.",
+          "Gli header della risposta, come `Content-Type`."],
+         multi=True,
+         spiegazione="Con HTTPS l'intero messaggio HTTP viaggia dentro il canale TLS: riga di "
+                     "richiesta (quindi percorso e query), header, cookie e corpo sono cifrati. "
+                     "Restano visibili le informazioni necessarie a instradare i pacchetti "
+                     "(indirizzi e porte) e la quantità e i tempi del traffico.",
+         rif=R % "HTTPS: HTTP dentro un canale TLS", trabocchetto=True))
+
+d(chiusa("c09-sicuro-idempotente", CAP, "metodi HTTP",
+         "Quali delle seguenti affermazioni sui metodi HTTP sono **vere**?",
+         ["Ogni metodo sicuro è anche idempotente.",
+          "`DELETE` resta idempotente anche se la seconda richiesta risponde `404`.",
+          "Un server può scrivere nel log una richiesta `GET` senza violarne la sicurezza."],
+         ["Un metodo idempotente restituisce sempre la stessa risposta.",
+          "`POST` diventa idempotente se il corpo è identico.",
+          "`PUT` è sicuro, perché ripeterlo non cambia nulla.",
+          "Un metodo sicuro non può mai modificare nulla sul server, nemmeno un contatore "
+          "di visite."],
+         multi=True,
+         spiegazione="Sicuro vuol dire che il client **non chiede** modifiche: log e contatori "
+                     "sono effetti collaterali di cui il client non è responsabile. Idempotente "
+                     "vuol dire che ripetere la richiesta lascia il server nello **stesso "
+                     "stato**, non che la risposta sia la stessa (la seconda `DELETE` risponde "
+                     "`404`). Chi non modifica nulla è anche idempotente; `PUT` è idempotente "
+                     "ma non sicuro.",
+         rif=R % "Metodi sicuri e idempotenti", trabocchetto=True))

@@ -1,8 +1,8 @@
 """Capitolo 8: asincronismo e richieste di rete (cookie e Web Storage, event
 loop e callback, Promise, async e await, fetch)."""
 
-from generatore import (FONTE_2024, Err, aperta, chiusa, combina_errori, famiglia,
-                        uscita_browser, uscita_js)
+from generatore import (Err, FONTE_2024, FONTE_2026, L, aperta, chiusa, combina_errori,
+                        famiglia, uscita_browser, uscita_js)
 
 CAP = 8
 R = "cap. 8, «%s»"
@@ -364,7 +364,7 @@ p.then((v) => console.log("ok", v))
             spiegazione="Una Promise che ha lasciato lo stato `pending` è *settled*, e da quel "
                         "momento il suo stato non cambia più: le chiamate successive a `reject` e "
                         "`resolve` vengono ignorate.",
-            rif=R % "Creare una Promise"))
+            rif=R % "Creare una Promise", trabocchetto=True))
 
 d(uscita_js("c08-resolve-metodo", CAP, "Promise",
             """
@@ -380,7 +380,7 @@ console.log("fine");""",
                         "Il `resolve` che riceve l'executor è una funzione legata a quella Promise; "
                         "`Promise.resolve(valore)` è un metodo statico che crea una nuova Promise "
                         "già risolta.",
-            rif=R % "Anatomia di una Promise: chi fa cosa"))
+            rif=R % "Anatomia di una Promise: chi fa cosa", trabocchetto=True))
 
 d(uscita_js("c08-stessa-promise", CAP, "Promise",
             """
@@ -395,7 +395,7 @@ p.then((r) => { console.log(r); return r * 2; });""",
                         "un gestore alimenta solo la Promise restituita da quel `then`, che qui "
                         "nessuno usa. Per passare il risultato da un passo al successivo bisogna "
                         "concatenare: `p.then(...).then(...)`.",
-            rif=R % "Concatenare le Promise"))
+            rif=R % "Concatenare le Promise", trabocchetto=True))
 
 d(uscita_js("c08-any-aggregate", CAP, "Promise",
             """
@@ -445,7 +445,7 @@ console.log("fine");""",
             spiegazione="Una funzione `async` restituisce **sempre** una Promise: il valore "
                         "restituito (qui 1) viene avvolto in una Promise risolta. Il gestore "
                         "registrato con `then` viene eseguito dopo la fine del codice sincrono.",
-            rif=R % "async"))
+            rif=R % "async", trabocchetto=True))
 
 d(uscita_js("c08-await-ordine", CAP, "async e await",
             """
@@ -525,7 +525,7 @@ d(uscita_browser("c08-localstorage", CAP, "memorizzare dati nel browser",
                              "`v + 1` concatena. Le proprietà dell'oggetto sono un'alternativa a "
                              "`getItem` e `setItem`. Per una chiave assente `getItem` restituisce "
                              "`null`.",
-                 rif=R % "localStorage"))
+                 rif=R % "localStorage", trabocchetto=True))
 
 d(chiusa("c08-storage", CAP, "memorizzare dati nel browser",
          "Quali delle seguenti affermazioni sui meccanismi di memorizzazione nel browser sono "
@@ -604,7 +604,7 @@ d(chiusa("c08-fetch-404", CAP, "fetch",
                      "affatto (rete assente, server irraggiungibile). Un `404` o un `500` sono "
                      "risposte HTTP a tutti gli effetti: si riconoscono controllando "
                      "`response.ok` (vero solo per gli stati da 200 a 299) o `response.status`.",
-         rif=R % "Lavorare con la risposta"))
+         rif=R % "Lavorare con la risposta", trabocchetto=True))
 
 d(chiusa("c08-fetch-corpo", CAP, "fetch",
          "Quali delle seguenti affermazioni sull'oggetto `Response` restituito da `fetch` sono "
@@ -716,3 +716,89 @@ d(aperta("c08-a-fetch", CAP, "fetch",
           "Es.: `const r = await fetch(url); if (!r.ok) throw new Error(r.status); return await "
           "r.json();`, dentro un `try/catch` per gli errori di rete."],
          rif=R % "Richieste di rete"))
+
+# ----------------------------------------------------------------------
+# Dalla prima prova intercorso del 2026
+_AWAIT_SENZA_ASYNC = """
+function f() {
+  let prom = new Promise(resolve => { setTimeout(() => resolve("X"), 1000); });
+  let res = await prom; console.log(`awaited: ${res}`);
+}
+f(); console.log("Done");"""
+
+d(chiusa("c08-prova-await", CAP, "async e await",
+         "Qual è il risultato dell'esecuzione del seguente frammento? Si assuma la presenza di "
+         "`\"use strict\";`.",
+         "Il codice solleva un errore sintattico",
+         ["`Done`, `undefined`", "`awaited: X`, `Done`", "`Done`, `awaited: X`"],
+         codice=L("js", _AWAIT_SENZA_ASYNC),
+         fisse=True,
+         spiegazione="`await` si può usare solo dentro le funzioni `async` (e al livello più "
+                     "esterno dei moduli). `f` non è `async`: il codice non viene nemmeno "
+                     "eseguito, perché l'errore è **sintattico** e viene rilevato prima di "
+                     "eseguire qualunque istruzione; non compare neppure `Done`. Con "
+                     "`async function f()` l'output sarebbe `Done` e, un secondo dopo, "
+                     "`awaited: X`.",
+         rif=R % "await", fonte=FONTE_2026, trabocchetto=True,
+         verifica=dict(tipo="node", strict=True, codice=L("js", _AWAIT_SENZA_ASYNC).sorgente,
+                       righe=[], errore="SyntaxError")))
+
+# ----------------------------------------------------------------------
+# Domande a trabocchetto
+d(uscita_js("c08-foreach-async", CAP, "async e await",
+            """
+const attendi = (ms) => new Promise((ok) => setTimeout(ok, ms));
+async function main() {
+  [30, 10, 20].forEach(async (ms) => {
+    await attendi(ms);
+    console.log(ms);
+  });
+  console.log("fine");
+}
+main();""",
+            ["fine", "10", "20", "30"],
+            [["10", "20", "30", "fine"], ["30", "10", "20", "fine"], ["fine", "30", "10", "20"],
+             ["fine"], ["30", "10", "20"]],
+            spiegazione="`forEach` chiama la funzione per ogni elemento e **non aspetta** le "
+                        "Promise che restituisce: le tre funzioni `async` partono insieme, si "
+                        "sospendono al primo `await`, e `main` prosegue subito stampando "
+                        "`fine`. Poi i timer scadono in ordine di durata. Per attendere ogni "
+                        "elemento si usa un `for...of` con `await`, oppure `Promise.all`.",
+            rif=R % "async e await", trabocchetto=True))
+
+d(uscita_js("c08-return-await", CAP, "async e await",
+            """
+async function rischiosa() { throw new Error("guasto"); }
+async function a() { try { return rischiosa(); } catch { return "gestito"; } }
+async function b() { try { return await rischiosa(); } catch { return "gestito"; } }
+async function main() {
+  for (const f of [a, b]) {
+    try { console.log(f.name, await f()); }
+    catch (e) { console.log(f.name, "rifiutata:", e.message); }
+  }
+}
+main();""",
+            ["a rifiutata: guasto", "b gestito"],
+            [["a gestito", "b gestito"], ["a rifiutata: guasto", "b rifiutata: guasto"],
+             ["a gestito", "b rifiutata: guasto"], Err("Error")],
+            spiegazione="`rischiosa()` restituisce una Promise rifiutata. In `a` la Promise "
+                        "viene restituita **senza attenderla**: il `try` termina subito, e il "
+                        "rifiuto passa alla Promise di `a`, fuori dal `try`. In `b`, `await` "
+                        "trasforma il rifiuto in un'eccezione **dentro** il `try`, e il `catch` "
+                        "la gestisce.",
+            rif=R % "await", trabocchetto=True))
+
+d(uscita_js("c08-then-senza-return", CAP, "Promise",
+            """
+const dopo = (v, ms) => new Promise((ok) => setTimeout(() => ok(v), ms));
+dopo(1, 10)
+  .then((v) => { dopo(v + 1, 50); })
+  .then((v) => console.log("ricevuto", v));""",
+            ["ricevuto undefined"],
+            [["ricevuto 2"], ["ricevuto 1"], Err("TypeError"), []],
+            spiegazione="Il primo `then` usa un'arrow function **con le graffe** e senza "
+                        "`return`: crea la seconda Promise ma restituisce `undefined`. Il "
+                        "secondo `then` riceve subito `undefined`, senza aspettare i 50 ms. "
+                        "Per concatenare davvero le Promise bisogna restituirle: "
+                        "`.then((v) => dopo(v + 1, 50))`.",
+            rif=R % "Concatenare le Promise", trabocchetto=True))

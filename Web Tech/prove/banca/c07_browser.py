@@ -2,8 +2,8 @@
 navigazione, proprietà dei nodi, modifica della struttura, eventi e loro
 propagazione, ordine di esecuzione degli script)."""
 
-from generatore import (FONTE_2024, FONTE_AULA, Err, aperta, chiusa, combina_errori,
-                        famiglia, uscita_browser)
+from generatore import (Err, FONTE_2024, FONTE_2026, FONTE_AULA, L, aperta, chiusa,
+                        combina_errori, famiglia, uscita_browser)
 
 CAP = 7
 R = "cap. 7, «%s»"
@@ -517,7 +517,7 @@ d(uscita_browser("c07-prova-head", CAP, "navigare il DOM",
                              "`<meta>`. `outerHTML` è il codice dell'elemento ricostruito a "
                              "partire dal DOM: la barra di `/>`, che per il parser non conta, non "
                              "compare.",
-                 rif=R % "Navigare fra soli elementi", fonte=FONTE_2024))
+                 rif=R % "Navigare fra soli elementi", fonte=FONTE_2024, trabocchetto=True))
 
 # ----------------------------------------------------------------------
 d(chiusa("c07-bom", CAP, "DOM e BOM",
@@ -552,7 +552,7 @@ d(uscita_browser("c07-window", CAP, "DOM e BOM",
                              "globale e le variabili `var` ne diventano proprietà. Le variabili "
                              "`let` e `const` globali vivono invece in uno scope separato e "
                              "**non** diventano proprietà di `window`.",
-                 rif=R % "L'oggetto window"))
+                 rif=R % "L'oggetto window", trabocchetto=True))
 
 d(uscita_browser("c07-nessuno", CAP, "trovare elementi",
                  """
@@ -571,7 +571,7 @@ d(uscita_browser("c07-nessuno", CAP, "trovare elementi",
                              "`NodeList` **vuota** (con `length` uguale a 0), come le collezioni "
                              "di `getElementsByTagName` e `getElementsByClassName`: si possono "
                              "scorrere senza controlli.",
-                 rif=R % "Trovare elementi"))
+                 rif=R % "Trovare elementi", trabocchetto=True))
 
 d(chiusa("c07-viva", CAP, "trovare elementi",
          "Quali dei seguenti metodi e proprietà restituiscono una collezione **viva**, che si "
@@ -685,7 +685,7 @@ d(chiusa("c07-prompt", CAP, "interagire con l'utente",
                      "come numero serve una conversione, per esempio con `parseInt`), oppure "
                      "`null` se l'utente preme Annulla. `confirm` restituisce un booleano, "
                      "`alert` nulla.",
-         rif=R % "Interagire con l'utente"))
+         rif=R % "Interagire con l'utente", trabocchetto=True))
 
 d(chiusa("c07-bloccanti", CAP, "interagire con l'utente",
          "Quali delle seguenti affermazioni su `alert`, `confirm` e `prompt` sono **vere**?",
@@ -911,3 +911,84 @@ d(aperta("c07-a-innerhtml", CAP, "proprietà dei nodi",
           "Per inserire testo si usa `textContent` (o `innerText`), oppure si creano i nodi con "
           "`createElement` e `createTextNode`."],
          rif=R % "innerHTML e outerHTML"))
+
+# ----------------------------------------------------------------------
+# Dalla prima prova intercorso del 2026
+d(chiusa("c07-prova-async", CAP, "ordine di esecuzione degli script",
+         "Quale affermazione è corretta per uno script esterno classico con attributo `async`?",
+         "Viene eseguito appena scaricato, senza garantire l'ordine rispetto ad altri script "
+         "`async`.",
+         ["Viene eseguito solo dopo `DOMContentLoaded`.",
+          "Ritorna sempre una `Promise`.",
+          "Viene eseguito appena scaricato, garantendo l'ordine rispetto ad altri script "
+          "`async`."],
+         fisse=True,
+         spiegazione="Con `async` lo script viene scaricato in parallelo all'analisi della "
+                     "pagina ed eseguito **appena è pronto**: due script `async` partono "
+                     "nell'ordine in cui finiscono di scaricarsi, non in quello del documento, e "
+                     "possono precedere `DOMContentLoaded`. L'ordine è garantito invece con "
+                     "`defer`, che esegue gli script dopo l'analisi e prima di "
+                     "`DOMContentLoaded`. `async` sullo script non ha niente a che vedere con le "
+                     "funzioni `async` e le Promise.",
+         rif=R % "Ordine di esecuzione degli script", fonte=FONTE_2026))
+
+# ----------------------------------------------------------------------
+# Domande a trabocchetto
+d(chiusa("c07-parser-p", CAP, "proprietà dei nodi",
+         "Il `<body>` di una pagina contiene soltanto il frammento seguente. Quanto vale "
+         "`document.body.innerHTML` dopo che il browser ha costruito il DOM?",
+         "`<p>Uno</p><div>Due</div>Tre<p></p>`",
+         ["`<p>Uno<div>Due</div>Tre</p>`",
+          "`<p>Uno</p><div>Due</div><p>Tre</p>`",
+          "`<p>Uno</p><div>Due</div>Tre`",
+          "`<p>Uno<div>Due</div></p>Tre`"],
+         codice=L("html", "<p>Uno<div>Due</div>Tre</p>"),
+         spiegazione="Un paragrafo può contenere solo testo ed elementi di riga: quando il "
+                     "parser incontra `<div>` con un `<p>` aperto, **chiude** il paragrafo. "
+                     "`Tre` resta testo direttamente nel `body`, e la `</p>` finale non ha più "
+                     "un paragrafo da chiudere: il parser ne crea uno nuovo, vuoto. È la stessa "
+                     "correzione che il capitolo mostra assegnando `outerHTML` con un `<h1>` "
+                     "dentro un `<p>`.",
+         rif=R % "innerHTML e outerHTML", trabocchetto=True,
+         verifica=dict(tipo="dom",
+                       html="<!DOCTYPE html><html><body><p>Uno<div>Due</div>Tre</p></body>"
+                            "</html>",
+                       espressione="document.body.innerHTML",
+                       atteso="<p>Uno</p><div>Due</div>Tre<p></p>")))
+
+d(uscita_browser("c07-innerhtml-script", CAP, "proprietà dei nodi",
+                 r"""
+<div id="d"></div>
+<script>
+  const d = document.getElementById("d");
+  d.innerHTML = "<script>console.log('A')<\/script>" +
+                "<img src='' onerror=\"console.log('B')\">";
+  console.log("C");
+</script>""",
+                 ["C", "B"],
+                 [["A", "C", "B"], ["A", "C"], ["C"], ["A", "B", "C"], ["B", "C"]],
+                 spiegazione="Assegnando `innerHTML` il browser interpreta la stringa come "
+                             "markup, ma un elemento `<script>` inserito così **non viene "
+                             "eseguito**. L'immagine invece viene elaborata: con `src` vuoto "
+                             "non si può caricare, e il suo gestore `onerror` viene eseguito, "
+                             "dopo lo script in corso. Per questo gli attacchi XSS usano attributi come "
+                             "`onerror`, e i dati dell'utente vanno inseriti con `textContent`.",
+                 rif=R % "innerHTML e outerHTML", trabocchetto=True))
+
+d(uscita_browser("c07-defer-inline", CAP, "ordine di esecuzione degli script",
+                 """
+<script defer>console.log("A");</script>
+<script type="module">console.log("B");</script>
+<script>console.log("C");</script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => console.log("D"));
+</script>""",
+                 ["A", "C", "B", "D"],
+                 [["C", "A", "B", "D"], ["A", "B", "C", "D"], ["C", "B", "A", "D"],
+                  ["A", "C", "D", "B"], ["C", "A", "D", "B"]],
+                 spiegazione="`defer` vale solo per gli script **esterni**: su uno script in "
+                             "linea non ha effetto, e `A` viene eseguito subito, come `C`. Gli "
+                             "script di tipo modulo invece sono differiti per impostazione "
+                             "predefinita, anche in linea: `B` parte dopo l'analisi della "
+                             "pagina, ma prima che scatti `DOMContentLoaded`.",
+                 rif=R % "Ordine di esecuzione degli script", trabocchetto=True))

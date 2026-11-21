@@ -14,9 +14,13 @@ from .modello import Famiglia
 
 SERIE = 10
 
+# L'ultimo capitolo della dispensa coperto dalla banca: le prove, se non si
+# scelgono i capitoli, pescano da 1 a ULTIMO.
+ULTIMO = 20
+
 # Quanto spesso un capitolo compare fra le domande chiuse (peso relativo).
 PESI = {1: 2, 2: 2, 3: 3, 4: 2, 5: 3, 6: 3, 7: 3, 8: 3, 9: 2, 10: 1, 11: 2, 12: 2, 13: 2,
-        14: 2, 15: 3, 16: 1}
+        14: 2, 15: 3, 16: 1, 17: 2, 18: 1, 19: 2, 20: 2}
 
 TITOLI = {
     1: "Introduzione al Web", 2: "HTML", 3: "CSS", 4: "Layout e Responsive Design",
@@ -24,7 +28,8 @@ TITOLI = {
     8: "Asincronismo e richieste di rete", 9: "Il Web sotto il cofano",
     10: "Il lato server del Web", 11: "Node.js", 12: "Applicazioni web con Node.js",
     13: "Gestione delle sessioni", 14: "CSS moderno e adattivo", 15: "Express",
-    16: "Una web app con Express",
+    16: "Una web app con Express", 17: "Il paradigma REST", 18: "API pronte per la produzione",
+    19: "TypeScript", 20: "Strumenti di front-end",
 }
 
 
@@ -125,7 +130,7 @@ def componi(numero, banca, n_chiuse=8, n_aperte=3, capitoli=None, titolo=None, m
     """Costruisce la prova con l'ID dato."""
     if numero < 1:
         raise ValueError("l'ID della prova parte da 1")
-    capitoli = sorted(capitoli or [c for c in sorted({d.cap for d in banca}) if c <= 16])
+    capitoli = sorted(capitoli or [c for c in sorted({d.cap for d in banca}) if c <= ULTIMO])
     numero_serie, posto = divmod(numero - 1, SERIE)
     serie = _Serie(banca, capitoli, numero_serie, n_chiuse, n_aperte)
     for _ in range(posto + 1):

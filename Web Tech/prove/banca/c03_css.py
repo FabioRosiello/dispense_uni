@@ -448,7 +448,7 @@ div.y h1.w { color: green; }""",
                          "(0, 0, 2), `#x .w` (1, 1, 0), `.y #z` (1, 1, 0), `div.y h1.w` "
                          "(0, 2, 2). Vincono a pari merito le due con un id e una classe; a "
                          "parità di specificità prevale l'ultima nell'ordine: `red`.",
-             rif=R % "Specificità", fonte=FONTE_AULA))
+             rif=R % "Specificità", fonte=FONTE_AULA, trabocchetto=True))
 
 d(colore_css("c03-ereditarieta", CAP, "ereditarietà",
              """
@@ -466,7 +466,7 @@ h1 { color: blue; }""",
                          "più bassa in assoluto. Basta una regola qualunque che selezioni "
                          "direttamente l'`h1` (qui `h1`, con specificità minima) per vincere, "
                          "indipendentemente da id e `!important` delle regole del genitore.",
-             rif=R % "Ereditarietà"))
+             rif=R % "Ereditarietà", trabocchetto=True))
 
 d(colore_css("c03-inline-important", CAP, "cascata e specificità",
              """
@@ -485,7 +485,7 @@ p { color: green !important; }
                          "lo stile inline (che è una dichiarazione normale) e i selettori più "
                          "specifici. La specificità conta solo fra dichiarazioni dello stesso "
                          "bucket.",
-             rif=R % "Origine e importanza"))
+             rif=R % "Origine e importanza", trabocchetto=True))
 
 # ----------------------------------------------------------------------
 d(chiusa("c03-anatomia", CAP, "regole CSS",
@@ -666,7 +666,7 @@ d(chiusa("c03-spec-numero", CAP, "cascata e specificità",
          spiegazione="La specificità è una terna (id, classi, tipi) confrontata da sinistra: "
                      "(1, 0, 0) batte (0, 11, 0). Non è un numero a tre cifre in cui le classi "
                      "«riportano» negli id.",
-         rif=R % "Specificità"))
+         rif=R % "Specificità", trabocchetto=True))
 
 d(chiusa("c03-ereditati", CAP, "ereditarietà",
          "Quali delle seguenti proprietà vengono **ereditate** per impostazione predefinita "
@@ -757,3 +757,44 @@ d(aperta("c03-a-pseudo", CAP, "pseudo-elementi",
           "Esempi: `p::first-line`, `p::first-letter`, `.nota::before` con `content`, "
           "`::selection`; il contenuto generato non fa parte del DOM."],
          rif="cap. 3, «Pseudo-classi» e «Pseudo-elementi»"))
+
+# ----------------------------------------------------------------------
+# Domande a trabocchetto
+d(colore_css("c03-attributo-id", CAP, "cascata e specificità",
+             """
+[id="menu"] a.attivo { color: green; }
+#menu a { color: red; }
+.barra a.attivo { color: blue; }""",
+             """
+<nav id="menu" class="barra">
+  <a class="attivo" href="#">Home</a>
+</nav>""",
+             "a", "red", ["green", "blue", "black"],
+             spiegazione="`[id=\"menu\"]` seleziona lo stesso elemento di `#menu`, ma è un "
+                         "selettore di **attributo**: conta come una classe, non come un id. Le "
+                         "specificità sono (0,2,1) per la prima e la terza regola e (1,0,1) per "
+                         "`#menu a`: un id batte qualunque numero di classi e attributi, quindi "
+                         "vince il rosso, anche se non è l'ultima regola.",
+             rif=R % "Specificità", trabocchetto=True))
+
+d(chiusa("c03-link-ereditarieta", CAP, "ereditarietà",
+         "Si consideri il seguente foglio di stile, l'unico dell'autore, applicato alla pagina il "
+         "cui `<body>` è riportato di seguito. Di che colore appare il link «qui»?",
+         "Del blu predefinito dei link: la regola del browser per `a` prevale "
+         "sull'ereditarietà.",
+         ["Verde, ereditato dal paragrafo.",
+          "Verde: le regole dell'autore battono sempre quelle del browser.",
+          "Nero, il colore iniziale del testo."],
+         codice=[L("css", "p { color: green; }"),
+                 L("html", '<p>Per iscriverti clicca <a href="#form">qui</a>.</p>')],
+         spiegazione="Un elemento eredita una proprietà solo se **nessuna regola**, di nessuna "
+                     "origine, gliela assegna. Il foglio di stile del browser ha una regola per i "
+                     "link, quindi `a` non eredita il verde del paragrafo: le regole dell'autore "
+                     "vincono su quelle del browser quando selezionano lo stesso elemento, e "
+                     "`p` non seleziona `a`. Per un link verde serve una regola su `a` (per "
+                     "esempio `p a { color: inherit; }`).",
+         rif=R % "Ereditarietà", trabocchetto=True,
+         verifica=dict(tipo="css", css="p { color: green; }",
+                       html='<p>Per iscriverti clicca <a href="#form">qui</a>.</p>',
+                       selettore="a", proprieta="color", atteso="rgb(0, 0, 238)",
+                       candidati=["rgb(0, 0, 238)", "green", "black"])))

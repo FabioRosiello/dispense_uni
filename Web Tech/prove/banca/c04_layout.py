@@ -350,7 +350,7 @@ d(chiusa("c04-absolute", CAP, "posizionamento",
                                    ".getBoundingClientRect(); const b = document.querySelector"
                                    "('.badge').getBoundingClientRect(); return String(b.top === "
                                    "c.top && b.right === c.right); })()",
-                       atteso="true")))
+                       atteso="true"), trabocchetto=True))
 
 d(chiusa("c04-fixed-sticky", CAP, "posizionamento",
          "Quali delle seguenti affermazioni sono **vere**?",
@@ -521,3 +521,31 @@ d(aperta("c04-a-position", CAP, "posizionamento",
           "scorrimento).",
           "`sticky`: come `relative` finché non raggiunge la soglia, poi resta attaccato."],
          rif=R % "Posizionamento"))
+
+# ----------------------------------------------------------------------
+# Domande a trabocchetto
+_MEDIA_PRIMA = """
+@media (min-width: 600px) {
+  p { color: red; }
+}
+p { color: blue; }"""
+
+d(chiusa("c04-media-ordine", CAP, "media query",
+         "Le regole seguenti stanno in un unico foglio di stile. Di che colore è un paragrafo "
+         "su uno schermo largo 1000px?",
+         "Blu: la media query non aggiunge specificità, e a parità vince la regola che viene "
+         "dopo.",
+         ["Rosso: le regole dentro una media query vera hanno la precedenza.",
+          "Rosso: la media query è più specifica di un semplice selettore di tipo.",
+          "Rosso fino a 1000px, blu oltre.",
+          "Nero: le due regole sono in conflitto e si annullano."],
+         codice=L("css", _MEDIA_PRIMA),
+         spiegazione="Una media query decide soltanto **se** le sue regole partecipano alla "
+                     "cascata: a 1000px partecipano, ma `p` dentro la media query ha la stessa "
+                     "specificità di `p` fuori, e vince l'ultima dichiarata. Per questo nei "
+                     "fogli *mobile first* le media query si scrivono **dopo** le regole "
+                     "generali.",
+         rif=R % "Media query", trabocchetto=True,
+         verifica=dict(tipo="css", css=_MEDIA_PRIMA, html="<p>Testo</p>", selettore="p",
+                       proprieta="color", atteso="blue", candidati=["blue", "red", "black"],
+                       viewport=[1000, 700])))

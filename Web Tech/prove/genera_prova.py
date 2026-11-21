@@ -7,6 +7,7 @@ Esempi:
     python genera_prova.py --id 7           la prova numero 7 (sempre la stessa)
     python genera_prova.py --id 1 --quante 10    le prove da 1 a 10
     python genera_prova.py --capitoli 5-8   solo JavaScript
+    python genera_prova.py --trabocchetti   solo domande chiuse a trabocchetto
     python genera_prova.py --elenco         che cosa contiene la banca
     python genera_prova.py --raccolta       tutte le domande, con le soluzioni
 
@@ -29,7 +30,7 @@ sys.path.insert(0, QUI)
 from banca import DOMANDE                                           # noqa: E402
 from generatore.latex import prova_tex, raccolta_tex                # noqa: E402
 from generatore.modello import Famiglia                             # noqa: E402
-from generatore.selezione import SERIE, TITOLI, componi             # noqa: E402
+from generatore.selezione import SERIE, TITOLI, ULTIMO, componi     # noqa: E402
 
 
 def leggi_capitoli(testo):
@@ -94,10 +95,10 @@ def elenco():
     print("\nLe famiglie sono domande parametriche: ogni volta escono con dati diversi.")
 
 
-def raccolta(capitoli, cartella, tieni_tex, solo_tex):
+def raccolta(banca, capitoli, cartella, tieni_tex, solo_tex):
     sezioni = []
     for cap in capitoli:
-        voci = [d for d in DOMANDE if d.cap == cap]
+        voci = [d for d in banca if d.cap == cap]
         voci.sort(key=lambda d: d.aperta)       # prima le chiuse, poi le aperte
         if voci:
             sezioni.append(("Capitolo %d — %s" % (cap, TITOLI.get(cap, "")),
@@ -116,7 +117,8 @@ def main():
     parser.add_argument("--chiuse", type=int, default=8, help="domande chiuse da 2 punti (8)")
     parser.add_argument("--aperte", type=int, default=3, help="domande aperte da 5 punti (3)")
     parser.add_argument("--capitoli", default=None,
-                        help="capitoli della dispensa, es. 1-15 oppure 3,5-8 (predefinito: 1-16)")
+                        help="capitoli della dispensa, es. 1-15 oppure 3,5-8 "
+                             "(predefinito: 1-%d)" % ULTIMO)
     parser.add_argument("--minuti", type=int, default=45, help="tempo indicato nelle istruzioni (45)")
     parser.add_argument("--titolo", default="Prova Scritta di Tecnologie Web")
     parser.add_argument("--cartella", default=os.path.join(QUI, "generate"),
@@ -127,16 +129,22 @@ def main():
     parser.add_argument("--elenco", action="store_true", help="mostrare il contenuto della banca")
     parser.add_argument("--raccolta", action="store_true",
                         help="un solo PDF con tutte le domande e le soluzioni")
+    parser.add_argument("--trabocchetti", action="store_true",
+                        help="fra le domande chiuse, solo quelle a trabocchetto")
     opzioni = parser.parse_args()
 
     if opzioni.elenco:
         elenco()
         return
     capitoli = leggi_capitoli(opzioni.capitoli) if opzioni.capitoli else \
-        sorted(c for c in {d.cap for d in DOMANDE} if c <= 16)
+        sorted(c for c in {d.cap for d in DOMANDE} if c <= ULTIMO)
+    banca = DOMANDE
+    if opzioni.trabocchetti:
+        # le domande aperte restano tutte: il filtro riguarda le chiuse
+        banca = [d for d in DOMANDE if d.aperta or getattr(d, "trabocchetto", False)]
     os.makedirs(opzioni.cartella, exist_ok=True)
     if opzioni.raccolta:
-        raccolta(capitoli, opzioni.cartella, opzioni.tieni_tex, opzioni.solo_tex)
+        raccolta(banca, capitoli, opzioni.cartella, opzioni.tieni_tex, opzioni.solo_tex)
         return
 
     primo = opzioni.id if opzioni.id is not None else random.randint(1, 99999)
@@ -144,7 +152,7 @@ def main():
         print("pdfLaTeX non trovato: scrivo i file .tex (si compilano con pdfLaTeX, "
               "anche su Overleaf).")
     for numero in range(primo, primo + opzioni.quante):
-        prova = componi(numero, DOMANDE, opzioni.chiuse, opzioni.aperte, capitoli,
+        prova = componi(numero, banca, opzioni.chiuse, opzioni.aperte, capitoli,
                         opzioni.titolo, opzioni.minuti)
         base = os.path.join(opzioni.cartella, "prova-%s" % prova.id_testo)
         prodotti = [compila(prova_tex(prova), base + ".pdf", opzioni.tieni_tex,

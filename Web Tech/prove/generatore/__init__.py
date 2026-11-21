@@ -10,6 +10,9 @@ Questo modulo espone ciò che serve per scrivere la banca delle domande:
     colore_css(...)            «di che colore è l'elemento?» (verificabile con Chromium)
     uscita_pug(...)            «quale HTML genera questo template?» (verificabile con Pug)
     risposte_server(...)       «che cosa risponde il server?» (verificabile avviandolo)
+    domanda_ts(...)            domanda su un frammento TypeScript (verificabile con tsc e Node)
+    domanda_sass(...)          domanda su un foglio di stile Sass (verificabile con Sass)
+    domanda_bundle(...)        domanda su un bundle prodotto da esbuild (verificabile)
     famiglia(...)              decoratore per le domande parametriche
     Err(nome, prima=[...])     un esito che termina con un'eccezione
     combina_errori(...)        distrattori costruiti dagli errori tipici, riga per riga
@@ -25,6 +28,7 @@ STRICT = 'Si assuma la presenza di `"use strict";`.'
 # Fonti delle domande riprese dalle prove del corso (compaiono nelle soluzioni)
 FONTE_2024 = "prima prova intercorso del 23 aprile 2024"
 FONTE_AULA = "facsimile mostrato in aula"
+FONTE_2026 = "prima prova intercorso del 2026"
 
 
 class Err:
@@ -72,13 +76,15 @@ def _esito_atteso(e):
 
 
 def uscita_js(id, cap, tema, codice, giusta, sbagliate, testo=None, strict=True, modulo=False,
-              file=None, **altro):
+              file=None, pacchetti=False, **altro):
     """Domanda «qual è l'output?» su un frammento JavaScript.
 
     giusta e sbagliate sono esiti (vedi `esito`). La risposta giusta viene
     confrontata con l'output reale di Node dallo script di verifica.
     modulo: il frammento è un modulo ES (può usare import). file: {nome:
     contenuto} dei file che il frammento legge, creati accanto a esso.
+    pacchetti: il frammento importa pacchetti npm (per esempio jsonwebtoken),
+    che la verifica prende dalla cartella verifica/node_modules.
     """
     if testo is None:
         testo = "Qual è il risultato dell'esecuzione del seguente frammento di codice JavaScript?"
@@ -90,6 +96,8 @@ def uscita_js(id, cap, tema, codice, giusta, sbagliate, testo=None, strict=True,
         verifica["modulo"] = True
     if file:
         verifica["file"] = dict(file)
+    if pacchetti:
+        verifica["pacchetti"] = True
     return Chiusa(id, cap, tema, testo, [esito(giusta)], [esito(s) for s in sbagliate],
                   codice=listato, verifica=verifica, **altro)
 
@@ -263,9 +271,79 @@ def colore_css(id, cap, tema, css, html, selettore, giusta, sbagliate, testo=Non
                   verifica=verifica, **altro)
 
 
-def famiglia(id, cap, tema, varianti=3):
+def famiglia(id, cap, tema, varianti=3, trabocchetto=False):
     """Decoratore: trasforma una funzione `f(rng) -> Chiusa` in una domanda
     parametrica della banca."""
     def decora(funzione):
-        return Famiglia(id, cap, tema, funzione, varianti=varianti)
+        return Famiglia(id, cap, tema, funzione, varianti=varianti, trabocchetto=trabocchetto)
     return decora
+
+
+def _esecuzione(righe, errore):
+    """L'esito atteso di un'esecuzione con Node: righe stampate ed eventuale
+    eccezione non gestita (None se il programma termina normalmente)."""
+    return {"righe": [str(r) for r in (righe or [])], "errore": errore}
+
+
+def domanda_ts(id, cap, tema, testo, codice, giuste, sbagliate, errori=(), js=None, ts=None,
+               opzioni=(), **altro):
+    """Domanda su un frammento TypeScript.
+
+    La verifica compila il frammento con tsc (TypeScript 7, impostazioni
+    predefinite, cioè modalità severa, più le `opzioni` date) e confronta
+    gli errori segnalati con `errori`, nella forma «riga:TSnnnn» (per esempio
+    "5:TS2322"). js: (righe, errore) attesi eseguendo con Node il JavaScript
+    prodotto da tsc; ts: lo stesso eseguendo direttamente il file .ts con
+    Node (che toglie i tipi senza controllarli). Le opzioni non si mostrano a
+    chi risponde: il testo deve dire come si compila.
+    """
+    listato = L("ts", codice)
+    verifica = dict(tipo="ts", codice=listato.sorgente, opzioni=list(opzioni),
+                    errori=sorted(errori, key=lambda e: (int(e.split(":")[0]), e)))
+    if js is not None:
+        verifica["js"] = _esecuzione(*js)
+    if ts is not None:
+        verifica["ts"] = _esecuzione(*ts)
+    return Chiusa(id, cap, tema, testo, giuste, sbagliate, codice=listato, verifica=verifica,
+                  **altro)
+
+
+def domanda_sass(id, cap, tema, testo, scss, giuste, sbagliate, css=None, errore=None,
+                 file=None, **altro):
+    """Domanda su un foglio di stile Sass (sintassi SCSS), «stile.scss».
+
+    css: il CSS che Sass deve produrre (il confronto ignora spazi e a capo);
+    errore: un frammento del messaggio con cui la compilazione deve fallire.
+    file: {nome: sorgente} di altri file .scss (moduli, parziali) usati dal
+    principale, mostrati prima di esso.
+    """
+    if (css is None) == (errore is None):
+        raise ErroreBanca("domanda %r: indicare il CSS atteso oppure l'errore" % id)
+    principale = L("scss", scss)
+    verifica = dict(tipo="sass", sorgente=principale.sorgente)
+    if css is not None:
+        verifica["css"] = css
+    else:
+        verifica["errore"] = errore
+    codice = [principale]
+    if file:
+        altri = [L("scss", s) for s in file.values()]
+        verifica["file"] = {nome: l.sorgente for nome, l in zip(file, altri)}
+        codice = altri + codice
+    return Chiusa(id, cap, tema, testo, giuste, sbagliate, codice=codice, verifica=verifica,
+                  **altro)
+
+
+def domanda_bundle(id, cap, tema, testo, file, giuste, sbagliate, funzioni, righe, **altro):
+    """Domanda su un bundle: i moduli in `file` ({nome: sorgente}, l'ultimo è
+    il punto d'ingresso) vengono impacchettati da esbuild con il tree shaking.
+
+    La verifica confronta le funzioni rimaste nel bundle (`funzioni`, in
+    ordine alfabetico) e l'output del bundle eseguito con Node (`righe`).
+    """
+    listati = [L("js", s) for s in file.values()]
+    verifica = dict(tipo="bundle", file={n: l.sorgente for n, l in zip(file, listati)},
+                    ingresso=list(file)[-1], funzioni=sorted(funzioni),
+                    righe=[str(r) for r in righe])
+    return Chiusa(id, cap, tema, testo, giuste, sbagliate, codice=listati, verifica=verifica,
+                  **altro)

@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(QUI))
 from banca import DOMANDE                      # noqa: E402
 from generatore.latex import domanda_tex       # noqa: E402
 from generatore.modello import Famiglia        # noqa: E402
-from generatore.selezione import SERIE, componi   # noqa: E402
+from generatore.selezione import SERIE, ULTIMO, componi   # noqa: E402
 
 
 def famiglie(semi):
@@ -54,7 +54,7 @@ def famiglie(semi):
 
 def prove(quante):
     fisse = {d.id for d in DOMANDE if not isinstance(d, Famiglia)}
-    tutti = sorted(c for c in {d.cap for d in DOMANDE} if c <= 16)
+    tutti = sorted(c for c in {d.cap for d in DOMANDE} if c <= ULTIMO)
     prove_fatte = problemi = 0
     gruppi = [(None, quante), (tutti[:-1], quante // 4)]
     gruppi += [([c], max(SERIE, quante // 50)) for c in tutti]

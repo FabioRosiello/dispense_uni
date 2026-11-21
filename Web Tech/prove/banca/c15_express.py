@@ -2,7 +2,7 @@
 parametri e router, risposte e template, middleware, gestione degli errori,
 middleware utili, sessioni, cookie e messaggi flash)."""
 
-from generatore import aperta, chiusa, combina_errori, famiglia, risposte_server
+from generatore import FONTE_2026, aperta, chiusa, combina_errori, famiglia, risposte_server
 
 CAP = 15
 R = "cap. 15, «%s»"
@@ -420,7 +420,7 @@ d(chiusa("c15-express5", CAP, "gestione degli errori",
                      "`next(err)` da soli. Con Express 4 la Promise veniva ignorata: il rifiuto "
                      "non gestito faceva terminare il processo, e bisognava usare `try/catch` e "
                      "chiamare `next(err)` a mano.",
-         rif=R % "Le Promise in Express 5"))
+         rif=R % "Le Promise in Express 5", trabocchetto=True))
 
 d(chiusa("c15-static", CAP, "middleware utili",
          "Un'applicazione esegue `app.use(\"/static\", express.static(\"public\"))`. Con quale URL "
@@ -492,7 +492,7 @@ d(chiusa("c15-express4", CAP, "routing",
                      "facoltative si scrivono con le graffe (`/web{-}tech`), una sequenza "
                      "qualsiasi con un jolly con nome (`{*resto}`), oppure si usa un'espressione "
                      "regolare.",
-         rif=R % "Percorsi delle rotte"))
+         rif=R % "Percorsi delle rotte", trabocchetto=True))
 
 d(chiusa("c15-locals", CAP, "rispondere al client",
          "In un gestore Express, a che cosa serve assegnare `res.locals.items = [...]` prima di "
@@ -565,3 +565,46 @@ d(aperta("c15-a-sessioni", CAP, "sessioni e cookie",
           "`connect-flash` li salva nella sessione (dopo `express-session`): `req.flash(k, "
           "msg)` li aggiunge, `req.flash(k)` li legge e li consuma."],
          rif="cap. 15, «Middleware utili» e «Messaggi flash»"))
+
+# ----------------------------------------------------------------------
+# Dalla prima prova intercorso del 2026
+d(aperta("c15-prova-middleware", CAP, "middleware",
+         "Che cosa si intende per *middleware* in un framework web? Spiegare brevemente il suo "
+         "ruolo e descrivere due possibili casi d'uso.",
+         ["Una funzione che si inserisce nel ciclo richiesta-risposta: riceve la richiesta, la "
+          "risposta e `next`, e può leggere o modificare entrambe, rispondere, o passare il "
+          "controllo al successivo con `next()`.",
+          "I middleware formano una catena eseguita nell'ordine in cui sono registrati "
+          "(`app.use`, o sulla singola rotta); un middleware a quattro parametri gestisce gli "
+          "errori.",
+          "Ruolo: fattorizzare le operazioni comuni a molte rotte, tenendo i gestori semplici.",
+          "Casi d'uso: analisi del corpo (`express.json`, `express.urlencoded`), file statici "
+          "(`express.static`), sessioni e cookie, autenticazione (verificare il token o la "
+          "sessione e rispondere 401), log delle richieste (morgan), gestione centralizzata "
+          "degli errori."],
+         rif=R % "I middleware", fonte=FONTE_2026))
+
+# ----------------------------------------------------------------------
+# Domande a trabocchetto
+d(risposte_server("c15-gestore-tre-parametri", CAP, "gestione degli errori",
+                  """
+import express from "express";
+const app = express();
+app.get("/", (req, res) => {
+  throw new Error("guasto");
+});
+app.use((err, req, res) => {
+  res.status(500).send("gestito");
+});
+app.listen(3000);""",
+                  ["GET /"],
+                  ["500 Error: guasto"],
+                  [["500 gestito"], ["200 gestito"], ["404 Cannot GET /"],
+                   ["500 Internal Server Error"]],
+                  applicazione="Express",
+                  spiegazione="Express riconosce un gestore di errori dal **numero di "
+                              "parametri**: deve averne quattro, `(err, req, res, next)`. Con "
+                              "tre è un middleware normale, che le richieste in errore saltano. "
+                              "L'errore arriva così al gestore predefinito, che in sviluppo "
+                              "risponde `500` con il messaggio e la traccia dell'errore.",
+                  rif=R % "Gestori di errore personalizzati", trabocchetto=True))

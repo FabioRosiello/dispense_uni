@@ -11,8 +11,9 @@ from .markup import a_latex
 from .modello import disposizione, NESSUNA
 
 LINGUE_LISTINGS = {
-    "js": "esJS", "html": "esHTML", "css": "esCSS", "http": "esHTTP", "pug": "esPug",
-    "php": "esPHP", "json": "esJSON", "sh": "esSh", "sql": "esSQL", "testo": "esTesto",
+    "js": "esJS", "ts": "esTS", "html": "esHTML", "css": "esCSS", "scss": "esSCSS",
+    "http": "esHTTP", "pug": "esPug", "php": "esPHP", "json": "esJSON", "sh": "esSh",
+    "sql": "esSQL", "testo": "esTesto",
 }
 
 PREAMBOLO = r"""\documentclass[10pt,a4paper]{article}
@@ -64,11 +65,23 @@ PREAMBOLO = r"""\documentclass[10pt,a4paper]{article}
     null,undefined,then,from,as},
   morestring=[b]", morestring=[b]', morestring=[b]`,
   morecomment=[l]{//}, morecomment=[s]{/*}{*/}}
+\lstdefinelanguage{esTS}{sensitive=true,
+  keywords={break,case,catch,class,const,continue,debugger,default,delete,do,else,export,
+    extends,finally,for,function,if,import,in,instanceof,let,new,return,super,switch,this,
+    throw,try,typeof,var,void,while,with,yield,async,await,of,static,get,set,true,false,
+    null,undefined,then,from,as,interface,type,enum,implements,readonly,private,public,
+    protected,keyof,any,unknown,never,string,number,boolean},
+  morestring=[b]", morestring=[b]', morestring=[b]`,
+  morecomment=[l]{//}, morecomment=[s]{/*}{*/}}
 \lstdefinelanguage{esHTML}{sensitive=false, morestring=[b]", tag=**[s]<>,
   usekeywordsintag=false, markfirstintag=true, morecomment=[s]{<!--}{-->}}
 \lstdefinelanguage{esCSS}{sensitive=true, alsoletter={-:@},
   keywords={@@PROPRIETA_CSS@@},
   morestring=[b]", morestring=[b]', morecomment=[s]{/*}{*/}}
+\lstdefinelanguage{esSCSS}{sensitive=true, alsoletter={-:@$},
+  keywords={@@PROPRIETA_CSS@@,@use,@mixin,@include,@if,@else,@each,@for,@while,@import,
+    @media,from,through,in},
+  morestring=[b]", morestring=[b]', morecomment=[l]{//}, morecomment=[s]{/*}{*/}}
 \lstdefinelanguage{esHTTP}{sensitive=true}
 \lstdefinelanguage{esPug}{sensitive=true, morestring=[b]", morestring=[b]',
   morecomment=[l]{//-}}
@@ -162,7 +175,7 @@ def proprieta_css(istanze):
     trovate = set()
     for istanza in istanze:
         for listato in istanza.codice:
-            if listato.lingua == "css":
+            if listato.lingua in ("css", "scss"):
                 # il segnaposto finale fa riconoscere anche l'ultima dichiarazione
                 trovate.update(m.group(1) + ":"
                                for m in _PROPRIETA.finditer(listato.sorgente + "\n}"))

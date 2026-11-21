@@ -3,7 +3,7 @@ specificità, custom property, calc/min/max/clamp, unità del viewport, gap e
 flex, container query, immagini responsive, preferenze dell'utente,
 @supports, annidamento)."""
 
-from generatore import L, aperta, chiusa, colore_css, famiglia
+from generatore import FONTE_2026, L, aperta, chiusa, colore_css, famiglia
 
 CAP = 14
 R = "cap. 14, «%s»"
@@ -442,7 +442,7 @@ d(colore_css("c14-commento", CAP, "pseudo-classi funzionali",
                          "l'inizio di una dichiarazione non valida, che arriva fino al primo punto "
                          "e virgola: viene scartata insieme a `background-color`. Lo sfondo resta "
                          "quello predefinito, trasparente (`color: navy` invece si applica).",
-             rif=R % ":has()"))
+             rif=R % ":has()", trabocchetto=True))
 
 d(chiusa("c14-viewport", CAP, "unità del viewport",
          "Su uno smartphone la barra degli indirizzi compare e scompare durante lo scorrimento. "
@@ -608,3 +608,84 @@ d(aperta("c14-a-immagini", CAP, "immagini responsive",
           "il primo `<source>` adatto; serve per l'*art direction* (contenuti diversi, non solo "
           "risoluzioni)."],
          rif=R % "Immagini responsive"))
+
+# ----------------------------------------------------------------------
+# Dalla prima prova intercorso del 2026
+_IS_CSS = """
+#root .msg { color: blue; }
+#root :is(.msg, #ghost) { color: red; }
+#root { color: yellow; }"""
+_IS_HTML = """
+<div id="root">
+  <p class="msg">Ciao</p>
+</div>"""
+
+d(chiusa("c14-prova-is", CAP, "pseudo-classi funzionali",
+         "Le regole appartengono allo stesso foglio CSS. Qual è il colore finale del testo?",
+         "Rosso.",
+         ["Foglio di stile non valido.", "Il colore ereditato: yellow.", "Blu."],
+         codice=[L("css", _IS_CSS), L("html", _IS_HTML)],
+         fisse=True,
+         spiegazione="La specificità di `:is()` è quella del suo argomento **più specifico**, "
+                     "anche se quell'argomento non seleziona nulla: `#ghost` non esiste nella "
+                     "pagina, ma `#root :is(.msg, #ghost)` vale (2,0,0) e batte `#root .msg`, "
+                     "che vale (1,1,0). Il giallo arriverebbe per ereditarietà solo se nessuna "
+                     "regola selezionasse il paragrafo.",
+         rif=R % "La specificità delle pseudo-classi funzionali", fonte=FONTE_2026,
+         trabocchetto=True,
+         verifica=dict(tipo="css", css=L("css", _IS_CSS).sorgente,
+                       html=L("html", _IS_HTML).sorgente, selettore=".msg", proprieta="color",
+                       atteso="red", candidati=["red", "yellow", "blue"])))
+
+d(aperta("c14-prova-container", CAP, "container query",
+         "Un componente appare in più punti della pagina, con larghezze diverse. Perché una "
+         "container query può essere più adatta di una media query per renderlo responsivo?",
+         ["Una media query interroga il **viewport**: a parità di schermo il componente "
+          "riceverebbe lo stesso stile ovunque, anche dove ha poco spazio (per esempio in una "
+          "barra laterale).",
+          "Una container query interroga le dimensioni di un **antenato** (il contenitore, con "
+          "`container-type: inline-size`): ogni copia del componente si adatta allo spazio che "
+          "ha davvero.",
+          "Il componente diventa riutilizzabile e indipendente dal layout della pagina; le "
+          "regole `@container` valgono per i discendenti del contenitore, non per il "
+          "contenitore stesso.",
+          "Esempio: una card che passa da colonna a riga quando il suo contenitore supera i "
+          "400px, nel contenuto principale come nella barra laterale."],
+         rif=R % "Container query", fonte=FONTE_2026))
+
+# ----------------------------------------------------------------------
+# Domande a trabocchetto
+_CONTENITORE_CSS = """
+.scheda {
+  container-type: inline-size;
+  width: 500px;
+  color: black;
+}
+@container (min-width: 400px) {
+  .scheda { color: red; }
+  .titolo { color: blue; }
+}"""
+_CONTENITORE_HTML = """
+<div class="scheda">
+  <p class="titolo">Ciao</p>
+</div>"""
+
+d(chiusa("c14-contenitore-stesso", CAP, "container query",
+         "Si consideri il seguente foglio di stile, applicato alla pagina il cui `<body>` è "
+         "riportato di seguito. Di che colore è il testo del `<div>` di classe `scheda` "
+         "(fuori dal paragrafo)?",
+         "Nero: una container query vale per i discendenti del contenitore, non per il "
+         "contenitore stesso.",
+         ["Rosso: il contenitore è largo 500px, più di 400px.",
+          "Blu, ereditato dal paragrafo `.titolo`.",
+          "Rosso: la regola nella container query viene dopo quella con il nero."],
+         codice=[L("css", _CONTENITORE_CSS), L("html", _CONTENITORE_HTML)],
+         spiegazione="Le regole di `@container` si valutano rispetto al **contenitore più "
+                     "vicino fra gli antenati** di ciascun elemento. Per `.titolo` è `.scheda`, "
+                     "largo 500px: il paragrafo diventa blu. Per `.scheda` stessa non c'è alcun "
+                     "contenitore antenato, quindi la sua regola non si applica e il testo resta "
+                     "nero. L'ereditarietà va dal genitore ai figli, mai al contrario.",
+         rif=R % "Container query", trabocchetto=True,
+         verifica=dict(tipo="css", css=L("css", _CONTENITORE_CSS).sorgente,
+                       html=L("html", _CONTENITORE_HTML).sorgente, selettore=".scheda",
+                       proprieta="color", atteso="black", candidati=["black", "red", "blue"])))

@@ -456,3 +456,37 @@ d(aperta("c01-a-4xx5xx", CAP, "codici di stato: le classi",
           "Esempi 5xx: 500 errore interno (es. un'eccezione non gestita), 502 risposta non "
           "valida da un server a monte, 503 servizio momentaneamente non disponibile."],
          rif="cap. 1, «Codici di stato della risposta»"))
+
+# ----------------------------------------------------------------------
+# Domande a trabocchetto
+_BASE_URL = "https://www.unina.it/corsi/web"
+_STESSA_RISORSA = [
+    ("https://WWW.UNINA.IT/corsi/web", True),
+    ("https://www.unina.it:443/corsi/web", True),
+    ("https://www.unina.it/corsi/./web", True),
+    ("http://www.unina.it/corsi/web", False),
+    ("https://www.unina.it/Corsi/web", False),
+    ("https://unina.it/corsi/web", False),
+    ("https://www.unina.it:8443/corsi/web", False),
+    ("https://www.unina.it/corsi/web/", False),
+]
+
+d(chiusa("c01-stessa-risorsa", CAP, "anatomia di una URL",
+         "Quali delle seguenti URL individuano la **stessa risorsa** di `%s`?" % _BASE_URL,
+         ["`%s`" % u for u, stessa in _STESSA_RISORSA if stessa],
+         ["`%s`" % u for u, stessa in _STESSA_RISORSA if not stessa],
+         multi=True,
+         spiegazione="Lo schema e il nome dell'host non distinguono maiuscole e minuscole, la "
+                     "porta 443 è quella predefinita di `https` (scriverla non cambia nulla) e "
+                     "il segmento `.` («questa cartella») viene risolto dal browser prima della "
+                     "richiesta. Individuano invece un'altra risorsa uno schema diverso "
+                     "(`http`), un altro host (`unina.it` e `www.unina.it` sono nomi diversi), "
+                     "un'altra porta e un altro percorso: il percorso in generale distingue "
+                     "maiuscole e minuscole, e anche la barra finale lo cambia.",
+         rif=R % "URL: individuare una risorsa", trabocchetto=True,
+         verifica=dict(tipo="node", strict=True,
+                       codice="const base = new URL(\"%s\").href;\n"
+                              "for (const u of [%s]) console.log(new URL(u).href === base);"
+                              % (_BASE_URL, ", ".join('"%s"' % u for u, _ in _STESSA_RISORSA)),
+                       righe=[str(stessa).lower() for _, stessa in _STESSA_RISORSA],
+                       errore=None)))

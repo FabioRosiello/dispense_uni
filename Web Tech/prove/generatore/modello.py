@@ -11,7 +11,8 @@ import textwrap
 
 from .markup import a_latex, larghezza_stimata, testo_semplice, AMMESSI_CODICE
 
-LINGUE = ("js", "html", "css", "http", "pug", "php", "json", "sh", "sql", "testo")
+LINGUE = ("js", "ts", "html", "css", "scss", "http", "pug", "php", "json", "sh", "sql",
+          "testo")
 
 # Larghezze utili (in caratteri) dei listati in corpo \footnotesize: una
 # colonna di listings è larga 5,1 pt.
@@ -113,13 +114,16 @@ class Chiusa:
     quante_giuste       (min, max) opzioni corrette da mostrare nelle multiple.
     nessuna             True se ha senso aggiungere «Nessuna delle altre».
     fisse               True per mostrare tutte le opzioni, senza estrazione.
+    trabocchetto        True per le domande costruite attorno a un dettaglio poco
+                        ovvio (l'allenamento le può proporre da sole).
     """
 
     aperta = False
 
     def __init__(self, id, cap, tema, testo, giuste, sbagliate, codice=None, dopo=None,
                  spiegazione="", rif=None, multi=None, n=None, quante_giuste=None,
-                 nessuna=False, fisse=False, verifica=None, punti=2, fonte=None):
+                 nessuna=False, fisse=False, verifica=None, punti=2, fonte=None,
+                 trabocchetto=False):
         self.id = id
         self.cap = cap
         self.tema = tema
@@ -138,6 +142,7 @@ class Chiusa:
         self.verifica = verifica
         self.punti = punti
         self.fonte = fonte
+        self.trabocchetto = trabocchetto
         self._controlla()
 
     # ------------------------------------------------------------------
@@ -222,7 +227,7 @@ class Aperta:
     aperta = True
 
     def __init__(self, id, cap, tema, testo, traccia, codice=None, rif=None, punti=5,
-                 righe=6, fonte=None):
+                 righe=6, fonte=None, trabocchetto=False):
         self.id = id
         self.cap = cap
         self.tema = tema
@@ -233,6 +238,7 @@ class Aperta:
         self.punti = punti
         self.righe = righe
         self.fonte = fonte
+        self.trabocchetto = trabocchetto
         self.verifica = None
         dove = "domanda aperta %r" % self.id
         if not self.traccia:
@@ -254,7 +260,7 @@ class Famiglia:
 
     aperta = False
 
-    def __init__(self, id, cap, tema, funzione, varianti=3, punti=2):
+    def __init__(self, id, cap, tema, funzione, varianti=3, punti=2, trabocchetto=False):
         self.id = id
         self.cap = cap
         self.tema = tema
@@ -262,6 +268,7 @@ class Famiglia:
         self.varianti = varianti      # quante volte compare nel mazzo di una serie
         self.punti = punti
         self.fonte = None
+        self.trabocchetto = trabocchetto
 
     def genera(self, rng):
         """La Chiusa di una variante."""

@@ -448,7 +448,7 @@ d(chiusa("c02-percent", CAP, "form: invio e codifica",
          rif=R % "Codifica delle URL",
          verifica=dict(tipo="node", strict=True,
                        codice='console.log(new URLSearchParams({ q: "pane & vino" }).toString());',
-                       righe=["q=pane+%26+vino"], errore=None)))
+                       righe=["q=pane+%26+vino"], errore=None), trabocchetto=True))
 
 d(chiusa("c02-checkbox-vuote", CAP, "form: invio e codifica",
          "Un form ha tre checkbox con ``name=\"esami\"`` e l'utente non ne spunta nessuna. "
@@ -462,7 +462,7 @@ d(chiusa("c02-checkbox-vuote", CAP, "form: invio e codifica",
          spiegazione="Le checkbox non spuntate non vengono inviate: il server non deve "
                      "aspettarsi di trovare il parametro. Le caselle spuntate con lo stesso "
                      "`name` ripetono invece la chiave (`esami=web&esami=pl2`).",
-         rif=R % "Caselle di spunta"))
+         rif=R % "Caselle di spunta", trabocchetto=True))
 
 d(chiusa("c02-radio", CAP, "form: invio e codifica",
          "Che cosa rende mutuamente esclusivi tre pulsanti radio di un form?",
@@ -593,3 +593,36 @@ d(aperta("c02-a-cache", CAP, "strumenti per sviluppatori",
           "In sviluppo si rischia di vedere una versione vecchia di CSS o script: si disattiva "
           "la cache dai DevTools (scheda Rete)."],
          rif=R % "Analisi di rete"))
+
+# ----------------------------------------------------------------------
+# Domande a trabocchetto
+_PAGINA = "https://www.example.org/corsi/web"
+_DESTINAZIONE = "https://www.example.org/corsi/web/lezioni.html"
+_LINK = [
+    ("web/lezioni.html", True),
+    ("./web/lezioni.html", True),
+    ("/corsi/web/lezioni.html", True),
+    ("lezioni.html", False),
+    ("./lezioni.html", False),
+    ("../web/lezioni.html", False),
+    ("/web/lezioni.html", False),
+]
+
+d(chiusa("c02-senza-barra", CAP, "URL relative e assolute",
+         "La pagina `%s` (senza barra finale) contiene alcuni link. Quali portano a `%s`?"
+         % (_PAGINA, _DESTINAZIONE),
+         ['``<a href="%s">``' % h for h, giusto in _LINK if giusto],
+         ['``<a href="%s">``' % h for h, giusto in _LINK if not giusto],
+         multi=True,
+         spiegazione="Un percorso relativo si risolve a partire dalla **cartella** della pagina, "
+                     "cioè da tutto ciò che precede l'ultima barra. Senza barra finale l'ultimo "
+                     "segmento, `web`, è trattato come un file: la cartella è `/corsi/`. Così "
+                     "`lezioni.html` porta a `/corsi/lezioni.html` e `../web/lezioni.html` a "
+                     "`/web/lezioni.html`; per entrare in `web` bisogna nominarla. È lo stesso "
+                     "motivo per cui i server reindirizzano `/docs` a `/docs/`.",
+         rif=R % "URL che puntano a una directory", trabocchetto=True,
+         verifica=dict(tipo="node", strict=True,
+                       codice="for (const h of [%s]) console.log(new URL(h, \"%s\").href === "
+                              "\"%s\");" % (", ".join('"%s"' % h for h, _ in _LINK), _PAGINA,
+                                            _DESTINAZIONE),
+                       righe=[str(giusto).lower() for _, giusto in _LINK], errore=None)))
